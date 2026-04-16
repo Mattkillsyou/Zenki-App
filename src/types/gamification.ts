@@ -4,6 +4,8 @@ export interface Achievement {
   description: string;
   icon: string; // Ionicons name
   xpReward: number;
+  flameReward: number;           // flames earned on unlock — scaled by difficulty
+  difficulty: 'easy' | 'medium' | 'hard' | 'elite' | 'mythic';
   unlocked: boolean;
   unlockedAt?: string; // ISO date
   requirement: { type: AchievementType; value: number };
@@ -43,6 +45,30 @@ export interface GamificationState {
   totalSessions: number;
   dojoPoints: number;       // earned from check-ins, redeemable in store
   pointsLifetime: number;   // total ever earned (for stats)
+  // Flames — new currency: 1 flame earned per achievement unlocked, redeemable as credit
+  flames: number;
+  flamesLifetime: number;
+  // Counters for achievement tracking
+  totalBookings: number;
+  totalPrivateSessions: number;
+  totalDrinks: number;
+  totalGearPurchases: number;
+  totalPosts: number;
+  followersCount: number;
+  likesReceived: number;
+  earlyBirdCount: number;   // sessions before 7am
+  nightOwlCount: number;    // sessions after 8pm
+  weekendSessionsCount: number;
+  loginStreak: number;
+  lastLoginDate: string;
+  quoteReadStreak: number;
+  lastQuoteReadDate: string;
+  referralCount: number;
+  beltLevel: number;        // 1 white, 2 blue, 3 purple, 4 brown, 5 black
+  stripesEarned: number;
+  memberSinceDate: string;  // ISO
+  sessionsThisWeek: number;
+  sessionsThisMonth: number;
   achievements: Achievement[];
   pendingCelebration: Celebration | null;
 }
@@ -74,4 +100,68 @@ export function getLevelFromXP(totalXP: number): { level: number; currentXP: num
     nextLevelXP,
     progress: remaining / nextLevelXP,
   };
+}
+
+/** Return the current counter value for an achievement requirement, given state. */
+export function getCurrentValue(type: AchievementType, state: GamificationState): number {
+  switch (type) {
+    case 'sessions_total':    return state.totalSessions;
+    case 'streak_days':       return state.streak;
+    case 'classes_booked':    return state.totalBookings;
+    case 'private_sessions':  return state.totalPrivateSessions;
+    case 'belt_promotion':    return state.beltLevel;
+    case 'stripes_earned':    return state.stripesEarned;
+    case 'login_streak':      return state.loginStreak;
+    case 'posts_created':     return state.totalPosts;
+    case 'followers':         return state.followersCount;
+    case 'likes_received':    return state.likesReceived;
+    case 'drinks_logged':     return state.totalDrinks;
+    case 'store_purchase':    return state.totalGearPurchases;
+    case 'gear_purchase':     return state.totalGearPurchases;
+    case 'early_bird':        return state.earlyBirdCount;
+    case 'night_owl':         return state.nightOwlCount;
+    case 'weekend_warrior':   return state.weekendSessionsCount;
+    case 'week_warrior':      return state.sessionsThisWeek;
+    case 'month_warrior':     return state.sessionsThisMonth;
+    case 'dojo_anniversary': {
+      if (!state.memberSinceDate) return 0;
+      const start = new Date(state.memberSinceDate).getTime();
+      const days = Math.floor((Date.now() - start) / 86400000);
+      return Math.max(0, days);
+    }
+    case 'community_member':  return state.totalPosts > 0 || state.followersCount > 0 ? 1 : 0;
+    case 'quote_reader':      return state.quoteReadStreak;
+    case 'referral':          return state.referralCount;
+    case 'completionist':     return state.achievements.filter((a) => a.unlocked).length;
+    default:                  return 0;
+  }
+}
+
+/** Progress in [0..1] for an achievement. */
+export function getAchievementProgress(ach: Achievement, state: GamificationState): number {
+  if (ach.unlocked) return 1;
+  const current = getCurrentValue(ach.requirement.type, state);
+  return Math.max(0, Math.min(1, current / ach.requirement.value));
+}
+
+/** Fallback flame reward if an achievement definition doesn't specify one. */
+export function defaultFlameReward(xpReward: number): number {
+  if (xpReward >= 2000) return 50;
+  if (xpReward >= 1000) return 25;
+  if (xpReward >= 500)  return 12;
+  if (xpReward >= 250)  return 6;
+  if (xpReward >= 100)  return 3;
+  return 1;
+}
+
+/** Display color for an achievement difficulty tier. */
+export function difficultyColor(diff: Achievement['difficulty'] | undefined): string {
+  switch (diff) {
+    case 'mythic':  return '#FF2D55';   // red
+    case 'elite':   return '#AF52DE';   // purple
+    case 'hard':    return '#FF9F0A';   // orange
+    case 'medium':  return '#FFD60A';   // yellow
+    case 'easy':
+    default:        return '#32D74B';   // green
+  }
 }

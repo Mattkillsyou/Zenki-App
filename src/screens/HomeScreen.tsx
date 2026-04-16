@@ -15,14 +15,30 @@ import { typography, spacing, borderRadius, shadows } from '../theme';
 import { ClassCard, AnimatedLogo, FadeInView, PressableScale, TimeClock, StreakBadge, PointsBadge, XPProgressBar, AchievementGrid, CelebrationModal } from '../components';
 import { useGamification } from '../context/GamificationContext';
 import { useAnnouncements } from '../context/AnnouncementContext';
+import { useAppointments } from '../context/AppointmentContext';
+import { useScreenSoundTheme } from '../context/SoundContext';
 import { getDailyQuote } from '../data/quotes';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const UPCOMING_CLASSES = [
-  { name: 'Jiu-Jitsu (Adults)', instructor: 'Sensei Tim', time: '12:00 PM', duration: '60 min', spotsLeft: 5, type: 'jiu-jitsu' as const },
-  { name: 'Muay Thai', instructor: 'Carnage', time: '5:00 PM', duration: '60 min', spotsLeft: 6, type: 'muay-thai' as const },
-];
+function sessionTypeToClassType(s: string): 'jiu-jitsu' | 'muay-thai' | 'pilates' | 'open-mat' {
+  const lc = s.toLowerCase();
+  if (lc.includes('jiu') || lc.includes('bjj')) return 'jiu-jitsu';
+  if (lc.includes('muay') || lc.includes('thai') || lc.includes('kickbox')) return 'muay-thai';
+  if (lc.includes('pilates') || lc.includes('mobility')) return 'pilates';
+  return 'open-mat';
+}
+
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+function isToday(iso: string): boolean {
+  const d = new Date(iso);
+  const n = new Date();
+  return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+}
 
 export function HomeScreen({ navigation }: any) {
   const { colors, isDark } = useTheme();
@@ -30,7 +46,16 @@ export function HomeScreen({ navigation }: any) {
   const isEmployee = user?.isEmployee === true;
   const { state: gamState, levelInfo, dismissCelebration } = useGamification();
   const { announcements } = useAnnouncements();
+  const { myAppointments } = useAppointments();
   const dailyQuote = getDailyQuote();
+
+  useScreenSoundTheme('home');
+
+  // User's confirmed/pending bookings for today
+  const todaysBookings = myAppointments
+    .filter((a) => a.memberId === user?.id && a.status !== 'cancelled' && a.status !== 'completed')
+    .filter((a) => isToday(a.startsAt))
+    .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -57,10 +82,22 @@ export function HomeScreen({ navigation }: any) {
           </View>
         </FadeInView>
 
-        {/* ─── Announcements (top of feed, admin-editable) ─── */}
+        {/* ─── Welcome (above announcements) ─── */}
+        <FadeInView delay={40} slideUp={12}>
+          <View style={[styles.welcomeSection, { paddingBottom: 0 }]}>
+            <Text style={styles.welcomeLine} numberOfLines={1}>
+              <Text style={[styles.welcomeLabel, { color: colors.textTertiary }]}>Welcome back, </Text>
+              <Text style={[styles.welcomeName, { color: colors.textPrimary }]}>
+                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Member'}
+              </Text>
+            </Text>
+          </View>
+        </FadeInView>
+
+        {/* ─── Announcements (admin-editable, below welcome) ─── */}
         {!isEmployee && announcements.length > 0 && (
-          <FadeInView delay={40} slideUp={12}>
-            <View style={styles.announcementsWrap}>
+          <FadeInView delay={80} slideUp={12}>
+            <View style={[styles.announcementsWrap, { marginTop: 12 }]}>
               {announcements.slice(0, 3).map((a) => (
                 <PressableScale key={a.id}>
                   <View style={[styles.announcementCard, { backgroundColor: colors.goldMuted }]}>
@@ -80,15 +117,35 @@ export function HomeScreen({ navigation }: any) {
           </FadeInView>
         )}
 
-        {/* ─── Welcome + Daily Japanese Quote ─── */}
-        <FadeInView delay={80} slideUp={20}>
-          <View style={styles.welcomeSection}>
-            <Text style={styles.welcomeLine} numberOfLines={1}>
-              <Text style={[styles.welcomeLabel, { color: colors.textTertiary }]}>Welcome back, </Text>
-              <Text style={[styles.welcomeName, { color: colors.textPrimary }]}>
-                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Member'}
-              </Text>
-            </Text>
+        {/* ─── Compact XP + Daily Quote ─── */}
+        <FadeInView delay={120} slideUp={20}>
+          <View style={[styles.welcomeSection, { paddingTop: 12 }]}>
+
+            {/* Compact XP row — only for members */}
+            {!isEmployee && (
+              <View style={[styles.compactXpRow, { backgroundColor: colors.surface }]}>
+                <View style={[styles.compactLevelCircle, { backgroundColor: colors.gold }]}>
+                  <Text style={styles.compactLevelText}>{levelInfo.level}</Text>
+                </View>
+                <View style={styles.compactXpBody}>
+                  <View style={styles.compactXpLabels}>
+                    <Text style={[styles.compactXpText, { color: colors.textSecondary }]}>
+                      Level {levelInfo.level}
+                    </Text>
+                    <Text style={[styles.compactXpText, { color: colors.gold }]}>
+                      {levelInfo.currentXP} / {levelInfo.nextLevelXP} XP
+                    </Text>
+                  </View>
+                  <View style={[styles.compactXpBarBg, { backgroundColor: colors.backgroundElevated }]}>
+                    <View style={[styles.compactXpBarFill, {
+                      backgroundColor: colors.gold,
+                      width: `${Math.max(4, levelInfo.progress * 100)}%`,
+                    }]} />
+                  </View>
+                </View>
+              </View>
+            )}
+
             <View style={[styles.quoteCard, { backgroundColor: colors.surface }]}>
               <Ionicons name="chatbubble-outline" size={18} color={colors.gold} style={{ marginBottom: 8 }} />
               <Text style={[styles.quoteText, { color: colors.textPrimary }]}>"{dailyQuote.text}"</Text>
@@ -107,30 +164,60 @@ export function HomeScreen({ navigation }: any) {
         {/* ─── Member Content ─── */}
         {!isEmployee && (
           <>
-            {/* XP Bar */}
-            <FadeInView delay={220} slideUp={16}>
-              <View style={styles.section}>
-                <View style={[styles.sectionCard, { backgroundColor: colors.surface,  }]}>
-                  <XPProgressBar level={levelInfo.level} currentXP={levelInfo.currentXP} nextLevelXP={levelInfo.nextLevelXP} progress={levelInfo.progress} totalXP={gamState.xp} />
+            {/* Today's Schedule — user's own bookings */}
+            {todaysBookings.length > 0 ? (
+              <FadeInView delay={340} slideUp={16}>
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your Schedule Today</Text>
+                    <TouchableOpacity style={[styles.seeAllButton, { backgroundColor: colors.accentTint }]} onPress={() => navigation.navigate('Schedule')}>
+                      <Text style={[styles.seeAllText, { color: colors.gold }]}>Browse</Text>
+                      <Ionicons name="chevron-forward" size={14} color={colors.gold} />
+                    </TouchableOpacity>
+                  </View>
+                  {todaysBookings.map((a) => (
+                    <ClassCard
+                      key={a.id}
+                      name={a.sessionType}
+                      instructor={a.instructor}
+                      time={formatTime(a.startsAt)}
+                      duration={`${a.durationMinutes} min`}
+                      spotsLeft={0}
+                      type={sessionTypeToClassType(a.sessionType)}
+                      booked
+                      status={a.status}
+                      onBook={() => navigation.navigate('Schedule')}
+                    />
+                  ))}
                 </View>
-              </View>
-            </FadeInView>
-
-            {/* Today's Classes */}
-            <FadeInView delay={340} slideUp={16}>
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Today's Schedule</Text>
-                  <TouchableOpacity style={[styles.seeAllButton, { backgroundColor: colors.accentTint }]} onPress={() => navigation.navigate('Schedule')}>
-                    <Text style={[styles.seeAllText, { color: colors.gold }]}>See All</Text>
-                    <Ionicons name="chevron-forward" size={14} color={colors.gold} />
+              </FadeInView>
+            ) : (
+              <FadeInView delay={340} slideUp={16}>
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Today's Schedule</Text>
+                    <TouchableOpacity style={[styles.seeAllButton, { backgroundColor: colors.accentTint }]} onPress={() => navigation.navigate('Schedule')}>
+                      <Text style={[styles.seeAllText, { color: colors.gold }]}>See All</Text>
+                      <Ionicons name="chevron-forward" size={14} color={colors.gold} />
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('Schedule')}
+                    activeOpacity={0.8}
+                    style={[styles.noBookingsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  >
+                    <View style={[styles.noBookingsIcon, { backgroundColor: colors.goldMuted }]}>
+                      <Ionicons name="calendar-outline" size={22} color={colors.gold} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.noBookingsTitle, { color: colors.textPrimary }]}>No classes booked today</Text>
+                      <Text style={[styles.noBookingsDesc, { color: colors.textSecondary }]}>Tap to browse the schedule and book one.</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
                   </TouchableOpacity>
                 </View>
-                {UPCOMING_CLASSES.map((cls) => (
-                  <ClassCard key={cls.name} {...cls} onBook={() => navigation.navigate('Book')} />
-                ))}
-              </View>
-            </FadeInView>
+              </FadeInView>
+            )}
 
           </>
         )}
@@ -165,7 +252,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   welcomeLine: {
-    marginBottom: 20,
+    marginBottom: 12,
   },
   welcomeLabel: {
     fontSize: 22,
@@ -176,6 +263,50 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '600',
     letterSpacing: -0.3,
+  },
+  // Compact XP row under name
+  compactXpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  compactLevelCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactLevelText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#000',
+  },
+  compactXpBody: {
+    flex: 1,
+    gap: 4,
+  },
+  compactXpLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  compactXpText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  compactXpBarBg: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  compactXpBarFill: {
+    height: '100%',
+    borderRadius: 3,
   },
   quoteCard: {
     borderRadius: 16,
@@ -298,6 +429,35 @@ const styles = StyleSheet.create({
   seeAllText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+
+  // Empty-state card for "no bookings today"
+  noBookingsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    paddingVertical: 18,
+    paddingHorizontal: 18,
+  },
+  noBookingsIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noBookingsTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+  },
+  noBookingsDesc: {
+    fontSize: 13,
+    fontWeight: '400',
+    marginTop: 3,
+    lineHeight: 18,
   },
 
   // Announcements — top of feed, admin-editable

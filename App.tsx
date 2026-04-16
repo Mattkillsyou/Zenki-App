@@ -12,6 +12,8 @@ import { DrinkTrackerProvider } from './src/context/DrinkTrackerContext';
 import { AttendanceProvider } from './src/context/AttendanceContext';
 import { AnnouncementProvider } from './src/context/AnnouncementContext';
 import { AppointmentProvider } from './src/context/AppointmentContext';
+import { ProductProvider } from './src/context/ProductContext';
+import { SoundProvider } from './src/context/SoundContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 
 function AppContent() {
@@ -81,19 +83,23 @@ export default function App() {
       <AuthProvider>
         <MotionProvider>
           <ThemeProvider>
-            <GamificationProvider>
-              <DrinkTrackerProvider>
-                <AttendanceProvider>
-                  <AnnouncementProvider>
-                    <AppointmentProvider>
-                      <TimeClockProvider>
-                        <AppContent />
-                      </TimeClockProvider>
-                    </AppointmentProvider>
-                  </AnnouncementProvider>
-                </AttendanceProvider>
-              </DrinkTrackerProvider>
-            </GamificationProvider>
+            <SoundProvider>
+              <GamificationProvider>
+                <DrinkTrackerProvider>
+                  <AttendanceProvider>
+                    <AnnouncementProvider>
+                      <AppointmentProvider>
+                        <ProductProvider>
+                          <TimeClockProvider>
+                            <AppContent />
+                          </TimeClockProvider>
+                        </ProductProvider>
+                      </AppointmentProvider>
+                    </AnnouncementProvider>
+                  </AttendanceProvider>
+                </DrinkTrackerProvider>
+              </GamificationProvider>
+            </SoundProvider>
           </ThemeProvider>
         </MotionProvider>
       </AuthProvider>

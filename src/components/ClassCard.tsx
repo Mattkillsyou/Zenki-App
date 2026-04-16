@@ -12,6 +12,8 @@ interface ClassCardProps {
   spotsLeft: number;
   type: 'jiu-jitsu' | 'muay-thai' | 'pilates' | 'open-mat';
   onBook: () => void;
+  booked?: boolean;                                        // user already has this class booked
+  status?: 'pending' | 'confirmed' | 'cancelled' | 'completed';
 }
 
 const typeIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
@@ -28,10 +30,18 @@ const typeColors: Record<string, string> = {
   'open-mat': '#3B82F6',
 };
 
-export function ClassCard({ name, instructor, time, duration, spotsLeft, type, onBook }: ClassCardProps) {
+export function ClassCard({ name, instructor, time, duration, spotsLeft, type, onBook, booked, status }: ClassCardProps) {
   const { colors } = useTheme();
   const isAlmostFull = spotsLeft <= 3;
   const accent = typeColors[type] || colors.gold;
+  const statusLabel = booked
+    ? status === 'pending'
+      ? 'PENDING'
+      : status === 'confirmed'
+      ? 'BOOKED'
+      : (status || 'BOOKED').toString().toUpperCase()
+    : null;
+  const statusColor = status === 'pending' ? colors.gold : ((colors as any).green || '#22C55E');
 
   return (
     <TouchableOpacity activeOpacity={0.8} onPress={onBook} style={[styles.container, { backgroundColor: colors.surface, marginBottom: 14 }]}>
@@ -46,15 +56,23 @@ export function ClassCard({ name, instructor, time, duration, spotsLeft, type, o
             <Ionicons name="time-outline" size={13} color={colors.textTertiary} />
             <Text style={[styles.metaText, { color: colors.textTertiary }]}>{time} · {duration}</Text>
           </View>
-          <View style={[styles.spotsBadge, { backgroundColor: isAlmostFull ? colors.errorMuted : colors.accentTint }]}>
-            <Text style={[styles.spotsText, { color: isAlmostFull ? colors.error : colors.textSecondary }]}>
-              {spotsLeft} left
-            </Text>
-          </View>
+          {booked ? (
+            <View style={[styles.spotsBadge, { backgroundColor: statusColor + '25' }]}>
+              <Text style={[styles.spotsText, { color: statusColor, fontWeight: '800', letterSpacing: 1 }]}>
+                {statusLabel}
+              </Text>
+            </View>
+          ) : (
+            <View style={[styles.spotsBadge, { backgroundColor: isAlmostFull ? colors.errorMuted : colors.accentTint }]}>
+              <Text style={[styles.spotsText, { color: isAlmostFull ? colors.error : colors.textSecondary }]}>
+                {spotsLeft} left
+              </Text>
+            </View>
+          )}
         </View>
       </View>
-      <TouchableOpacity onPress={onBook} style={[styles.bookBtn, { backgroundColor: colors.red }]} activeOpacity={0.8}>
-        <Ionicons name="arrow-forward" size={18} color="#FFF" />
+      <TouchableOpacity onPress={onBook} style={[styles.bookBtn, { backgroundColor: booked ? colors.backgroundElevated : colors.red }]} activeOpacity={0.8}>
+        <Ionicons name={booked ? 'checkmark' : 'arrow-forward'} size={18} color={booked ? statusColor : '#FFF'} />
       </TouchableOpacity>
     </TouchableOpacity>
   );

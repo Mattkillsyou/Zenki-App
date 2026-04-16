@@ -17,12 +17,12 @@ import { getStorage, FirebaseStorage } from 'firebase/storage';
 // ─────────────────────────────────────────────────
 
 const firebaseConfig = {
-  apiKey: 'YOUR_API_KEY',
-  authDomain: 'YOUR_PROJECT.firebaseapp.com',
-  projectId: 'YOUR_PROJECT_ID',
-  storageBucket: 'YOUR_PROJECT.appspot.com',
-  messagingSenderId: 'YOUR_SENDER_ID',
-  appId: 'YOUR_APP_ID',
+  apiKey: 'AIzaSyALHuiCPe3wjcKYeqrx90DHcT6bu-Wn_Fo',
+  authDomain: 'zenki-dojo.firebaseapp.com',
+  projectId: 'zenki-dojo',
+  storageBucket: 'zenki-dojo.firebasestorage.app',
+  messagingSenderId: '277160279219',
+  appId: '1:277160279219:web:4b04763265c86d17a484c6',
 };
 
 const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== 'YOUR_API_KEY';

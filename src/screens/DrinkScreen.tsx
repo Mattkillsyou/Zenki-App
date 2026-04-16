@@ -7,6 +7,7 @@ import { useMotion } from '../context/MotionContext';
 import { useDrinkTracker } from '../context/DrinkTrackerContext';
 import { DRINK_DEFINITIONS } from '../data/drinks';
 import { DrinkType } from '../types/drinks';
+import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { FadeInView } from '../components';
 
@@ -37,7 +38,9 @@ function AnimatedDrinkButton({ type, label, icon, color, price, onAdd }: {
   const { reduceMotion } = useMotion();
   const bounceAnim = useRef(new Animated.Value(1)).current;
 
+  const { play } = useSound();
   const handlePress = () => {
+    play('tap');
     onAdd(type);
     if (!reduceMotion) {
       Animated.sequence([
@@ -60,6 +63,8 @@ function AnimatedDrinkButton({ type, label, icon, color, price, onAdd }: {
 
 export function DrinkScreen() {
   const { colors } = useTheme();
+  const { play } = useSound();
+  useScreenSoundTheme('drinks');
   const {
     pending, pendingCounts, pendingTotal,
     addToPending, removeFromPending, clearPending, commitPending,
@@ -70,89 +75,109 @@ export function DrinkScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Compact pill toggle, no page title */}
-        <FadeInView delay={0} slideUp={0}>
-          <View style={styles.toggleRow}>
+      {/* Toggle — always at top */}
+      <View style={styles.toggleRow}>
+        <TouchableOpacity
+          style={[styles.toggleButton, { backgroundColor: showMonthly ? colors.gold : colors.surface, borderColor: showMonthly ? colors.gold : colors.borderSubtle }]}
+          onPress={() => setShowMonthly(!showMonthly)}
+        >
+          <Ionicons name={showMonthly ? 'today-outline' : 'calendar-outline'} size={14} color={showMonthly ? '#000' : colors.gold} />
+          <Text style={[styles.toggleText, { color: showMonthly ? '#000' : colors.gold }]}>
+            {showMonthly ? 'Today' : 'Monthly'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {!showMonthly ? (
+        /* ═════ Today view — single screen, flex layout ═════ */
+        <View style={styles.todayBody}>
+          {/* Menu header */}
+          <View style={styles.menuHeaderRow}>
+            <Text style={styles.menuEmoji}>🍴</Text>
+            <Text style={[styles.menuTitle, { color: colors.textPrimary }]}>MENU</Text>
+            <Text style={styles.menuEmoji}>🍴</Text>
+          </View>
+
+          {/* Drink grid */}
+          <View style={styles.section}>
+            <View style={styles.drinkGrid}>
+              {DRINK_DEFINITIONS.map((d) => (
+                <AnimatedDrinkButton key={d.type} {...d} onAdd={addToPending} />
+              ))}
+            </View>
+          </View>
+
+          {/* Cart area — always rendered so layout never shifts when items are added. */}
+          <View style={[styles.section, styles.cartFlex]}>
+            <View style={styles.cartHeader}>
+              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>YOUR ORDER</Text>
+              {pending.length > 0 && (
+                <TouchableOpacity onPress={clearPending}>
+                  <Text style={[styles.clearText, { color: colors.error }]}>Clear</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <View style={[styles.breakdownCard, styles.cartListWrap, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+              {pending.length === 0 ? (
+                <View style={styles.cartEmptyState}>
+                  <Ionicons name="cafe-outline" size={22} color={colors.textMuted} />
+                  <Text style={[styles.cartEmptyText, { color: colors.textMuted }]}>
+                    Tap a drink above to start an order
+                  </Text>
+                </View>
+              ) : (
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ flexGrow: 1 }}
+                >
+                  {DRINK_DEFINITIONS.filter((d) => pendingCounts[d.type] > 0).map((d) => (
+                    <View key={d.type} style={[styles.cartItemRow, { borderBottomColor: colors.divider }]}>
+                      <Ionicons name={d.icon as any} size={20} color={d.color} />
+                      <Text style={[styles.cartItemName, { color: colors.textPrimary }]}>{d.label}</Text>
+                      <View style={styles.qtyControls}>
+                        <TouchableOpacity
+                          style={[styles.qtyBtn, { backgroundColor: colors.backgroundElevated }]}
+                          onPress={() => removeFromPending(d.type)}
+                        >
+                          <Ionicons name="remove" size={16} color={colors.textPrimary} />
+                        </TouchableOpacity>
+                        <Text style={[styles.qtyText, { color: colors.textPrimary }]}>{pendingCounts[d.type]}</Text>
+                        <TouchableOpacity
+                          style={[styles.qtyBtn, { backgroundColor: colors.backgroundElevated }]}
+                          onPress={() => addToPending(d.type)}
+                        >
+                          <Ionicons name="add" size={16} color={colors.textPrimary} />
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={[styles.cartItemPrice, { color: colors.gold }]}>
+                        ${(pendingCounts[d.type] * d.price).toFixed(2)}
+                      </Text>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+
+            {/* Commit button — always rendered; disabled when cart is empty */}
             <TouchableOpacity
-              style={[styles.toggleButton, { backgroundColor: showMonthly ? colors.gold : colors.surface, borderColor: showMonthly ? colors.gold : colors.borderSubtle }]}
-              onPress={() => setShowMonthly(!showMonthly)}
+              style={[
+                styles.commitBtn,
+                { backgroundColor: pending.length > 0 ? colors.gold : colors.surfaceSecondary, opacity: pending.length > 0 ? 1 : 0.6 },
+              ]}
+              onPress={() => { play('success'); commitPending(); }}
+              disabled={pending.length === 0}
             >
-              <Ionicons name={showMonthly ? 'today-outline' : 'calendar-outline'} size={14} color={showMonthly ? '#000' : colors.gold} />
-              <Text style={[styles.toggleText, { color: showMonthly ? '#000' : colors.gold }]}>
-                {showMonthly ? 'Today' : 'Monthly'}
+              <Ionicons name="checkmark-circle" size={20} color={pending.length > 0 ? '#000' : colors.textMuted} />
+              <Text style={[styles.commitBtnText, { color: pending.length > 0 ? '#000' : colors.textMuted }]}>
+                {pending.length > 0 ? `Commit Order — $${pendingTotal.toFixed(2)}` : 'Commit Order'}
               </Text>
             </TouchableOpacity>
           </View>
-        </FadeInView>
 
-        {!showMonthly ? (
-          <>
-            {/* Drink Buttons — tap to add to pending cart */}
-            <FadeInView delay={60} slideUp={14}>
-              <View style={styles.section}>
-                <View style={styles.drinkGrid}>
-                  {DRINK_DEFINITIONS.map((d) => (
-                    <AnimatedDrinkButton key={d.type} {...d} onAdd={addToPending} />
-                  ))}
-                </View>
-              </View>
-            </FadeInView>
-
-            {/* Editable pending cart */}
-            {pending.length > 0 && (
-              <FadeInView delay={120} slideUp={14}>
-                <View style={styles.section}>
-                  <View style={styles.cartHeader}>
-                    <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>YOUR ORDER</Text>
-                    <TouchableOpacity onPress={clearPending}>
-                      <Text style={[styles.clearText, { color: colors.error }]}>Clear</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={[styles.breakdownCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-                    {DRINK_DEFINITIONS.filter((d) => pendingCounts[d.type] > 0).map((d) => (
-                      <View key={d.type} style={[styles.cartItemRow, { borderBottomColor: colors.divider }]}>
-                        <Ionicons name={d.icon as any} size={20} color={d.color} />
-                        <Text style={[styles.cartItemName, { color: colors.textPrimary }]}>{d.label}</Text>
-                        <View style={styles.qtyControls}>
-                          <TouchableOpacity
-                            style={[styles.qtyBtn, { backgroundColor: colors.backgroundElevated }]}
-                            onPress={() => removeFromPending(d.type)}
-                          >
-                            <Ionicons name="remove" size={16} color={colors.textPrimary} />
-                          </TouchableOpacity>
-                          <Text style={[styles.qtyText, { color: colors.textPrimary }]}>{pendingCounts[d.type]}</Text>
-                          <TouchableOpacity
-                            style={[styles.qtyBtn, { backgroundColor: colors.backgroundElevated }]}
-                            onPress={() => addToPending(d.type)}
-                          >
-                            <Ionicons name="add" size={16} color={colors.textPrimary} />
-                          </TouchableOpacity>
-                        </View>
-                        <Text style={[styles.cartItemPrice, { color: colors.gold }]}>
-                          ${(pendingCounts[d.type] * d.price).toFixed(2)}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-
-                  {/* Commit button */}
-                  <TouchableOpacity
-                    style={[styles.commitBtn, { backgroundColor: colors.gold }]}
-                    onPress={() => commitPending()}
-                  >
-                    <Ionicons name="checkmark-circle" size={20} color="#000" />
-                    <Text style={styles.commitBtnText}>Commit Order — ${pendingTotal.toFixed(2)}</Text>
-                  </TouchableOpacity>
-                </View>
-              </FadeInView>
-            )}
-
-            {/* Spacer so the fixed bottom bar doesn't cover content */}
-            <View style={{ height: 180 }} />
-          </>
-        ) : (
-          /* Monthly View */
+        </View>
+      ) : (
+        /* ═════ Monthly view — scrollable history ═════ */
+        <ScrollView showsVerticalScrollIndicator={false}>
           <FadeInView delay={60} slideUp={14}>
             <View style={styles.section}>
               <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>MONTHLY CHARGES</Text>
@@ -188,10 +213,10 @@ export function DrinkScreen() {
               )}
             </View>
           </FadeInView>
-        )}
 
-        <View style={{ height: spacing.xxl * 2 }} />
-      </ScrollView>
+          <View style={{ height: spacing.xxl * 2 }} />
+        </ScrollView>
+      )}
 
       {/* Fixed bottom: unpaid balance + pay */}
       {!showMonthly && (
@@ -243,8 +268,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingTop: 4,
+    paddingBottom: 0,
   },
   toggleButton: {
     flexDirection: 'row',
@@ -287,9 +312,34 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: spacing.lg,
-    marginTop: 32,
+    marginTop: 12,
   },
-  sectionLabel: { fontSize: 12, fontWeight: '600', marginBottom: spacing.md },
+  todayBody: {
+    flex: 1,
+    paddingBottom: 140,   // reserve room for the fixed BALANCE DUE bar so Commit Order is never hidden
+  },
+  cartFlex: {
+    flex: 1,                // fills remaining vertical space
+    minHeight: 180,
+    paddingBottom: 0,
+  },
+  cartListWrap: {
+    flex: 1,                // cart items scroll within this box
+    minHeight: 60,
+  },
+  cartEmptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    gap: 8,
+  },
+  cartEmptyText: {
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0.3,
+  },
+  sectionLabel: { fontSize: 11, fontWeight: '600', marginBottom: 8, letterSpacing: 0.5 },
   drinkGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -298,8 +348,8 @@ const styles = StyleSheet.create({
   },
   drinkButtonWrapper: {
     width: '32%',
-    aspectRatio: 1,
-    minHeight: 110,
+    aspectRatio: 1.15,
+    minHeight: 88,
   },
   drinkButton: {
     flex: 1,
@@ -322,7 +372,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 8,
     borderBottomWidth: 1,
   },
   cartItemName: { fontSize: 14, fontWeight: '600', flex: 1 },
@@ -335,9 +385,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 16,
-    borderRadius: 14,
+    paddingVertical: 12,
     marginTop: spacing.md,
+    borderRadius: 14,
   },
   commitBtnText: { fontSize: 15, fontWeight: '800', color: '#000', letterSpacing: 0.3 },
   bottomBar: {
@@ -367,6 +417,25 @@ const styles = StyleSheet.create({
   bottomPayText: { fontSize: 15, fontWeight: '700' },
   drinkLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
   drinkPrice: { fontSize: 14, fontWeight: '800' },
+
+  menuHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 18,
+    paddingHorizontal: spacing.lg,
+    marginTop: 8,
+    marginBottom: 2,
+  },
+  menuEmoji: {
+    fontSize: 30,
+  },
+  menuTitle: {
+    fontSize: 36,
+    fontWeight: '900',
+    letterSpacing: 6,
+    textTransform: 'uppercase',
+  },
   breakdownCard: { borderRadius: 16, overflow: 'hidden', borderWidth: 1.5 },
   breakdownRow: {
     flexDirection: 'row',

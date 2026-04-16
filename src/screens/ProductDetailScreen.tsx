@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,23 +7,31 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Dimensions,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { Button } from '../components';
-import { PRODUCTS } from '../data/products';
+import { getProductImages } from '../data/products';
+import { useProducts } from '../context/ProductContext';
 
 export function ProductDetailScreen({ navigation, route }: any) {
   const { colors } = useTheme();
+  const { products } = useProducts();
   const { productId } = route.params;
-  const product = PRODUCTS.find((p) => p.id === productId);
+  const product = products.find((p) => p.id === productId);
 
   const [selectedSize, setSelectedSize] = useState<string | null>(
     product?.sizes?.[0] || null,
   );
   const [quantity, setQuantity] = useState(1);
+  const [activeImageIdx, setActiveImageIdx] = useState(0);
+  const carouselRef = useRef<ScrollView>(null);
+  const [carouselWidth, setCarouselWidth] = useState(0);
 
   if (!product) {
     return (
@@ -90,19 +98,112 @@ export function ProductDetailScreen({ navigation, route }: any) {
           </TouchableOpacity>
         </View>
 
-        {/* Product Image */}
-        <View style={[styles.imageContainer, { backgroundColor: colors.surfaceSecondary, width: '100%', aspectRatio: 1 }]}>
-          <Image source={product.image} style={styles.productImage} resizeMode="cover" />
-          {product.badge && (
-            <View style={[styles.badge, { backgroundColor: colors.red }]}>
-              <Text style={[styles.badgeText, { color: colors.textInverse }]}>{product.badge}</Text>
-            </View>
-          )}
-          {!product.inStock && (
-            <View style={[styles.outOfStock, { backgroundColor: colors.overlay }]}>
-              <Text style={[styles.outOfStockText, { color: colors.textInverse }]}>Out of Stock</Text>
-            </View>
-          )}
+        {/* Product Image Carousel */}
+        <View
+          style={[styles.imageContainer, { backgroundColor: colors.surfaceSecondary, width: '100%', aspectRatio: 1 }]}
+          onLayout={(e) => setCarouselWidth(e.nativeEvent.layout.width)}
+        >
+          {(() => {
+            const gallery = getProductImages(product);
+            return (
+              <>
+                <ScrollView
+                  ref={carouselRef}
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+                    if (!carouselWidth) return;
+                    const idx = Math.round(e.nativeEvent.contentOffset.x / carouselWidth);
+                    setActiveImageIdx(idx);
+                  }}
+                  style={StyleSheet.absoluteFill}
+                >
+                  {gallery.map((src, i) => (
+                    <View key={i} style={{ width: carouselWidth || undefined, aspectRatio: 1 }}>
+                      <Image source={src} style={styles.productImage} resizeMode="cover" />
+                    </View>
+                  ))}
+                </ScrollView>
+
+                {product.badge && (
+                  <View style={[styles.badge, { backgroundColor: colors.red }]}>
+                    <Text style={[styles.badgeText, { color: colors.textInverse }]}>{product.badge}</Text>
+                  </View>
+                )}
+                {!product.inStock && (
+                  <View style={[styles.outOfStock, { backgroundColor: colors.overlay }]}>
+                    <Text style={[styles.outOfStockText, { color: colors.textInverse }]}>Out of Stock</Text>
+                  </View>
+                )}
+
+                {/* Image counter chip (top-left) */}
+                {gallery.length > 1 && (
+                  <View style={styles.imageCounter}>
+                    <Text style={styles.imageCounterText}>
+                      {activeImageIdx + 1} / {gallery.length}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Previous arrow */}
+                {gallery.length > 1 && activeImageIdx > 0 && (
+                  <TouchableOpacity
+                    style={[styles.arrowBtn, styles.arrowLeft]}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      const next = activeImageIdx - 1;
+                      setActiveImageIdx(next);
+                      carouselRef.current?.scrollTo({ x: next * carouselWidth, animated: true });
+                    }}
+                  >
+                    <Ionicons name="chevron-back" size={22} color="#FFF" />
+                  </TouchableOpacity>
+                )}
+
+                {/* Next arrow */}
+                {gallery.length > 1 && activeImageIdx < gallery.length - 1 && (
+                  <TouchableOpacity
+                    style={[styles.arrowBtn, styles.arrowRight]}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      const next = activeImageIdx + 1;
+                      setActiveImageIdx(next);
+                      carouselRef.current?.scrollTo({ x: next * carouselWidth, animated: true });
+                    }}
+                  >
+                    <Ionicons name="chevron-forward" size={22} color="#FFF" />
+                  </TouchableOpacity>
+                )}
+
+                {/* Pagination dots (bottom-center) — tap to jump */}
+                {gallery.length > 1 && (
+                  <View style={styles.dotsRow}>
+                    {gallery.map((_, i) => (
+                      <TouchableOpacity
+                        key={i}
+                        onPress={() => {
+                          setActiveImageIdx(i);
+                          carouselRef.current?.scrollTo({ x: i * carouselWidth, animated: true });
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                      >
+                        <View
+                          style={[
+                            styles.dot,
+                            {
+                              backgroundColor: i === activeImageIdx ? colors.gold : 'rgba(255,255,255,0.5)',
+                              width: i === activeImageIdx ? 22 : 6,
+                            },
+                          ]}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </>
+            );
+          })()}
         </View>
 
         <View style={styles.content}>
@@ -112,33 +213,34 @@ export function ProductDetailScreen({ navigation, route }: any) {
           </Text>
           <Text style={[styles.name, { color: colors.textPrimary, fontSize: 28, fontWeight: '800' }]}>{product.name}</Text>
 
-          {/* Pricing */}
-          <View style={styles.priceRow}>
-            <Text style={[styles.memberPrice, { color: colors.gold, fontSize: 24, fontWeight: '800' }]}>
-              ${product.memberPrice.toFixed(2)}
-            </Text>
-            {savings > 0 && (
-              <>
-                <Text style={[styles.originalPrice, { color: colors.textMuted }]}>
-                  ${product.price.toFixed(2)}
-                </Text>
-                <View style={[styles.savingsBadge, { backgroundColor: colors.goldMuted }]}>
-                  <Text style={[styles.savingsText, { color: colors.gold }]}>
-                    Save ${savings.toFixed(2)}
-                  </Text>
-                </View>
-              </>
-            )}
-          </View>
-
-          {/* Member price note */}
+          {/* Member pricing pill — ABOVE price */}
           <View style={[styles.memberNote, { backgroundColor: colors.redMuted, borderColor: colors.red + '20' }]}>
-
             <Ionicons name="diamond-outline" size={14} color={colors.red} />
             <Text style={[styles.memberNoteText, { color: colors.red }]}>
               Member pricing applied
             </Text>
           </View>
+
+          {/* Pricing — member price + original only, no mixed shapes */}
+          <View style={styles.priceRow}>
+            <Text style={[styles.memberPrice, { color: colors.gold, fontSize: 24, fontWeight: '800' }]}>
+              ${product.memberPrice.toFixed(2)}
+            </Text>
+            {savings > 0 && (
+              <Text style={[styles.originalPrice, { color: colors.textMuted }]}>
+                ${product.price.toFixed(2)}
+              </Text>
+            )}
+          </View>
+
+          {/* Savings badge — BELOW price, standalone pill */}
+          {savings > 0 && (
+            <View style={[styles.savingsBadge, { backgroundColor: colors.goldMuted }]}>
+              <Text style={[styles.savingsText, { color: colors.gold }]}>
+                Save ${savings.toFixed(2)}
+              </Text>
+            </View>
+          )}
 
           {/* Description */}
           <Text style={[styles.descTitle, { color: colors.textPrimary }]}>Description</Text>
@@ -234,22 +336,71 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 10,
+    zIndex: 20,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   imageContainer: {
+    position: 'relative',
+    overflow: 'hidden',
   },
   productImage: {
     width: '100%',
     height: '100%',
+  },
+  dotsRow: {
+    position: 'absolute',
+    bottom: 14,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dot: {
+    height: 6,
+    borderRadius: 3,
+  },
+  imageCounter: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  imageCounterText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  arrowBtn: {
+    position: 'absolute',
+    top: '50%',
+    marginTop: -18,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 15,
+  },
+  arrowLeft: {
+    left: 10,
+  },
+  arrowRight: {
+    right: 10,
   },
   badge: {
     position: 'absolute',
@@ -275,22 +426,27 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
+    alignItems: 'center',
   },
   category: {
     ...typography.label,
     fontSize: 11,
     marginBottom: spacing.xs,
+    textAlign: 'center',
   },
   name: {
     ...typography.sectionTitle,
     letterSpacing: -0.3,
     textTransform: 'none',
+    textAlign: 'center',
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: spacing.md,
     gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   memberPrice: {
   },
@@ -299,24 +455,29 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
   },
   savingsBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
     borderRadius: borderRadius.full,
+    alignSelf: 'center',
+    marginTop: spacing.sm,
   },
   savingsText: {
     ...typography.label,
     fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
   memberNote: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.full,
     borderWidth: 1,
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
   },
   memberNoteText: {
     ...typography.label,
@@ -327,21 +488,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 24,
     marginBottom: spacing.sm,
+    textAlign: 'center',
+    alignSelf: 'stretch',
   },
   description: {
     ...typography.body,
+    textAlign: 'center',
+    alignSelf: 'stretch',
   },
   sizeSection: {
     marginTop: 24,
+    alignItems: 'center',
+    alignSelf: 'stretch',
   },
   sizeLabel: {
     ...typography.label,
     marginBottom: spacing.sm,
+    textAlign: 'center',
   },
   sizeGrid: {
     flexDirection: 'row',
     gap: spacing.sm,
     flexWrap: 'wrap',
+    justifyContent: 'center',
   },
   sizeChip: {
     alignItems: 'center',
@@ -352,10 +521,13 @@ const styles = StyleSheet.create({
   },
   quantitySection: {
     marginTop: 24,
+    alignItems: 'center',
+    alignSelf: 'stretch',
   },
   quantityRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.md,
   },
   qtyButton: {
@@ -371,5 +543,6 @@ const styles = StyleSheet.create({
   actions: {
     marginTop: 24,
     gap: spacing.sm,
+    alignSelf: 'stretch',
   },
 });

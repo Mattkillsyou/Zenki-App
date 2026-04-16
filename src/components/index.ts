@@ -14,3 +14,4 @@ export { AchievementBadge, AchievementGrid } from './AchievementBadge';
 export { CelebrationModal } from './CelebrationModal';
 export { PostCard } from './PostCard';
 export { BeltDisplay } from './BeltDisplay';
+export { SoundPressable } from './SoundPressable';

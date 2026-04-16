@@ -9,6 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useScreenSoundTheme } from '../context/SoundContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { ClassCard } from '../components';
 
@@ -89,6 +90,7 @@ const PILATES_ENTRY = {
 
 export function ScheduleScreen({ navigation }: any) {
   const { colors } = useTheme();
+  useScreenSoundTheme('schedule');
   const [selectedDay, setSelectedDay] = useState(getTodayIndex());
   const [selectedFilter, setSelectedFilter] = useState('All');
   const weekDates = getWeekDates();

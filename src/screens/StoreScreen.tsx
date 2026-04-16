@@ -13,8 +13,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { CATEGORIES, PRODUCTS, Product } from '../data/products';
+import { CATEGORIES, Product } from '../data/products';
+import { useProducts } from '../context/ProductContext';
 import { useGamification } from '../context/GamificationContext';
+import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 
 // Conversion rate: $1 = 10 Dojo Points
 const POINTS_PER_DOLLAR = 10;
@@ -27,6 +29,9 @@ interface CartItem {
 export function StoreScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { state: gamState, redeemPoints } = useGamification();
+  const { products: PRODUCTS } = useProducts();
+  const { play } = useSound();
+  useScreenSoundTheme('store');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCart, setShowCart] = useState(false);
@@ -43,6 +48,7 @@ export function StoreScreen({ navigation }: any) {
   };
 
   const addToCart = (product: Product) => {
+    play('tap');
     setCart((prev) => {
       const existing = prev.find((item) => item.product.id === product.id);
       if (existing) {
@@ -63,73 +69,73 @@ export function StoreScreen({ navigation }: any) {
 
   const renderProduct = ({ item }: { item: Product }) => (
     <TouchableOpacity
-      style={[{ borderRadius: 20, overflow: 'hidden', borderWidth: 1.5, backgroundColor: colors.surface, borderColor: colors.border }]}
+      style={[styles.productCard, { backgroundColor: colors.surface }]}
       onPress={() => handleProductPress(item)}
-      activeOpacity={0.8}
+      activeOpacity={0.85}
     >
-      <View style={[styles.productImageContainer, { backgroundColor: colors.surfaceSecondary, aspectRatio: 1 }]}>
+      <View style={[styles.productImageContainer, { backgroundColor: '#000', aspectRatio: 1 }]}>
         <Image source={item.image} style={styles.productImage} resizeMode="cover" />
         {item.badge && (
           <View style={[styles.productBadge, { backgroundColor: colors.red }]}>
-            <Text style={[styles.productBadgeText, { color: colors.textInverse }]}>{item.badge}</Text>
+            <Text style={styles.productBadgeText}>{item.badge.toUpperCase()}</Text>
           </View>
         )}
         {!item.inStock && (
-          <View style={[styles.soldOut, { backgroundColor: colors.overlay }]}>
-            <Text style={[styles.soldOutText, { color: colors.textInverse }]}>Sold Out</Text>
+          <View style={[styles.soldOut, { backgroundColor: 'rgba(0,0,0,0.75)' }]}>
+            <Text style={styles.soldOutText}>SOLD OUT</Text>
           </View>
         )}
       </View>
       <View style={styles.productInfo}>
-        <Text style={[{ fontSize: 16, fontWeight: '700', color: colors.textPrimary }]} numberOfLines={2}>
-          {item.name}
+        <Text style={[styles.productName, { color: colors.textPrimary }]} numberOfLines={2}>
+          {item.name.toUpperCase()}
         </Text>
         <View style={styles.priceRow}>
-          <Text style={[{ fontSize: 18, fontWeight: '800', color: colors.gold }]}>
-            ${item.memberPrice.toFixed(2)}
-          </Text>
-          {item.memberPrice !== item.price && (
-            <Text style={[styles.originalPrice, { color: colors.textMuted }]}>
-              ${item.price.toFixed(2)}
+          <View style={styles.priceLeft}>
+            <Text style={[styles.productPrice, { color: colors.textPrimary }]}>
+              ${item.memberPrice.toFixed(0)}
             </Text>
+            {item.memberPrice !== item.price && (
+              <Text style={[styles.originalPrice, { color: colors.textMuted }]}>
+                ${item.price.toFixed(0)}
+              </Text>
+            )}
+          </View>
+          {item.inStock && (
+            <TouchableOpacity
+              style={[styles.addButton, { backgroundColor: colors.red }]}
+              onPress={(e) => { e.stopPropagation(); addToCart(item); }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="add" size={18} color="#FFF" />
+            </TouchableOpacity>
           )}
         </View>
       </View>
-      {item.inStock && (
-        <TouchableOpacity
-          style={[styles.addButton, { backgroundColor: colors.red }]}
-          onPress={(e) => { e.stopPropagation(); addToCart(item); }}
-        >
-          <Ionicons name="add" size={18} color="#FFF" />
-        </TouchableOpacity>
-      )}
     </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Header */}
+      {/* Header — Cobra Kai block type */}
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Zenki Gear</Text>
+        <View style={styles.heroCol}>
+          <View style={[styles.redStripe, { backgroundColor: colors.red }]} />
+          <Text style={[styles.title, { color: colors.textPrimary }]}>ZENKI GEAR</Text>
+          <Text style={[styles.tagline, { color: colors.textSecondary }]}>FORGED FOR THE MAT · WORN WITH PRIDE</Text>
+        </View>
         <TouchableOpacity
-          style={[styles.cartButton, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}
+          style={[styles.cartButton, { backgroundColor: '#000', borderColor: colors.red }]}
           onPress={() => setShowCart(!showCart)}
+          activeOpacity={0.75}
         >
-          <Ionicons name={showCart ? 'close-outline' : 'bag-outline'} size={24} color={colors.textPrimary} />
+          <Ionicons name={showCart ? 'close' : 'bag-outline'} size={22} color={colors.textPrimary} />
           {cartCount > 0 && (
             <View style={[styles.cartBadge, { backgroundColor: colors.red }]}>
               <Text style={styles.cartBadgeText}>{cartCount}</Text>
             </View>
           )}
         </TouchableOpacity>
-      </View>
-
-      {/* Member Discount Banner */}
-      <View style={[{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 24, padding: 20, borderRadius: 20, gap: 12, borderWidth: 1.5, backgroundColor: colors.redMuted, borderColor: colors.red + '40' }]}>
-        <Ionicons name="diamond-outline" size={18} color={colors.red} />
-        <Text style={[styles.discountText, { color: colors.red }]}>
-          Members save up to 15% on all items
-        </Text>
       </View>
 
       {/* Categories */}
@@ -144,21 +150,19 @@ export function StoreScreen({ navigation }: any) {
           return (
             <TouchableOpacity
               key={cat}
-              style={[
-                {
-                  paddingVertical: 10,
-                  paddingHorizontal: 20,
-                  borderRadius: 24,
-                  borderWidth: isActive ? 0 : 1.5,
-                  backgroundColor: isActive ? colors.gold : colors.surface,
-                  borderColor: isActive ? colors.gold : colors.border,
-                }
-              ]}
+              style={[styles.categoryChip, isActive && { borderBottomColor: colors.red }]}
               onPress={() => setSelectedCategory(cat)}
+              activeOpacity={0.7}
             >
-              <Text style={[
-                { fontSize: 14, fontWeight: '600', color: isActive ? colors.textInverse : colors.textMuted },
-              ]}>
+              <Text style={{
+                fontSize: 14,
+                fontWeight: '900',
+                fontStyle: 'italic',
+                color: isActive ? colors.textPrimary : colors.textSecondary,
+                opacity: isActive ? 1 : 0.75,
+                letterSpacing: 1.5,
+                textTransform: 'uppercase',
+              }}>
                 {cat}
               </Text>
             </TouchableOpacity>
@@ -286,44 +290,74 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: spacing.md + 4,
+    alignItems: 'flex-start',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  heroCol: {
+    flex: 1,
+  },
+  redStripe: {
+    width: 32,
+    height: 4,
+    marginBottom: 8,
   },
   title: {
     fontSize: 34,
-    fontWeight: '800',
+    fontWeight: '900',
+    fontStyle: 'italic',
+    letterSpacing: -0.5,
+    lineHeight: 36,
+  },
+  tagline: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 2,
+    marginTop: 6,
+    textTransform: 'uppercase',
   },
   cartButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 0,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
   },
   discountText: {
     ...typography.bodySmall,
     fontWeight: '600',
   },
   categoryRow: {
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
+    maxHeight: 52,
+    marginTop: 18,
+    marginBottom: 12,
   },
   categoryContent: {
-    paddingHorizontal: 24,
-    gap: 12,
-    alignItems: 'center',
+    paddingHorizontal: 20,
+    gap: 6,
+    alignItems: 'flex-end',
+  },
+  categoryChip: {
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
   },
   productList: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingTop: spacing.md,
     paddingBottom: spacing.xxl * 2,
   },
   productRow: {
     justifyContent: 'space-between',
-    gap: 14,
     marginBottom: 14,
+  },
+  productCard: {
+    width: '48.5%',
+    borderRadius: 0,         // sharp corners — 80s raw
+    overflow: 'hidden',
   },
   productImageContainer: {
   },
@@ -333,15 +367,19 @@ const styles = StyleSheet.create({
   },
   productBadge: {
     position: 'absolute',
-    top: spacing.sm,
-    left: spacing.sm,
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    top: 10,
+    left: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    // slight rotation for that rebellious sticker vibe
+    transform: [{ rotate: '-3deg' }],
   },
   productBadgeText: {
-    ...typography.label,
-    fontSize: 9,
+    fontSize: 10,
+    fontWeight: '900',
+    fontStyle: 'italic',
+    color: '#FFF',
+    letterSpacing: 1,
   },
   soldOut: {
     ...StyleSheet.absoluteFillObject,
@@ -349,46 +387,69 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   soldOutText: {
-    ...typography.label,
-    fontSize: 12,
+    fontSize: 18,
+    fontWeight: '900',
+    fontStyle: 'italic',
+    letterSpacing: 3,
+    color: '#FFF',
   },
   productInfo: {
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  productName: {
+    fontSize: 13,
+    fontWeight: '800',
+    fontStyle: 'italic',
+    letterSpacing: 0.5,
+    lineHeight: 19,
+    minHeight: 38,
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.sm,
-    gap: spacing.sm,
+    justifyContent: 'space-between',
+  },
+  priceLeft: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  productPrice: {
+    fontSize: 22,
+    fontWeight: '900',
+    fontStyle: 'italic',
+    letterSpacing: -0.5,
   },
   originalPrice: {
-    fontSize: 13,
+    fontSize: 12,
+    fontWeight: '600',
     textDecorationLine: 'line-through',
   },
   addButton: {
-    position: 'absolute',
-    bottom: spacing.sm,
-    right: spacing.sm,
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 0,         // sharp
     alignItems: 'center',
     justifyContent: 'center',
   },
   cartBadge: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    top: -6,
+    right: -6,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 0,         // sharp square badge
     alignItems: 'center',
     justifyContent: 'center',
   },
   cartBadgeText: {
     color: '#FFF',
-    fontSize: 10,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '900',
+    fontStyle: 'italic',
   },
   emptyCart: {
     alignItems: 'center',

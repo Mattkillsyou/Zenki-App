@@ -19,6 +19,7 @@
     "@stripe/stripe-react-native": "^0.61.0",
     "expo": "~52.0.0",
     "expo-auth-session": "~6.0.3",
+    "expo-av": "~15.0.1",
     "expo-crypto": "~14.0.2",
     "expo-device": "~7.0.3",
     "expo-font": "~13.0.0",

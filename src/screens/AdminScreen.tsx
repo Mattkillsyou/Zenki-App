@@ -13,7 +13,7 @@ import { useAttendance } from '../context/AttendanceContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { FadeInView, PressableScale } from '../components';
 import { MEMBERS } from '../data/members';
-import { PRODUCTS } from '../data/products';
+import { useProducts } from '../context/ProductContext';
 
 interface AdminCardProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -48,6 +48,7 @@ function AdminCard({ icon, title, subtitle, count, accentColor, onPress }: Admin
 
 export function AdminScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const { products: PRODUCTS } = useProducts();
   const { todayVisitors } = useAttendance();
 
   return (

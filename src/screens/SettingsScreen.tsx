@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useScreenSoundTheme } from '../context/SoundContext';
 import { ADMIN_PASSWORD_OVERRIDE_KEY } from '../data/members';
 import { typography, spacing, borderRadius } from '../theme';
 
@@ -29,6 +30,7 @@ export function SettingsScreen({ navigation }: any) {
   const { colors, mode, setMode } = useTheme();
   const { user } = useAuth();
   const isAdmin = user?.isAdmin === true;
+  useScreenSoundTheme('settings');
   const [pushEnabled, setPushEnabled] = useState(true);
   const [classReminders, setClassReminders] = useState(true);
   const [emailUpdates, setEmailUpdates] = useState(false);
@@ -203,16 +205,20 @@ export function SettingsScreen({ navigation }: any) {
           )}
         </View>
 
-        {/* Calendar */}
-        {renderSectionHeader('CALENDAR')}
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
-          {renderToggleRow(
-            'Block busy times from booking',
-            "When on, members can't book slots you already have an event for",
-            calendarSync,
-            setCalendarSync,
-          )}
-        </View>
+        {/* Calendar — admin-only */}
+        {isAdmin && (
+          <>
+            {renderSectionHeader('CALENDAR')}
+            <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+              {renderToggleRow(
+                'Block busy times from booking',
+                "When on, members can't book slots you already have an event for",
+                calendarSync,
+                setCalendarSync,
+              )}
+            </View>
+          </>
+        )}
 
         {/* Account */}
         {renderSectionHeader('ACCOUNT')}
@@ -248,6 +254,11 @@ export function SettingsScreen({ navigation }: any) {
             navigation.replace('SignIn');
           }, true)}
         </View>
+
+        {/* Credit */}
+        <Text style={[styles.creditText, { color: colors.textMuted }]}>
+          Created by Matt Brown · 2026
+        </Text>
 
         <View style={{ height: spacing.xxl * 2 }} />
       </ScrollView>
@@ -435,4 +446,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   modalBtnText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  creditText: {
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0.5,
+    marginTop: spacing.xl,
+    marginBottom: spacing.sm,
+    opacity: 0.7,
+  },
 });
