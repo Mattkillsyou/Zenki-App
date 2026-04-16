@@ -28,6 +28,7 @@ interface OnboardingData {
   phone: string;
   photo: string | null;
   bio: string;
+  funFact: string;
   instagram: string;
   twitter: string;
   website: string;
@@ -46,7 +47,7 @@ export function OnboardingScreen({ navigation, route }: any) {
   const [locationGranted, setLocationGranted] = useState(false);
   const [data, setData] = useState<OnboardingData>({
     email: '', password: '', confirmPassword: '',
-    firstName: '', lastName: '', phone: '', photo: null, bio: '',
+    firstName: '', lastName: '', phone: '', photo: null, bio: '', funFact: '',
     instagram: '', twitter: '', website: '', belt: 'none', stripes: 0,
     signedName: '', emailWaiverCopy: false,
   });
@@ -125,6 +126,7 @@ export function OnboardingScreen({ navigation, route }: any) {
       memberSince: new Date().toISOString().split('T')[0],
       isAdmin: false,
       profilePhoto: data.photo || undefined,
+      funFact: data.funFact.trim() || undefined,
       totalSessions: 0,
       weekStreak: 0,
     };
@@ -308,7 +310,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             <Ionicons name="chatbubble-ellipses-outline" size={64} color={colors.gold} />
           </Animated.View>
           <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Tell us about yourself</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>A short bio for your profile</Text>
+          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>A short bio and a fun fact for your profile</Text>
           <TextInput
             style={[styles.input, styles.bioInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: 'transparent', borderWidth: 0 }]}
             placeholder="I train because..."
@@ -319,6 +321,17 @@ export function OnboardingScreen({ navigation, route }: any) {
             maxLength={150}
           />
           <Text style={[styles.charCount, { color: colors.textMuted }]}>{data.bio.length}/150</Text>
+
+          <TextInput
+            style={[styles.input, styles.bioInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: 'transparent', borderWidth: 0, minHeight: 70 }]}
+            placeholder="Fun fact: I can juggle 5 balls…"
+            placeholderTextColor={colors.textMuted}
+            value={data.funFact}
+            onChangeText={(v) => setData({ ...data, funFact: v })}
+            multiline
+            maxLength={120}
+          />
+          <Text style={[styles.charCount, { color: colors.textMuted }]}>{data.funFact.length}/120</Text>
         </View>
       );
 

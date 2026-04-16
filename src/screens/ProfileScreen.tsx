@@ -152,6 +152,21 @@ export function ProfileScreen({ navigation }: any) {
           </View>
         </View>
 
+        {/* Fun Fact */}
+        {user?.funFact ? (
+          <View style={styles.section}>
+            <Card variant="elevated">
+              <View style={styles.funFactHeader}>
+                <Ionicons name="sparkles-outline" size={16} color={colors.gold} />
+                <Text style={[styles.funFactLabel, { color: colors.gold }]}>FUN FACT</Text>
+              </View>
+              <Text style={[styles.funFactText, { color: colors.textPrimary }]}>
+                {user.funFact}
+              </Text>
+            </Card>
+          </View>
+        ) : null}
+
         {/* Belt Progress (read-only — admins update via Admin Panel) */}
         {memberBelt !== 'none' && (
           <View style={styles.section}>
@@ -348,6 +363,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.sm,
     fontStyle: 'italic',
+  },
+  funFactHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  funFactLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+  },
+  funFactText: {
+    fontSize: 15,
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 22,
   },
   statsGrid: {
     flexDirection: 'row',

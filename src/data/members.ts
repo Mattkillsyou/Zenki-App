@@ -36,6 +36,7 @@ export interface Member {
   totalSessions: number;
   weekStreak: number;
   pushToken?: string; // Expo push token for notifications
+  funFact?: string;   // Fun fact shown on profile, captured in onboarding
 }
 
 export const MEMBERS: Member[] = [

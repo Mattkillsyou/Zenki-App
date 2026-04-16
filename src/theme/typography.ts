@@ -1,7 +1,8 @@
 import { TextStyle } from 'react-native';
 
 // Premium type scale — clear hierarchy with weight AND size contrast
-// No uppercase on headings (reduces readability), only on labels/badges
+// Centered by default across the app; specific rows (label/value) override
+// with textAlign: 'left' where needed.
 export const typography: Record<string, TextStyle> = {
   // Display — hero moments, onboarding
   heroTitle: {
@@ -9,6 +10,7 @@ export const typography: Record<string, TextStyle> = {
     fontWeight: '700',
     lineHeight: 40,
     letterSpacing: -0.5,
+    textAlign: 'center',
   },
 
   // Page title — top-level screen headings (Schedule, Store, Profile, etc.)
@@ -17,6 +19,7 @@ export const typography: Record<string, TextStyle> = {
     fontWeight: '700',
     lineHeight: 36,
     letterSpacing: -0.5,
+    textAlign: 'center',
   },
 
   // Section title — in-page section headings
@@ -25,6 +28,7 @@ export const typography: Record<string, TextStyle> = {
     fontWeight: '700',
     lineHeight: 28,
     letterSpacing: -0.3,
+    textAlign: 'center',
   },
 
   // Card title — card headers, list item titles
@@ -33,6 +37,7 @@ export const typography: Record<string, TextStyle> = {
     fontWeight: '600',
     lineHeight: 24,
     letterSpacing: -0.1,
+    textAlign: 'center',
   },
 
   // Subheading — supporting headings
@@ -40,6 +45,7 @@ export const typography: Record<string, TextStyle> = {
     fontSize: 15,
     fontWeight: '600',
     lineHeight: 22,
+    textAlign: 'center',
   },
 
   // Body — default reading text
@@ -47,6 +53,7 @@ export const typography: Record<string, TextStyle> = {
     fontSize: 15,
     fontWeight: '400',
     lineHeight: 24,
+    textAlign: 'center',
   },
 
   // Body small — secondary content
@@ -54,6 +61,7 @@ export const typography: Record<string, TextStyle> = {
     fontSize: 13,
     fontWeight: '400',
     lineHeight: 20,
+    textAlign: 'center',
   },
 
   // Caption — timestamps, metadata
@@ -62,6 +70,7 @@ export const typography: Record<string, TextStyle> = {
     fontWeight: '500',
     lineHeight: 16,
     letterSpacing: 0.2,
+    textAlign: 'center',
   },
 
   // Label — form labels, section markers
@@ -71,6 +80,7 @@ export const typography: Record<string, TextStyle> = {
     lineHeight: 16,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
+    textAlign: 'center',
   },
 
   // Button text
@@ -79,5 +89,6 @@ export const typography: Record<string, TextStyle> = {
     fontWeight: '600',
     lineHeight: 20,
     letterSpacing: 0.2,
+    textAlign: 'center',
   },
 };
