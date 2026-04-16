@@ -13,6 +13,7 @@ export { CommunityScreen } from './CommunityScreen';
 export { CreatePostScreen } from './CreatePostScreen';
 export { UserProfileScreen } from './UserProfileScreen';
 export { AttendanceHistoryScreen } from './AttendanceHistoryScreen';
+export { AdminBroadcastScreen } from './AdminBroadcastScreen';
 
 // Auth
 export { SignInScreen } from './auth/SignInScreen';

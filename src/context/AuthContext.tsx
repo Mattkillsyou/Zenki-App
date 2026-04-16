@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Member, MEMBERS } from '../data/members';
 import { pushMemberToSheets, pushMemberToFirestore } from '../services/memberSync';
+import { registerForPushNotifications, savePushTokenToFirestore } from '../services/pushNotifications';
 
 const STORAGE_KEY = '@zenki_current_user';
 const CUSTOM_MEMBER_KEY = '@zenki_custom_member';
@@ -60,6 +61,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Sync to Sheets + Firestore (fire-and-forget)
     pushMemberToSheets(member);
     pushMemberToFirestore(member);
+    // Register for push notifications + save token to Firestore
+    registerForPushNotifications().then((token) => {
+      if (token) {
+        savePushTokenToFirestore(member.id, token);
+        // Update local member with the token
+        const updatedMember = { ...member, pushToken: token };
+        AsyncStorage.setItem(CUSTOM_MEMBER_KEY, JSON.stringify(updatedMember));
+      }
+    });
   }, []);
 
   const signOut = useCallback(async () => {

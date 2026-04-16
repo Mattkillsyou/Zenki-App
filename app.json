@@ -15,6 +15,13 @@
         {
           "locationWhenInUsePermission": "Zenki Dojo uses your location to automatically log your visits when you arrive at the dojo."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#D4A017"
+        }
       ]
     ],
     "ios": {

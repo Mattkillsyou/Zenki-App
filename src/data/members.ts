@@ -35,6 +35,7 @@ export interface Member {
   profilePhoto?: string; // URI from device
   totalSessions: number;
   weekStreak: number;
+  pushToken?: string; // Expo push token for notifications
 }
 
 export const MEMBERS: Member[] = [

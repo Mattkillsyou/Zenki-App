@@ -12,9 +12,11 @@ import { useMotion } from '../../context/MotionContext';
 import { useAuth } from '../../context/AuthContext';
 import { typography, spacing, borderRadius } from '../../theme';
 import { BELT_ORDER, BELT_DISPLAY_COLORS, BELT_LABELS, BeltLevel, Member } from '../../data/members';
+import { WAIVER_TEXT, WAIVER_VERSION, WaiverSignature } from '../../data/waiver';
+import { pushWaiverToSheets, pushWaiverToFirestore } from '../../services/waiverSync';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 9;
 
 interface OnboardingData {
   email: string;
@@ -29,6 +31,8 @@ interface OnboardingData {
   twitter: string;
   website: string;
   belt: BeltLevel;
+  signedName: string;
+  emailWaiverCopy: boolean;
 }
 
 export function OnboardingScreen({ navigation, route }: any) {
@@ -42,6 +46,7 @@ export function OnboardingScreen({ navigation, route }: any) {
     email: '', password: '', confirmPassword: '',
     firstName: '', lastName: '', phone: '', photo: null, bio: '',
     instagram: '', twitter: '', website: '', belt: 'none',
+    signedName: '', emailWaiverCopy: false,
   });
 
   // Password validation
@@ -122,6 +127,20 @@ export function OnboardingScreen({ navigation, route }: any) {
       weekStreak: 0,
     };
     await createAccount(member);
+
+    // Record the signed waiver (fire-and-forget)
+    const signature: WaiverSignature = {
+      memberId: id,
+      memberName: `${data.firstName} ${data.lastName}`.trim(),
+      email: data.email,
+      signedName: data.signedName.trim(),
+      signedAt: new Date().toISOString(),
+      waiverVersion: WAIVER_VERSION,
+      emailCopy: data.emailWaiverCopy,
+    };
+    pushWaiverToSheets(signature);
+    pushWaiverToFirestore(signature);
+
     navigation.replace('Main');
   };
 
@@ -158,7 +177,8 @@ export function OnboardingScreen({ navigation, route }: any) {
 
   const stepIcons: (keyof typeof Ionicons.glyphMap)[] = [
     'lock-closed-outline', 'person-outline', 'camera-outline', 'create-outline',
-    'share-social-outline', 'ribbon-outline', 'location-outline', 'checkmark-circle',
+    'share-social-outline', 'ribbon-outline', 'document-text-outline',
+    'location-outline', 'checkmark-circle',
   ];
 
   const renderStep = () => {
@@ -379,8 +399,50 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 6: Location permission
+      // Step 6: Liability Waiver
       case 6: return (
+        <View style={styles.stepContent}>
+          <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
+            <Ionicons name="document-text-outline" size={64} color={colors.gold} />
+          </Animated.View>
+          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Liability Waiver</Text>
+          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
+            Please read the full waiver below and sign by typing your full legal name.
+          </Text>
+          <ScrollView
+            style={[styles.waiverBox, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            contentContainerStyle={styles.waiverScrollContent}
+            nestedScrollEnabled
+          >
+            <Text style={[styles.waiverText, { color: colors.textSecondary }]}>{WAIVER_TEXT}</Text>
+          </ScrollView>
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: 'transparent', borderWidth: 0 }]}
+            placeholder="Type your full legal name"
+            placeholderTextColor={colors.textMuted}
+            value={data.signedName}
+            onChangeText={(v) => setData({ ...data, signedName: v })}
+            autoCapitalize="words"
+          />
+          <TouchableOpacity
+            style={styles.emailCopyRow}
+            onPress={() => setData({ ...data, emailWaiverCopy: !data.emailWaiverCopy })}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={data.emailWaiverCopy ? 'checkbox' : 'square-outline'}
+              size={22}
+              color={data.emailWaiverCopy ? colors.gold : colors.textMuted}
+            />
+            <Text style={[styles.emailCopyLabel, { color: colors.textSecondary }]}>
+              Email me a copy of this waiver
+            </Text>
+          </TouchableOpacity>
+        </View>
+      );
+
+      // Step 7: Location permission
+      case 7: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="location-outline" size={64} color={colors.gold} />
@@ -401,8 +463,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 7: Welcome
-      case 7: return (
+      // Step 8: Welcome
+      case 8: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="checkmark-circle" size={80} color={colors.gold} />
@@ -425,7 +487,13 @@ export function OnboardingScreen({ navigation, route }: any) {
       return data.email.includes('@') && pwHasLength && pwHasUpper && pwHasNumber && pwMatch;
     }
     if (step === 1) return data.firstName.trim().length > 0;
-    return true; // All other steps are optional
+    if (step === 6) {
+      // Waiver step — signed name must reasonably match first + last name
+      const expected = `${data.firstName} ${data.lastName}`.trim().toLowerCase();
+      const signed = data.signedName.trim().toLowerCase();
+      return signed.length > 0 && (signed === expected || signed.includes(data.firstName.trim().toLowerCase()));
+    }
+    return true; // Other steps are optional
   };
 
   return (
@@ -495,8 +563,8 @@ export function OnboardingScreen({ navigation, route }: any) {
           )}
         </View>
 
-        {/* Skip */}
-        {step > 1 && step < TOTAL_STEPS - 1 && (
+        {/* Skip — not allowed on waiver (step 6) */}
+        {step > 1 && step < TOTAL_STEPS - 1 && step !== 6 && (
           <TouchableOpacity style={styles.skipButton} onPress={goNext}>
             <Text style={[styles.skipText, { color: colors.textMuted }]}>Skip for now</Text>
           </TouchableOpacity>
@@ -555,6 +623,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: borderRadius.lg,
   },
   photoOptionText: { ...typography.body, fontWeight: '600' },
+  waiverBox: {
+    width: '100%',
+    maxHeight: 260,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+  },
+  waiverScrollContent: { paddingVertical: spacing.md },
+  waiverText: { fontSize: 13, lineHeight: 20, textAlign: 'left' },
+  emailCopyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    alignSelf: 'flex-start',
+  },
+  emailCopyLabel: { fontSize: 14, fontWeight: '500' },
   socialRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, width: '100%' },
   socialInput: {
     flex: 1, borderRadius: borderRadius.md, paddingHorizontal: spacing.md,

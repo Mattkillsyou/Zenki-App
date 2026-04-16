@@ -153,6 +153,19 @@ export function AdminScreen({ navigation }: any) {
             />
           </FadeInView>
         </View>
+        <View style={[styles.grid, { gap: 14 }]}>
+          <FadeInView delay={280} slideUp={12} style={styles.gridItem}>
+            <AdminCard
+              icon="megaphone-outline"
+              title="Broadcast"
+              subtitle="Push notifications to members"
+              count={0}
+              accentColor={colors.warning}
+              onPress={() => navigation.navigate('AdminBroadcast')}
+            />
+          </FadeInView>
+          <View style={styles.gridItem} />
+        </View>
 
         {/* Quick Actions */}
         <FadeInView delay={300} slideUp={12}>
