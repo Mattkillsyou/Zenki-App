@@ -61,9 +61,6 @@ export function CommunityScreen({ navigation }: any) {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Community</Text>
-        </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.gold} />
         </View>
@@ -73,23 +70,12 @@ export function CommunityScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Community</Text>
-        <TouchableOpacity
-          style={[styles.searchButton, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}
-          onPress={() => navigation.navigate('UserProfile', { userId: getCurrentUid() })}
-        >
-          <Ionicons name="person-outline" size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
-      </View>
-
       {posts.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="people-outline" size={64} color={colors.textMuted} />
-          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Welcome to the Community</Text>
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>The Dojo Feed</Text>
           <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-            Follow other members to see their posts.{'\n'}Tap + to share your first post.
+            Be the first to share. Tap + to post a photo or video — every member can see it.
           </Text>
         </View>
       ) : (

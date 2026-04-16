@@ -8,6 +8,7 @@ export { FadeInView } from './FadeInView';
 export { PressableScale } from './PressableScale';
 export { TimeClock } from './TimeClock';
 export { StreakBadge } from './StreakBadge';
+export { PointsBadge } from './PointsBadge';
 export { XPProgressBar } from './XPProgressBar';
 export { AchievementBadge, AchievementGrid } from './AchievementBadge';
 export { CelebrationModal } from './CelebrationModal';

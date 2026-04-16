@@ -164,6 +164,28 @@ export function AdminScreen({ navigation }: any) {
               onPress={() => navigation.navigate('AdminBroadcast')}
             />
           </FadeInView>
+          <FadeInView delay={320} slideUp={12} style={styles.gridItem}>
+            <AdminCard
+              icon="newspaper-outline"
+              title="Announcements"
+              subtitle="Edit notices on Home screen"
+              count={0}
+              accentColor={colors.gold}
+              onPress={() => navigation.navigate('AdminAnnouncements')}
+            />
+          </FadeInView>
+        </View>
+        <View style={[styles.grid, { gap: 14 }]}>
+          <FadeInView delay={360} slideUp={12} style={styles.gridItem}>
+            <AdminCard
+              icon="checkmark-circle-outline"
+              title="Appointments"
+              subtitle="Approve & manage bookings"
+              count={0}
+              accentColor={colors.success}
+              onPress={() => navigation.navigate('AdminAppointments')}
+            />
+          </FadeInView>
           <View style={styles.gridItem} />
         </View>
 

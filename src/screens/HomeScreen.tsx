@@ -12,8 +12,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius, shadows } from '../theme';
-import { ClassCard, AnimatedLogo, FadeInView, PressableScale, TimeClock, StreakBadge, XPProgressBar, AchievementGrid, CelebrationModal } from '../components';
+import { ClassCard, AnimatedLogo, FadeInView, PressableScale, TimeClock, StreakBadge, PointsBadge, XPProgressBar, AchievementGrid, CelebrationModal } from '../components';
 import { useGamification } from '../context/GamificationContext';
+import { useAnnouncements } from '../context/AnnouncementContext';
+import { getDailyQuote } from '../data/quotes';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -27,19 +29,25 @@ export function HomeScreen({ navigation }: any) {
   const { user } = useAuth();
   const isEmployee = user?.isEmployee === true;
   const { state: gamState, levelInfo, dismissCelebration } = useGamification();
+  const { announcements } = useAnnouncements();
+  const dailyQuote = getDailyQuote();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
-        {/* ─── Header ─── */}
+        {/* ─── Header (compact with corner logo) ─── */}
         <FadeInView delay={0} slideUp={0}>
           <View style={styles.header}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.greeting, { color: colors.textTertiary }]}>Welcome back</Text>
-              <Text style={[styles.memberName, { color: colors.textPrimary }]} numberOfLines={1}>{user?.firstName ?? 'Member'}</Text>
-            </View>
+            <AnimatedLogo size={32} />
             <View style={styles.headerRight}>
+              {!isEmployee && (
+                <PointsBadge
+                  points={gamState.dojoPoints || 0}
+                  compact
+                  onPress={() => navigation.navigate('Store')}
+                />
+              )}
               {!isEmployee && <StreakBadge streak={gamState.streak} compact />}
               <TouchableOpacity style={[styles.iconButton, { backgroundColor: colors.surface }]}>
                 <Ionicons name="notifications-outline" size={20} color={colors.textSecondary} />
@@ -49,13 +57,42 @@ export function HomeScreen({ navigation }: any) {
           </View>
         </FadeInView>
 
-        {/* ─── Hero ─── */}
+        {/* ─── Announcements (top of feed, admin-editable) ─── */}
+        {!isEmployee && announcements.length > 0 && (
+          <FadeInView delay={40} slideUp={12}>
+            <View style={styles.announcementsWrap}>
+              {announcements.slice(0, 3).map((a) => (
+                <PressableScale key={a.id}>
+                  <View style={[styles.announcementCard, { backgroundColor: colors.goldMuted }]}>
+                    <View style={[styles.announcementIcon, { backgroundColor: colors.gold + '20' }]}>
+                      <Ionicons name="megaphone-outline" size={20} color={colors.gold} />
+                    </View>
+                    <View style={styles.announcementContent}>
+                      <Text style={[styles.announcementTitle, { color: colors.textPrimary }]} numberOfLines={2}>{a.title}</Text>
+                      {a.description ? (
+                        <Text style={[styles.announcementDesc, { color: colors.textSecondary }]} numberOfLines={2}>{a.description}</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                </PressableScale>
+              ))}
+            </View>
+          </FadeInView>
+        )}
+
+        {/* ─── Welcome + Daily Japanese Quote ─── */}
         <FadeInView delay={80} slideUp={20}>
-          <View style={[styles.heroCard, { backgroundColor: colors.surface }]}>
-            <AnimatedLogo size={110} />
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTagline, { color: colors.textPrimary }]}>PRIVATE TRAINING</Text>
-              <Text style={[styles.heroSub, { color: colors.textTertiary }]}>Est. 1997 · Los Feliz, LA</Text>
+          <View style={styles.welcomeSection}>
+            <Text style={styles.welcomeLine} numberOfLines={1}>
+              <Text style={[styles.welcomeLabel, { color: colors.textTertiary }]}>Welcome back, </Text>
+              <Text style={[styles.welcomeName, { color: colors.textPrimary }]}>
+                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Member'}
+              </Text>
+            </Text>
+            <View style={[styles.quoteCard, { backgroundColor: colors.surface }]}>
+              <Ionicons name="chatbubble-outline" size={18} color={colors.gold} style={{ marginBottom: 8 }} />
+              <Text style={[styles.quoteText, { color: colors.textPrimary }]}>"{dailyQuote.text}"</Text>
+              <Text style={[styles.quoteAttr, { color: colors.gold }]}>— {dailyQuote.attribution}</Text>
             </View>
           </View>
         </FadeInView>
@@ -70,37 +107,11 @@ export function HomeScreen({ navigation }: any) {
         {/* ─── Member Content ─── */}
         {!isEmployee && (
           <>
-            {/* Stats */}
-            <FadeInView delay={160} slideUp={16}>
-              <View style={styles.statsRow}>
-                {[
-                  { value: '12', label: 'This Month', icon: 'flame-outline' as const, accent: true },
-                  { value: '156', label: 'Sessions', icon: 'fitness-outline' as const, accent: false },
-                  { value: '3', label: 'Stripes', icon: 'ribbon-outline' as const, accent: true },
-                ].map((stat) => (
-                  <View key={stat.label} style={[styles.statCard, { backgroundColor: colors.surface,  }]}>
-                    <Ionicons name={stat.icon} size={22} color={stat.accent ? colors.gold : colors.textMuted} style={{ marginBottom: 10 }} />
-                    <Text style={[styles.statNumber, { color: stat.accent ? colors.gold : colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>{stat.value}</Text>
-                    <Text style={[styles.statLabel, { color: colors.textTertiary }]} numberOfLines={1}>{stat.label}</Text>
-                  </View>
-                ))}
-              </View>
-            </FadeInView>
-
             {/* XP Bar */}
             <FadeInView delay={220} slideUp={16}>
               <View style={styles.section}>
                 <View style={[styles.sectionCard, { backgroundColor: colors.surface,  }]}>
                   <XPProgressBar level={levelInfo.level} currentXP={levelInfo.currentXP} nextLevelXP={levelInfo.nextLevelXP} progress={levelInfo.progress} totalXP={gamState.xp} />
-                </View>
-              </View>
-            </FadeInView>
-
-            {/* Achievements */}
-            <FadeInView delay={280} slideUp={16}>
-              <View style={styles.section}>
-                <View style={[styles.sectionCard, { backgroundColor: colors.surface,  }]}>
-                  <AchievementGrid achievements={gamState.achievements} maxShow={8} />
                 </View>
               </View>
             </FadeInView>
@@ -121,46 +132,6 @@ export function HomeScreen({ navigation }: any) {
               </View>
             </FadeInView>
 
-            {/* Announcement */}
-            <FadeInView delay={400} slideUp={16}>
-              <View style={styles.section}>
-                <PressableScale>
-                  <View style={[styles.announcementCard, { backgroundColor: colors.goldMuted }]}>
-                    <View style={[styles.announcementIcon, { backgroundColor: colors.gold + '20' }]}>
-                      <Ionicons name="megaphone-outline" size={20} color={colors.gold} />
-                    </View>
-                    <View style={styles.announcementContent}>
-                      <Text style={[styles.announcementTitle, { color: colors.textPrimary }]}>Mat Cleaning — Saturday 8AM</Text>
-                      <Text style={[styles.announcementDesc, { color: colors.textSecondary }]}>Weekly deep clean. Open mat from 10 AM.</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-                  </View>
-                </PressableScale>
-              </View>
-            </FadeInView>
-
-            {/* Quick Actions */}
-            <FadeInView delay={460} slideUp={16}>
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: spacing.smd }]}>Quick Actions</Text>
-                <View style={styles.actionsRow}>
-                  {[
-                    { icon: 'body-outline' as const, label: 'Book\nPrivate', screen: 'Book', color: colors.gold },
-                    { icon: 'bag-outline' as const, label: 'Zenki\nGear', screen: 'Store', color: colors.redLight },
-                    { icon: 'ribbon-outline' as const, label: 'My\nProgress', screen: 'Profile', color: colors.info },
-                  ].map((action) => (
-                    <PressableScale key={action.label} onPress={() => navigation.navigate(action.screen)} style={styles.actionFlex}>
-                      <View style={[styles.actionCard, { backgroundColor: colors.surface,  }]}>
-                        <View style={[styles.actionIconWrap, { backgroundColor: action.color + '15' }]}>
-                          <Ionicons name={action.icon} size={24} color={action.color} />
-                        </View>
-                        <Text style={[styles.actionLabel, { color: colors.textSecondary }]}>{action.label}</Text>
-                      </View>
-                    </PressableScale>
-                  ))}
-                </View>
-              </View>
-            </FadeInView>
           </>
         )}
 
@@ -182,21 +153,50 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+
+  // Welcome + Quote
+  welcomeSection: {
     paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 24,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
-  greeting: {
-    fontSize: 12,
+  welcomeLine: {
+    marginBottom: 20,
+  },
+  welcomeLabel: {
+    fontSize: 22,
     fontWeight: '400',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
+    letterSpacing: -0.3,
   },
-  memberName: {
-    fontSize: 34,
-    fontWeight: '800',
-    letterSpacing: -0.8,
-    marginTop: 2,
+  welcomeName: {
+    fontSize: 22,
+    fontWeight: '600',
+    letterSpacing: -0.3,
+  },
+  quoteCard: {
+    borderRadius: 16,
+    padding: 24,
+    gap: 4,
+    alignItems: 'center',
+  },
+  quoteText: {
+    fontSize: 16,
+    fontWeight: '500',
+    lineHeight: 24,
+    textAlign: 'center',
+    letterSpacing: -0.1,
+    fontStyle: 'italic',
+  },
+  quoteAttr: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    marginTop: 10,
+    textAlign: 'center',
   },
   headerRight: {
     flexDirection: 'row',
@@ -300,7 +300,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Announcement — redesigned as a tinted banner
+  // Announcements — top of feed, admin-editable
+  announcementsWrap: {
+    paddingHorizontal: 20,
+    gap: 8,
+    marginBottom: 4,
+  },
   announcementCard: {
     flexDirection: 'row',
     alignItems: 'center',

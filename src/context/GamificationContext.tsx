@@ -9,12 +9,18 @@ const XP_PER_SESSION = 25;
 const XP_PER_BOOKING = 10;
 const STREAK_BONUS_XP = 5; // extra per streak day
 
+// Dojo Points — earnable currency redeemable in store
+const POINTS_PER_SESSION = 10;
+const POINTS_STREAK_BONUS = 2; // extra per streak day, capped at 30
+
 interface GamificationContextValue {
   state: GamificationState;
   levelInfo: { level: number; currentXP: number; nextLevelXP: number; progress: number };
   addXP: (amount: number, reason?: string) => void;
   recordSession: () => void;
   recordBooking: () => void;
+  redeemPoints: (amount: number, reason?: string) => boolean; // returns true if successful
+  awardPoints: (amount: number, reason?: string) => void;
   dismissCelebration: () => void;
 }
 
@@ -25,6 +31,8 @@ const defaultState: GamificationState = {
   longestStreak: 0,
   lastActiveDate: '',
   totalSessions: 0,
+  dojoPoints: 0,
+  pointsLifetime: 0,
   achievements: createInitialAchievements(),
   pendingCelebration: null,
 };
@@ -35,6 +43,8 @@ const GamificationContext = createContext<GamificationContextValue>({
   addXP: () => {},
   recordSession: () => {},
   recordBooking: () => {},
+  redeemPoints: () => false,
+  awardPoints: () => {},
   dismissCelebration: () => {},
 });
 
@@ -154,13 +164,19 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       const streakBonus = updated.streak * STREAK_BONUS_XP;
       updated.xp += XP_PER_SESSION + streakBonus;
 
+      // Award Dojo Points (separate currency, redeemable in store)
+      const pointsBonus = Math.min(updated.streak, 30) * POINTS_STREAK_BONUS;
+      const pointsEarned = POINTS_PER_SESSION + pointsBonus;
+      updated.dojoPoints = (updated.dojoPoints || 0) + pointsEarned;
+      updated.pointsLifetime = (updated.pointsLifetime || 0) + pointsEarned;
+
       const oldLevel = getLevelFromXP(prev.xp).level;
       const newLevel = getLevelFromXP(updated.xp).level;
       if (newLevel > oldLevel) {
         updated.pendingCelebration = {
           type: 'level_up',
           title: `Level ${newLevel}!`,
-          subtitle: 'Keep training!',
+          subtitle: `+${pointsEarned} Dojo Points earned`,
           xpGained: XP_PER_SESSION + streakBonus,
         };
       }
@@ -170,7 +186,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         updated.pendingCelebration = {
           type: 'streak_milestone',
           title: `${updated.streak}-Day Streak!`,
-          subtitle: 'You\'re on fire!',
+          subtitle: `You're on fire! +${pointsEarned} Dojo Points`,
           icon: 'flame',
         };
       }
@@ -179,6 +195,25 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       return updated;
     });
   }, [updateStreak, checkAchievements]);
+
+  const awardPoints = useCallback((amount: number, _reason?: string) => {
+    setState((prev) => ({
+      ...prev,
+      dojoPoints: (prev.dojoPoints || 0) + amount,
+      pointsLifetime: (prev.pointsLifetime || 0) + amount,
+    }));
+  }, []);
+
+  const redeemPoints = useCallback((amount: number, _reason?: string): boolean => {
+    let success = false;
+    setState((prev) => {
+      const balance = prev.dojoPoints || 0;
+      if (balance < amount) return prev;
+      success = true;
+      return { ...prev, dojoPoints: balance - amount };
+    });
+    return success;
+  }, []);
 
   const recordBooking = useCallback(() => {
     addXP(XP_PER_BOOKING, 'booking');
@@ -192,7 +227,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
   return (
     <GamificationContext.Provider
-      value={{ state, levelInfo, addXP, recordSession, recordBooking, dismissCelebration }}
+      value={{ state, levelInfo, addXP, recordSession, recordBooking, redeemPoints, awardPoints, dismissCelebration }}
     >
       {children}
     </GamificationContext.Provider>

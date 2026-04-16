@@ -13,40 +13,42 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { Button } from '../components';
+import { useAuth } from '../context/AuthContext';
+import { useAppointments } from '../context/AppointmentContext';
 
 export function BookingPaymentScreen({ navigation, route }: any) {
   const { colors } = useTheme();
-  const { instructor, sessionType, time, price, calendarUrl, isProduct } = route.params || {};
+  const { user } = useAuth();
+  const { requestAppointment } = useAppointments();
+  const { instructor, sessionType, time, price, calendarUrl, isProduct, startsAt, durationMinutes } = route.params || {};
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'apple'>('card');
+  const [confirmed, setConfirmed] = useState(false);
 
-  const handlePayment = () => {
+  const handlePayment = async () => {
     setLoading(true);
-    // Simulate Stripe payment — replace with real Stripe integration
-    setTimeout(() => {
-      setLoading(false);
-      const title = isProduct ? 'Order Confirmed' : 'Booking Confirmed';
-      const message = isProduct
-        ? `Your order for ${sessionType} has been placed.\n\nYou'll receive a confirmation email shortly.`
-        : `Your ${sessionType} with ${instructor} at ${time} has been booked.\n\nA confirmation has been sent to your email.`;
-
-      const buttons: any[] = [
-        {
-          text: 'Done',
-          onPress: () => navigation.popToTop(),
-        },
-      ];
-      if (!isProduct && calendarUrl) {
-        buttons.unshift({
-          text: 'Add to Calendar',
-          onPress: () => {
-            Linking.openURL(calendarUrl);
-            navigation.popToTop();
-          },
+    setTimeout(async () => {
+      // For appointment bookings (not product orders), create a pending appointment
+      if (!isProduct && user) {
+        await requestAppointment({
+          memberId: user.id,
+          memberName: `${user.firstName} ${user.lastName}`.trim() || 'Member',
+          instructor,
+          sessionType,
+          startsAt: startsAt || new Date().toISOString(),
+          durationMinutes: durationMinutes || 60,
+          price: price || 0,
         });
       }
-      Alert.alert(title, message, buttons);
-    }, 2000);
+      setLoading(false);
+      setConfirmed(true);
+    }, 1500);
+  };
+
+  const handleDone = () => navigation.popToTop();
+  const handleAddToCalendar = () => {
+    if (calendarUrl) Linking.openURL(calendarUrl);
+    navigation.popToTop();
   };
 
   return (
@@ -64,8 +66,32 @@ export function BookingPaymentScreen({ navigation, route }: any) {
           <View style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5 }]} />
         </View>
 
+        {/* Confirmation view */}
+        {confirmed && (
+          <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 32, alignItems: 'center' as const }]}>
+            <Ionicons name="checkmark-circle" size={64} color={colors.gold} />
+            <Text style={{ fontSize: 22, fontWeight: '700', color: colors.textPrimary, marginTop: 16, textAlign: 'center' }}>
+              {isProduct ? 'Order Confirmed' : 'Booking Submitted'}
+            </Text>
+            <Text style={{ fontSize: 15, color: colors.textSecondary, textAlign: 'center', marginTop: 8, lineHeight: 22 }}>
+              {isProduct
+                ? `Your order for ${sessionType} has been placed.`
+                : `${sessionType} with ${instructor} at ${time} is awaiting confirmation. You'll be reminded 1 hour before the session once approved.`}
+            </Text>
+            {!isProduct && calendarUrl && (
+              <TouchableOpacity onPress={handleAddToCalendar} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16 }}>
+                <Ionicons name="calendar-outline" size={18} color={colors.gold} />
+                <Text style={{ fontSize: 15, fontWeight: '600', color: colors.gold }}>Add to Calendar</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={handleDone} style={{ backgroundColor: colors.red, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 48, marginTop: 24 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#FFF' }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Order Summary */}
-        <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 24 }]}>
+        {!confirmed && <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 24 }]}>
 
           <Text style={[styles.summaryTitle, { color: colors.textMuted }]}>
             {isProduct ? 'ORDER SUMMARY' : 'BOOKING SUMMARY'}
@@ -107,9 +133,9 @@ export function BookingPaymentScreen({ navigation, route }: any) {
               ${price}
             </Text>
           </View>
-        </View>
+        </View>}
 
-        {/* Payment Method */}
+        {!confirmed && <>{/* Payment Method */}
         <View style={styles.section}>
           <Text style={[styles.sectionLabel, { color: colors.gold, fontSize: 13, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' }]}>PAYMENT METHOD</Text>
 
@@ -179,14 +205,15 @@ export function BookingPaymentScreen({ navigation, route }: any) {
             size="lg"
           />
         </View>
+        </>}
 
         {/* Security note */}
-        <View style={styles.securityRow}>
+        {!confirmed && <View style={styles.securityRow}>
           <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
           <Text style={[styles.securityText, { color: colors.textMuted }]}>
             Payments processed securely via Stripe
           </Text>
-        </View>
+        </View>}
 
         <View style={{ height: spacing.xxl * 2 }} />
       </ScrollView>

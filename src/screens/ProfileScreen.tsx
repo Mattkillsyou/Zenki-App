@@ -14,8 +14,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { Card, BeltDisplay } from '../components';
+import { Card, BeltDisplay, AchievementGrid } from '../components';
 import { BELT_DISPLAY_COLORS } from '../data/members';
+import { useGamification } from '../context/GamificationContext';
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { value: 'light', label: 'Light', icon: 'sunny-outline' },
@@ -26,6 +27,7 @@ const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionic
 export function ProfileScreen({ navigation }: any) {
   const { colors, mode, setMode } = useTheme();
   const { user } = useAuth();
+  const { state: gamState } = useGamification();
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
   // Demo data — in production this comes from member context/API
@@ -137,30 +139,25 @@ export function ProfileScreen({ navigation }: any) {
               )}
             </View>
           )}
-          <Text style={[styles.name, { color: colors.textPrimary }]}>Matt B</Text>
+          <Text style={[styles.name, { color: colors.textPrimary }]}>
+            {user?.firstName ?? 'Member'} {user?.lastName ?? ''}
+          </Text>
+          {user?.nickname ? (
+            <Text style={[styles.nickname, { color: colors.gold }]}>"{user.nickname}"</Text>
+          ) : null}
+          {user?.funFact ? (
+            <Text style={[styles.funFactInline, { color: colors.textSecondary }]} numberOfLines={2}>
+              {user.funFact}
+            </Text>
+          ) : null}
           <Text style={[styles.memberSince, { color: colors.textMuted }]}>
-            Member since 2024
+            Member since {user?.memberSince?.split('-')[0] ?? '2024'}
           </Text>
           <View style={[styles.memberBadge, { backgroundColor: colors.redMuted }]}>
             <Ionicons name="diamond-outline" size={14} color={colors.red} />
             <Text style={[styles.memberType, { color: colors.red }]}>Founding Member</Text>
           </View>
         </View>
-
-        {/* Fun Fact */}
-        {user?.funFact ? (
-          <View style={styles.section}>
-            <Card variant="elevated">
-              <View style={styles.funFactHeader}>
-                <Ionicons name="sparkles-outline" size={16} color={colors.gold} />
-                <Text style={[styles.funFactLabel, { color: colors.gold }]}>FUN FACT</Text>
-              </View>
-              <Text style={[styles.funFactText, { color: colors.textPrimary }]}>
-                {user.funFact}
-              </Text>
-            </Card>
-          </View>
-        ) : null}
 
         {/* Belt Progress (read-only — admins update via Admin Panel) */}
         {memberBelt !== 'none' && (
@@ -209,6 +206,13 @@ export function ProfileScreen({ navigation }: any) {
                 Badges{'\n'}Earned
               </Text>
             </View>
+          </View>
+        </View>
+
+        {/* Achievements */}
+        <View style={styles.section}>
+          <View style={[styles.achievementsCard, { backgroundColor: colors.surface }]}>
+            <AchievementGrid achievements={gamState.achievements} maxShow={20} />
           </View>
         </View>
 
@@ -347,23 +351,22 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     fontStyle: 'italic',
   },
-  funFactHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginBottom: spacing.sm,
-  },
-  funFactLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-  },
-  funFactText: {
-    fontSize: 15,
-    fontWeight: '500',
+  nickname: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontStyle: 'italic',
     textAlign: 'center',
-    lineHeight: 22,
+    marginTop: 2,
+    letterSpacing: 0.3,
+  },
+  funFactInline: {
+    fontSize: 13,
+    fontWeight: '400',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 6,
+    paddingHorizontal: spacing.lg,
+    lineHeight: 18,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -400,6 +403,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 16,
     marginTop: 0,
+  },
+  achievementsCard: {
+    borderRadius: 16,
+    padding: 16,
   },
   themeToggle: {
     flexDirection: 'row',

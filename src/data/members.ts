@@ -37,6 +37,9 @@ export interface Member {
   weekStreak: number;
   pushToken?: string; // Expo push token for notifications
   funFact?: string;   // Fun fact shown on profile, captured in onboarding
+  nickname?: string;  // Optional nickname / title shown next to display name
+  isVisibleInFeed?: boolean;   // Whether this member shows up in the community feed (default true)
+  messagingEnabled?: boolean;  // Whether other members can DM them (default true)
 }
 
 export const MEMBERS: Member[] = [

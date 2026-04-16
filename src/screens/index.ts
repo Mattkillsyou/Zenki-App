@@ -14,6 +14,8 @@ export { CreatePostScreen } from './CreatePostScreen';
 export { UserProfileScreen } from './UserProfileScreen';
 export { AttendanceHistoryScreen } from './AttendanceHistoryScreen';
 export { AdminBroadcastScreen } from './AdminBroadcastScreen';
+export { AdminAnnouncementsScreen } from './AdminAnnouncementsScreen';
+export { AdminAppointmentsScreen } from './AdminAppointmentsScreen';
 
 // Auth
 export { SignInScreen } from './auth/SignInScreen';

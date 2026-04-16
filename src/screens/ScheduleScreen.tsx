@@ -107,12 +107,6 @@ export function ScheduleScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Schedule</Text>
-        <Text style={[styles.month, { color: colors.gold }]}>{getMonthYear()}</Text>
-      </View>
-
       {/* Day Selector */}
       <View style={styles.daySelector}>
         {DAYS.map((day, index) => {
@@ -230,7 +224,7 @@ const styles = StyleSheet.create({
   daySelector: {
     flexDirection: 'row',
     paddingHorizontal: 24,
-    marginBottom: 24,
+    marginBottom: 8,
     gap: 8,
   },
   dayItem: {
@@ -251,7 +245,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   filterRow: {
-    marginBottom: 20,
+    flexGrow: 0,
+    flexShrink: 0,
+    maxHeight: 56,
+    marginTop: 4,
+    marginBottom: 8,
   },
   filterContent: {
     paddingHorizontal: 24,

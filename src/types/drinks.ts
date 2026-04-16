@@ -4,9 +4,16 @@ export interface DrinkEntry {
   price: number;
   timestamp: string; // ISO 8601
   date: string;      // YYYY-MM-DD
+  paid: boolean;     // whether the member has paid for this charge
+  paidAt?: string;   // ISO when paid
 }
 
-export type DrinkType = 'water' | 'protein' | 'electrolytes' | 'bcaa' | 'coffee' | 'energy';
+export interface PendingDrink {
+  type: DrinkType;
+  count: number;
+}
+
+export type DrinkType = 'water' | 'protein' | 'electrolytes' | 'bcaa' | 'coffee' | 'energy' | 'kombucha' | 'juice' | 'tea';
 
 export interface DrinkDefinition {
   type: DrinkType;
@@ -27,5 +34,6 @@ export interface MonthlySummary {
 }
 
 export interface DrinkTrackerState {
-  entries: DrinkEntry[];
+  entries: DrinkEntry[];     // committed charges (paid or unpaid)
+  pending: PendingDrink[];   // not yet committed, editable
 }

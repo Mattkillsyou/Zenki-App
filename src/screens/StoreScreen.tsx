@@ -14,6 +14,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { CATEGORIES, PRODUCTS, Product } from '../data/products';
+import { useGamification } from '../context/GamificationContext';
+
+// Conversion rate: $1 = 10 Dojo Points
+const POINTS_PER_DOLLAR = 10;
 
 interface CartItem {
   product: Product;
@@ -22,9 +26,13 @@ interface CartItem {
 
 export function StoreScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const { state: gamState, redeemPoints } = useGamification();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCart, setShowCart] = useState(false);
+  const [usePoints, setUsePoints] = useState(false);
+
+  const dojoPoints = gamState.dojoPoints || 0;
 
   const filtered = selectedCategory === 'All'
     ? PRODUCTS
@@ -180,21 +188,77 @@ export function StoreScreen({ navigation }: any) {
                   </TouchableOpacity>
                 </View>
               ))}
+              {/* Pay with Points toggle */}
+              {dojoPoints > 0 && (
+                <TouchableOpacity
+                  onPress={() => setUsePoints(!usePoints)}
+                  activeOpacity={0.7}
+                  style={[styles.pointsToggleRow, { backgroundColor: usePoints ? colors.goldMuted : colors.surface }]}
+                >
+                  <Ionicons name={usePoints ? 'checkmark-circle' : 'diamond-outline'} size={20} color={colors.gold} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.pointsToggleTitle, { color: colors.textPrimary }]}>
+                      Pay with Dojo Points
+                    </Text>
+                    <Text style={[styles.pointsToggleSub, { color: colors.textSecondary }]}>
+                      Balance: {dojoPoints.toLocaleString()} pts · {POINTS_PER_DOLLAR} pts = $1
+                    </Text>
+                  </View>
+                  {usePoints && (
+                    <View style={[styles.pointsAppliedBadge, { backgroundColor: colors.gold }]}>
+                      <Text style={styles.pointsAppliedText}>
+                        −${Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal).toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )}
+
+              {/* Total */}
               <View style={[styles.cartTotal, { borderTopColor: colors.divider }]}>
                 <Text style={[styles.cartTotalLabel, { color: colors.textMuted }]}>Total</Text>
-                <Text style={[styles.cartTotalAmount, { color: colors.gold }]}>${cartTotal.toFixed(2)}</Text>
+                {(() => {
+                  const pointsDiscount = usePoints ? Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal) : 0;
+                  const finalTotal = Math.max(0, cartTotal - pointsDiscount);
+                  return (
+                    <Text style={[styles.cartTotalAmount, { color: colors.gold }]}>${finalTotal.toFixed(2)}</Text>
+                  );
+                })()}
               </View>
+
               <TouchableOpacity
                 style={[styles.checkoutButton, { backgroundColor: colors.red }]}
                 onPress={() => {
+                  const pointsDiscount = usePoints ? Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal) : 0;
+                  const finalTotal = Math.max(0, cartTotal - pointsDiscount);
+                  if (usePoints && pointsDiscount > 0) {
+                    redeemPoints(Math.floor(pointsDiscount * POINTS_PER_DOLLAR));
+                  }
+                  if (finalTotal === 0) {
+                    // Fully covered by points — confirm directly
+                    Alert.alert(
+                      'Order Placed',
+                      `Your order was paid in full with ${Math.floor(pointsDiscount * POINTS_PER_DOLLAR).toLocaleString()} Dojo Points.`,
+                    );
+                    setCart([]);
+                    setShowCart(false);
+                    setUsePoints(false);
+                    return;
+                  }
                   navigation.navigate('BookingPayment', {
                     isProduct: true,
                     sessionType: `${cartCount} item${cartCount !== 1 ? 's' : ''}`,
-                    price: cartTotal,
+                    price: finalTotal,
                   });
                 }}
               >
-                <Text style={styles.checkoutText}>CHECKOUT — ${cartTotal.toFixed(2)}</Text>
+                <Text style={styles.checkoutText}>
+                  {(() => {
+                    const pointsDiscount = usePoints ? Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal) : 0;
+                    const finalTotal = Math.max(0, cartTotal - pointsDiscount);
+                    return finalTotal === 0 ? 'CONFIRM — FREE WITH POINTS' : `CHECKOUT — $${finalTotal.toFixed(2)}`;
+                  })()}
+                </Text>
               </TouchableOpacity>
             </>
           )}
@@ -352,6 +416,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 4,
   },
+  pointsToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    marginTop: 8,
+  },
+  pointsToggleTitle: { fontSize: 14, fontWeight: '600' },
+  pointsToggleSub: { fontSize: 12, fontWeight: '400', marginTop: 2 },
+  pointsAppliedBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  pointsAppliedText: { fontSize: 13, fontWeight: '800', color: '#000' },
   cartTotal: {
     flexDirection: 'row',
     justifyContent: 'space-between',

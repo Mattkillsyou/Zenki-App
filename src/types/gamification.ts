@@ -13,11 +13,26 @@ export type AchievementType =
   | 'sessions_total'
   | 'streak_days'
   | 'classes_booked'
+  | 'private_sessions'
   | 'belt_promotion'
+  | 'stripes_earned'
   | 'login_streak'
-  | 'early_bird'     // clocked in before 7am
-  | 'night_owl'      // trained after 8pm
-  | 'week_warrior';  // 5+ sessions in a week
+  | 'posts_created'
+  | 'followers'
+  | 'likes_received'
+  | 'drinks_logged'
+  | 'store_purchase'
+  | 'gear_purchase'
+  | 'early_bird'       // trained before 7am
+  | 'night_owl'        // trained after 8pm
+  | 'weekend_warrior'  // trained on a weekend
+  | 'week_warrior'     // 5+ sessions in a week
+  | 'month_warrior'    // 20+ sessions in a month
+  | 'dojo_anniversary' // membership milestones (1mo, 6mo, 1yr, etc)
+  | 'community_member' // joined community feed
+  | 'quote_reader'     // opened home screen N days in a row
+  | 'referral'         // invited another member
+  | 'completionist';   // collected 50 achievements
 
 export interface GamificationState {
   xp: number;
@@ -26,6 +41,8 @@ export interface GamificationState {
   longestStreak: number;
   lastActiveDate: string;  // YYYY-MM-DD
   totalSessions: number;
+  dojoPoints: number;       // earned from check-ins, redeemable in store
+  pointsLifetime: number;   // total ever earned (for stats)
   achievements: Achievement[];
   pendingCelebration: Celebration | null;
 }

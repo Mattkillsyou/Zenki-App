@@ -12,12 +12,13 @@ import { useMotion } from '../../context/MotionContext';
 import { useAuth } from '../../context/AuthContext';
 import { typography, spacing, borderRadius } from '../../theme';
 import { BELT_ORDER, BELT_DISPLAY_COLORS, BELT_LABELS, BeltLevel, Member } from '../../data/members';
+import { suggestNickname } from '../../utils/nickname';
 import { BeltDisplay } from '../../components/BeltDisplay';
 import { renderWaiverText, WAIVER_VERSION, WaiverSignature } from '../../data/waiver';
 import { pushWaiverToSheets, pushWaiverToFirestore } from '../../services/waiverSync';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 10;
 
 interface OnboardingData {
   email: string;
@@ -29,6 +30,7 @@ interface OnboardingData {
   photo: string | null;
   bio: string;
   funFact: string;
+  nickname: string;
   instagram: string;
   twitter: string;
   website: string;
@@ -47,7 +49,7 @@ export function OnboardingScreen({ navigation, route }: any) {
   const [locationGranted, setLocationGranted] = useState(false);
   const [data, setData] = useState<OnboardingData>({
     email: '', password: '', confirmPassword: '',
-    firstName: '', lastName: '', phone: '', photo: null, bio: '', funFact: '',
+    firstName: '', lastName: '', phone: '', photo: null, bio: '', funFact: '', nickname: '',
     instagram: '', twitter: '', website: '', belt: 'none', stripes: 0,
     signedName: '', emailWaiverCopy: false,
   });
@@ -127,6 +129,7 @@ export function OnboardingScreen({ navigation, route }: any) {
       isAdmin: false,
       profilePhoto: data.photo || undefined,
       funFact: data.funFact.trim() || undefined,
+      nickname: data.nickname.trim() || undefined,
       totalSessions: 0,
       weekStreak: 0,
     };
@@ -264,20 +267,32 @@ export function OnboardingScreen({ navigation, route }: any) {
             onChangeText={(v) => setData({ ...data, lastName: v })}
             autoCapitalize="words"
           />
+        </View>
+      );
+
+      // Step 2: Phone (its own step)
+      case 2: return (
+        <View style={styles.stepContent}>
+          <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
+            <Ionicons name="call-outline" size={64} color={colors.gold} />
+          </Animated.View>
+          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Phone number</Text>
+          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>For class reminders and important updates</Text>
           <TextInput
             style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: 'transparent', borderWidth: 0 }]}
-            placeholder="Phone number"
+            placeholder="(310) 555-0123"
             placeholderTextColor={colors.textMuted}
             value={data.phone}
             onChangeText={(v) => setData({ ...data, phone: v })}
             keyboardType="phone-pad"
             autoComplete="tel"
+            autoFocus
           />
         </View>
       );
 
-      // Step 2: Photo
-      case 2: return (
+      // Step 3: Photo
+      case 3: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             {data.photo ? (
@@ -303,40 +318,51 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 3: Bio
-      case 3: return (
+      // Step 4: Fun fact + auto-suggested nickname
+      case 4: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
-            <Ionicons name="chatbubble-ellipses-outline" size={64} color={colors.gold} />
+            <Ionicons name="sparkles-outline" size={64} color={colors.gold} />
           </Animated.View>
-          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Tell us about yourself</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>A short bio and a fun fact about you</Text>
+          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Fun fact</Text>
           <TextInput
             style={[styles.input, styles.bioInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: 'transparent', borderWidth: 0 }]}
-            placeholder="I train because..."
-            placeholderTextColor={colors.textMuted}
-            value={data.bio}
-            onChangeText={(v) => setData({ ...data, bio: v })}
-            multiline
-            maxLength={150}
-          />
-          <Text style={[styles.charCount, { color: colors.textMuted }]}>{data.bio.length}/150</Text>
-
-          <TextInput
-            style={[styles.input, styles.bioInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: 'transparent', borderWidth: 0, minHeight: 70 }]}
-            placeholder="Fun fact: I can juggle 5 balls…"
+            placeholder="I can juggle 5 balls…"
             placeholderTextColor={colors.textMuted}
             value={data.funFact}
-            onChangeText={(v) => setData({ ...data, funFact: v })}
+            onChangeText={(v) => {
+              const suggested = suggestNickname(v);
+              // Only auto-fill nickname if user hasn't customized it yet
+              setData({ ...data, funFact: v, nickname: data.nickname && data.nickname !== suggestNickname(data.funFact) ? data.nickname : suggested });
+            }}
             multiline
             maxLength={120}
           />
           <Text style={[styles.charCount, { color: colors.textMuted }]}>{data.funFact.length}/120</Text>
+
+          {/* Suggested nickname */}
+          {data.funFact.trim().length > 0 && (
+            <View style={{ width: '100%', marginTop: spacing.md }}>
+              <Text style={[styles.nicknameLabel, { color: colors.textTertiary }]}>YOUR NICKNAME</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.surface, color: colors.gold, borderColor: 'transparent', borderWidth: 0, fontStyle: 'italic', fontSize: 22, fontWeight: '700' }]}
+                placeholder="Your nickname"
+                placeholderTextColor={colors.textMuted}
+                value={data.nickname}
+                onChangeText={(v) => setData({ ...data, nickname: v })}
+                autoCapitalize="words"
+                maxLength={30}
+              />
+              <Text style={[styles.nicknameHint, { color: colors.textMuted }]}>
+                Auto-suggested from your fun fact. Tap to customize.
+              </Text>
+            </View>
+          )}
         </View>
       );
 
-      // Step 4: Socials
-      case 4: return (
+      // Step 5: Socials
+      case 5: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="globe-outline" size={64} color={colors.gold} />
@@ -379,11 +405,11 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 5: Belt + Stripes
-      case 5: return (
-        <View style={styles.stepContent}>
+      // Step 6: Belt + Stripes
+      case 6: return (
+        <View style={[styles.stepContent, { gap: spacing.md }]}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
-            <Ionicons name="ribbon-outline" size={64} color={colors.gold} />
+            <Ionicons name="ribbon-outline" size={48} color={colors.gold} />
           </Animated.View>
           <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Your belt & stripes</Text>
           <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
@@ -391,8 +417,8 @@ export function OnboardingScreen({ navigation, route }: any) {
           </Text>
 
           {/* Live belt preview */}
-          <View style={{ marginVertical: spacing.md }}>
-            <BeltDisplay belt={data.belt} stripes={data.stripes} width={220} />
+          <View style={{ marginVertical: spacing.xs }}>
+            <BeltDisplay belt={data.belt} stripes={data.stripes} width={180} />
           </View>
 
           {/* Belt picker */}
@@ -460,8 +486,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 6: Liability Waiver
-      case 6: return (
+      // Step 7: Liability Waiver
+      case 7: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="document-text-outline" size={64} color={colors.gold} />
@@ -504,8 +530,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 7: Location permission
-      case 7: return (
+      // Step 8: Location permission
+      case 8: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="location-outline" size={64} color={colors.gold} />
@@ -526,8 +552,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 8: Welcome
-      case 8: return (
+      // Step 9: Welcome
+      case 9: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="checkmark-circle" size={80} color={colors.gold} />
@@ -550,7 +576,7 @@ export function OnboardingScreen({ navigation, route }: any) {
       return data.email.includes('@') && pwHasLength && pwHasUpper && pwHasNumber && pwMatch;
     }
     if (step === 1) return data.firstName.trim().length > 0;
-    if (step === 6) {
+    if (step === 7) {
       // Waiver step — signed name must reasonably match first + last name
       const expected = `${data.firstName} ${data.lastName}`.trim().toLowerCase();
       const signed = data.signedName.trim().toLowerCase();
@@ -626,10 +652,23 @@ export function OnboardingScreen({ navigation, route }: any) {
           )}
         </View>
 
-        {/* Skip — not allowed on waiver (step 6) */}
-        {step > 1 && step < TOTAL_STEPS - 1 && step !== 6 && (
+        {/* Skip — not allowed on waiver (step 7) or phone (step 2) */}
+        {step > 2 && step < TOTAL_STEPS - 1 && step !== 7 && (
           <TouchableOpacity style={styles.skipButton} onPress={goNext}>
             <Text style={[styles.skipText, { color: colors.textMuted }]}>Skip for now</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Subtle login link — for members who reinstalled the app */}
+        {step === 0 && (
+          <TouchableOpacity
+            style={styles.subtleLoginRow}
+            onPress={() => navigation.replace('SignIn')}
+            activeOpacity={0.6}
+          >
+            <Text style={[styles.subtleLoginText, { color: colors.textMuted }]}>
+              Have an account? <Text style={{ color: colors.textSecondary, textDecorationLine: 'underline' }}>Sign in</Text>
+            </Text>
           </TouchableOpacity>
         )}
       </KeyboardAvoidingView>
@@ -660,7 +699,7 @@ const styles = StyleSheet.create({
   progressDots: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm, paddingHorizontal: spacing.sm },
   progressDot: { width: 10, height: 10, borderRadius: 5 },
   stepScrollContent: { flexGrow: 1, justifyContent: 'center' },
-  stepContainer: { paddingHorizontal: spacing.lg, paddingVertical: spacing.xl },
+  stepContainer: { paddingHorizontal: spacing.lg, paddingVertical: spacing.lg },
   stepContent: { alignItems: 'center', gap: spacing.lg },
   stepTitle: { ...typography.sectionTitle, fontSize: 24, textTransform: 'none', letterSpacing: 0, textAlign: 'center' },
   stepSubtitle: { ...typography.body, textAlign: 'center', lineHeight: 22, paddingHorizontal: spacing.md },
@@ -678,6 +717,8 @@ const styles = StyleSheet.create({
   reqList: { gap: 6, alignSelf: 'flex-start', paddingLeft: spacing.sm },
   bioInput: { minHeight: 100, textAlignVertical: 'top', textAlign: 'left', fontSize: 16 },
   charCount: { ...typography.bodySmall, alignSelf: 'flex-end' },
+  nicknameLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.5, marginBottom: 6, marginLeft: 4 },
+  nicknameHint: { fontSize: 11, fontWeight: '400', marginTop: 6, textAlign: 'center', fontStyle: 'italic' },
   photoPreview: { width: 128, height: 128, borderRadius: 64 },
   photoPlaceholder: { width: 128, height: 128, borderRadius: 64, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   photoButtons: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
@@ -739,4 +780,6 @@ const styles = StyleSheet.create({
   navButtonText: { ...typography.button, fontSize: 15 },
   skipButton: { alignItems: 'center', paddingBottom: spacing.lg },
   skipText: { ...typography.bodySmall, fontWeight: '500' },
+  subtleLoginRow: { alignItems: 'center', paddingBottom: spacing.md, paddingTop: spacing.xs },
+  subtleLoginText: { fontSize: 12, fontWeight: '400' },
 });

@@ -10,6 +10,8 @@ import { TimeClockProvider } from './src/context/TimeClockContext';
 import { GamificationProvider } from './src/context/GamificationContext';
 import { DrinkTrackerProvider } from './src/context/DrinkTrackerContext';
 import { AttendanceProvider } from './src/context/AttendanceContext';
+import { AnnouncementProvider } from './src/context/AnnouncementContext';
+import { AppointmentProvider } from './src/context/AppointmentContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 
 function AppContent() {
@@ -82,9 +84,13 @@ export default function App() {
             <GamificationProvider>
               <DrinkTrackerProvider>
                 <AttendanceProvider>
-                  <TimeClockProvider>
-                    <AppContent />
-                  </TimeClockProvider>
+                  <AnnouncementProvider>
+                    <AppointmentProvider>
+                      <TimeClockProvider>
+                        <AppContent />
+                      </TimeClockProvider>
+                    </AppointmentProvider>
+                  </AnnouncementProvider>
                 </AttendanceProvider>
               </DrinkTrackerProvider>
             </GamificationProvider>
