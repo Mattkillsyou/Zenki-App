@@ -20,14 +20,14 @@ export type SpinPrize =
  * Positions match the weight table in SLICE_WEIGHTS below (same index).
  */
 export const WHEEL_SLICES: SpinPrize[] = [
-  { type: 'points',  amount: 50,   label: '50 pts',              icon: '💎' },                         // 0
-  { type: 'flames',  amount: 3,    label: '3 Flames',            icon: '🔥' },                         // 1
-  { type: 'points',  amount: 100,  label: '100 pts',             icon: '💎' },                         // 2
-  { type: 'item',    itemKey: 'free_drink', label: 'FREE DRINK', icon: '🥤', confetti: true, rare: true }, // 3
-  { type: 'points',  amount: 200,  label: '200 pts',             icon: '💎' },                         // 4
-  { type: 'flames',  amount: 10,   label: '10 Flames',           icon: '🔥' },                         // 5
-  { type: 'points',  amount: 1000, label: 'JACKPOT — 1,000 pts', icon: '👑', confetti: true, rare: true }, // 6
-  { type: 'item',    itemKey: 'free_shirt', label: 'FREE SHIRT', icon: '👕', confetti: true, rare: true }, // 7
+  { type: 'points',  amount: 50,   label: '50 Diamonds',              icon: '💎' },                         // 0
+  { type: 'flames',  amount: 3,    label: '3 Flames',                 icon: '🔥' },                         // 1
+  { type: 'points',  amount: 100,  label: '100 Diamonds',             icon: '💎' },                         // 2
+  { type: 'item',    itemKey: 'free_drink', label: 'FREE DRINK',      icon: '🥤', confetti: true, rare: true }, // 3
+  { type: 'points',  amount: 200,  label: '200 Diamonds',             icon: '💎' },                         // 4
+  { type: 'flames',  amount: 10,   label: '10 Flames',                icon: '🔥' },                         // 5
+  { type: 'points',  amount: 1000, label: 'JACKPOT — 1,000 Diamonds', icon: '👑', confetti: true, rare: true }, // 6
+  { type: 'item',    itemKey: 'free_shirt', label: 'FREE SHIRT',      icon: '👕', confetti: true, rare: true }, // 7
 ];
 
 /**

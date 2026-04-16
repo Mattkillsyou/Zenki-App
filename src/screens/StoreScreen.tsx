@@ -217,10 +217,10 @@ export function StoreScreen({ navigation }: any) {
                   <Ionicons name={usePoints ? 'checkmark-circle' : 'diamond-outline'} size={20} color={colors.gold} />
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.pointsToggleTitle, { color: colors.textPrimary }]}>
-                      Pay with Dojo Points
+                      Pay with Diamonds
                     </Text>
                     <Text style={[styles.pointsToggleSub, { color: colors.textSecondary }]}>
-                      Balance: {dojoPoints.toLocaleString()} pts · {POINTS_PER_DOLLAR} pts = $1
+                      Balance: {dojoPoints.toLocaleString()} 💎 · {POINTS_PER_DOLLAR} 💎 = $1
                     </Text>
                   </View>
                   {usePoints && (

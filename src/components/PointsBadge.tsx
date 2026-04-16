@@ -37,7 +37,7 @@ export function PointsBadge({ points, compact, onPress }: PointsBadgeProps) {
       <Wrapper {...wrapperProps} style={[compact ? styles.compactContainer : styles.container, { backgroundColor: colors.surface }]}>
         <Ionicons name="diamond-outline" size={compact ? 16 : 22} color={colors.textMuted} />
         <Text style={[compact ? styles.compactCount : styles.count, { color: colors.textMuted }]}>0</Text>
-        {!compact && <Text style={[styles.label, { color: colors.textMuted }]}>points</Text>}
+        {!compact && <Text style={[styles.label, { color: colors.textMuted }]}>diamonds</Text>}
       </Wrapper>
     );
   }
@@ -50,7 +50,7 @@ export function PointsBadge({ points, compact, onPress }: PointsBadgeProps) {
       <Text style={[compact ? styles.compactCount : styles.count, { color: colors.gold }]}>
         {points.toLocaleString()}
       </Text>
-      {!compact && <Text style={[styles.label, { color: colors.textSecondary }]}>points</Text>}
+      {!compact && <Text style={[styles.label, { color: colors.textSecondary }]}>diamonds</Text>}
     </Wrapper>
   );
 }

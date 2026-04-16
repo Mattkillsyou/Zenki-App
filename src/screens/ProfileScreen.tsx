@@ -17,6 +17,7 @@ import { typography, spacing, borderRadius } from '../theme';
 import { BeltDisplay } from '../components';
 import { BELT_DISPLAY_COLORS } from '../data/members';
 import { useGamification } from '../context/GamificationContext';
+import { useSpinWheel } from '../context/SpinWheelContext';
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { value: 'light',  label: 'Light',  icon: 'sunny-outline' },
@@ -28,6 +29,7 @@ export function ProfileScreen({ navigation }: any) {
   const { colors, mode, setMode } = useTheme();
   const { user } = useAuth();
   const { state: gamState, levelInfo } = useGamification();
+  const { freeDrinkCredits, freeShirtCredits } = useSpinWheel();
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [showPhotoMenu, setShowPhotoMenu] = useState(false);
 
@@ -176,9 +178,50 @@ export function ProfileScreen({ navigation }: any) {
           <View style={[styles.statTile, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
             <Ionicons name="diamond-outline" size={18} color={colors.gold} />
             <Text style={[styles.statNum, { color: colors.textPrimary }]}>{gamState.dojoPoints || 0}</Text>
-            <Text style={[styles.statLabel, { color: colors.textMuted }]}>Points</Text>
+            <Text style={[styles.statLabel, { color: colors.textMuted }]}>Diamonds</Text>
           </View>
         </View>
+
+        {/* ── Vouchers (prizes won from the spin wheel) ── */}
+        {(freeDrinkCredits > 0 || freeShirtCredits > 0) && (
+          <>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>VOUCHERS</Text>
+            <View style={styles.voucherRow}>
+              {freeDrinkCredits > 0 && (
+                <View style={[styles.voucherCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}>
+                  <View style={[styles.voucherIcon, { backgroundColor: colors.gold + '22' }]}>
+                    <Ionicons name="cafe-outline" size={22} color={colors.gold} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.voucherTitle, { color: colors.textPrimary }]}>Free Drink</Text>
+                    <Text style={[styles.voucherSub, { color: colors.textMuted }]}>Show at the counter</Text>
+                  </View>
+                  {freeDrinkCredits > 1 && (
+                    <View style={[styles.voucherCountBadge, { backgroundColor: colors.gold }]}>
+                      <Text style={styles.voucherCountText}>×{freeDrinkCredits}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+              {freeShirtCredits > 0 && (
+                <View style={[styles.voucherCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}>
+                  <View style={[styles.voucherIcon, { backgroundColor: colors.gold + '22' }]}>
+                    <Ionicons name="shirt-outline" size={22} color={colors.gold} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.voucherTitle, { color: colors.textPrimary }]}>Free Shirt</Text>
+                    <Text style={[styles.voucherSub, { color: colors.textMuted }]}>Redeem in store</Text>
+                  </View>
+                  {freeShirtCredits > 1 && (
+                    <View style={[styles.voucherCountBadge, { backgroundColor: colors.gold }]}>
+                      <Text style={styles.voucherCountText}>×{freeShirtCredits}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          </>
+        )}
 
         {/* ── Appearance toggle — compact pill row ── */}
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>APPEARANCE</Text>
@@ -452,4 +495,49 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   photoMenuText: { ...typography.body, fontSize: 14 },
+  voucherRow: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  voucherCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5,
+  },
+  voucherIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voucherTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'left',
+  },
+  voucherSub: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'left',
+    marginTop: 1,
+  },
+  voucherCountBadge: {
+    minWidth: 28,
+    height: 24,
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voucherCountText: {
+    color: '#000',
+    fontSize: 12,
+    fontWeight: '800',
+  },
 });

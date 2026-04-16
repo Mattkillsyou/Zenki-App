@@ -235,7 +235,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         updated.pendingCelebration = {
           type: 'level_up',
           title: `Level ${newLevel}!`,
-          subtitle: `+${pointsEarned} Dojo Points earned`,
+          subtitle: `+${pointsEarned} Diamonds earned`,
           xpGained: XP_PER_SESSION + streakBonus,
         };
       }
@@ -243,7 +243,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         updated.pendingCelebration = {
           type: 'streak_milestone',
           title: `${updated.streak}-Day Streak!`,
-          subtitle: `You're on fire! +${pointsEarned} Dojo Points`,
+          subtitle: `You're on fire! +${pointsEarned} Diamonds`,
           icon: 'flame',
         };
       }
