@@ -76,7 +76,7 @@ export const MEMBERS: Member[] = [
     memberSince: '2026-04-01',
     isAdmin: false,
     isEmployee: true,
-    hourlyRate: 30,
+    hourlyRate: 20,
     totalSessions: 0,
     weekStreak: 0,
   },

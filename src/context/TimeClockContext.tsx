@@ -51,7 +51,7 @@ const TimeClockContext = createContext<TimeClockContextValue>({
 
 export function TimeClockProvider({
   children,
-  hourlyRate = 30,
+  hourlyRate = 20,
   employeeName = 'Apple',
 }: {
   children: React.ReactNode;
