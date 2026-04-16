@@ -100,6 +100,7 @@ export function CommunityScreen({ navigation }: any) {
           )}
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 120 }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.gold} />
           }
@@ -145,6 +146,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
+    paddingBottom: 100,
     gap: spacing.lg,
   },
   emptyTitle: {

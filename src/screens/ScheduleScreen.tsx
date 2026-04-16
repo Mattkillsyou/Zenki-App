@@ -202,7 +202,7 @@ export function ScheduleScreen({ navigation }: any) {
             </Text>
           </View>
         )}
-        <View style={{ height: spacing.xxl }} />
+        <View style={{ height: 120 }} />
       </ScrollView>
     </SafeAreaView>
   );

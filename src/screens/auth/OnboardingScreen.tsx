@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity,
+  View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
   Image, Animated, Dimensions, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -406,12 +406,18 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
 
         {/* Step Content */}
-        <Animated.View style={[styles.stepContainer, {
-          opacity: fadeAnim,
-          transform: [{ translateX: slideAnim }],
-        }]}>
-          {renderStep()}
-        </Animated.View>
+        <ScrollView
+          contentContainerStyle={styles.stepScrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Animated.View style={[styles.stepContainer, {
+            opacity: fadeAnim,
+            transform: [{ translateX: slideAnim }],
+          }]}>
+            {renderStep()}
+          </Animated.View>
+        </ScrollView>
 
         {/* Navigation Buttons */}
         <View style={styles.navRow}>
@@ -478,7 +484,8 @@ const styles = StyleSheet.create({
   progressFill: { height: '100%', borderRadius: 3 },
   progressDots: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm, paddingHorizontal: spacing.sm },
   progressDot: { width: 10, height: 10, borderRadius: 5 },
-  stepContainer: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.lg },
+  stepScrollContent: { flexGrow: 1, justifyContent: 'center' },
+  stepContainer: { paddingHorizontal: spacing.lg, paddingVertical: spacing.xl },
   stepContent: { alignItems: 'center', gap: spacing.lg },
   stepTitle: { ...typography.sectionTitle, fontSize: 24, textTransform: 'none', letterSpacing: 0, textAlign: 'center' },
   stepSubtitle: { ...typography.body, textAlign: 'center', lineHeight: 22, paddingHorizontal: spacing.md },

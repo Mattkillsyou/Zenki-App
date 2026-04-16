@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { AnimatedTabIcon } from '../components/AnimatedTabIcon';
@@ -29,7 +30,9 @@ const TAB_ICONS: Record<string, { active: keyof typeof Ionicons.glyphMap; inacti
 export function TabNavigator() {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const isEmployee = user?.isEmployee === true;
+  const tabBarHeight = 60 + insets.bottom;
 
   return (
     <Tab.Navigator
@@ -40,9 +43,9 @@ export function TabNavigator() {
           backgroundColor: colors.tabBar,
           borderTopColor: 'transparent',
           borderTopWidth: 0,
-          height: 76,
+          height: tabBarHeight,
           paddingTop: 10,
-          paddingBottom: 18,
+          paddingBottom: insets.bottom,
         },
         tabBarActiveTintColor: colors.gold,
         tabBarInactiveTintColor: colors.textMuted,

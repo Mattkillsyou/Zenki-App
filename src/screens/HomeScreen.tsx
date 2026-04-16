@@ -35,9 +35,9 @@ export function HomeScreen({ navigation }: any) {
         {/* ─── Header ─── */}
         <FadeInView delay={0} slideUp={0}>
           <View style={styles.header}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={[styles.greeting, { color: colors.textTertiary }]}>Welcome back</Text>
-              <Text style={[styles.memberName, { color: colors.textPrimary }]}>{user?.firstName ?? 'Member'}</Text>
+              <Text style={[styles.memberName, { color: colors.textPrimary }]} numberOfLines={1}>{user?.firstName ?? 'Member'}</Text>
             </View>
             <View style={styles.headerRight}>
               {!isEmployee && <StreakBadge streak={gamState.streak} compact />}
@@ -164,7 +164,6 @@ export function HomeScreen({ navigation }: any) {
           </>
         )}
 
-        <View style={{ height: 120 }} />
       </ScrollView>
 
       {!isEmployee && (
@@ -176,7 +175,7 @@ export function HomeScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollContent: { paddingBottom: 20 },
+  scrollContent: { paddingBottom: 120 },
 
   // Header
   header: {

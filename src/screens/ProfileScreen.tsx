@@ -446,8 +446,6 @@ const styles = StyleSheet.create({
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 0,
-    paddingHorizontal: 0,
     borderRadius: 16,
     borderWidth: 1,
     marginBottom: 10,

@@ -73,7 +73,7 @@ export function SignInScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Invite Gate */}
       <Modal visible={showInviteGate} animationType="fade">
-        <View style={[styles.gateContainer, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={[styles.gateContainer, { backgroundColor: colors.background }]}>
           <View style={[styles.gateIconWrap, { backgroundColor: colors.goldMuted }]}>
             <Ionicons name="shield-checkmark-outline" size={48} color={colors.gold} />
           </View>
@@ -88,11 +88,11 @@ export function SignInScreen({ navigation }: any) {
             autoCapitalize="none"
           />
           <Button title="Continue" onPress={handleVerifyInvite} fullWidth size="lg" />
-        </View>
+        </SafeAreaView>
       </Modal>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.inner}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
           {/* Logo */}
           <View style={styles.logoSection}>
@@ -191,8 +191,8 @@ export function SignInScreen({ navigation }: any) {
               <Text style={[styles.footerLink, { color: colors.gold }]}>Inquire</Text>
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
