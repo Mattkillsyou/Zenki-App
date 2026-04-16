@@ -22,6 +22,7 @@ import { AdminScreen } from '../screens/AdminScreen';
 import { AdminMembersScreen } from '../screens/AdminMembersScreen';
 import { AdminProductsScreen } from '../screens/AdminProductsScreen';
 import { AdminScheduleScreen } from '../screens/AdminScheduleScreen';
+import { AttendanceHistoryScreen } from '../screens/AttendanceHistoryScreen';
 import { BookingPaymentScreen } from '../screens/BookingPaymentScreen';
 import { PaymentMethodsScreen } from '../screens/PaymentMethodsScreen';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
@@ -249,6 +250,7 @@ export function RootNavigator() {
       <Stack.Screen name="AdminMembers" component={AdminMembersScreen} options={pushTransition} />
       <Stack.Screen name="AdminProducts" component={AdminProductsScreen} options={pushTransition} />
       <Stack.Screen name="AdminSchedule" component={AdminScheduleScreen} options={pushTransition} />
+      <Stack.Screen name="AttendanceHistory" component={AttendanceHistoryScreen} options={pushTransition} />
 
       {/* Community */}
       <Stack.Screen name="CreatePost" component={CreatePostScreen} options={modalTransition} />

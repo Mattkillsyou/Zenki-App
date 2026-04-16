@@ -9,6 +9,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import { TimeClockProvider } from './src/context/TimeClockContext';
 import { GamificationProvider } from './src/context/GamificationContext';
 import { DrinkTrackerProvider } from './src/context/DrinkTrackerContext';
+import { AttendanceProvider } from './src/context/AttendanceContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 
 function AppContent() {
@@ -80,9 +81,11 @@ export default function App() {
           <ThemeProvider>
             <GamificationProvider>
               <DrinkTrackerProvider>
-                <TimeClockProvider>
-                  <AppContent />
-                </TimeClockProvider>
+                <AttendanceProvider>
+                  <TimeClockProvider>
+                    <AppContent />
+                  </TimeClockProvider>
+                </AttendanceProvider>
               </DrinkTrackerProvider>
             </GamificationProvider>
           </ThemeProvider>

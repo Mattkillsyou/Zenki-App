@@ -9,9 +9,20 @@
     "splash": {
       "backgroundColor": "#1A1209"
     },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Zenki Dojo uses your location to automatically log your visits when you arrive at the dojo."
+        }
+      ]
+    ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.zenkidojo.app"
+      "bundleIdentifier": "com.zenkidojo.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Zenki Dojo uses your location to automatically log your visits when you arrive at the dojo."
+      }
     },
     "android": {
       "adaptiveIcon": {

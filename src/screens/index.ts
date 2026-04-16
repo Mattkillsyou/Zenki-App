@@ -12,6 +12,7 @@ export { DrinkScreen } from './DrinkScreen';
 export { CommunityScreen } from './CommunityScreen';
 export { CreatePostScreen } from './CreatePostScreen';
 export { UserProfileScreen } from './UserProfileScreen';
+export { AttendanceHistoryScreen } from './AttendanceHistoryScreen';
 
 // Auth
 export { SignInScreen } from './auth/SignInScreen';

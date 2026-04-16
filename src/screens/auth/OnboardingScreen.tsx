@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { useTheme } from '../../context/ThemeContext';
 import { useMotion } from '../../context/MotionContext';
 import { useAuth } from '../../context/AuthContext';
@@ -13,7 +14,7 @@ import { typography, spacing, borderRadius } from '../../theme';
 import { BELT_ORDER, BELT_DISPLAY_COLORS, BeltLevel, Member } from '../../data/members';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 
 interface OnboardingData {
   email: string;
@@ -35,6 +36,7 @@ export function OnboardingScreen({ navigation, route }: any) {
   const { createAccount } = useAuth();
   const [step, setStep] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
+  const [locationGranted, setLocationGranted] = useState(false);
   const [data, setData] = useState<OnboardingData>({
     email: '', password: '', confirmPassword: '',
     firstName: '', lastName: '', photo: null, bio: '',
@@ -143,9 +145,18 @@ export function OnboardingScreen({ navigation, route }: any) {
     }
   };
 
+  const requestLocationPermission = async () => {
+    if (Platform.OS === 'web') {
+      setLocationGranted(true);
+      return;
+    }
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    setLocationGranted(status === 'granted');
+  };
+
   const stepIcons: (keyof typeof Ionicons.glyphMap)[] = [
     'lock-closed-outline', 'person-outline', 'camera-outline', 'create-outline',
-    'share-social-outline', 'ribbon-outline', 'checkmark-circle',
+    'share-social-outline', 'ribbon-outline', 'location-outline', 'checkmark-circle',
   ];
 
   const renderStep = () => {
@@ -357,8 +368,30 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 6: Welcome
+      // Step 6: Location permission
       case 6: return (
+        <View style={styles.stepContent}>
+          <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
+            <Ionicons name="location-outline" size={64} color={colors.gold} />
+          </Animated.View>
+          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Enable location access</Text>
+          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
+            We'll automatically log your visits when you arrive at the dojo. Your location is only checked while the app is open.
+          </Text>
+          <TouchableOpacity
+            style={[styles.photoOption, { backgroundColor: colors.surface, borderWidth: 1, borderColor: 'transparent' }]}
+            onPress={requestLocationPermission}
+          >
+            <Ionicons name={locationGranted ? 'checkmark-circle' : 'navigate-outline'} size={24} color={locationGranted ? colors.success : colors.gold} />
+            <Text style={[styles.photoOptionText, { color: colors.textPrimary }]}>
+              {locationGranted ? 'Location Enabled' : 'Allow Location Access'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      );
+
+      // Step 7: Welcome
+      case 7: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="checkmark-circle" size={80} color={colors.gold} />

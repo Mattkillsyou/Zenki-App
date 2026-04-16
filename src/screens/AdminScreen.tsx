@@ -9,6 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useAttendance } from '../context/AttendanceContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { FadeInView, PressableScale } from '../components';
 import { MEMBERS } from '../data/members';
@@ -47,6 +48,7 @@ function AdminCard({ icon, title, subtitle, count, accentColor, onPress }: Admin
 
 export function AdminScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const { todayVisitors } = useAttendance();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -73,6 +75,36 @@ export function AdminScreen({ navigation }: any) {
                 Manage your dojo members, store, and schedule
               </Text>
             </View>
+          </View>
+        </FadeInView>
+
+        {/* Who's Here */}
+        <FadeInView delay={50} slideUp={10}>
+          <View style={[styles.whosHereCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.whosHereHeader}>
+              <Ionicons name="location" size={18} color={colors.success} />
+              <Text style={[styles.whosHereTitle, { color: colors.textPrimary }]}>Who's Here</Text>
+              <View style={[styles.liveBadge, { backgroundColor: colors.success + '20' }]}>
+                <View style={[styles.liveDot, { backgroundColor: colors.success }]} />
+                <Text style={[styles.liveCount, { color: colors.success }]}>{todayVisitors.length}</Text>
+              </View>
+            </View>
+            {todayVisitors.length === 0 ? (
+              <Text style={[styles.whosHereEmpty, { color: colors.textMuted }]}>No one has checked in today</Text>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.visitorScroll}>
+                {todayVisitors.map((v) => (
+                  <View key={v.id} style={styles.visitorChip}>
+                    <View style={[styles.visitorAvatar, { backgroundColor: colors.gold + '20' }]}>
+                      <Text style={[styles.visitorInitial, { color: colors.gold }]}>{v.memberName[0]}</Text>
+                    </View>
+                    <Text style={[styles.visitorName, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {v.memberName.split(' ')[0]}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
           </View>
         </FadeInView>
 
@@ -111,15 +143,14 @@ export function AdminScreen({ navigation }: any) {
             />
           </FadeInView>
           <FadeInView delay={240} slideUp={12} style={styles.gridItem}>
-            <View style={[styles.adminCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 22, opacity: 0.5 }]}>
-              <View style={styles.adminCardTop}>
-                <View style={[styles.adminCardIcon, { backgroundColor: colors.gold + '20', width: 52, height: 52, borderRadius: 16 }]}>
-                  <Ionicons name="analytics-outline" size={26} color={colors.textMuted} />
-                </View>
-              </View>
-              <Text style={[styles.adminCardTitle, { color: colors.textMuted, fontSize: 17, fontWeight: '700' }]}>Analytics</Text>
-              <Text style={[styles.adminCardSubtitle, { color: colors.textMuted, fontSize: 13 }]}>Coming soon</Text>
-            </View>
+            <AdminCard
+              icon="location-outline"
+              title="Attendance"
+              subtitle="Visit history & tracking"
+              count={todayVisitors.length}
+              accentColor={colors.info}
+              onPress={() => navigation.navigate('AttendanceHistory')}
+            />
           </FadeInView>
         </View>
 
@@ -224,4 +255,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  whosHereCard: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    padding: spacing.md + 4,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5,
+  },
+  whosHereHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: spacing.sm,
+  },
+  whosHereTitle: { fontSize: 17, fontWeight: '700', flex: 1 },
+  whosHereEmpty: { fontSize: 14, fontWeight: '500' },
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 6,
+  },
+  liveDot: { width: 8, height: 8, borderRadius: 4 },
+  liveCount: { fontSize: 15, fontWeight: '800' },
+  visitorScroll: { marginTop: 4 },
+  visitorChip: { alignItems: 'center', marginRight: 16, width: 52 },
+  visitorAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  visitorInitial: { fontSize: 18, fontWeight: '700' },
+  visitorName: { fontSize: 11, fontWeight: '600', marginTop: 4 },
 });
