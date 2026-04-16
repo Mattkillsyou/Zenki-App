@@ -86,11 +86,6 @@ export function ProfileScreen({ navigation }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Profile</Text>
-        </View>
-
         {/* Profile Card */}
         <View style={styles.profileSection}>
           <TouchableOpacity onPress={handleChangePhoto} activeOpacity={0.7}>
@@ -275,18 +270,6 @@ export function ProfileScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  title: {
-    fontSize: 34,
-    fontWeight: '800',
-    letterSpacing: -0.5,
   },
   profileSection: {
     alignItems: 'center',

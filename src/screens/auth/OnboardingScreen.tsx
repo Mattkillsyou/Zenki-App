@@ -310,7 +310,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             <Ionicons name="chatbubble-ellipses-outline" size={64} color={colors.gold} />
           </Animated.View>
           <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Tell us about yourself</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>A short bio and a fun fact for your profile</Text>
+          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>A short bio and a fun fact about you</Text>
           <TextInput
             style={[styles.input, styles.bioInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: 'transparent', borderWidth: 0 }]}
             placeholder="I train because..."
