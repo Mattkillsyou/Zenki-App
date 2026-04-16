@@ -379,7 +379,7 @@ export function OnboardingScreen({ navigation, route }: any) {
 
           {/* Live belt preview */}
           <View style={{ marginVertical: spacing.md }}>
-            <BeltDisplay belt={data.belt} stripes={data.stripes} width={260} />
+            <BeltDisplay belt={data.belt} stripes={data.stripes} width={220} />
           </View>
 
           {/* Belt picker */}

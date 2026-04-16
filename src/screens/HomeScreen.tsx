@@ -80,8 +80,8 @@ export function HomeScreen({ navigation }: any) {
                 ].map((stat) => (
                   <View key={stat.label} style={[styles.statCard, { backgroundColor: colors.surface,  }]}>
                     <Ionicons name={stat.icon} size={22} color={stat.accent ? colors.gold : colors.textMuted} style={{ marginBottom: 10 }} />
-                    <Text style={[styles.statNumber, { color: stat.accent ? colors.gold : colors.textPrimary }]}>{stat.value}</Text>
-                    <Text style={[styles.statLabel, { color: colors.textTertiary }]}>{stat.label}</Text>
+                    <Text style={[styles.statNumber, { color: stat.accent ? colors.gold : colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>{stat.value}</Text>
+                    <Text style={[styles.statLabel, { color: colors.textTertiary }]} numberOfLines={1}>{stat.label}</Text>
                   </View>
                 ))}
               </View>

@@ -150,7 +150,7 @@ export function ProfileScreen({ navigation }: any) {
               Jiu-Jitsu Progress
             </Text>
             <View style={styles.beltDisplayContainer}>
-              <BeltDisplay belt={memberBelt} stripes={memberStripes} width={280} />
+              <BeltDisplay belt={memberBelt} stripes={memberStripes} width={240} />
             </View>
             <Text style={[styles.beltHint, { color: colors.textMuted }]}>
               Belts and stripes are awarded by your instructor.
@@ -424,7 +424,8 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     marginBottom: spacing.sm,
     overflow: 'hidden',
-    width: '80%',
+    width: '90%',
+    maxWidth: 280,
     borderWidth: 1,
   },
   photoMenuItem: {

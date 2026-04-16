@@ -254,7 +254,7 @@ export function SettingsScreen({ navigation }: any) {
 
       {/* Password Change Modal (admin-only) */}
       <Modal visible={pwModalOpen} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
+        <SafeAreaView style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { backgroundColor: colors.backgroundElevated, borderColor: colors.border }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Change Password</Text>
@@ -300,7 +300,7 @@ export function SettingsScreen({ navigation }: any) {
               <Text style={styles.modalBtnText}>{saving ? 'Saving…' : 'Update Password'}</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 340,
     padding: spacing.lg,
     borderRadius: 20,
     borderWidth: 1.5,
