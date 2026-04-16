@@ -123,7 +123,7 @@ export function ProfileScreen({ navigation }: any) {
         </View>
 
         {/* ── Zenki Card — creative space-filler showing level, XP, progress ── */}
-        <View style={[styles.zenkiCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}>
+        <View style={[styles.zenkiCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.zenkiCardTop}>
             <View style={[styles.levelBadge, { backgroundColor: colors.gold }]}>
               <Text style={styles.levelNum}>{levelInfo.level}</Text>
@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     padding: 14,
     borderRadius: 18,
-    borderWidth: 2,
+    borderWidth: 1,
   },
   zenkiCardTop: {
     flexDirection: 'row',

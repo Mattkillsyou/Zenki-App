@@ -24,9 +24,21 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   navigation: any;
+  /** Vertical offset from top of screen where the bell icon sits (in px).
+   *  Used to anchor the chat-bubble tail under the bell. Defaults to a
+   *  reasonable value for the Home header. */
+  anchorTop?: number;
+  /** Horizontal offset of the bell from the right edge (in px). */
+  anchorRight?: number;
 }
 
-export function NotificationsModal({ visible, onClose, navigation }: Props) {
+export function NotificationsModal({
+  visible,
+  onClose,
+  navigation,
+  anchorTop = 60,
+  anchorRight = 20,
+}: Props) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const { announcements } = useAnnouncements();
@@ -51,7 +63,6 @@ export function NotificationsModal({ visible, onClose, navigation }: Props) {
             title: `${a.sessionType} with ${a.instructor}`,
             body: `${new Date(a.startsAt).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · ${a.status === 'pending' ? 'Awaiting confirmation' : 'Confirmed'}`,
             timestamp: a.createdAt,
-            actionLabel: 'View',
             onAction: () => { onClose(); navigation.navigate('Schedule'); },
           });
         }
@@ -79,7 +90,6 @@ export function NotificationsModal({ visible, onClose, navigation }: Props) {
         title: c.title,
         body: c.subtitle,
         timestamp: new Date().toISOString(),
-        actionLabel: 'See',
         onAction: () => { onClose(); navigation.navigate('Achievements'); },
       });
     }
@@ -90,8 +100,8 @@ export function NotificationsModal({ visible, onClose, navigation }: Props) {
         icon: 'flame',
         iconColor: '#FF6B35',
         tint: '#FF6B3520',
-        title: `${gamState.streak}-day streak — keep it alive!`,
-        body: `Train today to push it to ${gamState.streak + 1}. One missed day resets.`,
+        title: `${gamState.streak}-day streak`,
+        body: `Train today to push it to ${gamState.streak + 1}. Missed days reset.`,
         timestamp: new Date().toISOString(),
       });
     }
@@ -102,108 +112,206 @@ export function NotificationsModal({ visible, onClose, navigation }: Props) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
+        {/* Chat bubble anchored near the bell (top-right area) */}
         <Pressable
-          style={[styles.sheet, { backgroundColor: colors.backgroundElevated, borderColor: colors.border }]}
           onPress={(e) => e.stopPropagation()}
+          style={[
+            styles.bubbleWrap,
+            { top: anchorTop, right: anchorRight },
+          ]}
         >
-          <View style={styles.headerRow}>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>Notifications</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close" size={22} color={colors.textMuted} />
-            </TouchableOpacity>
+          {/* Little tail pointing up to the bell */}
+          <View style={styles.tailWrap}>
+            <View
+              style={[
+                styles.tailOutline,
+                { borderBottomColor: colors.border },
+              ]}
+            />
+            <View
+              style={[
+                styles.tailFill,
+                { borderBottomColor: colors.backgroundElevated },
+              ]}
+            />
           </View>
 
-          {items.length === 0 ? (
-            <View style={styles.empty}>
-              <View style={[styles.emptyIcon, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Ionicons name="notifications-outline" size={36} color={colors.textMuted} />
-              </View>
-              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>You're all caught up</Text>
-              <Text style={[styles.emptyBody, { color: colors.textMuted }]}>
-                No new notifications. Booked classes, announcements, and achievements will appear here.
+          <View
+            style={[
+              styles.bubble,
+              {
+                backgroundColor: colors.backgroundElevated,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <View style={styles.headerRow}>
+              <Text style={[styles.title, { color: colors.textPrimary }]}>
+                Notifications
               </Text>
+              <TouchableOpacity
+                onPress={onClose}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
             </View>
-          ) : (
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
-              {items.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  onPress={item.onAction}
-                  activeOpacity={item.onAction ? 0.8 : 1}
-                >
-                  <View style={[styles.iconBox, { backgroundColor: item.tint || colors.goldMuted }]}>
-                    <Ionicons name={item.icon} size={18} color={item.iconColor} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                      {item.title}
-                    </Text>
-                    <Text style={[styles.cardBody, { color: colors.textSecondary }]} numberOfLines={2}>
-                      {item.body}
-                    </Text>
-                  </View>
-                  {item.actionLabel && <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
+
+            {items.length === 0 ? (
+              <View style={styles.empty}>
+                <Ionicons
+                  name="notifications-outline"
+                  size={26}
+                  color={colors.textMuted}
+                />
+                <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+                  All caught up
+                </Text>
+                <Text style={[styles.emptyBody, { color: colors.textMuted }]}>
+                  Nothing new right now.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                style={{ maxHeight: 360 }}
+              >
+                {items.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.card,
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                    onPress={item.onAction}
+                    activeOpacity={item.onAction ? 0.8 : 1}
+                  >
+                    <View
+                      style={[
+                        styles.iconBox,
+                        { backgroundColor: item.tint || colors.goldMuted },
+                      ]}
+                    >
+                      <Ionicons name={item.icon} size={14} color={item.iconColor} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[styles.cardTitle, { color: colors.textPrimary }]}
+                        numberOfLines={1}
+                      >
+                        {item.title}
+                      </Text>
+                      <Text
+                        style={[styles.cardBody, { color: colors.textSecondary }]}
+                        numberOfLines={2}
+                      >
+                        {item.body}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
         </Pressable>
       </Pressable>
     </Modal>
   );
 }
 
+const BUBBLE_WIDTH = 300;
+
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: spacing.lg,
-    paddingTop: 16,
-    paddingBottom: 32,
+  bubbleWrap: {
+    position: 'absolute',
+    width: BUBBLE_WIDTH,
+  },
+  // Chat-bubble tail pointing up at the bell
+  tailWrap: {
+    position: 'absolute',
+    top: -9,
+    right: 14,
+    width: 20,
+    height: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tailOutline: {
+    position: 'absolute',
+    top: 0,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 11,
+    borderRightWidth: 11,
+    borderBottomWidth: 11,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+  },
+  tailFill: {
+    position: 'absolute',
+    top: 1.5,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 9,
+    borderRightWidth: 9,
+    borderBottomWidth: 9,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+  },
+  bubble: {
+    borderRadius: 16,
     borderWidth: 1.5,
-    borderBottomWidth: 0,
-    maxHeight: '75%',
+    padding: 14,
+    // Soft shadow for that popup-from-bell feel
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  title: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+  title: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
 
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderRadius: 14,
+    gap: 8,
+    padding: 10,
+    borderRadius: 10,
     borderWidth: 1,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   iconBox: {
-    width: 40, height: 40, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  cardTitle: { fontSize: 14, fontWeight: '700' },
-  cardBody: { fontSize: 12, marginTop: 2, lineHeight: 16 },
+  cardTitle: { fontSize: 12, fontWeight: '700' },
+  cardBody: { fontSize: 11, marginTop: 1, lineHeight: 14 },
 
   empty: {
     alignItems: 'center',
-    paddingVertical: 40,
-    gap: 12,
+    paddingVertical: 18,
+    gap: 6,
   },
-  emptyIcon: {
-    width: 80, height: 80, borderRadius: 40,
-    borderWidth: 1.5,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  emptyTitle: { fontSize: 17, fontWeight: '800' },
-  emptyBody: { fontSize: 12, textAlign: 'center', lineHeight: 16, paddingHorizontal: 24 },
+  emptyTitle: { fontSize: 13, fontWeight: '800' },
+  emptyBody: { fontSize: 11, textAlign: 'center' },
 });

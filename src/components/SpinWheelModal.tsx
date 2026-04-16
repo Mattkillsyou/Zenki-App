@@ -21,9 +21,9 @@ const WHEEL_SIZE = Math.min(Dimensions.get('window').width - 80, 280);
 const CENTER = WHEEL_SIZE / 2;
 const RADIUS = WHEEL_SIZE / 2 - 4;
 
-// Alternating clean colors — gold / red only, high contrast
-const SLICE_COLORS = ['#D4A017', '#1A1A1A', '#D4A017', '#C41E2A', '#D4A017', '#1A1A1A', '#D4A017', '#C41E2A'];
-const SLICE_TEXT_COLOR = ['#000', '#FFF', '#000', '#FFF', '#000', '#FFF', '#000', '#FFF'];
+// Two alternating colors only — simple, clean.
+const SLICE_COLORS = ['#D4A017', '#1A1A1A', '#D4A017', '#1A1A1A', '#D4A017', '#1A1A1A', '#D4A017', '#1A1A1A'];
+const SLICE_TEXT_COLOR = ['#000', '#D4A017', '#000', '#D4A017', '#000', '#D4A017', '#000', '#D4A017'];
 
 interface Props {
   visible: boolean;
@@ -42,15 +42,15 @@ function sliceArc(startDeg: number, endDeg: number): string {
   return `M ${CENTER},${CENTER} L ${x1.toFixed(3)},${y1.toFixed(3)} A ${RADIUS},${RADIUS} 0 ${largeArc} 1 ${x2.toFixed(3)},${y2.toFixed(3)} Z`;
 }
 
-/** Position for the text label at the center of a slice, pushed out from the hub. */
-function labelPos(sliceIdx: number): { x: number; y: number; rotate: number } {
+/** Position for the text label at the center of a slice, pushed out from the hub.
+ *  Labels stay upright (no rotation) for maximum legibility. */
+function labelPos(sliceIdx: number): { x: number; y: number } {
   const centerDeg = sliceIdx * SLICE_ANGLE + SLICE_ANGLE / 2;
   const centerRad = ((centerDeg - 90) * Math.PI) / 180;
-  const distance = RADIUS * 0.62;
+  const distance = RADIUS * 0.68;
   return {
     x: CENTER + distance * Math.cos(centerRad),
     y: CENTER + distance * Math.sin(centerRad),
-    rotate: centerDeg,
   };
 }
 
@@ -140,21 +140,25 @@ export function SpinWheelModal({ visible, onClose }: Props) {
                   })}
                 </G>
 
-                {/* Slice labels */}
+                {/* Slice labels — UPRIGHT, no rotation.
+                    `alignmentBaseline` is unreliable in react-native-svg on web,
+                    so we rely on `textAnchor="middle"` for horizontal centering
+                    and `dy` for vertical optical centering (pushes the baseline
+                    down by ~0.35em so the visual center matches the anchor point). */}
                 <G>
                   {WHEEL_SLICES.map((slice, i) => {
-                    const { x, y, rotate } = labelPos(i);
+                    const { x, y } = labelPos(i);
+                    const fs = WHEEL_SIZE * 0.062;
                     return (
                       <SvgText
                         key={`t-${i}`}
                         x={x}
                         y={y}
+                        dy={fs * 0.35}
                         fill={SLICE_TEXT_COLOR[i]}
-                        fontSize={WHEEL_SIZE * 0.055}
+                        fontSize={fs}
                         fontWeight="900"
                         textAnchor="middle"
-                        alignmentBaseline="central"
-                        transform={`rotate(${rotate} ${x} ${y})`}
                       >
                         {slice.label}
                       </SvgText>
