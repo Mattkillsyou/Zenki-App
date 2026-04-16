@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   stripesContainer: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse', // stripes are applied from the right end
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,

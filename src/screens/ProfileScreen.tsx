@@ -15,6 +15,7 @@ import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { Card, BeltDisplay } from '../components';
+import { BELT_DISPLAY_COLORS } from '../data/members';
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { value: 'light', label: 'Light', icon: 'sunny-outline' },
@@ -93,16 +94,24 @@ export function ProfileScreen({ navigation }: any) {
         {/* Profile Card */}
         <View style={styles.profileSection}>
           <TouchableOpacity onPress={handleChangePhoto} activeOpacity={0.7}>
-            <View style={[styles.avatarOuter, { borderColor: colors.gold }]}>
-              <View style={[styles.avatar, { backgroundColor: colors.surface }]}>
-                {profilePhoto ? (
-                  <Image source={{ uri: profilePhoto }} style={styles.avatarImage} />
-                ) : (
-                  <Ionicons name="person" size={40} color={colors.textMuted} />
-                )}
-                <View style={[styles.editBadge, { backgroundColor: colors.gold }]}>
-                  <Ionicons name="camera" size={12} color={colors.textInverse} />
+            <View style={styles.avatarWrapper}>
+              <View
+                style={[
+                  styles.avatarOuter,
+                  { borderColor: memberBelt === 'none' ? colors.border : BELT_DISPLAY_COLORS[memberBelt] },
+                ]}
+              >
+                <View style={[styles.avatar, { backgroundColor: colors.surface }]}>
+                  {profilePhoto ? (
+                    <Image source={{ uri: profilePhoto }} style={styles.avatarImage} />
+                  ) : (
+                    <Ionicons name="person" size={40} color={colors.textMuted} />
+                  )}
                 </View>
+              </View>
+              {/* Camera badge is a sibling so the avatar's overflow:hidden doesn't clip it */}
+              <View style={[styles.editBadge, { backgroundColor: colors.gold, borderColor: colors.background }]}>
+                <Ionicons name="camera" size={12} color={colors.textInverse} />
               </View>
             </View>
           </TouchableOpacity>
@@ -144,19 +153,21 @@ export function ProfileScreen({ navigation }: any) {
         </View>
 
         {/* Belt Progress (read-only — admins update via Admin Panel) */}
-        <View style={styles.section}>
-          <Card variant="elevated">
-            <Text style={[styles.beltTitle, { color: colors.textPrimary }]}>
-              Jiu-Jitsu Progress
-            </Text>
-            <View style={styles.beltDisplayContainer}>
-              <BeltDisplay belt={memberBelt} stripes={memberStripes} width={240} />
-            </View>
-            <Text style={[styles.beltHint, { color: colors.textMuted }]}>
-              Belts and stripes are awarded by your instructor.
-            </Text>
-          </Card>
-        </View>
+        {memberBelt !== 'none' && (
+          <View style={styles.section}>
+            <Card variant="elevated">
+              <Text style={[styles.beltTitle, { color: colors.textPrimary }]}>
+                Jiu-Jitsu Progress
+              </Text>
+              <View style={styles.beltDisplayContainer}>
+                <BeltDisplay belt={memberBelt} stripes={memberStripes} width={240} />
+              </View>
+              <Text style={[styles.beltHint, { color: colors.textMuted }]}>
+                Belts and stripes are awarded by your instructor.
+              </Text>
+            </Card>
+          </View>
+        )}
 
         {/* Stats */}
         <View style={styles.section}>
@@ -266,14 +277,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.lg,
   },
+  avatarWrapper: {
+    width: 118,
+    height: 118,
+    marginBottom: spacing.md,
+    position: 'relative',
+  },
   avatar: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+    width: 104,
+    height: 104,
+    borderRadius: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 4,
-    marginBottom: spacing.md,
     overflow: 'hidden',
   },
   avatarImage: {
@@ -282,11 +297,12 @@ const styles = StyleSheet.create({
   },
   editBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    bottom: 2,
+    right: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -344,7 +360,6 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
   },
   statCard: {
     flex: 1,
