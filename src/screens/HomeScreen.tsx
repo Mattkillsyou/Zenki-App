@@ -74,13 +74,8 @@ export function HomeScreen({ navigation }: any) {
   const [spinOpen, setSpinOpen] = React.useState(false);
   const [notifOpen, setNotifOpen] = React.useState(false);
 
-  // Show the spin wheel on first visit of the day
-  React.useEffect(() => {
-    if (!hasSpunToday && !isEmployee) {
-      const t = setTimeout(() => setSpinOpen(true), 600);
-      return () => clearTimeout(t);
-    }
-  }, [hasSpunToday, isEmployee]);
+  // Spin wheel is now opened manually via the icon in the header
+  // (previously auto-opened on first visit of the day)
 
   // User's confirmed/pending private bookings for today
   const todaysBookings = myAppointments
@@ -136,6 +131,22 @@ export function HomeScreen({ navigation }: any) {
                 />
               )}
               {!isEmployee && <StreakBadge streak={gamState.streak} compact />}
+              {!isEmployee && (
+                <TouchableOpacity
+                  style={[styles.iconButton, { backgroundColor: colors.surface }]}
+                  onPress={() => { play('navigate'); setSpinOpen(true); }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="disc-outline"
+                    size={20}
+                    color={hasSpunToday ? colors.textMuted : colors.gold}
+                  />
+                  {!hasSpunToday && (
+                    <View style={[styles.notifDot, { backgroundColor: colors.gold }]} />
+                  )}
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={[styles.iconButton, { backgroundColor: colors.surface }]}
                 onPress={() => { play('navigate'); setNotifOpen(true); }}
@@ -215,7 +226,6 @@ export function HomeScreen({ navigation }: any) {
             )}
 
             <View style={[styles.quoteCard, { backgroundColor: colors.surface }]}>
-              <Ionicons name="chatbubble-outline" size={18} color={colors.gold} style={{ marginBottom: 8 }} />
               <Text style={[styles.quoteText, { color: colors.textPrimary }]}>"{dailyQuote.text}"</Text>
               <Text style={[styles.quoteAttr, { color: colors.gold }]}>— {dailyQuote.attribution}</Text>
             </View>
