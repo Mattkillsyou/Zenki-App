@@ -8,6 +8,7 @@ import { useDrinkTracker } from '../context/DrinkTrackerContext';
 import { DRINK_DEFINITIONS } from '../data/drinks';
 import { DrinkType } from '../types/drinks';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
+import { useGamification } from '../context/GamificationContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { FadeInView } from '../components';
 
@@ -64,6 +65,7 @@ function AnimatedDrinkButton({ type, label, icon, color, price, onAdd }: {
 export function DrinkScreen() {
   const { colors } = useTheme();
   const { play } = useSound();
+  const { recordDrinkLogged } = useGamification();
   useScreenSoundTheme('drinks');
   const {
     pending, pendingCounts, pendingTotal,
@@ -94,7 +96,9 @@ export function DrinkScreen() {
           {/* Menu header */}
           <View style={styles.menuHeaderRow}>
             <Text style={styles.menuEmoji}>🍴</Text>
-            <Text style={[styles.menuTitle, { color: colors.textPrimary }]}>MENU</Text>
+            <View style={[styles.menuPillbox, { backgroundColor: colors.surface, borderColor: colors.gold }]}>
+              <Text style={[styles.menuTitle, { color: colors.textPrimary }]}>MENU</Text>
+            </View>
             <Text style={styles.menuEmoji}>🍴</Text>
           </View>
 
@@ -164,7 +168,12 @@ export function DrinkScreen() {
                 styles.commitBtn,
                 { backgroundColor: pending.length > 0 ? colors.gold : colors.surfaceSecondary, opacity: pending.length > 0 ? 1 : 0.6 },
               ]}
-              onPress={() => { play('success'); commitPending(); }}
+              onPress={() => {
+                play('success');
+                const totalDrinksCommitted = pending.reduce((n, p) => n + p.count, 0);
+                commitPending();
+                for (let i = 0; i < totalDrinksCommitted; i++) recordDrinkLogged();
+              }}
               disabled={pending.length === 0}
             >
               <Ionicons name="checkmark-circle" size={20} color={pending.length > 0 ? '#000' : colors.textMuted} />
@@ -430,8 +439,14 @@ const styles = StyleSheet.create({
   menuEmoji: {
     fontSize: 30,
   },
+  menuPillbox: {
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 2,
+  },
   menuTitle: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: '900',
     letterSpacing: 6,
     textTransform: 'uppercase',

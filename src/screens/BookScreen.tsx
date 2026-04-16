@@ -200,9 +200,14 @@ export function BookScreen({ navigation }: any) {
         </View>
 
         {/* Select Instructor — horizontal chip row */}
-        <View style={[styles.section, { marginTop: 8 }]}>
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>INSTRUCTOR</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 16 }}>
+        <View style={{ marginTop: 8 }}>
+          <Text style={[styles.sectionLabel, { color: colors.textMuted, paddingHorizontal: spacing.lg }]}>INSTRUCTOR</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingHorizontal: spacing.lg }}
+            style={{ flexGrow: 0 }}
+          >
             {INSTRUCTORS.map((inst, index) => {
               const isSelected = index === selectedInstructor;
               return (
@@ -219,6 +224,7 @@ export function BookScreen({ navigation }: any) {
                     backgroundColor: isSelected ? colors.goldMuted : colors.surface,
                     borderColor: isSelected ? colors.gold : colors.border,
                     gap: 8,
+                    flexShrink: 0,
                   }}
                   onPress={() => setSelectedInstructor(index)}
                 >

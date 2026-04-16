@@ -12,8 +12,9 @@ import { useTheme } from '../context/ThemeContext';
 import { useScreenSoundTheme } from '../context/SoundContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { ClassCard } from '../components';
+import { DAYS as SCHED_DAYS, SCHEDULES as SHARED_SCHEDULES, PILATES_ENTRY as SHARED_PILATES } from '../data/schedule';
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DAYS = SCHED_DAYS as unknown as string[];
 
 // Generate current week's dates dynamically
 const getWeekDates = (): number[] => {
@@ -38,74 +39,18 @@ const getTodayIndex = (): number => {
   return dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Convert to Mon=0 index
 };
 
-const FILTERS = ['All', 'Jiu-Jitsu', 'Muay Thai', 'Pilates'];
-
-interface ScheduleEntry {
-  name: string;
-  instructor: string;
-  time: string;
-  duration: string;
-  spotsLeft: number;
-  type: 'jiu-jitsu' | 'muay-thai' | 'pilates' | 'open-mat';
-}
-
-// Real schedule — varies by selected day
-const SCHEDULES: Record<string, ScheduleEntry[]> = {
-  Mon: [
-    { name: 'Group Workout', instructor: 'Carnage', time: '11:00 AM', duration: '60 min', spotsLeft: 8, type: 'open-mat' as const },
-    { name: 'Jiu-Jitsu (Adults)', instructor: 'Sensei Tim', time: '12:00 PM', duration: '60 min', spotsLeft: 6, type: 'jiu-jitsu' as const },
-    { name: 'Kids Jiu-Jitsu', instructor: 'Sensei Tim', time: '6:30 PM', duration: '45 min', spotsLeft: 8, type: 'jiu-jitsu' as const },
-  ],
-  Tue: [
-    { name: 'Muay Thai', instructor: 'Carnage', time: '12:00 PM', duration: '60 min', spotsLeft: 7, type: 'muay-thai' as const },
-    { name: 'Open Mat', instructor: 'Self-guided', time: '5:00 PM', duration: '90 min', spotsLeft: 10, type: 'open-mat' as const },
-  ],
-  Wed: [
-    { name: 'Jiu-Jitsu (Adults)', instructor: 'Sensei Tim', time: '12:00 PM', duration: '60 min', spotsLeft: 5, type: 'jiu-jitsu' as const },
-    { name: 'Muay Thai', instructor: 'Carnage', time: '5:00 PM', duration: '60 min', spotsLeft: 6, type: 'muay-thai' as const },
-  ],
-  Thu: [
-    { name: 'Muay Thai', instructor: 'Carnage', time: '12:00 PM', duration: '60 min', spotsLeft: 7, type: 'muay-thai' as const },
-    { name: 'Open Mat', instructor: 'Self-guided', time: '5:00 PM', duration: '90 min', spotsLeft: 10, type: 'open-mat' as const },
-  ],
-  Fri: [
-    { name: 'Jiu-Jitsu (Adults)', instructor: 'Sensei Tim', time: '12:00 PM', duration: '60 min', spotsLeft: 6, type: 'jiu-jitsu' as const },
-  ],
-  Sat: [
-    { name: 'Open Mat', instructor: 'Self-guided', time: '10:00 AM', duration: '120 min', spotsLeft: 10, type: 'open-mat' as const },
-  ],
-  Sun: [],
-};
-
-// Pilates is always available by appointment
-const PILATES_ENTRY = {
-  name: 'Mobility / Pilates',
-  instructor: 'Rachel',
-  time: 'By Appointment',
-  duration: '50 min',
-  spotsLeft: 1,
-  type: 'pilates' as const,
-};
+const SCHEDULES = SHARED_SCHEDULES;
+const PILATES_ENTRY = SHARED_PILATES;
 
 
 export function ScheduleScreen({ navigation }: any) {
   const { colors } = useTheme();
   useScreenSoundTheme('schedule');
   const [selectedDay, setSelectedDay] = useState(getTodayIndex());
-  const [selectedFilter, setSelectedFilter] = useState('All');
   const weekDates = getWeekDates();
 
   const dayKey = DAYS[selectedDay];
-  const daySchedule = [...(SCHEDULES[dayKey] || []), PILATES_ENTRY];
-
-  const filtered = selectedFilter === 'All'
-    ? daySchedule
-    : daySchedule.filter((cls) => {
-        if (selectedFilter === 'Jiu-Jitsu') return cls.type === 'jiu-jitsu';
-        if (selectedFilter === 'Muay Thai') return cls.type === 'muay-thai';
-        if (selectedFilter === 'Pilates') return cls.type === 'pilates';
-        return true;
-      });
+  const filtered = [...(SCHEDULES[dayKey] || []), PILATES_ENTRY];
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -143,43 +88,6 @@ export function ScheduleScreen({ navigation }: any) {
         })}
       </View>
 
-      {/* Filters */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterRow}
-        contentContainerStyle={styles.filterContent}
-      >
-        {FILTERS.map((filter) => {
-          const isActive = filter === selectedFilter;
-          return (
-            <TouchableOpacity
-              key={filter}
-              style={[
-                {
-                  paddingVertical: 10,
-                  paddingHorizontal: 18,
-                  borderRadius: 24,
-                  borderWidth: isActive ? 0 : 1.5,
-                  backgroundColor: isActive ? colors.gold : colors.surface,
-                  borderColor: isActive ? colors.gold : colors.border,
-                },
-              ]}
-              onPress={() => setSelectedFilter(filter)}
-            >
-              <Text style={[
-                {
-                  fontSize: 14,
-                  fontWeight: '600',
-                  color: isActive ? colors.textInverse : colors.textMuted,
-                },
-              ]}>
-                {filter}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
 
       {/* Class List — single-page, no scroll */}
       <View style={[styles.classList, styles.classListContent]}>

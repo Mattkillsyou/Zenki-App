@@ -15,11 +15,13 @@ import { typography, spacing, borderRadius } from '../theme';
 import { Button } from '../components';
 import { useAuth } from '../context/AuthContext';
 import { useAppointments } from '../context/AppointmentContext';
+import { useGamification } from '../context/GamificationContext';
 
 export function BookingPaymentScreen({ navigation, route }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const { requestAppointment } = useAppointments();
+  const { recordBooking, recordPrivateSession, recordGearPurchase } = useGamification();
   const { instructor, sessionType, time, price, calendarUrl, isProduct, startsAt, durationMinutes } = route.params || {};
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'apple'>('card');
@@ -39,6 +41,13 @@ export function BookingPaymentScreen({ navigation, route }: any) {
           durationMinutes: durationMinutes || 60,
           price: price || 0,
         });
+        // Achievement triggers
+        recordBooking();
+        if ((sessionType || '').toLowerCase().includes('private') || (sessionType || '').toLowerCase().includes('1:1')) {
+          recordPrivateSession();
+        }
+      } else if (isProduct) {
+        recordGearPurchase();
       }
       setLoading(false);
       setConfirmed(true);

@@ -31,7 +31,7 @@ interface CartItem {
 
 export function StoreScreen({ navigation }: any) {
   const { colors } = useTheme();
-  const { state: gamState, redeemPoints } = useGamification();
+  const { state: gamState, redeemPoints, recordGearPurchase } = useGamification();
   const { products: PRODUCTS } = useProducts();
   const { play } = useSound();
   useScreenSoundTheme('store');
@@ -144,7 +144,7 @@ export function StoreScreen({ navigation }: any) {
           onPress={() => setShowCart(!showCart)}
           activeOpacity={0.75}
         >
-          <Ionicons name={showCart ? 'close' : 'bag-outline'} size={22} color={colors.textPrimary} />
+          <Ionicons name={showCart ? 'close' : 'bag-outline'} size={22} color="#FFF" />
           {cartCount > 0 && (
             <View style={[styles.cartBadge, { backgroundColor: colors.red }]}>
               <Text style={styles.cartBadgeText}>{cartCount}</Text>
@@ -255,6 +255,7 @@ export function StoreScreen({ navigation }: any) {
                   }
                   if (finalTotal === 0) {
                     // Fully covered by points — confirm directly
+                    for (let i = 0; i < cartCount; i++) recordGearPurchase();
                     Alert.alert(
                       'Order Placed',
                       `Your order was paid in full with ${Math.floor(pointsDiscount * POINTS_PER_DOLLAR).toLocaleString()} Dojo Points.`,
@@ -264,6 +265,7 @@ export function StoreScreen({ navigation }: any) {
                     setUsePoints(false);
                     return;
                   }
+                  for (let i = 0; i < cartCount; i++) recordGearPurchase();
                   navigation.navigate('BookingPayment', {
                     isProduct: true,
                     sessionType: `${cartCount} item${cartCount !== 1 ? 's' : ''}`,
@@ -307,48 +309,22 @@ export function StoreScreen({ navigation }: any) {
             ))}
           </ScrollView>
 
-          {/* Arrows + page dots */}
+          {/* Swipe-only — page dots indicator */}
           {pages.length > 1 && (
-            <>
-              {currentPage > 0 && (
-                <TouchableOpacity
-                  style={[styles.pagerArrow, styles.pagerArrowLeft]}
-                  onPress={() => {
-                    const next = currentPage - 1;
-                    setPageIdx(next);
-                    pagerRef.current?.scrollTo({ x: next * pageWidth, animated: true });
-                  }}
-                >
-                  <Ionicons name="chevron-back" size={20} color="#FFF" />
-                </TouchableOpacity>
-              )}
-              {currentPage < pages.length - 1 && (
-                <TouchableOpacity
-                  style={[styles.pagerArrow, styles.pagerArrowRight]}
-                  onPress={() => {
-                    const next = currentPage + 1;
-                    setPageIdx(next);
-                    pagerRef.current?.scrollTo({ x: next * pageWidth, animated: true });
-                  }}
-                >
-                  <Ionicons name="chevron-forward" size={20} color="#FFF" />
-                </TouchableOpacity>
-              )}
-              <View style={styles.pageDotsRow}>
-                {pages.map((_, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.pageDot,
-                      {
-                        backgroundColor: i === currentPage ? colors.red : colors.textMuted,
-                        width: i === currentPage ? 20 : 6,
-                      },
-                    ]}
-                  />
-                ))}
-              </View>
-            </>
+            <View style={styles.pageDotsRow}>
+              {pages.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.pageDot,
+                    {
+                      backgroundColor: i === currentPage ? colors.red : colors.textMuted,
+                      width: i === currentPage ? 20 : 6,
+                    },
+                  ]}
+                />
+              ))}
+            </View>
           )}
         </View>
       )}
@@ -433,20 +409,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     rowGap: 14,
   },
-  pagerArrow: {
-    position: 'absolute',
-    top: '45%',
-    marginTop: -18,
-    width: 36,
-    height: 36,
-    borderRadius: 0,
-    backgroundColor: 'rgba(196,30,42,0.85)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
-  },
-  pagerArrowLeft: { left: 6 },
-  pagerArrowRight: { right: 6 },
   pageDotsRow: {
     position: 'absolute',
     bottom: 24,

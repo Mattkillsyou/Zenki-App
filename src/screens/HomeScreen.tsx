@@ -18,6 +18,8 @@ import { useAnnouncements } from '../context/AnnouncementContext';
 import { useAppointments } from '../context/AppointmentContext';
 import { useScreenSoundTheme } from '../context/SoundContext';
 import { getDailyQuote } from '../data/quotes';
+import { getTodaysSchedule } from '../data/schedule';
+import { useHasUnreadNotifications } from './NotificationsScreen';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -40,22 +42,67 @@ function isToday(iso: string): boolean {
   return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
 }
 
+/** Parse "12:00 PM" → minutes since midnight, used to sort. */
+function parseTimeSort(label: string): number {
+  const m = label.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!m) return 24 * 60 + 1; // "By Appointment" etc — push to end
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const mer = m[3].toUpperCase();
+  if (mer === 'PM' && h !== 12) h += 12;
+  if (mer === 'AM' && h === 12) h = 0;
+  return h * 60 + min;
+}
+
 export function HomeScreen({ navigation }: any) {
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
   const isEmployee = user?.isEmployee === true;
-  const { state: gamState, levelInfo, dismissCelebration } = useGamification();
+  const { state: gamState, levelInfo, dismissCelebration, recordAppOpen } = useGamification();
+  React.useEffect(() => { recordAppOpen(); }, [recordAppOpen]);
   const { announcements } = useAnnouncements();
   const { myAppointments } = useAppointments();
   const dailyQuote = getDailyQuote();
+  const hasUnreadNotifications = useHasUnreadNotifications();
 
   useScreenSoundTheme('home');
 
-  // User's confirmed/pending bookings for today
+  // User's confirmed/pending private bookings for today
   const todaysBookings = myAppointments
     .filter((a) => a.memberId === user?.id && a.status !== 'cancelled' && a.status !== 'completed')
     .filter((a) => isToday(a.startsAt))
     .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+
+  // Today's full studio schedule (group classes)
+  const studioClasses = getTodaysSchedule();
+
+  // Merged view: studio classes + user's private sessions, sorted by time
+  const todaysFullSchedule = [
+    ...studioClasses.map((cls) => ({
+      key: `class-${cls.name}-${cls.time}`,
+      name: cls.name,
+      instructor: cls.instructor,
+      time: cls.time,
+      duration: cls.duration,
+      spotsLeft: cls.spotsLeft,
+      type: cls.type,
+      sortKey: parseTimeSort(cls.time),
+      booked: false as const,
+      status: undefined as undefined,
+    })),
+    ...todaysBookings.map((a) => ({
+      key: `booking-${a.id}`,
+      name: a.sessionType,
+      instructor: a.instructor,
+      time: formatTime(a.startsAt),
+      duration: `${a.durationMinutes} min`,
+      spotsLeft: 0,
+      type: sessionTypeToClassType(a.sessionType),
+      sortKey: new Date(a.startsAt).getHours() * 60 + new Date(a.startsAt).getMinutes(),
+      booked: true as const,
+      status: a.status,
+    })),
+  ].sort((x, y) => x.sortKey - y.sortKey);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -74,9 +121,15 @@ export function HomeScreen({ navigation }: any) {
                 />
               )}
               {!isEmployee && <StreakBadge streak={gamState.streak} compact />}
-              <TouchableOpacity style={[styles.iconButton, { backgroundColor: colors.surface }]}>
+              <TouchableOpacity
+                style={[styles.iconButton, { backgroundColor: colors.surface }]}
+                onPress={() => navigation.navigate('Notifications')}
+                activeOpacity={0.7}
+              >
                 <Ionicons name="notifications-outline" size={20} color={colors.textSecondary} />
-                <View style={[styles.notifDot, { backgroundColor: colors.red }]} />
+                {hasUnreadNotifications && (
+                  <View style={[styles.notifDot, { backgroundColor: colors.red }]} />
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -164,43 +217,32 @@ export function HomeScreen({ navigation }: any) {
         {/* ─── Member Content ─── */}
         {!isEmployee && (
           <>
-            {/* Today's Schedule — user's own bookings */}
-            {todaysBookings.length > 0 ? (
-              <FadeInView delay={340} slideUp={16}>
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
-                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your Schedule Today</Text>
-                    <TouchableOpacity style={[styles.seeAllButton, { backgroundColor: colors.accentTint }]} onPress={() => navigation.navigate('Schedule')}>
-                      <Text style={[styles.seeAllText, { color: colors.gold }]}>Browse</Text>
-                      <Ionicons name="chevron-forward" size={14} color={colors.gold} />
-                    </TouchableOpacity>
-                  </View>
-                  {todaysBookings.map((a) => (
-                    <ClassCard
-                      key={a.id}
-                      name={a.sessionType}
-                      instructor={a.instructor}
-                      time={formatTime(a.startsAt)}
-                      duration={`${a.durationMinutes} min`}
-                      spotsLeft={0}
-                      type={sessionTypeToClassType(a.sessionType)}
-                      booked
-                      status={a.status}
-                      onBook={() => navigation.navigate('Schedule')}
-                    />
-                  ))}
+            {/* Today's Schedule — full studio classes + user bookings merged */}
+            <FadeInView delay={340} slideUp={16}>
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Today's Schedule</Text>
+                  <TouchableOpacity style={[styles.seeAllButton, { backgroundColor: colors.accentTint }]} onPress={() => navigation.navigate('Schedule')}>
+                    <Text style={[styles.seeAllText, { color: colors.gold }]}>See All</Text>
+                    <Ionicons name="chevron-forward" size={14} color={colors.gold} />
+                  </TouchableOpacity>
                 </View>
-              </FadeInView>
-            ) : (
-              <FadeInView delay={340} slideUp={16}>
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
-                    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Today's Schedule</Text>
-                    <TouchableOpacity style={[styles.seeAllButton, { backgroundColor: colors.accentTint }]} onPress={() => navigation.navigate('Schedule')}>
-                      <Text style={[styles.seeAllText, { color: colors.gold }]}>See All</Text>
-                      <Ionicons name="chevron-forward" size={14} color={colors.gold} />
-                    </TouchableOpacity>
-                  </View>
+                {todaysFullSchedule.length > 0 ? (
+                  todaysFullSchedule.map((cls) => (
+                    <ClassCard
+                      key={cls.key}
+                      name={cls.name}
+                      instructor={cls.instructor}
+                      time={cls.time}
+                      duration={cls.duration}
+                      spotsLeft={cls.spotsLeft}
+                      type={cls.type}
+                      booked={cls.booked}
+                      status={cls.status}
+                      onBook={() => navigation.navigate(cls.booked ? 'Schedule' : 'Book')}
+                    />
+                  ))
+                ) : (
                   <TouchableOpacity
                     onPress={() => navigation.navigate('Schedule')}
                     activeOpacity={0.8}
@@ -210,14 +252,14 @@ export function HomeScreen({ navigation }: any) {
                       <Ionicons name="calendar-outline" size={22} color={colors.gold} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.noBookingsTitle, { color: colors.textPrimary }]}>No classes booked today</Text>
-                      <Text style={[styles.noBookingsDesc, { color: colors.textSecondary }]}>Tap to browse the schedule and book one.</Text>
+                      <Text style={[styles.noBookingsTitle, { color: colors.textPrimary }]}>Rest day</Text>
+                      <Text style={[styles.noBookingsDesc, { color: colors.textSecondary }]}>No classes scheduled today. Browse the week.</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
                   </TouchableOpacity>
-                </View>
-              </FadeInView>
-            )}
+                )}
+              </View>
+            </FadeInView>
 
           </>
         )}

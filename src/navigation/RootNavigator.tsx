@@ -32,6 +32,9 @@ import { ProductDetailScreen } from '../screens/ProductDetailScreen';
 import { CreatePostScreen } from '../screens/CreatePostScreen';
 import { UserProfileScreen } from '../screens/UserProfileScreen';
 import { AchievementsScreen } from '../screens/AchievementsScreen';
+import { AchievementDetailScreen } from '../screens/AchievementDetailScreen';
+import { ContactSupportScreen } from '../screens/ContactSupportScreen';
+import { NotificationsScreen } from '../screens/NotificationsScreen';
 
 const Stack = createStackNavigator();
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -267,6 +270,9 @@ export function RootNavigator() {
       {/* Detail — push */}
       <Stack.Screen name="ProductDetail" component={ProductDetailScreen} options={pushTransition} />
       <Stack.Screen name="Achievements" component={AchievementsScreen} options={pushTransition} />
+      <Stack.Screen name="AchievementDetail" component={AchievementDetailScreen} options={pushTransition} />
+      <Stack.Screen name="ContactSupport" component={ContactSupportScreen} options={pushTransition} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} options={pushTransition} />
     </Stack.Navigator>
   );
 }

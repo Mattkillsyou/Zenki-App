@@ -1,9 +1,11 @@
 import React from 'react';
+import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useDrinkTracker } from '../context/DrinkTrackerContext';
 import { AnimatedTabIcon } from '../components/AnimatedTabIcon';
 import {
   HomeScreen,
@@ -30,9 +32,11 @@ const TAB_ICONS: Record<string, { active: keyof typeof Ionicons.glyphMap; inacti
 export function TabNavigator() {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const { unpaidTotal } = useDrinkTracker();
   const insets = useSafeAreaInsets();
   const isEmployee = user?.isEmployee === true;
   const tabBarHeight = 60 + insets.bottom;
+  const hasUnpaidDrinks = unpaidTotal > 0;
 
   return (
     <Tab.Navigator
@@ -53,13 +57,19 @@ export function TabNavigator() {
           const icons = TAB_ICONS[route.name];
           if (!icons) return null;
           const iconName = focused ? icons.active : icons.inactive;
+          const showDot = route.name === 'Hydration' && hasUnpaidDrinks;
           return (
-            <AnimatedTabIcon
-              name={iconName}
-              size={focused ? 28 : 24}
-              color={color}
-              focused={focused}
-            />
+            <View style={{ position: 'relative' }}>
+              <AnimatedTabIcon
+                name={iconName}
+                size={focused ? 28 : 24}
+                color={color}
+                focused={focused}
+              />
+              {showDot && (
+                <View style={[tabStyles.badge, { backgroundColor: colors.red, borderColor: colors.tabBar }]} />
+              )}
+            </View>
           );
         },
       })}
@@ -74,3 +84,15 @@ export function TabNavigator() {
     </Tab.Navigator>
   );
 }
+
+const tabStyles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1.5,
+  },
+});
