@@ -20,29 +20,35 @@ export type SpinPrize =
  * Positions match the weight table in SLICE_WEIGHTS below (same index).
  */
 export const WHEEL_SLICES: SpinPrize[] = [
-  { type: 'points',  amount: 25,  label: '25 pts',              icon: '💎' },                         // 0
-  { type: 'flames',  amount: 2,   label: '2 Flames',            icon: '🔥' },                         // 1
-  { type: 'points',  amount: 100, label: '100 pts',             icon: '💎' },                         // 2
+  { type: 'points',  amount: 50,   label: '50 pts',              icon: '💎' },                         // 0
+  { type: 'flames',  amount: 3,    label: '3 Flames',            icon: '🔥' },                         // 1
+  { type: 'points',  amount: 100,  label: '100 pts',             icon: '💎' },                         // 2
   { type: 'item',    itemKey: 'free_drink', label: 'FREE DRINK', icon: '🥤', confetti: true, rare: true }, // 3
-  { type: 'points',  amount: 50,  label: '50 pts',              icon: '💎' },                         // 4
-  { type: 'flames',  amount: 5,   label: '5 Flames',            icon: '🔥' },                         // 5
-  { type: 'points',  amount: 500, label: 'JACKPOT — 500 pts',   icon: '👑', confetti: true, rare: true }, // 6
+  { type: 'points',  amount: 200,  label: '200 pts',             icon: '💎' },                         // 4
+  { type: 'flames',  amount: 10,   label: '10 Flames',           icon: '🔥' },                         // 5
+  { type: 'points',  amount: 1000, label: 'JACKPOT — 1,000 pts', icon: '👑', confetti: true, rare: true }, // 6
   { type: 'item',    itemKey: 'free_shirt', label: 'FREE SHIRT', icon: '👕', confetti: true, rare: true }, // 7
 ];
 
 /**
  * Weighted probabilities per slice — sum must equal WEIGHT_TOTAL.
- * Tuned so the economy is sustainable: ~2% rare prizes combined.
- *  - 25 pts ...... 35%  (common filler — feels-good)
- *  - 2 flames .... 28%  (common)
- *  - 100 pts ..... 10%  (medium)
- *  - Free Drink ... 2%  (rare)
- *  - 50 pts ...... 18%  (medium)
- *  - 5 flames ..... 6%  (medium)
- *  - 500 pts ...... 0.9% (very rare jackpot)
- *  - Free Shirt ... 0.1% (mythic — maybe once a year per member)
+ * Tuned for a $5K/mo exclusive dojo (~20 members, ~$1.2M/yr revenue).
+ * Prizes feel premium and generous, matching the luxury positioning.
+ *
+ *  - 50 pts ....... 32%  (common feels-good filler)
+ *  - 3 flames ..... 24%  (common)
+ *  - 100 pts ...... 15%  (medium)
+ *  - Free Drink ... 8%   (rare-ish — capped 1/week)
+ *  - 200 pts ...... 14%  (solid win)
+ *  - 10 flames .... 5%   (premium flames)
+ *  - 1,000 pts .... 0.5% (rare jackpot — capped 1/month)
+ *  - Free Shirt ... 1.5% (premium — capped 1/quarter per member)
+ *
+ * Projected annual cost at 50% daily engagement: ~$30K/yr ≈ 2.5% of revenue.
+ * Even at 100% engagement: ~$60K/yr ≈ 5% of revenue.
+ * Luxury tier can absorb this for the retention & wow factor.
  */
-const SLICE_WEIGHTS = [350, 280, 100, 20, 180, 60, 9, 1];
+const SLICE_WEIGHTS = [320, 240, 150, 80, 140, 50, 5, 15];
 const WEIGHT_TOTAL = SLICE_WEIGHTS.reduce((a, b) => a + b, 0); // 1000
 
 /** Pity floor: guarantee at least one flame win within every PITY_WINDOW spins. */
@@ -56,15 +62,15 @@ const PITY_WINDOW = 5;
 interface PrizeCap {
   /** Maximum wins allowed in the time window. */
   max: number;
-  /** Time window: 'week' | 'month' | 'year'. */
-  window: 'week' | 'month' | 'year';
+  /** Time window. */
+  window: 'week' | 'month' | 'quarter' | 'year';
 }
 
 /** Maps slice index → cap rule. Uncapped slices are omitted. */
 const SLICE_CAPS: Record<number, PrizeCap> = {
-  3: { max: 1, window: 'week' },   // Free Drink — 1/week per member
-  6: { max: 1, window: 'month' },  // 500 pts jackpot — 1/month
-  7: { max: 1, window: 'year' },   // Free Shirt — 1/year (mythic)
+  3: { max: 1, window: 'week' },     // Free Drink — 1/week per member
+  6: { max: 1, window: 'month' },    // 1,000 pts jackpot — 1/month
+  7: { max: 1, window: 'quarter' },  // Free Shirt — 1/quarter per member (premium tier)
 };
 
 interface SpinHistoryEntry {
@@ -110,10 +116,14 @@ function todayISO(): string {
 }
 
 /** Returns true if the given ISO date falls within the current window. */
-function inWindow(dateISO: string, window: 'week' | 'month' | 'year'): boolean {
+function inWindow(dateISO: string, window: 'week' | 'month' | 'quarter' | 'year'): boolean {
   const d = new Date(dateISO);
   const now = new Date();
   if (window === 'year')  return d.getFullYear() === now.getFullYear();
+  if (window === 'quarter') {
+    const q = (date: Date) => Math.floor(date.getMonth() / 3); // 0,1,2,3
+    return d.getFullYear() === now.getFullYear() && q(d) === q(now);
+  }
   if (window === 'month') return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   // week: last 7 days rolling
   const diff = now.getTime() - d.getTime();
