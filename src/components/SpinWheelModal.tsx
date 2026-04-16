@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useSpinWheel, WHEEL_SLICES, SpinPrize } from '../context/SpinWheelContext';
 import { useSound } from '../context/SoundContext';
+import { Confetti } from './Confetti';
 
 const SLICE_COUNT = 8;
 const SLICE_ANGLE = 360 / SLICE_COUNT;
@@ -61,12 +62,14 @@ export function SpinWheelModal({ visible, onClose }: Props) {
   const rotation = useRef(new Animated.Value(0)).current;
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<SpinPrize | null>(null);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setResult(null);
       rotation.setValue(0);
       setSpinning(false);
+      setShowConfetti(false);
     }
   }, [visible, rotation]);
 
@@ -90,6 +93,11 @@ export function SpinWheelModal({ visible, onClose }: Props) {
       setSpinning(false);
       setResult(prize);
       play('success');
+      // Rare prizes (Free Drink, Free Shirt, 500pts jackpot) fire the confetti cannon
+      if (prize.confetti) {
+        setShowConfetti(false);          // reset first
+        setTimeout(() => setShowConfetti(true), 30);
+      }
     });
   };
 
@@ -101,6 +109,9 @@ export function SpinWheelModal({ visible, onClose }: Props) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
+        {/* Confetti lives ABOVE the card so it rains over everything */}
+        <Confetti active={showConfetti} />
+
         <View style={[styles.card, { backgroundColor: colors.backgroundElevated, borderColor: colors.gold }]}>
           <View style={styles.headerRow}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>DAILY SPIN</Text>
@@ -140,27 +151,23 @@ export function SpinWheelModal({ visible, onClose }: Props) {
                   })}
                 </G>
 
-                {/* Slice labels — UPRIGHT, no rotation.
-                    `alignmentBaseline` is unreliable in react-native-svg on web,
-                    so we rely on `textAnchor="middle"` for horizontal centering
-                    and `dy` for vertical optical centering (pushes the baseline
-                    down by ~0.35em so the visual center matches the anchor point). */}
+                {/* Slice icons — UPRIGHT emoji, no rotation.
+                    Only the icon is shown on the wheel; the full prize name
+                    is revealed in the result display after winning. */}
                 <G>
                   {WHEEL_SLICES.map((slice, i) => {
                     const { x, y } = labelPos(i);
-                    const fs = WHEEL_SIZE * 0.062;
+                    const fs = WHEEL_SIZE * 0.14;
                     return (
                       <SvgText
                         key={`t-${i}`}
                         x={x}
                         y={y}
                         dy={fs * 0.35}
-                        fill={SLICE_TEXT_COLOR[i]}
                         fontSize={fs}
-                        fontWeight="900"
                         textAnchor="middle"
                       >
-                        {slice.label}
+                        {slice.icon}
                       </SvgText>
                     );
                   })}
