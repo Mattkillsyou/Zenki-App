@@ -181,12 +181,8 @@ export function ScheduleScreen({ navigation }: any) {
         })}
       </ScrollView>
 
-      {/* Class List */}
-      <ScrollView
-        style={styles.classList}
-        contentContainerStyle={styles.classListContent}
-        showsVerticalScrollIndicator={false}
-      >
+      {/* Class List — single-page, no scroll */}
+      <View style={[styles.classList, styles.classListContent]}>
         {filtered.map((cls) => (
           <ClassCard key={`${cls.name}-${cls.time}`} {...cls} onBook={() => navigation.navigate('Book')} />
         ))}
@@ -198,8 +194,7 @@ export function ScheduleScreen({ navigation }: any) {
             </Text>
           </View>
         )}
-        <View style={{ height: 120 }} />
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,9 @@ import {
   FlatList,
   Image,
   Alert,
+  Dimensions,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,12 +39,24 @@ export function StoreScreen({ navigation }: any) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCart, setShowCart] = useState(false);
   const [usePoints, setUsePoints] = useState(false);
+  const [pageIdx, setPageIdx] = useState(0);
+  const [pageWidth, setPageWidth] = useState(0);
+  const pagerRef = useRef<ScrollView>(null);
 
   const dojoPoints = gamState.dojoPoints || 0;
 
   const filtered = selectedCategory === 'All'
     ? PRODUCTS
     : PRODUCTS.filter((p) => p.category === selectedCategory);
+
+  // Paginate into chunks of 4 products (2 rows × 2 cols)
+  const PRODUCTS_PER_PAGE = 4;
+  const pages: Product[][] = [];
+  for (let i = 0; i < filtered.length; i += PRODUCTS_PER_PAGE) {
+    pages.push(filtered.slice(i, i + PRODUCTS_PER_PAGE));
+  }
+  if (pages.length === 0) pages.push([]);
+  const currentPage = Math.min(pageIdx, pages.length - 1);
 
   const handleProductPress = (product: Product) => {
     navigation.navigate('ProductDetail', { productId: product.id });
@@ -268,16 +283,74 @@ export function StoreScreen({ navigation }: any) {
           )}
         </ScrollView>
       ) : (
-        /* Products Grid */
-        <FlatList
-          data={filtered}
-          renderItem={renderProduct}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          columnWrapperStyle={styles.productRow}
-          contentContainerStyle={styles.productList}
-          showsVerticalScrollIndicator={false}
-        />
+        /* Products — paginated: 4 products per page, horizontal swipe */
+        <View
+          style={{ flex: 1 }}
+          onLayout={(e) => setPageWidth(e.nativeEvent.layout.width)}
+        >
+          <ScrollView
+            ref={pagerRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+              if (!pageWidth) return;
+              setPageIdx(Math.round(e.nativeEvent.contentOffset.x / pageWidth));
+            }}
+          >
+            {pages.map((pageProducts, pIdx) => (
+              <View key={pIdx} style={{ width: pageWidth || undefined, paddingHorizontal: 20, paddingTop: spacing.md }}>
+                <View style={styles.pageGrid}>
+                  {pageProducts.map((item) => renderProduct({ item }))}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+
+          {/* Arrows + page dots */}
+          {pages.length > 1 && (
+            <>
+              {currentPage > 0 && (
+                <TouchableOpacity
+                  style={[styles.pagerArrow, styles.pagerArrowLeft]}
+                  onPress={() => {
+                    const next = currentPage - 1;
+                    setPageIdx(next);
+                    pagerRef.current?.scrollTo({ x: next * pageWidth, animated: true });
+                  }}
+                >
+                  <Ionicons name="chevron-back" size={20} color="#FFF" />
+                </TouchableOpacity>
+              )}
+              {currentPage < pages.length - 1 && (
+                <TouchableOpacity
+                  style={[styles.pagerArrow, styles.pagerArrowRight]}
+                  onPress={() => {
+                    const next = currentPage + 1;
+                    setPageIdx(next);
+                    pagerRef.current?.scrollTo({ x: next * pageWidth, animated: true });
+                  }}
+                >
+                  <Ionicons name="chevron-forward" size={20} color="#FFF" />
+                </TouchableOpacity>
+              )}
+              <View style={styles.pageDotsRow}>
+                {pages.map((_, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.pageDot,
+                      {
+                        backgroundColor: i === currentPage ? colors.red : colors.textMuted,
+                        width: i === currentPage ? 20 : 6,
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
+            </>
+          )}
+        </View>
       )}
     </SafeAreaView>
   );
@@ -353,6 +426,39 @@ const styles = StyleSheet.create({
   productRow: {
     justifyContent: 'space-between',
     marginBottom: 14,
+  },
+  pageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 14,
+  },
+  pagerArrow: {
+    position: 'absolute',
+    top: '45%',
+    marginTop: -18,
+    width: 36,
+    height: 36,
+    borderRadius: 0,
+    backgroundColor: 'rgba(196,30,42,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  pagerArrowLeft: { left: 6 },
+  pagerArrowRight: { right: 6 },
+  pageDotsRow: {
+    position: 'absolute',
+    bottom: 24,
+    left: 0, right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pageDot: {
+    height: 6,
+    borderRadius: 0, // cobra kai — sharp
   },
   productCard: {
     width: '48.5%',

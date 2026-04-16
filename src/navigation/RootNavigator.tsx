@@ -31,6 +31,7 @@ import { PaymentMethodsScreen } from '../screens/PaymentMethodsScreen';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
 import { CreatePostScreen } from '../screens/CreatePostScreen';
 import { UserProfileScreen } from '../screens/UserProfileScreen';
+import { AchievementsScreen } from '../screens/AchievementsScreen';
 
 const Stack = createStackNavigator();
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -265,6 +266,7 @@ export function RootNavigator() {
 
       {/* Detail — push */}
       <Stack.Screen name="ProductDetail" component={ProductDetailScreen} options={pushTransition} />
+      <Stack.Screen name="Achievements" component={AchievementsScreen} options={pushTransition} />
     </Stack.Navigator>
   );
 }

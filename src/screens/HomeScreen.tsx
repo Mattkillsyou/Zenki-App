@@ -59,7 +59,7 @@ export function HomeScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <View style={{ flex: 1 }}>
 
         {/* ─── Header (compact with corner logo) ─── */}
         <FadeInView delay={0} slideUp={0}>
@@ -222,7 +222,7 @@ export function HomeScreen({ navigation }: any) {
           </>
         )}
 
-      </ScrollView>
+      </View>
 
       {!isEmployee && (
         <CelebrationModal celebration={gamState.pendingCelebration} onDismiss={dismissCelebration} />
@@ -248,8 +248,8 @@ const styles = StyleSheet.create({
   // Welcome + Quote
   welcomeSection: {
     paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingTop: 4,
+    paddingBottom: 4,
   },
   welcomeLine: {
     marginBottom: 12,
@@ -310,8 +310,8 @@ const styles = StyleSheet.create({
   },
   quoteCard: {
     borderRadius: 16,
-    padding: 24,
-    gap: 4,
+    padding: 16,
+    gap: 2,
     alignItems: 'center',
   },
   quoteText: {
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
   // Sections
   section: {
     paddingHorizontal: 24,
-    marginTop: 32,
+    marginTop: 14,
   },
   sectionCard: {
     borderRadius: 20,

@@ -32,6 +32,7 @@ const CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
 const INSTRUCTORS = [
   { name: 'Sensei Tim', specialty: 'Jiu-Jitsu, Kenpo', avatar: 'ST' },
   { name: 'Carnage', specialty: 'Muay Thai', avatar: 'CA' },
+  { name: 'Justin', specialty: 'Muay Thai', avatar: 'JU' },
   { name: 'Rachel', specialty: 'Mobility, Pilates', avatar: 'RA' },
 ];
 
@@ -171,16 +172,15 @@ export function BookScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <View style={{ flex: 1 }}>
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>Book Private</Text>
+            <Text style={[styles.title, { color: colors.textPrimary, fontSize: 24 }]}>Book Private</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               By appointment only
             </Text>
           </View>
-          {/* Google Calendar Link */}
           <TouchableOpacity
             style={[
               styles.calendarButton,
@@ -190,61 +190,55 @@ export function BookScreen({ navigation }: any) {
           >
             <Ionicons
               name={calendarLinked ? 'checkmark-circle' : 'logo-google'}
-              size={18}
+              size={16}
               color={calendarLinked ? colors.gold : colors.textSecondary}
             />
             <Text style={[styles.calendarButtonText, { color: calendarLinked ? colors.gold : colors.textSecondary }]}>
-              {calendarLinked ? 'Synced' : 'Sync Cal'}
+              {calendarLinked ? 'Synced' : 'Sync'}
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Select Instructor */}
-        <View style={[styles.section, { marginTop: 32 }]}>
+        {/* Select Instructor — horizontal chip row */}
+        <View style={[styles.section, { marginTop: 8 }]}>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>INSTRUCTOR</Text>
-          {INSTRUCTORS.map((inst, index) => {
-            const isSelected = index === selectedInstructor;
-            return (
-              <TouchableOpacity
-                key={inst.name}
-                style={[
-                  {
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 16 }}>
+            {INSTRUCTORS.map((inst, index) => {
+              const isSelected = index === selectedInstructor;
+              return (
+                <TouchableOpacity
+                  key={inst.name}
+                  style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    borderRadius: 20,
-                    padding: 20,
-                    marginBottom: 16,
+                    borderRadius: 14,
+                    paddingLeft: 6,
+                    paddingRight: 12,
+                    paddingVertical: 6,
                     borderWidth: 1.5,
                     backgroundColor: isSelected ? colors.goldMuted : colors.surface,
                     borderColor: isSelected ? colors.gold : colors.border,
-                    gap: 16,
-                  }
-                ]}
-                onPress={() => setSelectedInstructor(index)}
-              >
-                <View style={[{ width: 64, height: 64, borderRadius: 32, backgroundColor: isSelected ? colors.gold : colors.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }]}>
-                  <Text style={[styles.avatarText, { color: isSelected ? colors.textInverse : colors.textMuted }]}>
-                    {inst.avatar}
-                  </Text>
-                </View>
-                <View style={styles.instructorInfo}>
-                  <Text style={[{ fontSize: 18, fontWeight: '700', color: colors.textPrimary }]}>
-                    {inst.name}
-                  </Text>
-                  <Text style={[styles.instructorSpecialty, { color: colors.textSecondary }]}>
-                    {inst.specialty}
-                  </Text>
-                </View>
-                {isSelected && (
-                  <Ionicons name="checkmark-circle" size={24} color={colors.gold} />
-                )}
-              </TouchableOpacity>
-            );
-          })}
+                    gap: 8,
+                  }}
+                  onPress={() => setSelectedInstructor(index)}
+                >
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: isSelected ? colors.gold : colors.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={[styles.avatarText, { color: isSelected ? colors.textInverse : colors.textMuted, fontSize: 12 }]}>
+                      {inst.avatar}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{inst.name}</Text>
+                    <Text style={{ fontSize: 10, color: colors.textSecondary }}>{inst.specialty}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
         {/* Session Type */}
-        <View style={[styles.section, { marginTop: 32 }]}>
+        <View style={[styles.section, { marginTop: 12 }]}>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>SESSION TYPE</Text>
           <View style={styles.typeGrid}>
             {SESSION_TYPES.map((type, index) => {
@@ -287,7 +281,7 @@ export function BookScreen({ navigation }: any) {
         </View>
 
         {/* Time Slots */}
-        <View style={[styles.section, { marginTop: 32 }]}>
+        <View style={[styles.section, { marginTop: 12, flex: 1 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>AVAILABLE TIMES</Text>
             {checkingAvailability && (
@@ -356,50 +350,27 @@ export function BookScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* Summary & Book */}
-        {selectedTime && (
-          <View style={[{ borderRadius: 20, padding: 20, borderWidth: 1.5, backgroundColor: colors.surface, borderColor: colors.border, marginHorizontal: spacing.lg, marginTop: 32 }]}>
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Session</Text>
-              <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
-                {SESSION_TYPES[selectedType].label}
+        {/* Summary + Book — compact single row, always at bottom */}
+        <View style={[styles.section, { paddingBottom: 12 }]}>
+          {selectedTime && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}>
+              <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                {SESSION_TYPES[selectedType].label} · {INSTRUCTORS[selectedInstructor].name} · {selectedTime}
               </Text>
-            </View>
-            <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Instructor</Text>
-              <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
-                {INSTRUCTORS[selectedInstructor].name}
-              </Text>
-            </View>
-            <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Time</Text>
-              <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{selectedTime}</Text>
-            </View>
-            <View style={[styles.summaryDivider, { backgroundColor: colors.divider }]} />
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Total</Text>
-              <Text style={[styles.summaryValue, { color: colors.gold, fontWeight: '900', fontSize: 20 }]}>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: colors.gold }}>
                 {SESSION_TYPES[selectedType].priceLabel}
               </Text>
             </View>
-          </View>
-        )}
-
-        <View style={[styles.section, { marginTop: 32, paddingHorizontal: 24, paddingBottom: 24 }]}>
+          )}
           <Button
             title={selectedTime ? `Pay & Book — ${SESSION_TYPES[selectedType].priceLabel}` : 'Select a Time'}
             onPress={handleBooking}
             fullWidth
             size="lg"
-
             disabled={!selectedTime}
           />
         </View>
-
-        <View style={{ height: spacing.xxl * 2 }} />
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }

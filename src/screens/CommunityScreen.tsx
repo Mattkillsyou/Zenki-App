@@ -1,15 +1,33 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  RefreshControl,
+  ActivityIndicator,
+  ScrollView,
+  Image,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { typography, spacing, borderRadius } from '../theme';
+import { useAuth } from '../context/AuthContext';
+import { spacing, typography } from '../theme';
 import { PostCard } from '../components/PostCard';
 import { Post, getFeed, likePost, unlikePost } from '../services/firebasePosts';
-import { getCurrentUid } from '../services/firebaseAuth';
+
+interface StoryItem {
+  userId: string;
+  displayName: string;
+  avatar?: string;
+  isSelf?: boolean;
+}
 
 export function CommunityScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -44,7 +62,7 @@ export function CommunityScreen({ navigation }: any) {
     try {
       if (liked) await likePost(postId);
       else await unlikePost(postId);
-    } catch (error) {
+    } catch {
       // Revert on failure
       setPosts((prev) =>
         prev.map((p) =>
@@ -58,26 +76,99 @@ export function CommunityScreen({ navigation }: any) {
     navigation.navigate('UserProfile', { userId });
   };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.gold} />
-        </View>
-      </SafeAreaView>
-    );
-  }
+  // Stories rail — derives unique recent posters. Self (add-your-story) always first.
+  const stories: StoryItem[] = [
+    { userId: user?.id || 'self', displayName: 'Your Story', isSelf: true },
+    ...Array.from(
+      new Map(posts.map((p) => [p.userId, { userId: p.userId, displayName: p.displayName, avatar: p.avatar } as StoryItem])).values(),
+    ),
+  ];
+
+  const renderHeader = () => (
+    <View>
+      {/* Stories rail */}
+      <View style={[styles.storiesWrap, { borderBottomColor: colors.border }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.storiesRow}
+        >
+          {stories.map((s) => (
+            <TouchableOpacity
+              key={s.userId}
+              style={styles.storyItem}
+              onPress={() => s.isSelf ? navigation.navigate('CreatePost') : handleUserPress(s.userId)}
+              activeOpacity={0.8}
+            >
+              <View
+                style={[
+                  styles.storyRing,
+                  s.isSelf
+                    ? { borderColor: colors.textMuted, borderStyle: 'dashed' as const }
+                    : { borderColor: colors.gold },
+                ]}
+              >
+                <View style={[styles.storyAvatar, { backgroundColor: colors.goldMuted }]}>
+                  {s.avatar ? (
+                    <Image source={{ uri: s.avatar }} style={styles.storyAvatarImage} />
+                  ) : s.isSelf ? (
+                    <Ionicons name="add" size={28} color={colors.gold} />
+                  ) : (
+                    <Text style={[styles.storyInitials, { color: colors.gold }]}>
+                      {s.displayName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+              </View>
+              <Text
+                style={[styles.storyLabel, { color: colors.textSecondary }]}
+                numberOfLines={1}
+              >
+                {s.isSelf ? 'Your story' : s.displayName.split(' ')[0]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+    </View>
+  );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {posts.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="people-outline" size={64} color={colors.textMuted} />
-          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>The Dojo Feed</Text>
-          <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-            Be the first to share. Tap + to post a photo or video — every member can see it.
-          </Text>
+      {/* Instagram-style top bar */}
+      <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.logo, { color: colors.textPrimary }]}>Dojo</Text>
+        <View style={styles.topBarRight}>
+          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="heart-outline" size={26} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={() => navigation.navigate('CreatePost')}
+          >
+            <Ionicons name="paper-plane-outline" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
         </View>
+      </View>
+
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.gold} />
+        </View>
+      ) : posts.length === 0 ? (
+        <ScrollView
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.gold} />}
+          contentContainerStyle={{ flex: 1 }}
+        >
+          {renderHeader()}
+          <View style={styles.emptyContainer}>
+            <Ionicons name="people-outline" size={56} color={colors.textMuted} />
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>The Dojo Feed</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
+              Be the first to share. Tap + to post a photo or video.
+            </Text>
+          </View>
+        </ScrollView>
       ) : (
         <FlatList
           data={posts}
@@ -85,6 +176,7 @@ export function CommunityScreen({ navigation }: any) {
             <PostCard post={item} onLike={handleLike} onUserPress={handleUserPress} />
           )}
           keyExtractor={(item) => item.id}
+          ListHeaderComponent={renderHeader}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 120 }}
           refreshControl={
@@ -98,7 +190,7 @@ export function CommunityScreen({ navigation }: any) {
         style={[styles.fab, { backgroundColor: colors.gold }]}
         onPress={() => navigation.navigate('CreatePost')}
       >
-        <Ionicons name="add" size={28} color={colors.textInverse} />
+        <Ionicons name="add" size={28} color="#000" />
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -106,22 +198,66 @@ export function CommunityScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
+
+  topBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md + 4,
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
   },
-  title: { fontSize: 34, fontWeight: '800', letterSpacing: -0.5 },
-  searchButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1,
+  logo: {
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+    fontStyle: 'italic',
+  },
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
+  },
+
+  storiesWrap: {
+    borderBottomWidth: 0.5,
+    paddingVertical: 10,
+  },
+  storiesRow: {
+    paddingHorizontal: 12,
+    gap: 12,
+  },
+  storyItem: {
+    alignItems: 'center',
+    width: 68,
+  },
+  storyRing: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2,
+    padding: 2,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 4,
   },
+  storyAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  storyAvatarImage: { width: '100%', height: '100%' },
+  storyInitials: { fontSize: 16, fontWeight: '800' },
+  storyLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    maxWidth: 64,
+    textAlign: 'center',
+  },
+
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -133,27 +269,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
     paddingBottom: 100,
-    gap: spacing.lg,
+    gap: 10,
   },
   emptyTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
     textAlign: 'center',
   },
   emptySubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 20,
   },
   fab: {
     position: 'absolute',
     bottom: 100,
     right: spacing.lg,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 0,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 8,
