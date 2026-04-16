@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components';
-import { MEMBERS, CREDENTIALS } from '../../data/members';
+import { MEMBERS, CREDENTIALS, ADMIN_PASSWORD_OVERRIDE_KEY } from '../../data/members';
 import { spacing, borderRadius } from '../../theme';
 
 const INVITE_CODE = 'dragon';
@@ -57,9 +57,21 @@ export function SignInScreen({ navigation }: any) {
     setLoading(true);
     setTimeout(async () => {
       const cred = CREDENTIALS[username.toLowerCase()];
-      if (cred && cred.password === password) {
-        const member = MEMBERS.find((m) => m.id === cred.memberId);
-        if (member) { await auth.signIn(member); navigation.replace('Main'); return; }
+      if (cred) {
+        // Check for an admin-set password override first, fall back to default
+        let expectedPassword = cred.password;
+        try {
+          const raw = await AsyncStorage.getItem(ADMIN_PASSWORD_OVERRIDE_KEY);
+          if (raw) {
+            const overrides = JSON.parse(raw) as Record<string, string>;
+            if (overrides[cred.memberId]) expectedPassword = overrides[cred.memberId];
+          }
+        } catch { /* ignore */ }
+
+        if (expectedPassword === password) {
+          const member = MEMBERS.find((m) => m.id === cred.memberId);
+          if (member) { await auth.signIn(member); navigation.replace('Main'); return; }
+        }
       }
       if (password === 'temp') { navigation.navigate('SetPassword', { username }); setLoading(false); return; }
       setLoading(false);

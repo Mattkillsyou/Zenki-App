@@ -12,3 +12,4 @@ export { XPProgressBar } from './XPProgressBar';
 export { AchievementBadge, AchievementGrid } from './AchievementBadge';
 export { CelebrationModal } from './CelebrationModal';
 export { PostCard } from './PostCard';
+export { BeltDisplay } from './BeltDisplay';

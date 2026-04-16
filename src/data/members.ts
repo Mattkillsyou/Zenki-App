@@ -56,8 +56,8 @@ export const MEMBERS: Member[] = [
     id: '2',
     username: 'matt.b',
     firstName: 'Matt',
-    lastName: 'B',
-    email: 'matt@example.com',
+    lastName: 'Brown',
+    email: 'mattbrowntheemail@gmail.com',
     belt: 'white',
     stripes: 3,
     memberSince: '2024-01-15',
@@ -83,10 +83,22 @@ export const MEMBERS: Member[] = [
 ];
 
 // Login credentials — username → { password, memberId }
+// Admins are limited to sensei.tim and matt.b. Default password = 'password'.
+// Admins can change their password in Settings → the override is saved to
+// AsyncStorage under ADMIN_PASSWORD_OVERRIDE_KEY (see AuthContext / SettingsScreen).
 export const CREDENTIALS: Record<string, { password: string; memberId: string }> = {
-  admin: { password: 'password', memberId: '2' },
+  'sensei.tim': { password: 'password', memberId: '1' },
+  'tim@zenkidojo.com': { password: 'password', memberId: '1' },
+  'matt.b': { password: 'password', memberId: '2' },
+  'mattbrowntheemail@gmail.com': { password: 'password', memberId: '2' },
   apple: { password: 'password', memberId: '3' },
 };
+
+/**
+ * AsyncStorage key for password overrides set from Settings.
+ * Shape: { [memberId: string]: string }  — only stores changed passwords.
+ */
+export const ADMIN_PASSWORD_OVERRIDE_KEY = '@zenki_admin_passwords';
 
 export const BELT_ORDER: BeltLevel[] = ['none', 'white', 'blue', 'purple', 'brown', 'black'];
 

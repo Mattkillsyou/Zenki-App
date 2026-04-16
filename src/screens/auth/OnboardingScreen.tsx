@@ -12,6 +12,7 @@ import { useMotion } from '../../context/MotionContext';
 import { useAuth } from '../../context/AuthContext';
 import { typography, spacing, borderRadius } from '../../theme';
 import { BELT_ORDER, BELT_DISPLAY_COLORS, BELT_LABELS, BeltLevel, Member } from '../../data/members';
+import { BeltDisplay } from '../../components/BeltDisplay';
 import { renderWaiverText, WAIVER_VERSION, WaiverSignature } from '../../data/waiver';
 import { pushWaiverToSheets, pushWaiverToFirestore } from '../../services/waiverSync';
 
@@ -31,6 +32,7 @@ interface OnboardingData {
   twitter: string;
   website: string;
   belt: BeltLevel;
+  stripes: number;
   signedName: string;
   emailWaiverCopy: boolean;
 }
@@ -45,7 +47,7 @@ export function OnboardingScreen({ navigation, route }: any) {
   const [data, setData] = useState<OnboardingData>({
     email: '', password: '', confirmPassword: '',
     firstName: '', lastName: '', phone: '', photo: null, bio: '',
-    instagram: '', twitter: '', website: '', belt: 'none',
+    instagram: '', twitter: '', website: '', belt: 'none', stripes: 0,
     signedName: '', emailWaiverCopy: false,
   });
 
@@ -119,7 +121,7 @@ export function OnboardingScreen({ navigation, route }: any) {
       email: data.email,
       phone: data.phone.trim() || undefined,
       belt: data.belt,
-      stripes: 0,
+      stripes: data.stripes,
       memberSince: new Date().toISOString().split('T')[0],
       isAdmin: false,
       profilePhoto: data.photo || undefined,
@@ -364,14 +366,23 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 5: Belt
+      // Step 5: Belt + Stripes
       case 5: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="ribbon-outline" size={64} color={colors.gold} />
           </Animated.View>
-          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>What's your belt level?</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>Select your current Jiu-Jitsu belt</Text>
+          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Your belt & stripes</Text>
+          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
+            Set your current rank. Only instructors can update this later.
+          </Text>
+
+          {/* Live belt preview */}
+          <View style={{ marginVertical: spacing.md }}>
+            <BeltDisplay belt={data.belt} stripes={data.stripes} width={260} />
+          </View>
+
+          {/* Belt picker */}
           <View style={styles.beltGrid}>
             {BELT_ORDER.map((belt) => {
               const isSelected = data.belt === belt;
@@ -384,7 +395,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                     isSelected && { borderColor: colors.gold, borderWidth: 2 },
                     !isSelected && { borderColor: 'transparent', borderWidth: 1 },
                   ]}
-                  onPress={() => setData({ ...data, belt })}
+                  onPress={() => setData({ ...data, belt, stripes: belt === 'none' ? 0 : data.stripes })}
                 >
                   <View style={[styles.beltDot, { backgroundColor: BELT_DISPLAY_COLORS[belt] }]} />
                   <Text style={[
@@ -397,6 +408,42 @@ export function OnboardingScreen({ navigation, route }: any) {
               );
             })}
           </View>
+
+          {/* Stripe picker — only meaningful if a belt is selected */}
+          {data.belt !== 'none' && (
+            <View style={styles.stripesPickerSection}>
+              <Text style={[styles.stripesPickerLabel, { color: colors.textSecondary }]}>
+                Stripes
+              </Text>
+              <View style={styles.stripesPicker}>
+                {[0, 1, 2, 3, 4].map((n) => {
+                  const active = data.stripes === n;
+                  return (
+                    <TouchableOpacity
+                      key={n}
+                      style={[
+                        styles.stripeChip,
+                        {
+                          backgroundColor: active ? colors.gold : colors.surface,
+                          borderColor: active ? colors.gold : colors.border,
+                        },
+                      ]}
+                      onPress={() => setData({ ...data, stripes: n })}
+                    >
+                      <Text
+                        style={[
+                          styles.stripeChipLabel,
+                          { color: active ? '#000' : colors.textSecondary },
+                        ]}
+                      >
+                        {n}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
         </View>
       );
 
@@ -655,6 +702,18 @@ const styles = StyleSheet.create({
   },
   beltDot: { width: 16, height: 16, borderRadius: 8 },
   beltLabel: { ...typography.body, fontWeight: '600' },
+  stripesPickerSection: { width: '100%', alignItems: 'center', marginTop: spacing.md, gap: spacing.sm },
+  stripesPickerLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase' },
+  stripesPicker: { flexDirection: 'row', gap: spacing.sm },
+  stripeChip: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stripeChipLabel: { fontSize: 18, fontWeight: '800' },
   navRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: spacing.lg, paddingBottom: spacing.md,

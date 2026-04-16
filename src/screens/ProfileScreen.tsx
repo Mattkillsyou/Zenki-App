@@ -14,10 +14,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { Card } from '../components';
-import { BELT_DISPLAY_COLORS } from '../data/members';
-
-const BELT_COLORS = BELT_DISPLAY_COLORS;
+import { Card, BeltDisplay } from '../components';
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { value: 'light', label: 'Light', icon: 'sunny-outline' },
@@ -146,45 +143,18 @@ export function ProfileScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* Belt Progress */}
+        {/* Belt Progress (read-only — admins update via Admin Panel) */}
         <View style={styles.section}>
           <Card variant="elevated">
             <Text style={[styles.beltTitle, { color: colors.textPrimary }]}>
               Jiu-Jitsu Progress
             </Text>
-            <View style={styles.beltRow}>
-              {Object.entries(BELT_COLORS).map(([name, color]) => {
-                const isCurrent = name === memberBelt;
-                return (
-                  <View key={name} style={styles.beltItem}>
-                    <View
-                      style={[
-                        styles.beltDot,
-                        { backgroundColor: color },
-                        isCurrent && { opacity: 1, borderWidth: 2, borderColor: colors.gold },
-                      ]}
-                    >
-                      {isCurrent && (
-                        <Ionicons name="checkmark" size={12} color={name === 'white' ? '#333' : '#FFF'} />
-                      )}
-                    </View>
-                    <Text style={[styles.beltName, { color: colors.textMuted }]}>{name}</Text>
-                  </View>
-                );
-              })}
+            <View style={styles.beltDisplayContainer}>
+              <BeltDisplay belt={memberBelt} stripes={memberStripes} width={280} />
             </View>
-            <View style={styles.stripeRow}>
-              <Text style={[styles.stripeLabel, { color: colors.textSecondary }]}>Stripes:</Text>
-              {[1, 2, 3, 4].map((s) => (
-                <View
-                  key={s}
-                  style={[
-                    styles.stripeBar,
-                    { backgroundColor: s <= memberStripes ? colors.gold : colors.surfaceSecondary },
-                  ]}
-                />
-              ))}
-            </View>
+            <Text style={[styles.beltHint, { color: colors.textMuted }]}>
+              Belts and stripes are awarded by your instructor.
+            </Text>
           </Card>
         </View>
 
@@ -352,39 +322,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     fontSize: 16,
   },
-  beltRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  beltItem: {
+  beltDisplayContainer: {
     alignItems: 'center',
+    paddingVertical: spacing.sm,
   },
-  beltDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    opacity: 0.3,
-  },
-  beltName: {
-    ...typography.label,
-    marginTop: 4,
-    fontSize: 9,
-  },
-  stripeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.md,
-    gap: spacing.sm,
-  },
-  stripeLabel: {
-    ...typography.bodySmall,
-  },
-  stripeBar: {
-    width: 24,
-    height: 6,
-    borderRadius: 3,
+  beltHint: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    fontStyle: 'italic',
   },
   statsGrid: {
     flexDirection: 'row',
