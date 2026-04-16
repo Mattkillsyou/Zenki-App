@@ -132,6 +132,14 @@ export function HomeScreen({ navigation }: any) {
                   onPress={() => navigation.navigate('Store')}
                 />
               )}
+              {!isEmployee && (
+                <View style={[styles.flamesChip, { backgroundColor: colors.surface }]}>
+                  <Ionicons name="flame" size={16} color="#FF6B35" />
+                  <Text style={[styles.flamesChipText, { color: colors.textPrimary }]}>
+                    {(gamState.flames || 0).toLocaleString()}
+                  </Text>
+                </View>
+              )}
               {!isEmployee && <StreakBadge streak={gamState.streak} compact />}
               <TouchableOpacity
                 style={[styles.iconButton, { backgroundColor: colors.surface }]}
@@ -617,5 +625,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 6,
     elevation: 5,
+  },
+  flamesChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    gap: 4,
+  },
+  flamesChipText: {
+    fontSize: 14,
+    fontWeight: '800',
   },
 });

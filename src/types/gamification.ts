@@ -42,6 +42,9 @@ export interface GamificationState {
   streak: number;          // consecutive days with activity
   longestStreak: number;
   lastActiveDate: string;  // YYYY-MM-DD
+  weekStreak: number;          // consecutive weeks with at least one training day
+  longestWeekStreak: number;
+  lastActiveWeek: string;      // ISO week identifier like '2026-W15'
   totalSessions: number;
   dojoPoints: number;       // earned from check-ins, redeemable in store
   pointsLifetime: number;   // total ever earned (for stats)

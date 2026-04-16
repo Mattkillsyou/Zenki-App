@@ -50,6 +50,9 @@ const defaultState: GamificationState = {
   streak: 0,
   longestStreak: 0,
   lastActiveDate: '',
+  weekStreak: 0,
+  longestWeekStreak: 0,
+  lastActiveWeek: '',
   totalSessions: 0,
   dojoPoints: 0,
   pointsLifetime: 0,
@@ -113,6 +116,30 @@ function isWeekend(d: Date): boolean {
   return day === 0 || day === 6;
 }
 
+/** Returns ISO week identifier like '2026-W15'. Week starts on Monday. */
+function isoWeek(d: Date = new Date()): string {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  // Thursday in current week decides the ISO year
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+}
+
+/** The ISO week identifier of 7 days before the given date. */
+function previousWeekISO(fromISOWeek: string): string {
+  const match = fromISOWeek.match(/^(\d{4})-W(\d{2})$/);
+  if (!match) return '';
+  const year = parseInt(match[1], 10);
+  const week = parseInt(match[2], 10);
+  // Reconstruct a date at the start of that week, subtract 7 days
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Dow = jan4.getUTCDay() || 7;
+  const weekStart = new Date(jan4);
+  weekStart.setUTCDate(jan4.getUTCDate() - (jan4Dow - 1) + (week - 1) * 7 - 7);
+  return isoWeek(weekStart);
+}
+
 export function GamificationProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<GamificationState>(defaultState);
   const [loaded, setLoaded] = useState(false);
@@ -144,10 +171,26 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
   const updateStreak = useCallback((prev: GamificationState): GamificationState => {
     const today = todayISO();
-    if (prev.lastActiveDate === today) return prev;
-    const newStreak = prev.lastActiveDate === yesterdayISO() ? prev.streak + 1 : 1;
-    const longestStreak = Math.max(prev.longestStreak, newStreak);
-    return { ...prev, streak: newStreak, longestStreak, lastActiveDate: today };
+    const thisWeek = isoWeek();
+
+    // Daily streak
+    let next = prev;
+    if (prev.lastActiveDate !== today) {
+      const newStreak = prev.lastActiveDate === yesterdayISO() ? prev.streak + 1 : 1;
+      const longestStreak = Math.max(prev.longestStreak, newStreak);
+      next = { ...next, streak: newStreak, longestStreak, lastActiveDate: today };
+    }
+
+    // Weekly streak — independent of daily streak. A week counts once the member
+    // trains any day in it; consecutive calendar weeks extend the streak.
+    if (prev.lastActiveWeek !== thisWeek) {
+      const prevWeek = prev.lastActiveWeek ? previousWeekISO(thisWeek) : '';
+      const newWeekStreak = prev.lastActiveWeek === prevWeek ? prev.weekStreak + 1 : 1;
+      const longestWeekStreak = Math.max(prev.longestWeekStreak, newWeekStreak);
+      next = { ...next, weekStreak: newWeekStreak, longestWeekStreak, lastActiveWeek: thisWeek };
+    }
+
+    return next;
   }, []);
 
   const checkAchievements = useCallback((prev: GamificationState): GamificationState => {

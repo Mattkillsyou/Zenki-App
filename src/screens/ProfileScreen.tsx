@@ -163,6 +163,7 @@ export function ProfileScreen({ navigation }: any) {
           <View style={[styles.statTile, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
             <Ionicons name="flame" size={18} color="#FF6B35" />
             <Text style={[styles.statNum, { color: colors.textPrimary }]}>{gamState.streak}</Text>
+            <Text style={[styles.statSub, { color: colors.gold }]}>{gamState.weekStreak || 0}w</Text>
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Streak</Text>
           </View>
           <View style={[styles.statTile, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
@@ -426,6 +427,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   statNum: { fontSize: 18, fontWeight: '900', marginTop: 2 },
+  statSub: { fontSize: 9, fontWeight: '700', letterSpacing: 0.4, marginTop: -2 },
   statLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
 
   // Appearance
