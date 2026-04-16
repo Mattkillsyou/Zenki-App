@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { Card } from '../components';
 import { BELT_DISPLAY_COLORS } from '../data/members';
@@ -26,12 +27,13 @@ const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionic
 
 export function ProfileScreen({ navigation }: any) {
   const { colors, mode, setMode } = useTheme();
+  const { user } = useAuth();
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
   // Demo data — in production this comes from member context/API
-  const memberBelt = 'white';
-  const memberStripes = 3;
-  const isAdmin = true;
+  const memberBelt = user?.belt ?? 'white';
+  const memberStripes = user?.stripes ?? 0;
+  const isAdmin = user?.isAdmin === true;
 
   const handlePickPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();

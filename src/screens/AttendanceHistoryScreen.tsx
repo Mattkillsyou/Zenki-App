@@ -12,7 +12,7 @@ import { getTodayString } from '../utils/location';
 
 export function AttendanceHistoryScreen({ navigation }: any) {
   const { colors } = useTheme();
-  const { visits, todayVisitors, getVisitCountByMember } = useAttendance();
+  const { allVisitsHistory, todayVisitors, getVisitCountByMember } = useAttendance();
 
   const today = getTodayString();
 
@@ -25,23 +25,23 @@ export function AttendanceHistoryScreen({ navigation }: any) {
   const monthStart = useMemo(() => today.slice(0, 7), [today]);
 
   const weekCount = useMemo(
-    () => visits.filter((v) => v.date >= weekAgo).length,
-    [visits, weekAgo],
+    () => allVisitsHistory.filter((v) => v.date >= weekAgo).length,
+    [allVisitsHistory, weekAgo],
   );
   const monthCount = useMemo(
-    () => visits.filter((v) => v.date.startsWith(monthStart)).length,
-    [visits, monthStart],
+    () => allVisitsHistory.filter((v) => v.date.startsWith(monthStart)).length,
+    [allVisitsHistory, monthStart],
   );
 
   // Group visits by date (most recent first)
   const groupedVisits = useMemo(() => {
-    const groups: Record<string, typeof visits> = {};
-    [...visits].reverse().forEach((v) => {
+    const groups: Record<string, typeof allVisitsHistory> = {};
+    allVisitsHistory.forEach((v) => {
       if (!groups[v.date]) groups[v.date] = [];
       groups[v.date].push(v);
     });
     return Object.entries(groups);
-  }, [visits]);
+  }, [allVisitsHistory]);
 
   // Member frequency
   const memberCounts = getVisitCountByMember();
