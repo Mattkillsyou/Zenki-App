@@ -1,0 +1,227 @@
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
+import { typography, spacing, borderRadius } from '../theme';
+import { FadeInView, PressableScale } from '../components';
+import { MEMBERS } from '../data/members';
+import { PRODUCTS } from '../data/products';
+
+interface AdminCardProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  subtitle: string;
+  count: number;
+  accentColor: string;
+  onPress: () => void;
+}
+
+function AdminCard({ icon, title, subtitle, count, accentColor, onPress }: AdminCardProps) {
+  const { colors } = useTheme();
+  return (
+    <PressableScale onPress={onPress}>
+      <View style={[styles.adminCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 22 }]}>
+        <View style={styles.adminCardTop}>
+          <View style={[styles.adminCardIcon, { backgroundColor: accentColor + '20', width: 52, height: 52, borderRadius: 16 }]}>
+            <Ionicons name={icon} size={26} color={accentColor} />
+          </View>
+          <Text style={[styles.adminCardCount, { color: accentColor, fontSize: 28, fontWeight: '800' }]}>{count}</Text>
+        </View>
+        <Text style={[styles.adminCardTitle, { color: colors.textPrimary, fontSize: 17, fontWeight: '700' }]}>{title}</Text>
+        <Text style={[styles.adminCardSubtitle, { color: colors.textMuted, fontSize: 13 }]}>{subtitle}</Text>
+        <View style={styles.adminCardFooter}>
+          <Text style={[styles.adminCardAction, { color: accentColor }]}>Manage</Text>
+          <Ionicons name="chevron-forward" size={16} color={accentColor} />
+        </View>
+      </View>
+    </PressableScale>
+  );
+}
+
+export function AdminScreen({ navigation }: any) {
+  const { colors } = useTheme();
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5 }]}
+          >
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: colors.textPrimary, fontSize: 34, fontWeight: '800' }]}>Admin Panel</Text>
+          <View style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5 }]} />
+        </View>
+
+        {/* Welcome */}
+        <FadeInView delay={0} slideUp={10}>
+          <View style={[styles.welcomeCard, { backgroundColor: colors.redMuted, borderColor: colors.red + '25' }]}>
+            <Ionicons name="shield-checkmark-outline" size={22} color={colors.red} />
+            <View style={styles.welcomeText}>
+              <Text style={[styles.welcomeTitle, { color: colors.red }]}>Owner Dashboard</Text>
+              <Text style={[styles.welcomeDesc, { color: colors.red }]}>
+                Manage your dojo members, store, and schedule
+              </Text>
+            </View>
+          </View>
+        </FadeInView>
+
+        {/* Admin Cards Grid */}
+        <View style={[styles.grid, { gap: 14 }]}>
+          <FadeInView delay={60} slideUp={12} style={styles.gridItem}>
+            <AdminCard
+              icon="people-outline"
+              title="Members"
+              subtitle="Add, edit, belts & stripes"
+              count={MEMBERS.length}
+              accentColor={colors.gold}
+              onPress={() => navigation.navigate('AdminMembers')}
+            />
+          </FadeInView>
+          <FadeInView delay={120} slideUp={12} style={styles.gridItem}>
+            <AdminCard
+              icon="bag-outline"
+              title="Store"
+              subtitle="Products, pricing, stock"
+              count={PRODUCTS.length}
+              accentColor={colors.red}
+              onPress={() => navigation.navigate('AdminProducts')}
+            />
+          </FadeInView>
+        </View>
+        <View style={[styles.grid, { gap: 14 }]}>
+          <FadeInView delay={180} slideUp={12} style={styles.gridItem}>
+            <AdminCard
+              icon="calendar-outline"
+              title="Schedule"
+              subtitle="Classes, times, instructors"
+              count={7}
+              accentColor={colors.success}
+              onPress={() => navigation.navigate('AdminSchedule')}
+            />
+          </FadeInView>
+          <FadeInView delay={240} slideUp={12} style={styles.gridItem}>
+            <View style={[styles.adminCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 22, opacity: 0.5 }]}>
+              <View style={styles.adminCardTop}>
+                <View style={[styles.adminCardIcon, { backgroundColor: colors.gold + '20', width: 52, height: 52, borderRadius: 16 }]}>
+                  <Ionicons name="analytics-outline" size={26} color={colors.textMuted} />
+                </View>
+              </View>
+              <Text style={[styles.adminCardTitle, { color: colors.textMuted, fontSize: 17, fontWeight: '700' }]}>Analytics</Text>
+              <Text style={[styles.adminCardSubtitle, { color: colors.textMuted, fontSize: 13 }]}>Coming soon</Text>
+            </View>
+          </FadeInView>
+        </View>
+
+        {/* Quick Actions */}
+        <FadeInView delay={300} slideUp={12}>
+          <View style={styles.section}>
+            <Text style={[styles.sectionLabel, { color: colors.gold, fontSize: 13, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' }]}>QUICK ACTIONS</Text>
+            {[
+              { icon: 'person-add-outline' as const, label: 'Add New Member', screen: 'AdminMembers' },
+              { icon: 'add-circle-outline' as const, label: 'Add New Product', screen: 'AdminProducts' },
+              { icon: 'time-outline' as const, label: 'Edit Schedule', screen: 'AdminSchedule' },
+            ].map((action) => (
+              <TouchableOpacity
+                key={action.label}
+                style={[styles.quickAction, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 20 }]}
+                onPress={() => navigation.navigate(action.screen)}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: colors.gold + '20', width: 52, height: 52, borderRadius: 16 }]}>
+                  <Ionicons name={action.icon} size={22} color={colors.gold} />
+                </View>
+                <Text style={[styles.quickActionLabel, { color: colors.textPrimary, fontSize: 17, fontWeight: '700' }]}>
+                  {action.label}
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </FadeInView>
+
+        <View style={{ height: spacing.xxl * 2 }} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  backButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
+  title: { ...typography.sectionTitle },
+  welcomeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: spacing.lg,
+    padding: spacing.md + 4,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  welcomeText: { flex: 1 },
+  welcomeTitle: { ...typography.body, fontWeight: '700' },
+  welcomeDesc: { ...typography.bodySmall, marginTop: 2 },
+  grid: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  gridItem: { flex: 1 },
+  adminCard: {
+    minHeight: 160,
+  },
+  adminCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  adminCardIcon: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminCardCount: { fontWeight: '800' },
+  adminCardTitle: { ...typography.cardTitle },
+  adminCardSubtitle: { ...typography.bodySmall, marginTop: 2 },
+  adminCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.md,
+    gap: 4,
+  },
+  adminCardAction: { ...typography.label, fontSize: 11 },
+  section: {
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.md,
+  },
+  sectionLabel: { ...typography.label, marginBottom: spacing.md },
+  quickAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    gap: spacing.md,
+  },
+  quickActionLabel: { ...typography.body, fontWeight: '700', flex: 1 },
+  quickActionIcon: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

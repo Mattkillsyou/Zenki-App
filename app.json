@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Zenki Dojo",
+    "slug": "zenki-dojo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#1A1209"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.zenkidojo.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1A1209"
+      },
+      "package": "com.zenkidojo.app"
+    }
+  }
+}
