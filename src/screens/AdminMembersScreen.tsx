@@ -20,6 +20,7 @@ import {
   BeltLevel,
   BELT_ORDER,
   BELT_DISPLAY_COLORS,
+  BELT_LABELS,
 } from '../data/members';
 
 const EMPTY_MEMBER: Omit<Member, 'id'> = {
@@ -157,7 +158,7 @@ export function AdminMembersScreen({ navigation }: any) {
                 <View style={styles.beltRow}>
                   <View style={[styles.beltDot, { backgroundColor: BELT_DISPLAY_COLORS[member.belt] }]} />
                   <Text style={[styles.beltText, { color: colors.textSecondary }]}>
-                    {member.belt.charAt(0).toUpperCase() + member.belt.slice(1)} · {member.stripes} stripes
+                    {BELT_LABELS[member.belt]} · {member.stripes} stripes
                   </Text>
                   {member.isAdmin && (
                     <View style={[styles.adminBadge, { backgroundColor: colors.redMuted }]}>
@@ -224,7 +225,7 @@ export function AdminMembersScreen({ navigation }: any) {
                       onPress={() => setForm((prev) => ({ ...prev, belt: belt as BeltLevel }))}
                     >
                       <Text style={[styles.beltChipText, { color: isActive ? (belt === 'white' ? '#333' : '#FFF') : colors.textMuted }]}>
-                        {belt.charAt(0).toUpperCase() + belt.slice(1)}
+                        {BELT_LABELS[belt]}
                       </Text>
                     </TouchableOpacity>
                   );

@@ -11,7 +11,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useMotion } from '../../context/MotionContext';
 import { useAuth } from '../../context/AuthContext';
 import { typography, spacing, borderRadius } from '../../theme';
-import { BELT_ORDER, BELT_DISPLAY_COLORS, BeltLevel, Member } from '../../data/members';
+import { BELT_ORDER, BELT_DISPLAY_COLORS, BELT_LABELS, BeltLevel, Member } from '../../data/members';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TOTAL_STEPS = 8;
@@ -22,6 +22,7 @@ interface OnboardingData {
   confirmPassword: string;
   firstName: string;
   lastName: string;
+  phone: string;
   photo: string | null;
   bio: string;
   instagram: string;
@@ -39,8 +40,8 @@ export function OnboardingScreen({ navigation, route }: any) {
   const [locationGranted, setLocationGranted] = useState(false);
   const [data, setData] = useState<OnboardingData>({
     email: '', password: '', confirmPassword: '',
-    firstName: '', lastName: '', photo: null, bio: '',
-    instagram: '', twitter: '', website: '', belt: 'white',
+    firstName: '', lastName: '', phone: '', photo: null, bio: '',
+    instagram: '', twitter: '', website: '', belt: 'none',
   });
 
   // Password validation
@@ -111,6 +112,7 @@ export function OnboardingScreen({ navigation, route }: any) {
       firstName: data.firstName,
       lastName: data.lastName,
       email: data.email,
+      phone: data.phone.trim() || undefined,
       belt: data.belt,
       stripes: 0,
       memberSince: new Date().toISOString().split('T')[0],
@@ -237,6 +239,15 @@ export function OnboardingScreen({ navigation, route }: any) {
             onChangeText={(v) => setData({ ...data, lastName: v })}
             autoCapitalize="words"
           />
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: 'transparent', borderWidth: 0 }]}
+            placeholder="Phone number"
+            placeholderTextColor={colors.textMuted}
+            value={data.phone}
+            onChangeText={(v) => setData({ ...data, phone: v })}
+            keyboardType="phone-pad"
+            autoComplete="tel"
+          />
         </View>
       );
 
@@ -359,7 +370,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                     styles.beltLabel,
                     { color: isSelected ? (belt === 'white' ? '#333' : '#FFF') : colors.textSecondary },
                   ]}>
-                    {belt.charAt(0).toUpperCase() + belt.slice(1)}
+                    {BELT_LABELS[belt]}
                   </Text>
                 </TouchableOpacity>
               );

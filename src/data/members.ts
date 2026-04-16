@@ -17,7 +17,7 @@
 //   Increment stripes (max 4)
 // ──────────────────────────────────────────────────────────
 
-export type BeltLevel = 'white' | 'blue' | 'purple' | 'brown' | 'black';
+export type BeltLevel = 'none' | 'white' | 'blue' | 'purple' | 'brown' | 'black';
 
 export interface Member {
   id: string;
@@ -87,12 +87,22 @@ export const CREDENTIALS: Record<string, { password: string; memberId: string }>
   apple: { password: 'password', memberId: '3' },
 };
 
-export const BELT_ORDER: BeltLevel[] = ['white', 'blue', 'purple', 'brown', 'black'];
+export const BELT_ORDER: BeltLevel[] = ['none', 'white', 'blue', 'purple', 'brown', 'black'];
 
 export const BELT_DISPLAY_COLORS: Record<BeltLevel, string> = {
+  none: '#71717A',
   white: '#F5F5F5',
   blue: '#1565C0',
   purple: '#7B1FA2',
   brown: '#5D4037',
   black: '#212121',
+};
+
+export const BELT_LABELS: Record<BeltLevel, string> = {
+  none: 'N/A',
+  white: 'White',
+  blue: 'Blue',
+  purple: 'Purple',
+  brown: 'Brown',
+  black: 'Black',
 };
