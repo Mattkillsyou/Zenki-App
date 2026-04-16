@@ -207,8 +207,8 @@ export function SettingsScreen({ navigation }: any) {
         {renderSectionHeader('CALENDAR')}
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
           {renderToggleRow(
-            'Google Calendar Sync',
-            'Add bookings to your calendar automatically',
+            'Block busy times from booking',
+            "When on, members can't book slots you already have an event for",
             calendarSync,
             setCalendarSync,
           )}

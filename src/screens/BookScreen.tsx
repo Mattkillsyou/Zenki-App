@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +15,7 @@ import { typography, spacing, borderRadius } from '../theme';
 import { Button } from '../components';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import { fetchBusyIntervals, isSlotBusy, BusyInterval } from '../services/calendarAvailability';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -44,12 +46,57 @@ const TIME_SLOTS = [
   '2:00 PM', '3:00 PM', '5:00 PM', '6:00 PM',
 ];
 
+/** Parse a slot label like "2:00 PM" plus a base date into an absolute Date. */
+function slotToDate(baseDate: Date, label: string): Date {
+  const match = label.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return new Date(baseDate);
+  let hour = parseInt(match[1], 10);
+  const minute = parseInt(match[2], 10);
+  const meridiem = match[3].toUpperCase();
+  if (meridiem === 'PM' && hour !== 12) hour += 12;
+  if (meridiem === 'AM' && hour === 12) hour = 0;
+  const d = new Date(baseDate);
+  d.setHours(hour, minute, 0, 0);
+  return d;
+}
+
+/** Extract "60 min" → 60. Defaults to 60. */
+function parseDurationMinutes(s: string): number {
+  const m = s.match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : 60;
+}
+
+function todayDateString(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function BookScreen({ navigation }: any) {
   const { colors } = useTheme();
   const [selectedInstructor, setSelectedInstructor] = useState(0);
   const [selectedType, setSelectedType] = useState(0);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [calendarLinked, setCalendarLinked] = useState(false);
+  const [busyIntervals, setBusyIntervals] = useState<BusyInterval[]>([]);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const currentDateStr = todayDateString();
+  const currentDate = useMemo(() => new Date(), []);
+  const currentDuration = parseDurationMinutes(SESSION_TYPES[selectedType].duration);
+
+  // Fetch the owner's busy intervals whenever the date we're booking for changes.
+  // Today's the only bookable date right now, but this is structured to expand.
+  useEffect(() => {
+    let cancelled = false;
+    setCheckingAvailability(true);
+    fetchBusyIntervals(currentDateStr)
+      .then((intervals) => {
+        if (!cancelled) setBusyIntervals(intervals);
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingAvailability(false);
+      });
+    return () => { cancelled = true; };
+  }, [currentDateStr]);
 
   const discovery = AuthSession.useAutoDiscovery('https://accounts.google.com');
 
@@ -101,6 +148,14 @@ export function BookScreen({ navigation }: any) {
 
   const handleBooking = () => {
     if (!selectedTime) return;
+
+    // Defensive — shouldn't be reachable since busy slots are disabled
+    const slotDate = slotToDate(currentDate, selectedTime);
+    const conflict = isSlotBusy(slotDate, currentDuration, busyIntervals);
+    if (conflict) {
+      Alert.alert('Unavailable', 'That time is already booked. Please choose another slot.');
+      return;
+    }
 
     const instructor = INSTRUCTORS[selectedInstructor];
     const sessionType = SESSION_TYPES[selectedType];
@@ -233,16 +288,28 @@ export function BookScreen({ navigation }: any) {
 
         {/* Time Slots */}
         <View style={[styles.section, { marginTop: 32 }]}>
-          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>AVAILABLE TIMES</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>AVAILABLE TIMES</Text>
+            {checkingAvailability && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <ActivityIndicator size="small" color={colors.textMuted} />
+                <Text style={{ fontSize: 11, color: colors.textMuted }}>Checking calendar…</Text>
+              </View>
+            )}
+          </View>
           <Text style={[styles.dateLabel, { color: colors.textSecondary }]}>
             {getDisplayDate()}
           </Text>
           <View style={styles.timeGrid}>
             {TIME_SLOTS.map((time) => {
               const isSelected = time === selectedTime;
+              const slotDate = slotToDate(currentDate, time);
+              const conflict = isSlotBusy(slotDate, currentDuration, busyIntervals);
+              const isBusy = conflict !== null;
               return (
                 <TouchableOpacity
                   key={time}
+                  disabled={isBusy}
                   style={[
                     {
                       height: 52,
@@ -251,21 +318,38 @@ export function BookScreen({ navigation }: any) {
                       alignItems: 'center',
                       justifyContent: 'center',
                       borderWidth: 1.5,
-                      backgroundColor: isSelected ? colors.gold : colors.surface,
-                      borderColor: isSelected ? colors.gold : colors.border,
-                    }
+                      backgroundColor: isBusy
+                        ? colors.surfaceSecondary
+                        : isSelected
+                        ? colors.gold
+                        : colors.surface,
+                      borderColor: isBusy
+                        ? colors.border
+                        : isSelected
+                        ? colors.gold
+                        : colors.border,
+                      opacity: isBusy ? 0.5 : 1,
+                    },
                   ]}
                   onPress={() => setSelectedTime(time)}
                 >
-                  <Text style={[
-                    {
-                      fontSize: 15,
-                      fontWeight: '600',
-                      color: isSelected ? colors.textInverse : colors.textSecondary,
-                    }
-                  ]}>
+                  <Text style={{
+                    fontSize: 15,
+                    fontWeight: '600',
+                    color: isBusy
+                      ? colors.textMuted
+                      : isSelected
+                      ? colors.textInverse
+                      : colors.textSecondary,
+                    textDecorationLine: isBusy ? 'line-through' : 'none',
+                  }}>
                     {time}
                   </Text>
+                  {isBusy && (
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textMuted, marginTop: 1, letterSpacing: 0.5 }}>
+                      UNAVAILABLE
+                    </Text>
+                  )}
                 </TouchableOpacity>
               );
             })}
