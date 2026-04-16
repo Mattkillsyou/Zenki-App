@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -60,6 +60,7 @@ function parseTimeSort(label: string): number {
 export function HomeScreen({ navigation }: any) {
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const isEmployee = user?.isEmployee === true;
   const { state: gamState, levelInfo, dismissCelebration, recordAppOpen } = useGamification();
   React.useEffect(() => { recordAppOpen(); }, [recordAppOpen]);
@@ -131,22 +132,6 @@ export function HomeScreen({ navigation }: any) {
                 />
               )}
               {!isEmployee && <StreakBadge streak={gamState.streak} compact />}
-              {!isEmployee && (
-                <TouchableOpacity
-                  style={[styles.iconButton, { backgroundColor: colors.surface }]}
-                  onPress={() => { play('navigate'); setSpinOpen(true); }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name="disc-outline"
-                    size={20}
-                    color={hasSpunToday ? colors.textMuted : colors.gold}
-                  />
-                  {!hasSpunToday && (
-                    <View style={[styles.notifDot, { backgroundColor: colors.gold }]} />
-                  )}
-                </TouchableOpacity>
-              )}
               <TouchableOpacity
                 style={[styles.iconButton, { backgroundColor: colors.surface }]}
                 onPress={() => { play('navigate'); setNotifOpen(true); }}
@@ -293,6 +278,26 @@ export function HomeScreen({ navigation }: any) {
 
       {!isEmployee && (
         <CelebrationModal celebration={gamState.pendingCelebration} onDismiss={dismissCelebration} />
+      )}
+
+      {/* Floating spin wheel button — bottom left above the Home tab.
+          Only shown when the user hasn't spun yet today. Once spun,
+          disappears entirely until tomorrow. */}
+      {!isEmployee && !hasSpunToday && (
+        <TouchableOpacity
+          onPress={() => { play('navigate'); setSpinOpen(true); }}
+          activeOpacity={0.8}
+          style={[
+            styles.spinFab,
+            {
+              backgroundColor: colors.gold,
+              bottom: 60 + insets.bottom + 16,
+              shadowColor: colors.gold,
+            },
+          ]}
+        >
+          <Ionicons name="disc-outline" size={26} color="#000" />
+        </TouchableOpacity>
       )}
 
       {/* Daily Spin Wheel */}
@@ -596,5 +601,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 16,
     letterSpacing: 0.1,
+  },
+  spinFab: {
+    position: 'absolute',
+    left: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });
