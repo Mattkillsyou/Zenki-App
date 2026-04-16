@@ -42,7 +42,8 @@ export async function pushTimeEntry(
     regularPay: breakdown ? breakdown.regularPay.toFixed(2) : '0',
     overtimePay: breakdown ? breakdown.overtimePay.toFixed(2) : '0',
     doubletimePay: breakdown ? breakdown.doubletimePay.toFixed(2) : '0',
-    holidayBonus: breakdown ? breakdown.holidayBonus.toFixed(2) : '0',
+    holidayHours: breakdown ? (breakdown.holidayMinutes / 60).toFixed(2) : '0',
+    holidayPay: breakdown ? breakdown.holidayPay.toFixed(2) : '0',
     totalPay: breakdown ? breakdown.totalPay.toFixed(2) : '0',
     pay: breakdown ? breakdown.totalPay.toFixed(2) : '0', // backward compat
 

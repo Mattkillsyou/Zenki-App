@@ -21,8 +21,8 @@ import { getHolidayInfo } from '../data/holidays';
 //   12+ hrs         → 2.0x (double time)
 //
 // HOLIDAY PAY (Zenki Dojo policy, not CA-required):
-//   Any hour worked on a holiday gets a 1.5x multiplier applied on top
-//   of the regular/OT/DT rate (so holiday OT = 1.5 × 1.5 = 2.25x).
+//   Flat 2x base rate for every hour worked on a recognized holiday.
+//   OT and DT rules do NOT stack on holidays — every hour is 2x, period.
 // ──────────────────────────────────────────────────────────────────
 
 export const CA_RULES = {
@@ -32,7 +32,7 @@ export const CA_RULES = {
   DT_THRESHOLD_MINUTES: 12 * 60,    // after 12 hours
   OT_MULTIPLIER: 1.5,
   DT_MULTIPLIER: 2.0,
-  HOLIDAY_MULTIPLIER: 1.5,
+  HOLIDAY_MULTIPLIER: 2.0,
 };
 
 // Anchor Monday for bi-weekly calculation
@@ -102,22 +102,25 @@ export function getElapsedMinutes(clockIn: string): number {
 }
 
 export interface PayBreakdown {
-  regularMinutes: number;      // 0 – 8 hrs (1.0x base)
-  overtimeMinutes: number;     // 8 – 12 hrs (1.5x base)
-  doubletimeMinutes: number;   // 12+ hrs (2.0x base)
+  regularMinutes: number;      // 0 – 8 hrs (1.0x base)  — non-holidays only
+  overtimeMinutes: number;     // 8 – 12 hrs (1.5x base) — non-holidays only
+  doubletimeMinutes: number;   // 12+ hrs (2.0x base)    — non-holidays only
+  holidayMinutes: number;      // all hours on a holiday (2.0x base)
   isHoliday: boolean;
   holidayName?: string;
   regularPay: number;
   overtimePay: number;
   doubletimePay: number;
-  holidayBonus: number;        // extra 0.5x premium on all paid hours for holidays
+  holidayPay: number;          // full pay for holiday hours (not a bonus)
   totalPay: number;
   totalMultiplier: number;     // blended effective rate (for display)
 }
 
 /**
- * Given a completed entry's paid minutes and date, split into
- * regular/OT/DT and compute pay. Applies holiday premium if applicable.
+ * Given a completed entry's paid minutes and date, compute pay.
+ *
+ * On a HOLIDAY: every paid minute is 2x base. OT/DT rules don't apply.
+ * On a REGULAR day: split hours into regular (0–8) / OT (8–12) / DT (12+).
  */
 export function calculatePayBreakdown(
   paidMinutes: number,
@@ -126,8 +129,28 @@ export function calculatePayBreakdown(
 ): PayBreakdown {
   const holiday = getHolidayInfo(date);
   const baseRate = hourlyRate;
+  const totalHours = paidMinutes / 60;
 
-  // Split hours by overtime tier
+  // Holiday: flat 2x on all hours, no OT/DT split
+  if (holiday.isHoliday) {
+    const holidayPay = totalHours * baseRate * CA_RULES.HOLIDAY_MULTIPLIER;
+    return {
+      regularMinutes: 0,
+      overtimeMinutes: 0,
+      doubletimeMinutes: 0,
+      holidayMinutes: paidMinutes,
+      isHoliday: true,
+      holidayName: holiday.name,
+      regularPay: 0,
+      overtimePay: 0,
+      doubletimePay: 0,
+      holidayPay: round2(holidayPay),
+      totalPay: round2(holidayPay),
+      totalMultiplier: CA_RULES.HOLIDAY_MULTIPLIER,
+    };
+  }
+
+  // Non-holiday: split hours by overtime tier
   const regularMinutes = Math.min(paidMinutes, CA_RULES.OT_THRESHOLD_MINUTES);
   const overtimeMinutes = Math.max(
     0,
@@ -135,32 +158,23 @@ export function calculatePayBreakdown(
   );
   const doubletimeMinutes = Math.max(0, paidMinutes - CA_RULES.DT_THRESHOLD_MINUTES);
 
-  // Base pay by tier
   const regularPay = (regularMinutes / 60) * baseRate;
   const overtimePay = (overtimeMinutes / 60) * baseRate * CA_RULES.OT_MULTIPLIER;
   const doubletimePay = (doubletimeMinutes / 60) * baseRate * CA_RULES.DT_MULTIPLIER;
 
-  // Holiday premium: +50% on TOP of regular/OT/DT rates for all paid hours worked
-  // e.g. holiday regular = 1.0 + 0.5 = 1.5x base
-  //       holiday OT     = 1.5 + 0.5 = 2.0x base (still stacked with OT)
-  //       holiday DT     = 2.0 + 0.5 = 2.5x base
-  const holidayPremiumRate = holiday.isHoliday ? 0.5 : 0;
-  const holidayBonus = (paidMinutes / 60) * baseRate * holidayPremiumRate;
-
-  const totalPay = regularPay + overtimePay + doubletimePay + holidayBonus;
-  const totalHours = paidMinutes / 60;
+  const totalPay = regularPay + overtimePay + doubletimePay;
   const totalMultiplier = totalHours > 0 ? totalPay / (totalHours * baseRate) : 1;
 
   return {
     regularMinutes,
     overtimeMinutes,
     doubletimeMinutes,
-    isHoliday: holiday.isHoliday,
-    holidayName: holiday.name,
+    holidayMinutes: 0,
+    isHoliday: false,
     regularPay: round2(regularPay),
     overtimePay: round2(overtimePay),
     doubletimePay: round2(doubletimePay),
-    holidayBonus: round2(holidayBonus),
+    holidayPay: 0,
     totalPay: round2(totalPay),
     totalMultiplier: Math.round(totalMultiplier * 100) / 100,
   };
@@ -201,7 +215,7 @@ export interface PeriodTotals {
   overtimeHours: number;
   doubletimeHours: number;
   holidayHours: number;
-  holidayBonus: number;
+  holidayPay: number;
 }
 
 export function getPeriodTotals(period: BiweeklyPeriod, hourlyRate: number): PeriodTotals {
@@ -211,7 +225,7 @@ export function getPeriodTotals(period: BiweeklyPeriod, hourlyRate: number): Per
   let doubletimeMinutes = 0;
   let holidayMinutes = 0;
   let totalPay = 0;
-  let holidayBonus = 0;
+  let holidayPay = 0;
   const uniqueDays = new Set<string>();
 
   for (const entry of period.entries) {
@@ -221,9 +235,9 @@ export function getPeriodTotals(period: BiweeklyPeriod, hourlyRate: number): Per
     regularMinutes += bd.regularMinutes;
     overtimeMinutes += bd.overtimeMinutes;
     doubletimeMinutes += bd.doubletimeMinutes;
-    if (bd.isHoliday) holidayMinutes += entry.paidMinutes;
+    holidayMinutes += bd.holidayMinutes;
     totalPay += bd.totalPay;
-    holidayBonus += bd.holidayBonus;
+    holidayPay += bd.holidayPay;
     uniqueDays.add(entry.date);
   }
 
@@ -235,7 +249,7 @@ export function getPeriodTotals(period: BiweeklyPeriod, hourlyRate: number): Per
     overtimeHours: round2(overtimeMinutes / 60),
     doubletimeHours: round2(doubletimeMinutes / 60),
     holidayHours: round2(holidayMinutes / 60),
-    holidayBonus: round2(holidayBonus),
+    holidayPay: round2(holidayPay),
   };
 }
 

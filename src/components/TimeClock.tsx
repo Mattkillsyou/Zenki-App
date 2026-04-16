@@ -41,7 +41,7 @@ export function TimeClock() {
         <View style={[styles.holidayBanner, { backgroundColor: colors.gold + '20', borderColor: colors.gold }]}>
           <Ionicons name="star" size={16} color={colors.gold} />
           <Text style={[styles.holidayText, { color: colors.gold }]}>
-            {todayHoliday.name} · Holiday pay (1.5×)
+            {todayHoliday.name} · Double pay (2×)
           </Text>
         </View>
       )}
@@ -145,7 +145,7 @@ export function TimeClock() {
               <BreakdownChip label="DT 2×" value={periodSummary.doubletimeHours} color={colors.error} />
             )}
             {periodSummary.holidayHours > 0 && (
-              <BreakdownChip label="Holiday" value={periodSummary.holidayHours} color={colors.gold} />
+              <BreakdownChip label="Holiday 2×" value={periodSummary.holidayHours} color={colors.gold} />
             )}
           </View>
         )}

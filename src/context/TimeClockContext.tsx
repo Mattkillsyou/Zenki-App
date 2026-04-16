@@ -45,7 +45,7 @@ const TimeClockContext = createContext<TimeClockContextValue>({
   periodSummary: {
     totalPaidHours: 0, totalPay: 0, daysWorked: 0,
     regularHours: 0, overtimeHours: 0, doubletimeHours: 0,
-    holidayHours: 0, holidayBonus: 0,
+    holidayHours: 0, holidayPay: 0,
   },
 });
 
