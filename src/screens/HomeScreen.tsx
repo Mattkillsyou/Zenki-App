@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -291,12 +292,13 @@ export function HomeScreen({ navigation }: any) {
             styles.spinFab,
             {
               backgroundColor: colors.gold,
-              bottom: 60 + insets.bottom + 16,
+              // Sit flush above the tab bar (bottom-left corner of the content area)
+              bottom: 60 + insets.bottom + 4,
               shadowColor: colors.gold,
             },
           ]}
         >
-          <Ionicons name="disc-outline" size={26} color="#000" />
+          <Ionicons name="disc-outline" size={24} color="#000" />
         </TouchableOpacity>
       )}
 
@@ -397,12 +399,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   quoteText: {
-    fontSize: 16,
-    fontWeight: '500',
-    lineHeight: 24,
+    fontSize: 17,
+    lineHeight: 26,
     textAlign: 'center',
-    letterSpacing: -0.1,
+    letterSpacing: 0.2,
     fontStyle: 'italic',
+    fontWeight: '400',
+    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' }),
   },
   quoteAttr: {
     fontSize: 12,
@@ -604,15 +607,15 @@ const styles = StyleSheet.create({
   },
   spinFab: {
     position: 'absolute',
-    left: 16,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    left: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowRadius: 6,
+    elevation: 5,
   },
 });

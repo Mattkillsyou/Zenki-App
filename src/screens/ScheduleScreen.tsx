@@ -52,19 +52,42 @@ export function ScheduleScreen({ navigation }: any) {
   const dayKey = DAYS[selectedDay];
   const filtered = [...(SCHEDULES[dayKey] || []), PILATES_ENTRY];
 
+  const todayIdx = getTodayIndex();
+  const selectedFullLabel = (() => {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
+    const selectedDate = new Date(monday);
+    selectedDate.setDate(monday.getDate() + selectedDay);
+    return selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  })();
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Header — minimal, brand-forward */}
+      {/* Header — month + class count chip */}
       <View style={styles.scheduleHeader}>
-        <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>
-          {getMonthYear()}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Ionicons name="calendar" size={22} color={colors.gold} />
+          <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>
+            {getMonthYear()}
+          </Text>
+        </View>
+        <View style={[styles.countChip, { backgroundColor: colors.goldMuted, borderColor: colors.gold }]}>
+          <Text style={[styles.countChipText, { color: colors.gold }]}>
+            {filtered.length} {filtered.length === 1 ? 'class' : 'classes'}
+          </Text>
+        </View>
       </View>
+
+      {/* Divider under header */}
+      <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
       {/* Day Selector */}
       <View style={styles.daySelector}>
         {DAYS.map((day, index) => {
           const isSelected = index === selectedDay;
+          const isToday = index === todayIdx;
           return (
             <TouchableOpacity
               key={day}
@@ -72,7 +95,7 @@ export function ScheduleScreen({ navigation }: any) {
                 styles.dayItem,
                 {
                   backgroundColor: isSelected ? colors.gold : colors.surface,
-                  borderColor: colors.border,
+                  borderColor: isSelected ? colors.gold : colors.border,
                   borderWidth: 1.5,
                 },
               ]}
@@ -90,16 +113,53 @@ export function ScheduleScreen({ navigation }: any) {
               ]}>
                 {weekDates[index]}
               </Text>
+              {/* Today dot indicator */}
+              {isToday && !isSelected && (
+                <View style={[styles.todayDot, { backgroundColor: colors.gold }]} />
+              )}
+              {isToday && isSelected && (
+                <View style={[styles.todayDot, { backgroundColor: colors.textInverse }]} />
+              )}
             </TouchableOpacity>
           );
         })}
       </View>
 
+      {/* Selected-day detail strip */}
+      <View style={styles.selectedStrip}>
+        <View style={[styles.selectedAccent, { backgroundColor: colors.gold }]} />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.selectedDayLabel, { color: colors.textPrimary }]}>
+            {selectedFullLabel}
+          </Text>
+          <Text style={[styles.selectedDaySub, { color: colors.textMuted }]}>
+            {selectedDay === todayIdx ? 'TODAY' : DAYS[selectedDay].toUpperCase() + ' · WEEK VIEW'}
+          </Text>
+        </View>
+        <Ionicons name="time-outline" size={20} color={colors.textTertiary} />
+      </View>
 
-      {/* Class List — single-page, no scroll */}
-      <View style={[styles.classList, styles.classListContent]}>
-        {filtered.map((cls) => (
-          <ClassCard key={`${cls.name}-${cls.time}`} {...cls} onBook={() => navigation.navigate('Book')} />
+      {/* Divider before class list */}
+      <View style={[styles.sectionDivider, styles.subtleDivider, { backgroundColor: colors.borderSubtle }]} />
+
+      {/* Class List */}
+      <ScrollView
+        style={styles.classList}
+        contentContainerStyle={styles.classListContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {filtered.map((cls, i) => (
+          <React.Fragment key={`${cls.name}-${cls.time}`}>
+            <ClassCard {...cls} onBook={() => navigation.navigate('Book')} />
+            {/* Subtle time separator between cards (every 2) */}
+            {i < filtered.length - 1 && (i + 1) % 2 === 0 && (
+              <View style={styles.dottedDividerRow}>
+                <View style={[styles.dottedDot, { backgroundColor: colors.borderSubtle }]} />
+                <View style={[styles.dottedDot, { backgroundColor: colors.borderSubtle }]} />
+                <View style={[styles.dottedDot, { backgroundColor: colors.borderSubtle }]} />
+              </View>
+            )}
+          </React.Fragment>
         ))}
         {filtered.length === 0 && (
           <View style={styles.emptyState}>
@@ -109,7 +169,8 @@ export function ScheduleScreen({ navigation }: any) {
             </Text>
           </View>
         )}
-      </View>
+        <View style={{ height: 24 }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -119,15 +180,81 @@ const styles = StyleSheet.create({
   scheduleHeader: {
     paddingHorizontal: 24,
     paddingTop: 20,
-    paddingBottom: 16,
+    paddingBottom: 18,
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
   },
   screenTitle: {
-    fontSize: 34,
+    fontSize: 26,
     fontWeight: '900',
-    letterSpacing: -0.8,
+    letterSpacing: -0.6,
+  },
+  countChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  countChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  sectionDivider: {
+    height: 1,
+    marginHorizontal: 24,
+  },
+  subtleDivider: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  selectedStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 24,
+    marginTop: 16,
+    marginBottom: 12,
+    paddingVertical: 4,
+  },
+  selectedAccent: {
+    width: 3,
+    height: 32,
+    borderRadius: 2,
+  },
+  selectedDayLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+    textAlign: 'left',
+  },
+  selectedDaySub: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    marginTop: 2,
+    textAlign: 'left',
+  },
+  todayDot: {
+    position: 'absolute',
+    bottom: 6,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+  dottedDividerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  dottedDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
   },
   screenSubtitle: {
     fontSize: 12,
@@ -155,15 +282,17 @@ const styles = StyleSheet.create({
   daySelector: {
     flexDirection: 'row',
     paddingHorizontal: 24,
-    marginBottom: 8,
-    gap: 8,
+    marginTop: 14,
+    gap: 6,
   },
   dayItem: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 26,
-    minHeight: 52,
+    paddingVertical: 10,
+    paddingBottom: 14,
+    borderRadius: 18,
+    minHeight: 62,
+    position: 'relative',
   },
   dayLabel: {
     fontSize: 14,
@@ -188,7 +317,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   classList: { flex: 1 },
-  classListContent: { paddingHorizontal: 24, gap: 14 },
+  classListContent: { paddingHorizontal: 24, gap: 12 },
   emptyState: { paddingVertical: 48, alignItems: 'center', gap: 16 },
   emptyIcon: { marginBottom: 8 },
   emptyText: { fontSize: 15 },
