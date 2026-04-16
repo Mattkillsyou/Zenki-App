@@ -1,6 +1,6 @@
 import { collection, addDoc } from 'firebase/firestore';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
-import { WaiverSignature, WAIVER_TEXT } from '../data/waiver';
+import { WaiverSignature, renderWaiverText } from '../data/waiver';
 
 // ─────────────────────────────────────────────────
 // Google Sheets — Apps Script endpoint
@@ -22,7 +22,7 @@ export async function pushWaiverToSheets(signature: WaiverSignature): Promise<bo
     const payload = {
       ...signature,
       // Include the waiver text so the Apps Script can email it
-      waiverText: signature.emailCopy ? WAIVER_TEXT : undefined,
+      waiverText: signature.emailCopy ? renderWaiverText(signature.signedName) : undefined,
     };
     const response = await fetch(WAIVER_SHEET_URL, {
       method: 'POST',

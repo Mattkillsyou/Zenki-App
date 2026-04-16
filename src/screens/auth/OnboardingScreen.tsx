@@ -12,7 +12,7 @@ import { useMotion } from '../../context/MotionContext';
 import { useAuth } from '../../context/AuthContext';
 import { typography, spacing, borderRadius } from '../../theme';
 import { BELT_ORDER, BELT_DISPLAY_COLORS, BELT_LABELS, BeltLevel, Member } from '../../data/members';
-import { WAIVER_TEXT, WAIVER_VERSION, WaiverSignature } from '../../data/waiver';
+import { renderWaiverText, WAIVER_VERSION, WaiverSignature } from '../../data/waiver';
 import { pushWaiverToSheets, pushWaiverToFirestore } from '../../services/waiverSync';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -133,6 +133,7 @@ export function OnboardingScreen({ navigation, route }: any) {
       memberId: id,
       memberName: `${data.firstName} ${data.lastName}`.trim(),
       email: data.email,
+      phone: data.phone.trim() || undefined,
       signedName: data.signedName.trim(),
       signedAt: new Date().toISOString(),
       waiverVersion: WAIVER_VERSION,
@@ -414,7 +415,9 @@ export function OnboardingScreen({ navigation, route }: any) {
             contentContainerStyle={styles.waiverScrollContent}
             nestedScrollEnabled
           >
-            <Text style={[styles.waiverText, { color: colors.textSecondary }]}>{WAIVER_TEXT}</Text>
+            <Text style={[styles.waiverText, { color: colors.textSecondary }]}>
+              {renderWaiverText(`${data.firstName} ${data.lastName}`.trim())}
+            </Text>
           </ScrollView>
           <TextInput
             style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: 'transparent', borderWidth: 0 }]}
