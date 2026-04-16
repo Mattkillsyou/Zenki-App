@@ -1,5 +1,5 @@
 import { TimeEntry } from '../types/timeclock';
-import { formatTime } from '../utils/timeclock';
+import { formatTime, calculatePayBreakdown } from '../utils/timeclock';
 
 // ─────────────────────────────────────────────────
 // Google Sheets Sync Service
@@ -19,7 +19,11 @@ export async function pushTimeEntry(
 ): Promise<boolean> {
   const rawHours = entry.totalMinutes != null ? (entry.totalMinutes / 60).toFixed(2) : '0';
   const paidHours = entry.paidMinutes != null ? (entry.paidMinutes / 60).toFixed(2) : '0';
-  const pay = entry.paidMinutes != null ? ((entry.paidMinutes / 60) * hourlyRate).toFixed(2) : '0';
+
+  // CA labor law pay breakdown: regular / OT 1.5× / DT 2× / holiday premium
+  const breakdown = entry.paidMinutes != null
+    ? calculatePayBreakdown(entry.paidMinutes, entry.date, hourlyRate)
+    : null;
 
   const payload = {
     employeeName,
@@ -27,12 +31,27 @@ export async function pushTimeEntry(
     clockIn: entry.clockIn ? formatTime(entry.clockIn) : '',
     clockOut: entry.clockOut ? formatTime(entry.clockOut) : '',
     rawHours,
+    paidHours,
+    hourlyRate: hourlyRate.toString(),
+
+    // CA labor law breakdown
+    mealDeductionMinutes: entry.mealDeductionMinutes ?? 0,
+    regularHours: breakdown ? (breakdown.regularMinutes / 60).toFixed(2) : '0',
+    overtimeHours: breakdown ? (breakdown.overtimeMinutes / 60).toFixed(2) : '0',
+    doubletimeHours: breakdown ? (breakdown.doubletimeMinutes / 60).toFixed(2) : '0',
+    regularPay: breakdown ? breakdown.regularPay.toFixed(2) : '0',
+    overtimePay: breakdown ? breakdown.overtimePay.toFixed(2) : '0',
+    doubletimePay: breakdown ? breakdown.doubletimePay.toFixed(2) : '0',
+    holidayBonus: breakdown ? breakdown.holidayBonus.toFixed(2) : '0',
+    totalPay: breakdown ? breakdown.totalPay.toFixed(2) : '0',
+    pay: breakdown ? breakdown.totalPay.toFixed(2) : '0', // backward compat
+
+    isHoliday: entry.isHoliday ? 'Yes' : 'No',
+    holidayName: entry.holidayName ?? '',
+
     lunchTaken: entry.lunchTaken ? 'Yes' : 'No',
     breakTaken: entry.breakTaken ? 'Yes' : 'No',
-    deductions: '0',
-    paidHours,
-    pay,
-    hourlyRate: hourlyRate.toString(),
+
     periodStart,
     periodEnd,
   };

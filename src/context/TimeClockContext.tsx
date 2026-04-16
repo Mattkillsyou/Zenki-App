@@ -1,15 +1,18 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TimeClockState, TimeEntry } from '../types/timeclock';
+import type { PeriodTotals } from '../utils/timeclock';
 import {
   createEmptyPeriod,
   generateEntryId,
   calculateRawMinutes,
   calculatePaidMinutes,
+  getAutoMealDeductionMinutes,
   getElapsedMinutes,
   getCurrentBiweeklyPeriod,
   getPeriodTotals,
 } from '../utils/timeclock';
+import { getHolidayInfo } from '../data/holidays';
 import { pushTimeEntry } from '../services/googleSheets';
 
 const STORAGE_KEY = '@zenki_timeclock_state';
@@ -22,7 +25,7 @@ interface TimeClockContextValue {
   clockOut: () => Promise<void>;
   markLunchTaken: () => void;
   markBreakTaken: () => void;
-  periodSummary: { totalPaidHours: number; totalPay: number; daysWorked: number };
+  periodSummary: PeriodTotals;
 }
 
 const defaultState: TimeClockState = {
@@ -39,7 +42,11 @@ const TimeClockContext = createContext<TimeClockContextValue>({
   clockOut: async () => {},
   markLunchTaken: () => {},
   markBreakTaken: () => {},
-  periodSummary: { totalPaidHours: 0, totalPay: 0, daysWorked: 0 },
+  periodSummary: {
+    totalPaidHours: 0, totalPay: 0, daysWorked: 0,
+    regularHours: 0, overtimeHours: 0, doubletimeHours: 0,
+    holidayHours: 0, holidayBonus: 0,
+  },
 });
 
 export function TimeClockProvider({
@@ -107,15 +114,20 @@ export function TimeClockProvider({
 
   const clockIn = useCallback(() => {
     const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const hol = getHolidayInfo(dateStr);
     const entry: TimeEntry = {
       id: generateEntryId(),
-      date: now.toISOString().split('T')[0],
+      date: dateStr,
       clockIn: now.toISOString(),
       clockOut: null,
       lunchTaken: false,
       breakTaken: false,
       totalMinutes: null,
       paidMinutes: null,
+      mealDeductionMinutes: null,
+      isHoliday: hol.isHoliday,
+      holidayName: hol.name,
       synced: false,
     };
     setState((prev) => ({
@@ -134,11 +146,13 @@ export function TimeClockProvider({
       const now = new Date().toISOString();
       const raw = calculateRawMinutes(prev.currentEntry.clockIn, now);
       const paid = calculatePaidMinutes(prev.currentEntry.clockIn, now);
+      const mealDeduction = getAutoMealDeductionMinutes(raw);
       const completed: TimeEntry = {
         ...prev.currentEntry,
         clockOut: now,
         totalMinutes: raw,
         paidMinutes: paid,
+        mealDeductionMinutes: mealDeduction,
       };
       // Update the entry in the period
       const entries = prev.currentPeriod.entries.map((e) =>

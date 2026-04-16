@@ -5,8 +5,11 @@ export interface TimeEntry {
   clockOut: string | null;
   lunchTaken: boolean;
   breakTaken: boolean;
-  totalMinutes: number | null;   // Raw minutes worked
-  paidMinutes: number | null;    // totalMinutes - 75 (auto-deducted), floored at 0
+  totalMinutes: number | null;   // Raw minutes worked (clockIn → clockOut)
+  paidMinutes: number | null;    // totalMinutes - auto meal deduction (CA law)
+  mealDeductionMinutes: number | null; // Minutes auto-deducted for unpaid meal breaks
+  isHoliday: boolean;            // Was this shift worked on a recognized holiday?
+  holidayName?: string;          // e.g. "Memorial Day"
   synced: boolean;
 }
 
