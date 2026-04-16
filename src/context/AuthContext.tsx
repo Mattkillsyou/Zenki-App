@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Member, MEMBERS } from '../data/members';
+import { pushMemberToSheets, pushMemberToFirestore } from '../services/memberSync';
 
 const STORAGE_KEY = '@zenki_current_user';
 const CUSTOM_MEMBER_KEY = '@zenki_custom_member';
@@ -56,6 +57,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem(CUSTOM_MEMBER_KEY, JSON.stringify(member));
     await AsyncStorage.setItem(STORAGE_KEY, member.id);
     setUser(member);
+    // Sync to Sheets + Firestore (fire-and-forget)
+    pushMemberToSheets(member);
+    pushMemberToFirestore(member);
   }, []);
 
   const signOut = useCallback(async () => {
