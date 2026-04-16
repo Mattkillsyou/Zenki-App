@@ -123,12 +123,10 @@ export function CommunityScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Top bar */}
+      {/* Top bar — Zenki logo mark, no redundant label */}
       <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
         <View style={styles.topBarLeft}>
-          <View style={[styles.titleUnderline, { borderBottomColor: colors.gold }]}>
-            <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>COMMUNITY</Text>
-          </View>
+          <AnimatedLogo size={40} />
         </View>
         <View style={styles.topBarRight}>
           <TouchableOpacity

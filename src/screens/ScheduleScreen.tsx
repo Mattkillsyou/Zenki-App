@@ -54,10 +54,9 @@ export function ScheduleScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Header */}
+      {/* Header — minimal, brand-forward */}
       <View style={styles.scheduleHeader}>
-        <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>Schedule</Text>
-        <Text style={[styles.screenSubtitle, { color: colors.textMuted }]}>
+        <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>
           {getMonthYear()}
         </Text>
       </View>
@@ -119,19 +118,22 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scheduleHeader: {
     paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingTop: 20,
+    paddingBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
   },
   screenTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
+    fontSize: 34,
+    fontWeight: '900',
+    letterSpacing: -0.8,
   },
   screenSubtitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   header: {
     flexDirection: 'row',

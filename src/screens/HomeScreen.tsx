@@ -14,6 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius, shadows } from '../theme';
 import { ClassCard, AnimatedLogo, FadeInView, PressableScale, TimeClock, StreakBadge, PointsBadge, XPProgressBar, AchievementGrid, CelebrationModal } from '../components';
 import { SpinWheelModal } from '../components/SpinWheelModal';
+import { NotificationsModal } from '../components/NotificationsModal';
 import { useSpinWheel } from '../context/SpinWheelContext';
 import { useGamification } from '../context/GamificationContext';
 import { useAnnouncements } from '../context/AnnouncementContext';
@@ -71,6 +72,7 @@ export function HomeScreen({ navigation }: any) {
   const { play } = useSound();
   const { hasSpunToday } = useSpinWheel();
   const [spinOpen, setSpinOpen] = React.useState(false);
+  const [notifOpen, setNotifOpen] = React.useState(false);
 
   // Show the spin wheel on first visit of the day
   React.useEffect(() => {
@@ -136,7 +138,7 @@ export function HomeScreen({ navigation }: any) {
               {!isEmployee && <StreakBadge streak={gamState.streak} compact />}
               <TouchableOpacity
                 style={[styles.iconButton, { backgroundColor: colors.surface }]}
-                onPress={() => { play('navigate'); navigation.navigate('Notifications'); }}
+                onPress={() => { play('navigate'); setNotifOpen(true); }}
                 activeOpacity={0.7}
               >
                 <Ionicons name="notifications-outline" size={20} color={colors.textSecondary} />
@@ -285,6 +287,13 @@ export function HomeScreen({ navigation }: any) {
 
       {/* Daily Spin Wheel */}
       <SpinWheelModal visible={spinOpen} onClose={() => setSpinOpen(false)} />
+
+      {/* Notifications popup */}
+      <NotificationsModal
+        visible={notifOpen}
+        onClose={() => setNotifOpen(false)}
+        navigation={navigation}
+      />
     </SafeAreaView>
   );
 }

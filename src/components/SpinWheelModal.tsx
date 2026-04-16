@@ -9,6 +9,7 @@ import {
   Easing,
   Dimensions,
 } from 'react-native';
+import Svg, { Path, Circle, G, Text as SvgText } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useSpinWheel, WHEEL_SLICES, SpinPrize } from '../context/SpinWheelContext';
@@ -16,14 +17,41 @@ import { useSound } from '../context/SoundContext';
 
 const SLICE_COUNT = 8;
 const SLICE_ANGLE = 360 / SLICE_COUNT;
-const WHEEL_SIZE = Math.min(Dimensions.get('window').width - 60, 300);
+const WHEEL_SIZE = Math.min(Dimensions.get('window').width - 80, 280);
+const CENTER = WHEEL_SIZE / 2;
+const RADIUS = WHEEL_SIZE / 2 - 4;
 
-// Alternating slice colors for contrast
-const SLICE_COLORS = ['#D4A017', '#1a1a1a', '#D4A017', '#C41E2A', '#D4A017', '#1a1a1a', '#D4A017', '#C41E2A'];
+// Alternating clean colors — gold / red only, high contrast
+const SLICE_COLORS = ['#D4A017', '#1A1A1A', '#D4A017', '#C41E2A', '#D4A017', '#1A1A1A', '#D4A017', '#C41E2A'];
+const SLICE_TEXT_COLOR = ['#000', '#FFF', '#000', '#FFF', '#000', '#FFF', '#000', '#FFF'];
 
 interface Props {
   visible: boolean;
   onClose: () => void;
+}
+
+/** Build an SVG path for a pie slice centered at (CENTER,CENTER) with given start/end angles (degrees, 0 = top, clockwise). */
+function sliceArc(startDeg: number, endDeg: number): string {
+  const startRad = ((startDeg - 90) * Math.PI) / 180;
+  const endRad   = ((endDeg - 90) * Math.PI) / 180;
+  const x1 = CENTER + RADIUS * Math.cos(startRad);
+  const y1 = CENTER + RADIUS * Math.sin(startRad);
+  const x2 = CENTER + RADIUS * Math.cos(endRad);
+  const y2 = CENTER + RADIUS * Math.sin(endRad);
+  const largeArc = endDeg - startDeg > 180 ? 1 : 0;
+  return `M ${CENTER},${CENTER} L ${x1.toFixed(3)},${y1.toFixed(3)} A ${RADIUS},${RADIUS} 0 ${largeArc} 1 ${x2.toFixed(3)},${y2.toFixed(3)} Z`;
+}
+
+/** Position for the text label at the center of a slice, pushed out from the hub. */
+function labelPos(sliceIdx: number): { x: number; y: number; rotate: number } {
+  const centerDeg = sliceIdx * SLICE_ANGLE + SLICE_ANGLE / 2;
+  const centerRad = ((centerDeg - 90) * Math.PI) / 180;
+  const distance = RADIUS * 0.62;
+  return {
+    x: CENTER + distance * Math.cos(centerRad),
+    y: CENTER + distance * Math.sin(centerRad),
+    rotate: centerDeg,
+  };
 }
 
 export function SpinWheelModal({ visible, onClose }: Props) {
@@ -34,7 +62,6 @@ export function SpinWheelModal({ visible, onClose }: Props) {
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<SpinPrize | null>(null);
 
-  // Reset whenever modal opens
   useEffect(() => {
     if (visible) {
       setResult(null);
@@ -49,19 +76,14 @@ export function SpinWheelModal({ visible, onClose }: Props) {
     setSpinning(true);
     setResult(null);
 
-    // Compute prize upfront and land the wheel on it
     const { sliceIndex, prize } = spin();
-    // To land slice i under the pointer (top), rotate so that slice i centers at the top.
-    // Slices are drawn starting at the top going clockwise; center of slice i is at angle:
-    //   (i * SLICE_ANGLE) + SLICE_ANGLE / 2
-    // We rotate counter-clockwise, so final rotation = 360 * N - centerAngle - jitter
-    const spins = 6; // full rotations before landing
-    const jitter = (Math.random() - 0.5) * (SLICE_ANGLE * 0.35); // small variance within slice
+    const spins = 6;
+    const jitter = (Math.random() - 0.5) * (SLICE_ANGLE * 0.3);
     const targetAngle = spins * 360 - (sliceIndex * SLICE_ANGLE + SLICE_ANGLE / 2) + jitter;
 
     Animated.timing(rotation, {
       toValue: targetAngle,
-      duration: 3800,
+      duration: 4000,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start(() => {
@@ -88,77 +110,70 @@ export function SpinWheelModal({ visible, onClose }: Props) {
           </View>
 
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            One free spin every day. Win flames, points, or a free drink.
+            One free spin every day.
           </Text>
 
           {/* Wheel */}
           <View style={styles.wheelWrap}>
-            {/* Pointer */}
+            {/* Pointer (red triangle pointing down from the top) */}
             <View style={[styles.pointer, { borderTopColor: colors.red }]} />
 
-            <Animated.View
-              style={[
-                styles.wheel,
-                {
-                  width: WHEEL_SIZE,
-                  height: WHEEL_SIZE,
-                  borderRadius: WHEEL_SIZE / 2,
-                  borderColor: colors.gold,
-                  transform: [{ rotate: spinDeg }],
-                },
-              ]}
-            >
-              {WHEEL_SLICES.map((slice, i) => {
-                const angle = i * SLICE_ANGLE;
-                return (
-                  <View
-                    key={i}
-                    style={[
-                      styles.slice,
-                      {
-                        width: WHEEL_SIZE,
-                        height: WHEEL_SIZE,
-                        transform: [{ rotate: `${angle}deg` }],
-                      },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.sliceTri,
-                        {
-                          width: WHEEL_SIZE / 2,
-                          borderLeftWidth: (WHEEL_SIZE / 2) * Math.tan((SLICE_ANGLE / 2) * (Math.PI / 180)),
-                          borderRightWidth: (WHEEL_SIZE / 2) * Math.tan((SLICE_ANGLE / 2) * (Math.PI / 180)),
-                          borderBottomWidth: WHEEL_SIZE / 2,
-                          borderBottomColor: SLICE_COLORS[i],
-                        },
-                      ]}
-                    />
-                    <Text
-                      style={[
-                        styles.sliceLabel,
-                        {
-                          color: i % 2 === 1 ? '#FFF' : '#000',
-                          top: WHEEL_SIZE * 0.11,
-                        },
-                      ]}
-                    >
-                      {slice.label}
-                    </Text>
-                  </View>
-                );
-              })}
-              {/* Hub */}
-              <View style={[styles.hub, { backgroundColor: colors.gold, borderColor: colors.red }]}>
-                <Ionicons name="flame" size={28} color="#000" />
-              </View>
+            <Animated.View style={[styles.wheelOuter, { transform: [{ rotate: spinDeg }] }]}>
+              <Svg width={WHEEL_SIZE} height={WHEEL_SIZE}>
+                {/* Outer gold ring */}
+                <Circle cx={CENTER} cy={CENTER} r={RADIUS + 3} fill={colors.gold} />
+
+                {/* Pie slices */}
+                <G>
+                  {WHEEL_SLICES.map((slice, i) => {
+                    const start = i * SLICE_ANGLE;
+                    const end = (i + 1) * SLICE_ANGLE;
+                    return (
+                      <Path
+                        key={i}
+                        d={sliceArc(start, end)}
+                        fill={SLICE_COLORS[i]}
+                        stroke={colors.gold}
+                        strokeWidth={1}
+                      />
+                    );
+                  })}
+                </G>
+
+                {/* Slice labels */}
+                <G>
+                  {WHEEL_SLICES.map((slice, i) => {
+                    const { x, y, rotate } = labelPos(i);
+                    return (
+                      <SvgText
+                        key={`t-${i}`}
+                        x={x}
+                        y={y}
+                        fill={SLICE_TEXT_COLOR[i]}
+                        fontSize={WHEEL_SIZE * 0.055}
+                        fontWeight="900"
+                        textAnchor="middle"
+                        alignmentBaseline="central"
+                        transform={`rotate(${rotate} ${x} ${y})`}
+                      >
+                        {slice.label}
+                      </SvgText>
+                    );
+                  })}
+                </G>
+              </Svg>
             </Animated.View>
+
+            {/* Hub (doesn't rotate) */}
+            <View pointerEvents="none" style={[styles.hub, { backgroundColor: colors.gold, borderColor: colors.red }]}>
+              <Ionicons name="flame" size={22} color="#000" />
+            </View>
           </View>
 
           {/* Result or Spin button */}
           {result ? (
             <View style={styles.resultWrap}>
-              <Text style={[styles.resultTitle, { color: colors.gold }]}>You won</Text>
+              <Text style={[styles.resultTitle, { color: colors.gold }]}>YOU WON</Text>
               <Text style={[styles.resultPrize, { color: colors.textPrimary }]}>{result.label}</Text>
               <TouchableOpacity
                 style={[styles.primaryBtn, { backgroundColor: colors.gold }]}
@@ -194,7 +209,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    maxWidth: 380,
+    maxWidth: 360,
     borderRadius: 24,
     borderWidth: 2,
     padding: 20,
@@ -205,7 +220,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   title: {
     fontSize: 22,
@@ -217,66 +232,43 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     marginBottom: 20,
-    paddingHorizontal: 12,
   },
 
   wheelWrap: {
+    width: WHEEL_SIZE,
+    height: WHEEL_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
+    position: 'relative',
   },
   pointer: {
     position: 'absolute',
-    top: -6,
+    top: -2,
     width: 0,
     height: 0,
-    borderLeftWidth: 14,
-    borderRightWidth: 14,
-    borderTopWidth: 24,
+    borderLeftWidth: 12,
+    borderRightWidth: 12,
+    borderTopWidth: 20,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    zIndex: 10,
+    zIndex: 20,
   },
-  wheel: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 5,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  slice: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    alignItems: 'center',
-  },
-  sliceTri: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    width: 0,
-    height: 0,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    alignSelf: 'center',
-  },
-  sliceLabel: {
-    position: 'absolute',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 0.3,
-    textAlign: 'center',
+  wheelOuter: {
+    width: WHEEL_SIZE,
+    height: WHEEL_SIZE,
   },
   hub: {
     position: 'absolute',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    top: CENTER - 24,
+    left: CENTER - 24,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    zIndex: 5,
+    zIndex: 10,
   },
 
   resultWrap: {
@@ -285,15 +277,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   resultTitle: {
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '900',
     letterSpacing: 2,
   },
   resultPrize: {
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: '900',
-    letterSpacing: -0.5,
-    marginBottom: 16,
+    letterSpacing: -0.3,
+    marginBottom: 14,
   },
 
   primaryBtn: {
