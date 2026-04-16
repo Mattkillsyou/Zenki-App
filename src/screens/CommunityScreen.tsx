@@ -16,13 +16,13 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { spacing, typography } from '../theme';
 import { PostCard } from '../components/PostCard';
+import { AnimatedLogo } from '../components/AnimatedLogo';
 import { Post, getFeed, likePost, unlikePost } from '../services/firebasePosts';
 
 interface StoryItem {
   userId: string;
   displayName: string;
   avatar?: string;
-  isSelf?: boolean;
 }
 
 export function CommunityScreen({ navigation }: any) {
@@ -76,75 +76,70 @@ export function CommunityScreen({ navigation }: any) {
     navigation.navigate('UserProfile', { userId });
   };
 
-  // Stories rail — derives unique recent posters. Self (add-your-story) always first.
-  const stories: StoryItem[] = [
-    { userId: user?.id || 'self', displayName: 'Your Story', isSelf: true },
-    ...Array.from(
-      new Map(posts.map((p) => [p.userId, { userId: p.userId, displayName: p.displayName, avatar: p.avatar } as StoryItem])).values(),
-    ),
-  ];
-
-  const renderHeader = () => (
-    <View>
-      {/* Stories rail */}
-      <View style={[styles.storiesWrap, { borderBottomColor: colors.border }]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.storiesRow}
-        >
-          {stories.map((s) => (
-            <TouchableOpacity
-              key={s.userId}
-              style={styles.storyItem}
-              onPress={() => s.isSelf ? navigation.navigate('CreatePost') : handleUserPress(s.userId)}
-              activeOpacity={0.8}
-            >
-              <View
-                style={[
-                  styles.storyRing,
-                  s.isSelf
-                    ? { borderColor: colors.textMuted, borderStyle: 'dashed' as const }
-                    : { borderColor: colors.gold },
-                ]}
-              >
-                <View style={[styles.storyAvatar, { backgroundColor: colors.goldMuted }]}>
-                  {s.avatar ? (
-                    <Image source={{ uri: s.avatar }} style={styles.storyAvatarImage} />
-                  ) : s.isSelf ? (
-                    <Ionicons name="add" size={28} color={colors.gold} />
-                  ) : (
-                    <Text style={[styles.storyInitials, { color: colors.gold }]}>
-                      {s.displayName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
-                    </Text>
-                  )}
-                </View>
-              </View>
-              <Text
-                style={[styles.storyLabel, { color: colors.textSecondary }]}
-                numberOfLines={1}
-              >
-                {s.isSelf ? 'Your story' : s.displayName.split(' ')[0]}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-    </View>
+  // Stories rail — unique recent posters.
+  const stories: StoryItem[] = Array.from(
+    new Map(posts.map((p) => [p.userId, { userId: p.userId, displayName: p.displayName, avatar: p.avatar } as StoryItem])).values(),
   );
+
+  const renderHeader = () =>
+    stories.length === 0 ? null : (
+      <View>
+        <View style={[styles.storiesWrap, { borderBottomColor: colors.border }]}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.storiesRow}
+          >
+            {stories.map((s) => (
+              <TouchableOpacity
+                key={s.userId}
+                style={styles.storyItem}
+                onPress={() => handleUserPress(s.userId)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.storyRing, { borderColor: colors.gold }]}>
+                  <View style={[styles.storyAvatar, { backgroundColor: colors.goldMuted }]}>
+                    {s.avatar ? (
+                      <Image source={{ uri: s.avatar }} style={styles.storyAvatarImage} />
+                    ) : (
+                      <Text style={[styles.storyInitials, { color: colors.gold }]}>
+                        {s.displayName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+                <Text
+                  style={[styles.storyLabel, { color: colors.textSecondary }]}
+                  numberOfLines={1}
+                >
+                  {s.displayName.split(' ')[0]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Instagram-style top bar */}
+      {/* Top bar */}
       <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.logo, { color: colors.textPrimary }]}>Dojo</Text>
+        <View style={styles.topBarLeft}>
+          <View style={[styles.titleUnderline, { borderBottomColor: colors.gold }]}>
+            <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>COMMUNITY</Text>
+          </View>
+        </View>
         <View style={styles.topBarRight}>
-          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="heart-outline" size={26} color={colors.textPrimary} />
+          <TouchableOpacity
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={() => navigation.navigate('UserSearch')}
+          >
+            <Ionicons name="search-outline" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <TouchableOpacity
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            onPress={() => navigation.navigate('CreatePost')}
+            onPress={() => navigation.navigate('MessagesList')}
           >
             <Ionicons name="paper-plane-outline" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
@@ -204,14 +199,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingVertical: 10,
+    paddingTop: 16,
+    paddingBottom: 12,
     borderBottomWidth: 0.5,
   },
-  logo: {
-    fontSize: 24,
+  topBarLeft: {
+    flex: 1,
+  },
+  titleUnderline: {
+    alignSelf: 'flex-start',
+    borderBottomWidth: 3,
+    paddingBottom: 2,
+  },
+  screenTitle: {
+    fontSize: 20,
     fontWeight: '900',
-    letterSpacing: -0.5,
-    fontStyle: 'italic',
+    letterSpacing: 3,
   },
   topBarRight: {
     flexDirection: 'row',

@@ -39,6 +39,7 @@ interface GamificationContextValue {
   awardStripe: () => void;
   redeemPoints: (amount: number, reason?: string) => boolean;
   awardPoints: (amount: number, reason?: string) => void;
+  awardFlames: (amount: number, reason?: string) => void;
   redeemFlames: (amount: number, reason?: string) => boolean;
   dismissCelebration: () => void;
 }
@@ -96,6 +97,7 @@ const GamificationContext = createContext<GamificationContextValue>({
   awardStripe: () => {},
   redeemPoints: () => false,
   awardPoints: () => {},
+  awardFlames: () => {},
   redeemFlames: () => false,
   dismissCelebration: () => {},
 });
@@ -327,6 +329,14 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     }));
   }, []);
 
+  const awardFlames = useCallback((amount: number) => {
+    setState((prev) => ({
+      ...prev,
+      flames: (prev.flames || 0) + amount,
+      flamesLifetime: (prev.flamesLifetime || 0) + amount,
+    }));
+  }, []);
+
   const redeemPoints = useCallback((amount: number): boolean => {
     let success = false;
     setState((prev) => {
@@ -373,6 +383,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         awardStripe,
         redeemPoints,
         awardPoints,
+        awardFlames,
         redeemFlames,
         dismissCelebration,
       }}

@@ -13,6 +13,7 @@ import { AttendanceProvider } from './src/context/AttendanceContext';
 import { AnnouncementProvider } from './src/context/AnnouncementContext';
 import { AppointmentProvider } from './src/context/AppointmentContext';
 import { ProductProvider } from './src/context/ProductContext';
+import { SpinWheelProvider } from './src/context/SpinWheelContext';
 import { SoundProvider } from './src/context/SoundContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 
@@ -90,9 +91,11 @@ export default function App() {
                     <AnnouncementProvider>
                       <AppointmentProvider>
                         <ProductProvider>
-                          <TimeClockProvider>
-                            <AppContent />
-                          </TimeClockProvider>
+                          <SpinWheelProvider>
+                            <TimeClockProvider>
+                              <AppContent />
+                            </TimeClockProvider>
+                          </SpinWheelProvider>
                         </ProductProvider>
                       </AppointmentProvider>
                     </AnnouncementProvider>

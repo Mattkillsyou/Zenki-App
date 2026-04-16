@@ -168,14 +168,27 @@ export function UserProfileScreen({ navigation, route }: any) {
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity
-              style={[styles.actionButton, { backgroundColor: following ? colors.surface : colors.red }]}
-              onPress={handleFollow}
-            >
-              <Text style={[styles.actionButtonText, { color: following ? colors.textPrimary : '#FFF' }]}>
-                {following ? 'Following' : 'Follow'}
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.ownButtonsRow}>
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: following ? colors.surface : colors.red, borderColor: colors.border, borderWidth: following ? 1 : 0, flex: 1 }]}
+                onPress={handleFollow}
+              >
+                <Text style={[styles.actionButtonText, { color: following ? colors.textPrimary : '#FFF' }]}>
+                  {following ? 'Following' : 'Follow'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, flex: 1 }]}
+                onPress={() => navigation.navigate('MessagesChat', {
+                  otherUserId: userId,
+                  otherUserName: profile?.displayName,
+                  otherUserAvatar: profile?.avatar,
+                })}
+              >
+                <Ionicons name="paper-plane-outline" size={16} color={colors.textPrimary} />
+                <Text style={[styles.actionButtonText, { color: colors.textPrimary }]}>Message</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
@@ -249,7 +262,15 @@ export function UserProfileScreen({ navigation, route }: any) {
           <View style={styles.postsGrid}>
             {posts.map((post) => (
               <TouchableOpacity key={post.id} style={styles.gridItem}>
-                <Image source={{ uri: post.mediaUrl }} style={styles.gridImage} resizeMode="cover" />
+                {post.mediaUrl ? (
+                  <Image source={{ uri: post.mediaUrl }} style={styles.gridImage} resizeMode="cover" />
+                ) : (
+                  <View style={[styles.gridImage, { backgroundColor: colors.surface, padding: 8, justifyContent: 'center', alignItems: 'center' }]}>
+                    <Text style={{ color: colors.textPrimary, fontSize: 10, fontWeight: '500', textAlign: 'center' }} numberOfLines={5}>
+                      {post.caption}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             ))}
             {posts.length === 0 && (

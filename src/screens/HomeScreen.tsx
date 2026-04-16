@@ -13,10 +13,12 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius, shadows } from '../theme';
 import { ClassCard, AnimatedLogo, FadeInView, PressableScale, TimeClock, StreakBadge, PointsBadge, XPProgressBar, AchievementGrid, CelebrationModal } from '../components';
+import { SpinWheelModal } from '../components/SpinWheelModal';
+import { useSpinWheel } from '../context/SpinWheelContext';
 import { useGamification } from '../context/GamificationContext';
 import { useAnnouncements } from '../context/AnnouncementContext';
 import { useAppointments } from '../context/AppointmentContext';
-import { useScreenSoundTheme } from '../context/SoundContext';
+import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { getDailyQuote } from '../data/quotes';
 import { getTodaysSchedule } from '../data/schedule';
 import { useHasUnreadNotifications } from './NotificationsScreen';
@@ -66,6 +68,17 @@ export function HomeScreen({ navigation }: any) {
   const hasUnreadNotifications = useHasUnreadNotifications();
 
   useScreenSoundTheme('home');
+  const { play } = useSound();
+  const { hasSpunToday } = useSpinWheel();
+  const [spinOpen, setSpinOpen] = React.useState(false);
+
+  // Show the spin wheel on first visit of the day
+  React.useEffect(() => {
+    if (!hasSpunToday && !isEmployee) {
+      const t = setTimeout(() => setSpinOpen(true), 600);
+      return () => clearTimeout(t);
+    }
+  }, [hasSpunToday, isEmployee]);
 
   // User's confirmed/pending private bookings for today
   const todaysBookings = myAppointments
@@ -111,7 +124,7 @@ export function HomeScreen({ navigation }: any) {
         {/* ─── Header (compact with corner logo) ─── */}
         <FadeInView delay={0} slideUp={0}>
           <View style={styles.header}>
-            <AnimatedLogo size={32} />
+            <AnimatedLogo size={56} />
             <View style={styles.headerRight}>
               {!isEmployee && (
                 <PointsBadge
@@ -123,7 +136,7 @@ export function HomeScreen({ navigation }: any) {
               {!isEmployee && <StreakBadge streak={gamState.streak} compact />}
               <TouchableOpacity
                 style={[styles.iconButton, { backgroundColor: colors.surface }]}
-                onPress={() => navigation.navigate('Notifications')}
+                onPress={() => { play('navigate'); navigation.navigate('Notifications'); }}
                 activeOpacity={0.7}
               >
                 <Ionicons name="notifications-outline" size={20} color={colors.textSecondary} />
@@ -269,6 +282,9 @@ export function HomeScreen({ navigation }: any) {
       {!isEmployee && (
         <CelebrationModal celebration={gamState.pendingCelebration} onDismiss={dismissCelebration} />
       )}
+
+      {/* Daily Spin Wheel */}
+      <SpinWheelModal visible={spinOpen} onClose={() => setSpinOpen(false)} />
     </SafeAreaView>
   );
 }

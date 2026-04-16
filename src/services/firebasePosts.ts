@@ -12,14 +12,16 @@ export interface Post {
   userId: string;
   displayName: string;
   avatar: string | null;
-  mediaUrl: string;
-  mediaType: 'photo' | 'video';
+  /** Optional for text-only (tweet-style) posts. */
+  mediaUrl?: string | null;
+  mediaType?: 'photo' | 'video' | null;
   caption: string;
   likes: number;
   liked?: boolean;
   createdAt: string;
 }
 
+/** Photo/video post — uploads media then creates doc. */
 export async function createPost(mediaUri: string, mediaType: 'photo' | 'video', caption: string): Promise<Post | null> {
   if (!FIREBASE_CONFIGURED || !db) return null;
   const uid = getCurrentUid();
@@ -36,6 +38,31 @@ export async function createPost(mediaUri: string, mediaType: 'photo' | 'video',
     mediaUrl,
     mediaType,
     caption,
+    likes: 0,
+    createdAt: new Date().toISOString(),
+  };
+
+  const docRef = await addDoc(collection(db, 'posts'), postData);
+  return { id: docRef.id, ...postData };
+}
+
+/** Text-only (tweet-style) post. No media upload. */
+export async function createTextPost(caption: string): Promise<Post | null> {
+  if (!FIREBASE_CONFIGURED || !db) return null;
+  const uid = getCurrentUid();
+  if (!uid) return null;
+  if (!caption.trim()) return null;
+
+  const userDoc = await getDoc(doc(db, 'users', uid));
+  const userData = userDoc.data();
+
+  const postData = {
+    userId: uid,
+    displayName: userData?.displayName || 'Member',
+    avatar: userData?.avatar || null,
+    mediaUrl: null,
+    mediaType: null,
+    caption: caption.trim(),
     likes: 0,
     createdAt: new Date().toISOString(),
   };

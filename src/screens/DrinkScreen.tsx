@@ -96,8 +96,10 @@ export function DrinkScreen() {
           {/* Menu header */}
           <View style={styles.menuHeaderRow}>
             <Text style={styles.menuEmoji}>🍴</Text>
-            <View style={[styles.menuPillbox, { backgroundColor: colors.surface, borderColor: colors.gold }]}>
-              <Text style={[styles.menuTitle, { color: colors.textPrimary }]}>MENU</Text>
+            <View style={[styles.menuUnderline, { borderBottomColor: colors.gold }]}>
+              <Text style={[styles.menuTitle, { color: colors.textPrimary }]}>
+                MENU
+              </Text>
             </View>
             <Text style={styles.menuEmoji}>🍴</Text>
           </View>
@@ -439,17 +441,18 @@ const styles = StyleSheet.create({
   menuEmoji: {
     fontSize: 30,
   },
-  menuPillbox: {
-    paddingHorizontal: 20,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 2,
+  menuUnderline: {
+    paddingBottom: 3,
+    borderBottomWidth: 3,
   },
   menuTitle: {
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: '900',
-    letterSpacing: 6,
+    textAlign: 'center',
+    textShadowColor: 'transparent',
+    letterSpacing: 4,
     textTransform: 'uppercase',
+    includeFontPadding: false,
   },
   breakdownCard: { borderRadius: 16, overflow: 'hidden', borderWidth: 1.5 },
   breakdownRow: {

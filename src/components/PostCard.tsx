@@ -82,10 +82,18 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
         </TouchableOpacity>
       </View>
 
-      {/* Media — full width, square, tappable for double-tap like */}
-      <TouchableOpacity activeOpacity={0.98} onPress={handleMediaTap}>
-        <Image source={{ uri: post.mediaUrl }} style={styles.media} resizeMode="cover" />
-      </TouchableOpacity>
+      {/* Media (photo/video) OR text caption prominence */}
+      {post.mediaUrl ? (
+        <TouchableOpacity activeOpacity={0.98} onPress={handleMediaTap}>
+          <Image source={{ uri: post.mediaUrl }} style={styles.media} resizeMode="cover" />
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.textPostWrap}>
+          <Text style={[styles.textPostBody, { color: colors.textPrimary }]}>
+            {post.caption}
+          </Text>
+        </View>
+      )}
 
       {/* Actions */}
       <View style={styles.actions}>
@@ -118,8 +126,8 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
         </Text>
       )}
 
-      {/* Caption */}
-      {post.caption ? (
+      {/* Inline caption — only show below actions for media posts. Text-only already shows it above. */}
+      {post.caption && post.mediaUrl ? (
         <Text style={[styles.captionLine, { color: colors.textPrimary }]} numberOfLines={3}>
           <Text style={{ fontWeight: '700' }}>{post.displayName}</Text>
           <Text style={{ color: colors.textSecondary }}>  {post.caption}</Text>
@@ -185,6 +193,16 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
     backgroundColor: '#000',
+  },
+  textPostWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 14,
+  },
+  textPostBody: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '500',
   },
 
   actions: {

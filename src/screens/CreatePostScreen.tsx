@@ -5,18 +5,25 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { createPost } from '../services/firebasePosts';
+import { createPost, createTextPost } from '../services/firebasePosts';
 
 export type MediaOrientation = 'portrait' | 'landscape' | 'square';
 
+type PostMode = 'photo' | 'text';
+
 export function CreatePostScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const [mode, setMode] = useState<PostMode>('photo');
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'photo' | 'video'>('photo');
   const [orientation, setOrientation] = useState<MediaOrientation>('portrait');
   const [aspectRatio, setAspectRatio] = useState<number>(1);
   const [caption, setCaption] = useState('');
   const [uploading, setUploading] = useState(false);
+  const TEXT_MAX = 280;
+  const canPostText = mode === 'text' && caption.trim().length > 0;
+  const canPostPhoto = mode === 'photo' && !!mediaUri;
+  const canPost = canPostText || canPostPhoto;
 
   const detectOrientation = (width: number, height: number): MediaOrientation => {
     if (Math.abs(width - height) < 20) return 'square';
@@ -60,6 +67,18 @@ export function CreatePostScreen({ navigation }: any) {
   };
 
   const handlePost = async () => {
+    if (mode === 'text') {
+      if (!caption.trim()) return;
+      setUploading(true);
+      try {
+        await createTextPost(caption);
+        navigation.goBack();
+      } catch {
+        Alert.alert('Error', 'Failed to post. Please try again.');
+        setUploading(false);
+      }
+      return;
+    }
     if (!mediaUri) return;
     setUploading(true);
     try {
@@ -81,19 +100,56 @@ export function CreatePostScreen({ navigation }: any) {
         <Text style={[styles.title, { color: colors.textPrimary }]}>New Post</Text>
         <TouchableOpacity
           onPress={handlePost}
-          disabled={!mediaUri || uploading}
-          style={[styles.postButton, { backgroundColor: mediaUri ? colors.red : colors.surfaceSecondary }]}
+          disabled={!canPost || uploading}
+          style={[styles.postButton, { backgroundColor: canPost ? colors.red : colors.surfaceSecondary }]}
         >
           {uploading ? (
             <ActivityIndicator size="small" color="#FFF" />
           ) : (
-            <Text style={[styles.postButtonText, { color: mediaUri ? '#FFF' : colors.textMuted }]}>Post</Text>
+            <Text style={[styles.postButtonText, { color: canPost ? '#FFF' : colors.textMuted }]}>Post</Text>
           )}
         </TouchableOpacity>
       </View>
 
-      {/* Media Preview or Picker */}
-      {mediaUri ? (
+      {/* Mode toggle — Photo vs Text */}
+      <View style={[styles.modeToggle, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <TouchableOpacity
+          style={[styles.modeOption, mode === 'photo' && { backgroundColor: colors.gold }]}
+          onPress={() => setMode('photo')}
+        >
+          <Ionicons name="image-outline" size={16} color={mode === 'photo' ? '#000' : colors.textMuted} />
+          <Text style={[styles.modeLabel, { color: mode === 'photo' ? '#000' : colors.textMuted }]}>Photo</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.modeOption, mode === 'text' && { backgroundColor: colors.gold }]}
+          onPress={() => setMode('text')}
+        >
+          <Ionicons name="chatbox-outline" size={16} color={mode === 'text' ? '#000' : colors.textMuted} />
+          <Text style={[styles.modeLabel, { color: mode === 'text' ? '#000' : colors.textMuted }]}>Text</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* TEXT MODE */}
+      {mode === 'text' && (
+        <View style={styles.textModeWrap}>
+          <TextInput
+            style={[styles.textarea, { backgroundColor: colors.surface, color: colors.textPrimary }]}
+            placeholder="What's on your mind?"
+            placeholderTextColor={colors.textMuted}
+            value={caption}
+            onChangeText={setCaption}
+            multiline
+            maxLength={TEXT_MAX}
+            autoFocus
+          />
+          <Text style={[styles.charCount, { color: caption.length > TEXT_MAX - 20 ? colors.red : colors.textMuted }]}>
+            {caption.length}/{TEXT_MAX}
+          </Text>
+        </View>
+      )}
+
+      {/* PHOTO MODE — the block below only renders when mode === 'photo' */}
+      {mode === 'photo' && (mediaUri ? (
         <View style={styles.previewContainer}>
           <View style={[styles.previewFrame, { backgroundColor: colors.surface, aspectRatio }]}>
             {mediaType === 'video' ? (
@@ -153,10 +209,10 @@ export function CreatePostScreen({ navigation }: any) {
             <Text style={[styles.pickerSub, { color: colors.textTertiary }]}>Record · 60s max</Text>
           </TouchableOpacity>
         </View>
-      )}
+      ))}
 
-      {/* Caption */}
-      {mediaUri && (
+      {/* Caption (photo mode only) */}
+      {mode === 'photo' && mediaUri && (
         <View style={styles.captionContainer}>
           <TextInput
             style={[styles.captionInput, { backgroundColor: colors.surface, color: colors.textPrimary }]}
@@ -253,4 +309,36 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   charCount: { fontSize: 11, fontWeight: '500', alignSelf: 'flex-end', marginTop: 6 },
+
+  modeToggle: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    padding: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  modeOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  modeLabel: { fontSize: 13, fontWeight: '700' },
+
+  textModeWrap: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  textarea: {
+    borderRadius: 16,
+    padding: 16,
+    fontSize: 18,
+    minHeight: 200,
+    textAlignVertical: 'top',
+    lineHeight: 24,
+  },
 });
