@@ -19,6 +19,8 @@ export { AdminAppointmentsScreen } from './AdminAppointmentsScreen';
 export { WorkoutScreen } from './WorkoutScreen';
 export { TimerScreen } from './TimerScreen';
 export { PRDetailScreen } from './PRDetailScreen';
+export { EmployeeChecklistScreen } from './EmployeeChecklistScreen';
+export { AdminEmployeeTasksScreen } from './AdminEmployeeTasksScreen';
 
 // Auth
 export { SignInScreen } from './auth/SignInScreen';

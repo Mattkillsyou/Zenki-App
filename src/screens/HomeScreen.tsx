@@ -21,6 +21,7 @@ import { useGamification } from '../context/GamificationContext';
 import { useAnnouncements } from '../context/AnnouncementContext';
 import { useAppointments } from '../context/AppointmentContext';
 import { useWorkouts } from '../context/WorkoutContext';
+import { useEmployeeTasks } from '../context/EmployeeTaskContext';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { getDailyQuote } from '../data/quotes';
 import { getTodaysSchedule } from '../data/schedule';
@@ -57,6 +58,71 @@ function parseTimeSort(label: string): number {
   if (mer === 'PM' && h !== 12) h += 12;
   if (mer === 'AM' && h === 12) h = 0;
   return h * 60 + min;
+}
+
+/**
+ * Employee-only card on Home showing today's checklist progress.
+ * Tap to open full EmployeeChecklist screen.
+ */
+function EmployeeChecklistCard({ navigation, memberId }: { navigation: any; memberId: string }) {
+  const { colors } = useTheme();
+  const { todayTasksFor } = useEmployeeTasks();
+  const tasks = todayTasksFor(memberId);
+  const done = tasks.filter((t) => t.completedToday).length;
+  const total = tasks.length;
+  const progressPct = total > 0 ? (done / total) * 100 : 0;
+
+  return (
+    <FadeInView delay={160} slideUp={16}>
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Today's Checklist</Text>
+          <TouchableOpacity
+            style={[styles.seeAllButton, { backgroundColor: colors.accentTint }]}
+            onPress={() => navigation.navigate('EmployeeChecklist')}
+          >
+            <Text style={[styles.seeAllText, { color: colors.gold }]}>Open</Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.gold} />
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          onPress={() => navigation.navigate('EmployeeChecklist')}
+          activeOpacity={0.85}
+          style={[
+            {
+              padding: 18,
+              borderRadius: 18,
+              borderWidth: 1.5,
+              gap: 10,
+              marginHorizontal: spacing.lg,
+              backgroundColor: colors.surface,
+              borderColor: done === total && total > 0 ? colors.success : colors.border,
+            },
+          ]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Ionicons
+                name={total > 0 && done === total ? 'checkmark-circle' : 'list-outline'}
+                size={22}
+                color={total > 0 && done === total ? colors.success : colors.gold}
+              />
+              <Text style={{ fontSize: 16, fontWeight: '800', color: colors.textPrimary }}>
+                {total === 0 ? 'No tasks today' : `${done}/${total} complete`}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </View>
+          {total > 0 && (
+            <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.backgroundElevated, overflow: 'hidden' }}>
+              <View style={{ height: '100%', width: `${progressPct}%`, backgroundColor: colors.gold, borderRadius: 3 }} />
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+    </FadeInView>
+  );
 }
 
 export function HomeScreen({ navigation }: any) {
@@ -224,7 +290,7 @@ export function HomeScreen({ navigation }: any) {
             )}
 
             <View style={[styles.quoteCard, { backgroundColor: colors.surface }]}>
-              <Text style={[styles.quoteText, { color: colors.textPrimary }]}>"{dailyQuote.text}"</Text>
+              <Text style={[styles.quoteText, { color: colors.textPrimary }]}>{dailyQuote.text}</Text>
               <Text style={[styles.quoteAttr, { color: colors.gold }]}>— {dailyQuote.attribution}</Text>
             </View>
           </View>
@@ -236,6 +302,9 @@ export function HomeScreen({ navigation }: any) {
             <View style={styles.section}><TimeClock /></View>
           </FadeInView>
         )}
+
+        {/* ─── Employee Checklist (employee-only) ─── */}
+        {isEmployee && <EmployeeChecklistCard navigation={navigation} memberId={user?.id ?? ''} />}
 
         {/* ─── Member Content ─── */}
         {!isEmployee && (

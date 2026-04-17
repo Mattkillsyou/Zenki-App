@@ -29,6 +29,8 @@ import { AdminAppointmentsScreen } from '../screens/AdminAppointmentsScreen';
 import { WorkoutScreen } from '../screens/WorkoutScreen';
 import { TimerScreen } from '../screens/TimerScreen';
 import { PRDetailScreen } from '../screens/PRDetailScreen';
+import { EmployeeChecklistScreen } from '../screens/EmployeeChecklistScreen';
+import { AdminEmployeeTasksScreen } from '../screens/AdminEmployeeTasksScreen';
 import { BookingPaymentScreen } from '../screens/BookingPaymentScreen';
 import { PaymentMethodsScreen } from '../screens/PaymentMethodsScreen';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
@@ -270,6 +272,8 @@ export function RootNavigator() {
       <Stack.Screen name="Workout" component={WorkoutScreen} options={pushTransition} />
       <Stack.Screen name="Timer" component={TimerScreen} options={pushTransition} />
       <Stack.Screen name="PRDetail" component={PRDetailScreen} options={pushTransition} />
+      <Stack.Screen name="EmployeeChecklist" component={EmployeeChecklistScreen} options={pushTransition} />
+      <Stack.Screen name="AdminEmployeeTasks" component={AdminEmployeeTasksScreen} options={pushTransition} />
 
 
       {/* Community */}

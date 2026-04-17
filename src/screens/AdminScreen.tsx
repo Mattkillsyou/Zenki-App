@@ -187,7 +187,16 @@ export function AdminScreen({ navigation }: any) {
               onPress={() => navigation.navigate('AdminAppointments')}
             />
           </FadeInView>
-          <View style={styles.gridItem} />
+          <FadeInView delay={400} slideUp={12} style={styles.gridItem}>
+            <AdminCard
+              icon="list-outline"
+              title="Employee Tasks"
+              subtitle="Daily + time-sensitive checklist"
+              count={0}
+              accentColor={colors.info}
+              onPress={() => navigation.navigate('AdminEmployeeTasks')}
+            />
+          </FadeInView>
         </View>
 
         {/* Quick Actions */}

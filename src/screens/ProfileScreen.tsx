@@ -16,7 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { BeltDisplay } from '../components';
+import { BeltDisplay, AchievementGrid } from '../components';
 import { BELT_DISPLAY_COLORS } from '../data/members';
 import { useGamification } from '../context/GamificationContext';
 import { useSpinWheel } from '../context/SpinWheelContext';
@@ -165,6 +165,11 @@ export function ProfileScreen({ navigation }: any) {
           <View style={[styles.xpBarBg, { backgroundColor: colors.backgroundElevated }]}>
             <View style={[styles.xpBarFill, { backgroundColor: colors.gold, width: `${Math.max(4, levelInfo.progress * 100)}%` }]} />
           </View>
+        </View>
+
+        {/* ── Achievements (under XP bar, above stats) ── */}
+        <View style={styles.achievementsWrap}>
+          <AchievementGrid achievements={gamState.achievements} maxShow={8} />
         </View>
 
         {/* ── Stats strip — 4 bold numbers ── */}
@@ -482,6 +487,11 @@ const styles = StyleSheet.create({
   xpBarFill: { height: '100%', borderRadius: 3 },
 
   // Stats strip
+  achievementsWrap: {
+    paddingHorizontal: spacing.lg,
+    marginTop: 14,
+    marginBottom: 4,
+  },
   statsRow: {
     flexDirection: 'row',
     gap: 6,

@@ -11,48 +11,70 @@ interface PointsBadgeProps {
 }
 
 /**
- * Dojo Points display — earnable currency redeemable in the store.
+ * Diamonds display — earnable currency redeemable in the store.
  * Subtle gold sparkle pulse when points > 0.
+ *
+ * Always renders the same JSX structure regardless of points value —
+ * only the colors and icon variant change. Ensures React re-renders
+ * reliably when the points prop changes.
  */
 export function PointsBadge({ points, compact, onPress }: PointsBadgeProps) {
   const { colors } = useTheme();
   const { reduceMotion } = useMotion();
   const sparkleAnim = useRef(new Animated.Value(0.7)).current;
 
+  const hasPoints = points > 0;
+
   useEffect(() => {
-    if (reduceMotion || points === 0) return;
-    Animated.loop(
+    if (reduceMotion || !hasPoints) return;
+    const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(sparkleAnim, { toValue: 1, duration: 1400, useNativeDriver: true }),
         Animated.timing(sparkleAnim, { toValue: 0.7, duration: 1400, useNativeDriver: true }),
       ]),
-    ).start();
-  }, [points, reduceMotion]);
-
-  const Wrapper: any = onPress ? TouchableOpacity : View;
-  const wrapperProps = onPress ? { onPress, activeOpacity: 0.7 } : {};
-
-  if (points === 0) {
-    return (
-      <Wrapper {...wrapperProps} style={[compact ? styles.compactContainer : styles.container, { backgroundColor: colors.surface }]}>
-        <Ionicons name="diamond-outline" size={compact ? 16 : 22} color={colors.textMuted} />
-        <Text style={[compact ? styles.compactCount : styles.count, { color: colors.textMuted }]}>0</Text>
-        {!compact && <Text style={[styles.label, { color: colors.textMuted }]}>diamonds</Text>}
-      </Wrapper>
     );
-  }
+    loop.start();
+    return () => loop.stop();
+  }, [hasPoints, reduceMotion, sparkleAnim]);
 
-  return (
-    <Wrapper {...wrapperProps} style={[compact ? styles.compactContainer : styles.container, { backgroundColor: colors.surface }]}>
-      <Animated.View style={{ opacity: sparkleAnim }}>
-        <Ionicons name="diamond" size={compact ? 16 : 22} color={colors.gold} />
+  const content = (
+    <>
+      <Animated.View style={{ opacity: hasPoints ? sparkleAnim : 1 }}>
+        <Ionicons
+          name={hasPoints ? 'diamond' : 'diamond-outline'}
+          size={compact ? 16 : 22}
+          color={hasPoints ? colors.gold : colors.textMuted}
+        />
       </Animated.View>
-      <Text style={[compact ? styles.compactCount : styles.count, { color: colors.gold }]}>
+      <Text
+        style={[
+          compact ? styles.compactCount : styles.count,
+          { color: hasPoints ? colors.gold : colors.textMuted },
+        ]}
+      >
         {points.toLocaleString()}
       </Text>
-      {!compact && <Text style={[styles.label, { color: colors.textSecondary }]}>diamonds</Text>}
-    </Wrapper>
+      {!compact && (
+        <Text style={[styles.label, { color: hasPoints ? colors.textSecondary : colors.textMuted }]}>
+          diamonds
+        </Text>
+      )}
+    </>
   );
+
+  const containerStyle = [
+    compact ? styles.compactContainer : styles.container,
+    { backgroundColor: colors.surface },
+  ];
+
+  if (onPress) {
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={containerStyle}>
+        {content}
+      </TouchableOpacity>
+    );
+  }
+  return <View style={containerStyle}>{content}</View>;
 }
 
 const styles = StyleSheet.create({
