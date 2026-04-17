@@ -107,7 +107,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       style.id = styleId;
       document.head.appendChild(style);
     }
-    style.textContent = `body, body * { font-family: ${fontFamily} !important; }`;
+    // Apply theme font globally but WITHOUT !important.
+    // React Native Web sets fontFamily inline on icon elements (Ionicons, etc.)
+    // Inline styles always beat stylesheet rules, so icons keep their font.
+    // Only text elements without an explicit inline fontFamily get the theme font.
+    style.textContent = `body, body * { font-family: ${fontFamily}; }`;
   }, [resolvedTheme.colors.fontFamily]);
 
   // Inject text glow on web
