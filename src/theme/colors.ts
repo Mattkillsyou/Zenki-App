@@ -113,6 +113,12 @@ export interface ThemeColors {
   spinner: string;
   /** Switch track active color */
   switchTrack: string;
+  /** Macro chart colors */
+  macroProtein: string;
+  macroCarbs: string;
+  macroFat: string;
+  /** Flame/streak color */
+  flames: string;
 }
 
 export const darkColors: ThemeColors = {
@@ -182,6 +188,10 @@ export const darkColors: ThemeColors = {
   uppercaseHeaders: false,
   spinner: '#D4A017',
   switchTrack: '#D4A017',
+  macroProtein: '#FF6B6B',
+  macroCarbs: '#4ECDC4',
+  macroFat: '#FFD166',
+  flames: '#FF6B35',
 };
 
 export const lightColors: ThemeColors = {
@@ -243,6 +253,10 @@ export const lightColors: ThemeColors = {
   uppercaseHeaders: false,
   spinner: '#B8890F',
   switchTrack: '#B8890F',
+  macroProtein: '#FF6B6B',
+  macroCarbs: '#4ECDC4',
+  macroFat: '#FFD166',
+  flames: '#FF6B35',
 };
 
 export const colors = darkColors;

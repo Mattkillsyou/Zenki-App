@@ -313,11 +313,11 @@ export function RootNavigator() {
       <Stack.Screen name="Bloodwork" component={BloodworkScreen} options={pushTransition} />
       <Stack.Screen name="BloodworkUpload" component={BloodworkUploadScreen} options={modalTransition} />
       <Stack.Screen name="BloodworkReportDetail" component={BloodworkReportDetailScreen} options={pushTransition} />
-      <Stack.Screen name="WorkoutSession" component={WorkoutSessionScreen} options={modalTransition} />
-      <Stack.Screen name="SessionHistory" component={SessionHistoryScreen} options={pushTransition} />
-      <Stack.Screen name="ActivityTracker" component={ActivityTrackerScreen} options={modalTransition} />
-      <Stack.Screen name="WeeklyReport" component={WeeklyReportScreen} options={pushTransition} />
-      <Stack.Screen name="BodyLab" component={BodyLabScreen} options={pushTransition} />
+      <Stack.Screen name="WorkoutSession" component={withErrorBoundary(WorkoutSessionScreen, 'HR Session')} options={modalTransition} />
+      <Stack.Screen name="SessionHistory" component={withErrorBoundary(SessionHistoryScreen, 'Session History')} options={pushTransition} />
+      <Stack.Screen name="ActivityTracker" component={withErrorBoundary(ActivityTrackerScreen, 'GPS Tracker')} options={modalTransition} />
+      <Stack.Screen name="WeeklyReport" component={withErrorBoundary(WeeklyReportScreen, 'Weekly Report')} options={pushTransition} />
+      <Stack.Screen name="BodyLab" component={withErrorBoundary(BodyLabScreen, 'Body Lab')} options={pushTransition} />
 
 
       {/* Community */}

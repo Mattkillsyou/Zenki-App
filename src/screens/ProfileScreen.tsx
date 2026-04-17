@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius } from '../theme';
@@ -170,6 +171,13 @@ export function ProfileScreen({ navigation }: any) {
             <Ionicons name="diamond-outline" size={11} color={colors.red} />
             <Text style={[styles.memberType, { color: colors.red }]}>FOUNDING MEMBER</Text>
           </View>
+          <TouchableOpacity
+            style={[styles.editProfileBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={() => setEditOpen(true)}
+          >
+            <Ionicons name="create-outline" size={14} color={colors.textSecondary} />
+            <Text style={[styles.editProfileText, { color: colors.textSecondary }]}>Edit Profile</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ── Zenki Card — creative space-filler showing level, XP, progress ── */}
@@ -210,7 +218,7 @@ export function ProfileScreen({ navigation }: any) {
         {/* ── Stats strip — 4 bold numbers ── */}
         <View style={styles.statsRow}>
           <View style={[styles.statTile, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-            <Ionicons name="flame" size={18} color="#FF6B35" />
+            <Ionicons name="flame" size={18} color={colors.flames} />
             <Text style={[styles.statNum, { color: colors.textPrimary }]}>{gamState.streak}</Text>
             <Text style={[styles.statSub, { color: colors.gold }]}>{gamState.weekStreak || 0}w</Text>
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Streak</Text>
@@ -369,6 +377,57 @@ export function ProfileScreen({ navigation }: any) {
 
         <View style={{ height: 24 }} />
       </ScrollView>
+
+      {/* ── Edit Profile Modal ── */}
+      <Modal visible={editOpen} animationType="slide" transparent onRequestClose={() => setEditOpen(false)}>
+        <View style={styles.voucherModalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setEditOpen(false)} />
+          <View style={[styles.editModal, { backgroundColor: colors.backgroundElevated, borderColor: colors.border }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={[styles.editModalTitle, { color: colors.textPrimary }]}>Edit Profile</Text>
+              <TouchableOpacity onPress={() => setEditOpen(false)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                <Ionicons name="close" size={24} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.editLabel, { color: colors.textMuted }]}>BIO</Text>
+            <TextInput
+              style={[styles.editInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="Tell the dojo about yourself..."
+              placeholderTextColor={colors.textMuted}
+              value={editBio}
+              onChangeText={setEditBio}
+              multiline
+              maxLength={140}
+            />
+            <Text style={[styles.editCharCount, { color: colors.textMuted }]}>{editBio.length}/140</Text>
+
+            <Text style={[styles.editLabel, { color: colors.textMuted, marginTop: 12 }]}>TRAINING GOALS</Text>
+            <TextInput
+              style={[styles.editInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="What are you working toward?"
+              placeholderTextColor={colors.textMuted}
+              value={editGoals}
+              onChangeText={setEditGoals}
+              multiline
+              maxLength={200}
+            />
+
+            <TouchableOpacity
+              style={[styles.editSaveBtn, { backgroundColor: colors.gold }]}
+              onPress={() => {
+                // Save to AsyncStorage (lightweight persistence)
+                AsyncStorage.setItem('@zenki_profile_bio', editBio);
+                AsyncStorage.setItem('@zenki_profile_goals', editGoals);
+                setEditOpen(false);
+                Alert.alert('Saved', 'Your profile has been updated.');
+              }}
+            >
+              <Text style={styles.editSaveBtnText}>Save Changes</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Voucher redemption modal ──
            Member taps a voucher → large display appears. Employee taps the
@@ -805,6 +864,45 @@ const styles = StyleSheet.create({
     height: 56,
     // intentionally no backgroundColor — fully transparent
   },
+
+  // ── Edit Profile ──
+  editProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 8,
+  },
+  editProfileText: { fontSize: 12, fontWeight: '600' },
+  editModal: {
+    width: '90%',
+    maxWidth: 360,
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  editModalTitle: { fontSize: 20, fontWeight: '800' },
+  editLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginBottom: 4 },
+  editInput: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  editCharCount: { fontSize: 10, fontWeight: '600', textAlign: 'right', marginTop: 2 },
+  editSaveBtn: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  editSaveBtnText: { color: '#000', fontSize: 15, fontWeight: '900' },
 
   // ── Training Summary ──
   summaryCard: {

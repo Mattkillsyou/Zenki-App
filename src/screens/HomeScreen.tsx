@@ -369,7 +369,7 @@ export function HomeScreen({ navigation }: any) {
               )}
               {!isEmployee && (
                 <View style={[styles.flamesChip, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="flame" size={16} color="#FF6B35" />
+                  <Ionicons name="flame" size={16} color={colors.flames} />
                   <Text style={[styles.flamesChipText, { color: colors.textPrimary }]}>
                     {formatCount(gamState.flames || 0)}
                   </Text>
@@ -543,13 +543,13 @@ export function HomeScreen({ navigation }: any) {
 
                   {/* Calories Burned */}
                   <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-                    <View style={[styles.dashIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
-                      <Ionicons name="flame" size={18} color="#F59E0B" />
+                    <View style={[styles.dashIconWrap, { backgroundColor: colors.warningMuted }]}>
+                      <Ionicons name="flame" size={18} color={colors.warning} />
                     </View>
                     <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.caloriesBurned}</Text>
                     <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Cal Burned</Text>
                     <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
-                      <View style={[styles.dashProgressFill, { backgroundColor: '#F59E0B', width: `${Math.min(100, (todayStats.caloriesBurned / 500) * 100)}%` }]} />
+                      <View style={[styles.dashProgressFill, { backgroundColor: colors.warning, width: `${Math.min(100, (todayStats.caloriesBurned / 500) * 100)}%` }]} />
                     </View>
                   </View>
 

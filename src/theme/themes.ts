@@ -105,6 +105,10 @@ const matrixColors: ThemeColors = {
   uppercaseHeaders: true,
   spinner: '#00ff41',
   switchTrack: '#00ff41',
+  macroProtein: '#00ff41',
+  macroCarbs: '#00cc33',
+  macroFat: '#33ff00',
+  flames: '#00ff41',
 };
 
 const matrixOverlay: ThemeOverlayConfig = {
@@ -196,6 +200,10 @@ const alienColors: ThemeColors = {
   uppercaseHeaders: true,
   spinner: '#FF8C00',
   switchTrack: '#FF8C00',
+  macroProtein: '#FF8C00',
+  macroCarbs: '#CC7000',
+  macroFat: '#FFa500',
+  flames: '#FF8C00',
 };
 
 const alienOverlay: ThemeOverlayConfig = {
@@ -287,6 +295,10 @@ const jurassicColors: ThemeColors = {
   uppercaseHeaders: true,
   spinner: '#00CCFF',
   switchTrack: '#FFB800',
+  macroProtein: '#FF6B6B',
+  macroCarbs: '#00CCFF',
+  macroFat: '#FFB800',
+  flames: '#FF3333',
 };
 
 const jurassicOverlay: ThemeOverlayConfig = {
@@ -378,6 +390,10 @@ const ghostColors: ThemeColors = {
   uppercaseHeaders: false,
   spinner: '#00F0FF',
   switchTrack: '#00F0FF',
+  macroProtein: '#FF4081',
+  macroCarbs: '#00E5A0',
+  macroFat: '#FFD740',
+  flames: '#FF4081',
 };
 
 const ghostOverlay: ThemeOverlayConfig = {
@@ -469,6 +485,10 @@ const bladerunnerColors: ThemeColors = {
   uppercaseHeaders: false,
   spinner: '#FF6F3C',
   switchTrack: '#FF6F3C',
+  macroProtein: '#FF6F3C',
+  macroCarbs: '#4DC9F6',
+  macroFat: '#FFB347',
+  flames: '#FF6F3C',
 };
 
 const bladerunnerOverlay: ThemeOverlayConfig = {

@@ -315,7 +315,7 @@ export function WeeklyReportScreen({ navigation }: any) {
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>PROGRESS</Text>
         <View style={[styles.progressRow, { gap: 8 }]}>
           <View style={[styles.progressTile, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Ionicons name="flame" size={18} color="#FF6B35" />
+            <Ionicons name="flame" size={18} color={colors.flames} />
             <Text style={[styles.progressNum, { color: colors.textPrimary }]}>{gamState.streak}</Text>
             <Text style={[styles.progressLabel, { color: colors.textMuted }]}>Day Streak</Text>
           </View>

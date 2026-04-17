@@ -45,6 +45,31 @@ export function SettingsScreen({ navigation }: any) {
   const [weeklyReportNotif, setWeeklyReportNotif] = useState(true);
   const [calendarSync, setCalendarSync] = useState(false);
 
+  // Load notification prefs
+  useEffect(() => {
+    AsyncStorage.getItem('@zenki_notif_prefs').then((raw) => {
+      if (!raw) return;
+      try {
+        const p = JSON.parse(raw);
+        if (p.pushEnabled !== undefined) setPushEnabled(p.pushEnabled);
+        if (p.classReminders !== undefined) setClassReminders(p.classReminders);
+        if (p.emailUpdates !== undefined) setEmailUpdates(p.emailUpdates);
+        if (p.streakAlerts !== undefined) setStreakAlerts(p.streakAlerts);
+        if (p.achievementAlerts !== undefined) setAchievementAlerts(p.achievementAlerts);
+        if (p.weeklyReportNotif !== undefined) setWeeklyReportNotif(p.weeklyReportNotif);
+        if (p.calendarSync !== undefined) setCalendarSync(p.calendarSync);
+      } catch {}
+    });
+  }, []);
+
+  // Persist notification prefs on change
+  useEffect(() => {
+    AsyncStorage.setItem('@zenki_notif_prefs', JSON.stringify({
+      pushEnabled, classReminders, emailUpdates, streakAlerts,
+      achievementAlerts, weeklyReportNotif, calendarSync,
+    }));
+  }, [pushEnabled, classReminders, emailUpdates, streakAlerts, achievementAlerts, weeklyReportNotif, calendarSync]);
+
   // Preferences
   const [unitPref, setUnitPref] = useState<UnitPref>('imperial');
   const [soundEnabled, setSoundEnabled] = useState(true);

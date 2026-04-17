@@ -535,7 +535,7 @@ function StatsTab({
           icon="flame"
           label="Day Streak"
           value={streak}
-          color="#FF6B35"
+          color={colors.flames}
         />
         <StatTile
           icon="calendar-number"

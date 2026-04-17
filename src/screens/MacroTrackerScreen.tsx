@@ -317,7 +317,7 @@ export function MacroTrackerScreen({ navigation }: any) {
                       {day.hasEntries && !isSelected && (
                         <View style={[
                           styles.calDot,
-                          { backgroundColor: day.hitGoal ? '#22C55E' : colors.gold },
+                          { backgroundColor: day.hitGoal ? colors.success : colors.gold },
                         ]} />
                       )}
                     </TouchableOpacity>
@@ -384,7 +384,7 @@ export function MacroTrackerScreen({ navigation }: any) {
                 label="Protein"
                 value={totals.protein}
                 goal={goals.protein}
-                color="#FF6B6B"
+                color={colors.macroProtein}
                 bgColor={colors.surface}
                 trackColor={colors.background}
                 textColor={colors.textPrimary}
@@ -394,7 +394,7 @@ export function MacroTrackerScreen({ navigation }: any) {
                 label="Carbs"
                 value={totals.carbs}
                 goal={goals.carbs}
-                color="#4ECDC4"
+                color={colors.macroCarbs}
                 bgColor={colors.surface}
                 trackColor={colors.background}
                 textColor={colors.textPrimary}
@@ -450,7 +450,7 @@ export function MacroTrackerScreen({ navigation }: any) {
                           {/* Fat (gold) */}
                           <SvgCircle
                             cx={cx} cy={cy} r={radius}
-                            fill="none" stroke="#FFD166" strokeWidth={stroke}
+                            fill="none" stroke={colors.macroFat} strokeWidth={stroke}
                             strokeDasharray={`${fatDash} ${circ - fatDash}`}
                             strokeDashoffset={fatOffset}
                             strokeLinecap="round"
@@ -459,7 +459,7 @@ export function MacroTrackerScreen({ navigation }: any) {
                           {/* Carbs (teal) */}
                           <SvgCircle
                             cx={cx} cy={cy} r={radius}
-                            fill="none" stroke="#4ECDC4" strokeWidth={stroke}
+                            fill="none" stroke={colors.macroCarbs} strokeWidth={stroke}
                             strokeDasharray={`${carbsDash} ${circ - carbsDash}`}
                             strokeDashoffset={carbsOffset}
                             strokeLinecap="round"
@@ -468,7 +468,7 @@ export function MacroTrackerScreen({ navigation }: any) {
                           {/* Protein (red) */}
                           <SvgCircle
                             cx={cx} cy={cy} r={radius}
-                            fill="none" stroke="#FF6B6B" strokeWidth={stroke}
+                            fill="none" stroke={colors.macroProtein} strokeWidth={stroke}
                             strokeDasharray={`${proteinDash} ${circ - proteinDash}`}
                             strokeDashoffset={proteinOffset}
                             strokeLinecap="round"
@@ -489,19 +489,19 @@ export function MacroTrackerScreen({ navigation }: any) {
 
                   <View style={styles.donutLegend}>
                     <View style={styles.donutLegendRow}>
-                      <View style={[styles.donutLegendDot, { backgroundColor: '#FF6B6B' }]} />
+                      <View style={[styles.donutLegendDot, { backgroundColor: colors.macroProtein }]} />
                       <Text style={[styles.donutLegendText, { color: colors.textSecondary }]}>
                         Protein · {Math.round(totals.protein)}g · {totals.calories > 0 ? Math.round((totals.protein * 4 / (totals.protein * 4 + totals.carbs * 4 + totals.fat * 9)) * 100) : 0}%
                       </Text>
                     </View>
                     <View style={styles.donutLegendRow}>
-                      <View style={[styles.donutLegendDot, { backgroundColor: '#4ECDC4' }]} />
+                      <View style={[styles.donutLegendDot, { backgroundColor: colors.macroCarbs }]} />
                       <Text style={[styles.donutLegendText, { color: colors.textSecondary }]}>
                         Carbs · {Math.round(totals.carbs)}g · {totals.calories > 0 ? Math.round((totals.carbs * 4 / (totals.protein * 4 + totals.carbs * 4 + totals.fat * 9)) * 100) : 0}%
                       </Text>
                     </View>
                     <View style={styles.donutLegendRow}>
-                      <View style={[styles.donutLegendDot, { backgroundColor: '#FFD166' }]} />
+                      <View style={[styles.donutLegendDot, { backgroundColor: colors.macroFat }]} />
                       <Text style={[styles.donutLegendText, { color: colors.textSecondary }]}>
                         Fat · {Math.round(totals.fat)}g · {totals.calories > 0 ? Math.round((totals.fat * 9 / (totals.protein * 4 + totals.carbs * 4 + totals.fat * 9)) * 100) : 0}%
                       </Text>
@@ -578,11 +578,11 @@ export function MacroTrackerScreen({ navigation }: any) {
                       {isAdapted ? 'Adapted from your data · updates weekly' : 'Estimated · adapts once you have ~10 days of logs'}
                     </Text>
                   </View>
-                  <View style={[styles.tdeeBadge, { backgroundColor: isAdapted ? 'rgba(76,175,80,0.15)' : 'rgba(255,255,255,0.08)' }]}>
+                  <View style={[styles.tdeeBadge, { backgroundColor: isAdapted ? colors.successMuted : 'rgba(255,255,255,0.08)' }]}>
                     <Ionicons
                       name={isAdapted ? 'pulse' : 'calculator-outline'}
                       size={16}
-                      color={isAdapted ? '#4CAF50' : colors.textMuted}
+                      color={isAdapted ? colors.success : colors.textMuted}
                     />
                   </View>
                 </View>
