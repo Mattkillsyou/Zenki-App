@@ -7,6 +7,8 @@ import {
   Image,
   Alert,
   ScrollView,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,9 +31,16 @@ export function ProfileScreen({ navigation }: any) {
   const { colors, mode, setMode } = useTheme();
   const { user } = useAuth();
   const { state: gamState, levelInfo } = useGamification();
-  const { freeDrinkCredits, freeShirtCredits } = useSpinWheel();
+  const { freeDrinkCredits, freeShirtCredits, consumeFreeDrink, consumeFreeShirt } = useSpinWheel();
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [showPhotoMenu, setShowPhotoMenu] = useState(false);
+  const [activeVoucher, setActiveVoucher] = useState<null | 'drink' | 'shirt'>(null);
+
+  const handleRedeemVoucher = () => {
+    if (activeVoucher === 'drink') consumeFreeDrink();
+    else if (activeVoucher === 'shirt') consumeFreeShirt();
+    setActiveVoucher(null);
+  };
 
   const memberBelt = user?.belt ?? 'white';
   const memberStripes = user?.stripes ?? 0;
@@ -189,36 +198,44 @@ export function ProfileScreen({ navigation }: any) {
             <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>VOUCHERS</Text>
             <View style={styles.voucherRow}>
               {freeDrinkCredits > 0 && (
-                <View style={[styles.voucherCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setActiveVoucher('drink')}
+                  style={[styles.voucherCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}
+                >
                   <View style={[styles.voucherIcon, { backgroundColor: colors.gold + '22' }]}>
                     <Ionicons name="cafe-outline" size={22} color={colors.gold} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.voucherTitle, { color: colors.textPrimary }]}>Free Drink</Text>
-                    <Text style={[styles.voucherSub, { color: colors.textMuted }]}>Show at the counter</Text>
+                    <Text style={[styles.voucherSub, { color: colors.textMuted }]}>Tap to redeem at counter</Text>
                   </View>
                   {freeDrinkCredits > 1 && (
                     <View style={[styles.voucherCountBadge, { backgroundColor: colors.gold }]}>
                       <Text style={styles.voucherCountText}>×{freeDrinkCredits}</Text>
                     </View>
                   )}
-                </View>
+                </TouchableOpacity>
               )}
               {freeShirtCredits > 0 && (
-                <View style={[styles.voucherCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setActiveVoucher('shirt')}
+                  style={[styles.voucherCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}
+                >
                   <View style={[styles.voucherIcon, { backgroundColor: colors.gold + '22' }]}>
                     <Ionicons name="shirt-outline" size={22} color={colors.gold} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.voucherTitle, { color: colors.textPrimary }]}>Free Shirt</Text>
-                    <Text style={[styles.voucherSub, { color: colors.textMuted }]}>Redeem in store</Text>
+                    <Text style={[styles.voucherSub, { color: colors.textMuted }]}>Tap to redeem at counter</Text>
                   </View>
                   {freeShirtCredits > 1 && (
                     <View style={[styles.voucherCountBadge, { backgroundColor: colors.gold }]}>
                       <Text style={styles.voucherCountText}>×{freeShirtCredits}</Text>
                     </View>
                   )}
-                </View>
+                </TouchableOpacity>
               )}
             </View>
           </>
@@ -288,6 +305,59 @@ export function ProfileScreen({ navigation }: any) {
 
         <View style={{ height: 24 }} />
       </ScrollView>
+
+      {/* ── Voucher redemption modal ──
+           Member taps a voucher → large display appears. Employee taps the
+           invisible hit zone in the bottom-right corner of the card to redeem
+           (decrements the count in SpinWheelContext). No visible affordance
+           for the redeem button — the member can't accidentally burn it. */}
+      <Modal visible={activeVoucher !== null} animationType="fade" transparent onRequestClose={() => setActiveVoucher(null)}>
+        <View style={styles.voucherModalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setActiveVoucher(null)} />
+          <View style={[styles.voucherTicket, { backgroundColor: colors.gold }]}>
+            {/* Notch decorations — punch-card feel */}
+            <View style={[styles.voucherTicketNotchLeft, { backgroundColor: colors.background }]} />
+            <View style={[styles.voucherTicketNotchRight, { backgroundColor: colors.background }]} />
+
+            <View style={styles.voucherTicketHeader}>
+              <Text style={styles.voucherTicketLabel}>ZENKI DOJO</Text>
+              <Text style={styles.voucherTicketDivider}>·</Text>
+              <Text style={styles.voucherTicketLabel}>VOUCHER</Text>
+            </View>
+
+            <View style={styles.voucherTicketBody}>
+              <Ionicons
+                name={activeVoucher === 'drink' ? 'cafe' : 'shirt'}
+                size={72}
+                color="#000"
+              />
+              <Text style={styles.voucherTicketTitle}>
+                {activeVoucher === 'drink' ? 'FREE DRINK' : 'FREE SHIRT'}
+              </Text>
+              <Text style={styles.voucherTicketSub}>
+                Hand this screen to staff
+              </Text>
+            </View>
+
+            <View style={styles.voucherTicketFooter}>
+              <Text style={styles.voucherTicketMember}>
+                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Member'}
+              </Text>
+              <Text style={styles.voucherTicketId}>
+                #{String(Date.now()).slice(-6)}
+              </Text>
+            </View>
+
+            {/* Hidden staff redeem button — bottom right, visually identical
+                to the ticket background so members don't see it. */}
+            <Pressable
+              onPress={handleRedeemVoucher}
+              style={styles.voucherRedeemZone}
+              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -541,5 +611,111 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 12,
     fontWeight: '800',
+  },
+
+  // Voucher redemption modal
+  voucherModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  voucherTicket: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 16,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  voucherTicketNotchLeft: {
+    position: 'absolute',
+    left: -12,
+    top: '50%',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    transform: [{ translateY: -12 }],
+  },
+  voucherTicketNotchRight: {
+    position: 'absolute',
+    right: -12,
+    top: '50%',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    transform: [{ translateY: -12 }],
+  },
+  voucherTicketHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 20,
+  },
+  voucherTicketLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 2.5,
+    color: '#000',
+  },
+  voucherTicketDivider: { color: '#000', opacity: 0.5 },
+  voucherTicketBody: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(0,0,0,0.2)',
+    borderStyle: 'dashed',
+    width: '100%',
+    gap: 8,
+    marginBottom: 12,
+  },
+  voucherTicketTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: 1,
+    color: '#000',
+    marginTop: 6,
+  },
+  voucherTicketSub: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#000',
+    opacity: 0.75,
+    letterSpacing: 0.5,
+  },
+  voucherTicketFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingTop: 8,
+  },
+  voucherTicketMember: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#000',
+  },
+  voucherTicketId: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#000',
+    opacity: 0.6,
+    fontFamily: 'Courier',
+  },
+  // Hidden redeem tap zone — bottom-right corner, no visible affordance.
+  voucherRedeemZone: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 56,
+    height: 56,
+    // intentionally no backgroundColor — fully transparent
   },
 });
