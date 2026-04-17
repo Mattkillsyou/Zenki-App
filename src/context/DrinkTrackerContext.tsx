@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DrinkEntry, DrinkType, DrinkTrackerState, MonthlySummary, PendingDrink } from '../types/drinks';
 import { DRINK_DEFINITIONS } from '../data/drinks';
+import { generateId } from '../utils/generateId';
 import { pushDrinkEntry, markDrinksPaid } from '../services/drinkSheets';
 
 const STORAGE_KEY = '@zenki_drink_tracker';
@@ -126,7 +127,7 @@ export function DrinkTrackerProvider({ children }: { children: React.ReactNode }
         if (!def) return;
         for (let i = 0; i < p.count; i++) {
           const entry: DrinkEntry = {
-            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + i,
+            id: generateId('drink'),
             type: p.type,
             price: def.price,
             timestamp: now.toISOString(),

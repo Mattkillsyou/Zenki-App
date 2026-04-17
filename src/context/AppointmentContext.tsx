@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { generateId } from '../utils/generateId';
 
 const STORAGE_KEY = '@zenki_appointments';
 
@@ -115,7 +116,7 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
   const requestAppointment = useCallback(async (a: Omit<Appointment, 'id' | 'status' | 'createdAt'>) => {
     const next: Appointment = {
       ...a,
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      id: generateId('appt'),
       status: 'pending',
       createdAt: new Date().toISOString(),
     };
@@ -143,12 +144,16 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const cancelAppointment = useCallback(async (id: string) => {
-    const existing = appointments.find((a) => a.id === id);
-    if (existing?.notificationId) await cancelNotification(existing.notificationId);
-    setAppointments((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status: 'cancelled', notificationId: undefined } : a)),
-    );
-  }, [appointments]);
+    // Use functional update to avoid stale closure over appointments
+    setAppointments((prev) => {
+      const existing = prev.find((a) => a.id === id);
+      if (existing?.notificationId) {
+        // Cancel notification outside of state update (fire-and-forget)
+        cancelNotification(existing.notificationId).catch(() => {});
+      }
+      return prev.map((a) => (a.id === id ? { ...a, status: 'cancelled' as const, notificationId: undefined } : a));
+    });
+  }, []);
 
   const completeAppointment = useCallback((id: string) => {
     setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status: 'completed' } : a)));

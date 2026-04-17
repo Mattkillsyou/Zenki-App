@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WorkoutLog, PersonalRecord } from '../types/workout';
 import { EXERCISES_BY_KEY } from '../data/exercises';
+import { generateId } from '../utils/generateId';
 import { useGamification } from './GamificationContext';
 
 const LOGS_KEY = '@zenki_workout_logs';
@@ -47,7 +48,7 @@ function todayISO(): string {
 }
 
 function genId(prefix: string): string {
-  return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return generateId(prefix);
 }
 
 export function WorkoutProvider({ children }: { children: React.ReactNode }) {

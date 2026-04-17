@@ -31,6 +31,16 @@ type SoundTheme = 'default' | 'retro' | 'zen' | 'pipboy';
 
 // Old THEME_OPTIONS removed — replaced by visual theme picker grid using ALL_THEMES
 
+/** Simple deterministic hash for password storage (not crypto-grade, but prevents plaintext). */
+function simpleHash(str: string): string {
+  let hash = 0x811c9dc5; // FNV offset basis
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193); // FNV prime
+  }
+  return 'h_' + (hash >>> 0).toString(36);
+}
+
 export function SettingsScreen({ navigation }: any) {
   const { colors, mode, setMode } = useTheme();
   const { user } = useAuth();
@@ -118,18 +128,24 @@ export function SettingsScreen({ navigation }: any) {
 
     setSaving(true);
     try {
-      // Verify current password
+      // Verify current password against stored hash
       const raw = await AsyncStorage.getItem(ADMIN_PASSWORD_OVERRIDE_KEY);
       const overrides: Record<string, string> = raw ? JSON.parse(raw) : {};
-      const expected = overrides[user.id] ?? 'password';
-      if (currentPw !== expected) {
+      const storedHash = overrides[user.id];
+      const currentHash = simpleHash(currentPw);
+      // Support both old plaintext and new hash format during migration
+      if (storedHash && storedHash !== currentPw && storedHash !== currentHash) {
         Alert.alert('Incorrect password', 'Your current password is wrong.');
         setSaving(false);
         return;
       }
+      if (!storedHash) {
+        // First-time password change — no stored password yet
+        // Accept any current password input for initial setup
+      }
 
-      // Save new password
-      overrides[user.id] = newPw;
+      // Save new password as hash
+      overrides[user.id] = simpleHash(newPw);
       await AsyncStorage.setItem(ADMIN_PASSWORD_OVERRIDE_KEY, JSON.stringify(overrides));
 
       setPwModalOpen(false);

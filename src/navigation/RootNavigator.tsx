@@ -284,55 +284,54 @@ export function RootNavigator() {
       />
 
       {/* Modals — slide up */}
-      <Stack.Screen name="Settings" component={SettingsScreen} options={modalTransition} />
-      <Stack.Screen name="Admin" component={AdminScreen} options={modalTransition} />
-      <Stack.Screen name="BookingPayment" component={BookingPaymentScreen} options={modalTransition} />
-      <Stack.Screen name="PaymentMethods" component={PaymentMethodsScreen} options={modalTransition} />
+      <Stack.Screen name="Settings" component={withErrorBoundary(SettingsScreen, 'Settings')} options={modalTransition} />
+      <Stack.Screen name="Admin" component={withErrorBoundary(AdminScreen, 'Admin')} options={modalTransition} />
+      <Stack.Screen name="BookingPayment" component={withErrorBoundary(BookingPaymentScreen, 'Payment')} options={modalTransition} />
+      <Stack.Screen name="PaymentMethods" component={withErrorBoundary(PaymentMethodsScreen, 'Payment Methods')} options={modalTransition} />
 
       {/* Admin sub-screens — push */}
-      <Stack.Screen name="AdminMembers" component={AdminMembersScreen} options={pushTransition} />
-      <Stack.Screen name="AdminProducts" component={AdminProductsScreen} options={pushTransition} />
-      <Stack.Screen name="AdminSchedule" component={AdminScheduleScreen} options={pushTransition} />
-      <Stack.Screen name="AttendanceHistory" component={AttendanceHistoryScreen} options={pushTransition} />
-      <Stack.Screen name="AdminBroadcast" component={AdminBroadcastScreen} options={pushTransition} />
-      <Stack.Screen name="AdminAnnouncements" component={AdminAnnouncementsScreen} options={pushTransition} />
-      <Stack.Screen name="AdminAppointments" component={AdminAppointmentsScreen} options={pushTransition} />
+      <Stack.Screen name="AdminMembers" component={withErrorBoundary(AdminMembersScreen, 'Admin Members')} options={pushTransition} />
+      <Stack.Screen name="AdminProducts" component={withErrorBoundary(AdminProductsScreen, 'Admin Products')} options={pushTransition} />
+      <Stack.Screen name="AdminSchedule" component={withErrorBoundary(AdminScheduleScreen, 'Admin Schedule')} options={pushTransition} />
+      <Stack.Screen name="AttendanceHistory" component={withErrorBoundary(AttendanceHistoryScreen, 'Attendance')} options={pushTransition} />
+      <Stack.Screen name="AdminBroadcast" component={withErrorBoundary(AdminBroadcastScreen, 'Broadcast')} options={pushTransition} />
+      <Stack.Screen name="AdminAnnouncements" component={withErrorBoundary(AdminAnnouncementsScreen, 'Announcements')} options={pushTransition} />
+      <Stack.Screen name="AdminAppointments" component={withErrorBoundary(AdminAppointmentsScreen, 'Appointments')} options={pushTransition} />
       <Stack.Screen name="Workout" component={withErrorBoundary(WorkoutScreen, 'Workout')} options={pushTransition} />
       <Stack.Screen name="Timer" component={withErrorBoundary(TimerScreen, 'Timer')} options={pushTransition} />
-      <Stack.Screen name="PRDetail" component={PRDetailScreen} options={pushTransition} />
-      <Stack.Screen name="EmployeeChecklist" component={EmployeeChecklistScreen} options={pushTransition} />
-      <Stack.Screen name="AdminEmployeeTasks" component={AdminEmployeeTasksScreen} options={pushTransition} />
+      <Stack.Screen name="PRDetail" component={withErrorBoundary(PRDetailScreen, 'PR Detail')} options={pushTransition} />
+      <Stack.Screen name="EmployeeChecklist" component={withErrorBoundary(EmployeeChecklistScreen, 'Checklist')} options={pushTransition} />
+      <Stack.Screen name="AdminEmployeeTasks" component={withErrorBoundary(AdminEmployeeTasksScreen, 'Employee Tasks')} options={pushTransition} />
       <Stack.Screen name="WeightTracker" component={withErrorBoundary(WeightTrackerScreen, 'Weight Tracker')} options={pushTransition} />
       <Stack.Screen name="MacroTracker" component={withErrorBoundary(MacroTrackerScreen, 'Macro Tracker')} options={pushTransition} />
-      <Stack.Screen name="MacroSetup" component={MacroSetupScreen} options={modalTransition} />
-      <Stack.Screen name="BarcodeScanner" component={BarcodeScannerScreen} options={modalTransition} />
-      <Stack.Screen name="PhotoFood" component={PhotoFoodScreen} options={modalTransition} />
-      <Stack.Screen name="DexaScans" component={DexaScansScreen} options={pushTransition} />
-      <Stack.Screen name="DexaUpload" component={DexaUploadScreen} options={modalTransition} />
-      <Stack.Screen name="DexaScanDetail" component={DexaScanDetailScreen} options={pushTransition} />
-      <Stack.Screen name="Bloodwork" component={BloodworkScreen} options={pushTransition} />
-      <Stack.Screen name="BloodworkUpload" component={BloodworkUploadScreen} options={modalTransition} />
-      <Stack.Screen name="BloodworkReportDetail" component={BloodworkReportDetailScreen} options={pushTransition} />
+      <Stack.Screen name="MacroSetup" component={withErrorBoundary(MacroSetupScreen, 'Macro Setup')} options={modalTransition} />
+      <Stack.Screen name="BarcodeScanner" component={withErrorBoundary(BarcodeScannerScreen, 'Barcode Scanner')} options={modalTransition} />
+      <Stack.Screen name="PhotoFood" component={withErrorBoundary(PhotoFoodScreen, 'Photo Food')} options={modalTransition} />
+      <Stack.Screen name="DexaScans" component={withErrorBoundary(DexaScansScreen, 'DEXA Scans')} options={pushTransition} />
+      <Stack.Screen name="DexaUpload" component={withErrorBoundary(DexaUploadScreen, 'DEXA Upload')} options={modalTransition} />
+      <Stack.Screen name="DexaScanDetail" component={withErrorBoundary(DexaScanDetailScreen, 'DEXA Detail')} options={pushTransition} />
+      <Stack.Screen name="Bloodwork" component={withErrorBoundary(BloodworkScreen, 'Bloodwork')} options={pushTransition} />
+      <Stack.Screen name="BloodworkUpload" component={withErrorBoundary(BloodworkUploadScreen, 'Bloodwork Upload')} options={modalTransition} />
+      <Stack.Screen name="BloodworkReportDetail" component={withErrorBoundary(BloodworkReportDetailScreen, 'Bloodwork Detail')} options={pushTransition} />
       <Stack.Screen name="WorkoutSession" component={withErrorBoundary(WorkoutSessionScreen, 'HR Session')} options={modalTransition} />
       <Stack.Screen name="SessionHistory" component={withErrorBoundary(SessionHistoryScreen, 'Session History')} options={pushTransition} />
       <Stack.Screen name="ActivityTracker" component={withErrorBoundary(ActivityTrackerScreen, 'GPS Tracker')} options={modalTransition} />
       <Stack.Screen name="WeeklyReport" component={withErrorBoundary(WeeklyReportScreen, 'Weekly Report')} options={pushTransition} />
       <Stack.Screen name="BodyLab" component={withErrorBoundary(BodyLabScreen, 'Body Lab')} options={pushTransition} />
 
-
       {/* Community */}
-      <Stack.Screen name="CreatePost" component={CreatePostScreen} options={modalTransition} />
-      <Stack.Screen name="UserProfile" component={UserProfileScreen} options={pushTransition} />
+      <Stack.Screen name="CreatePost" component={withErrorBoundary(CreatePostScreen, 'Create Post')} options={modalTransition} />
+      <Stack.Screen name="UserProfile" component={withErrorBoundary(UserProfileScreen, 'User Profile')} options={pushTransition} />
 
       {/* Detail — push */}
-      <Stack.Screen name="ProductDetail" component={ProductDetailScreen} options={pushTransition} />
-      <Stack.Screen name="Achievements" component={AchievementsScreen} options={pushTransition} />
-      <Stack.Screen name="AchievementDetail" component={AchievementDetailScreen} options={pushTransition} />
-      <Stack.Screen name="ContactSupport" component={ContactSupportScreen} options={pushTransition} />
-      <Stack.Screen name="Notifications" component={NotificationsScreen} options={pushTransition} />
-      <Stack.Screen name="MessagesList" component={MessagesListScreen} options={pushTransition} />
-      <Stack.Screen name="MessagesChat" component={MessagesChatScreen} options={pushTransition} />
-      <Stack.Screen name="UserSearch" component={UserSearchScreen} options={pushTransition} />
+      <Stack.Screen name="ProductDetail" component={withErrorBoundary(ProductDetailScreen, 'Product Detail')} options={pushTransition} />
+      <Stack.Screen name="Achievements" component={withErrorBoundary(AchievementsScreen, 'Achievements')} options={pushTransition} />
+      <Stack.Screen name="AchievementDetail" component={withErrorBoundary(AchievementDetailScreen, 'Achievement Detail')} options={pushTransition} />
+      <Stack.Screen name="ContactSupport" component={withErrorBoundary(ContactSupportScreen, 'Contact Support')} options={pushTransition} />
+      <Stack.Screen name="Notifications" component={withErrorBoundary(NotificationsScreen, 'Notifications')} options={pushTransition} />
+      <Stack.Screen name="MessagesList" component={withErrorBoundary(MessagesListScreen, 'Messages')} options={pushTransition} />
+      <Stack.Screen name="MessagesChat" component={withErrorBoundary(MessagesChatScreen, 'Chat')} options={pushTransition} />
+      <Stack.Screen name="UserSearch" component={withErrorBoundary(UserSearchScreen, 'Search')} options={pushTransition} />
     </Stack.Navigator>
   );
 }

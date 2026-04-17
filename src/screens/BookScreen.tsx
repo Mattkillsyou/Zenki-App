@@ -26,7 +26,8 @@ const getDisplayDate = () => {
   return now.toLocaleDateString('en-US', options);
 };
 
-const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+import { GOOGLE_CLIENT_ID } from '../config/env';
+// GOOGLE_CLIENT_ID loaded from Expo config extra or env vars — see src/config/env.ts
 const CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
 
 const INSTRUCTORS = [

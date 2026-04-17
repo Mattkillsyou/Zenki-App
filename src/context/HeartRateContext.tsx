@@ -7,6 +7,7 @@ import {
   BLEStatus,
   ActivityType,
 } from '../types/heartRate';
+import { generateId } from '../utils/generateId';
 import {
   computeZoneBreakdown,
   computeStrain,
@@ -69,7 +70,7 @@ const HeartRateContext = createContext<HeartRateContextValue>({
 });
 
 function randomId(): string {
-  return 'hrsess_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  return generateId('hrsess');
 }
 
 export function HeartRateProvider({ children }: { children: React.ReactNode }) {

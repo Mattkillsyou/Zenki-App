@@ -3,6 +3,7 @@ import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { useAuth } from './AuthContext';
+import { generateId } from '../utils/generateId';
 import { AttendanceVisit, AttendanceState } from '../types/attendance';
 import { isWithinDojo, getTodayString, POLLING_INTERVAL_MS } from '../utils/location';
 import {
@@ -145,7 +146,7 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
         );
         if (!alreadyVisited) {
           const visit: AttendanceVisit = {
-            id: 'visit_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+            id: generateId('visit'),
             memberId: user.id,
             memberName: `${user.firstName} ${user.lastName}`.trim(),
             date: today,

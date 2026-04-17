@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { Product, PRODUCTS as BUILTIN_PRODUCTS, ProductCategory } from '../data/products';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
+import { generateId } from '../utils/generateId';
 
 const STORAGE_KEY = '@zenki_custom_products';
 
@@ -72,7 +73,7 @@ function toProduct(c: StoredCustomProduct): Product {
 }
 
 function randomId(): string {
-  return 'custom_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  return generateId('custom');
 }
 
 export function ProductProvider({ children }: { children: React.ReactNode }) {

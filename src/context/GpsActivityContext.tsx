@@ -8,6 +8,7 @@ import {
   GpsActivityType,
   GPS_ACTIVITY_METS,
 } from '../types/activity';
+import { generateId } from '../utils/generateId';
 import {
   totalDistance,
   totalElevationGain,
@@ -67,7 +68,7 @@ const GpsActivityContext = createContext<GpsActivityContextValue>({
 });
 
 function randomId(): string {
-  return 'gps_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  return generateId('gps');
 }
 
 export function GpsActivityProvider({ children }: { children: React.ReactNode }) {

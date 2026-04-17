@@ -17,6 +17,7 @@ import {
   ExpenditureUpdate,
 } from '../utils/nutrition';
 import { FoodSearchResult } from '../types/food';
+import { generateId } from '../utils/generateId';
 import { DexaScan } from '../types/dexa';
 import { BloodworkReport } from '../types/bloodwork';
 
@@ -136,7 +137,7 @@ const NutritionContext = createContext<NutritionContextValue>({
 });
 
 function genId(prefix: string): string {
-  return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return generateId(prefix);
 }
 
 export function NutritionProvider({ children }: { children: React.ReactNode }) {

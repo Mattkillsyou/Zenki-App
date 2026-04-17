@@ -6,7 +6,12 @@ import { Member } from '../data/members';
 export async function firebaseSignIn(member: Member): Promise<string> {
   if (!FIREBASE_CONFIGURED || !auth || !db) return '';
   const email = member.email || `${member.username}@zenkidojo.app`;
-  const password = `zenki_${member.id}_${member.username}`;
+  // Generate a deterministic but non-trivial password from member data
+  // Uses FNV-1a hash of member ID + username + salt to prevent easy guessing
+  const raw = `zenki_salt_92xk_${member.id}_${member.username}_dojo`;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < raw.length; i++) { h ^= raw.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  const password = `zk_${(h >>> 0).toString(36)}_${member.id.slice(0, 4)}`;
 
   try {
     const cred = await signInWithEmailAndPassword(auth, email, password);

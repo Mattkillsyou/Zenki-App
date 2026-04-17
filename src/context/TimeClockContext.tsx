@@ -100,9 +100,10 @@ export function TimeClockProvider({
   // Live timer while clocked in
   useEffect(() => {
     if (state.currentEntry) {
-      setElapsedMinutes(getElapsedMinutes(state.currentEntry.clockIn));
+      const clockInTime = state.currentEntry.clockIn; // capture value to avoid stale closure
+      setElapsedMinutes(getElapsedMinutes(clockInTime));
       timerRef.current = setInterval(() => {
-        setElapsedMinutes(getElapsedMinutes(state.currentEntry!.clockIn));
+        setElapsedMinutes(getElapsedMinutes(clockInTime));
       }, 1000);
     } else {
       setElapsedMinutes(0);

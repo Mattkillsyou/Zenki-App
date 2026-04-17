@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { EmployeeTask, TaskCompletion } from '../types/employeeTask';
+import { generateId } from '../utils/generateId';
 
 const TASKS_KEY = '@zenki_employee_tasks';
 const COMPLETIONS_KEY = '@zenki_task_completions';
@@ -46,7 +47,7 @@ function todayISO(): string {
 }
 
 function genId(): string {
-  return `task_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return generateId('task');
 }
 
 const DEFAULT_SEED_TASKS: Omit<EmployeeTask, 'id' | 'createdAt'>[] = [

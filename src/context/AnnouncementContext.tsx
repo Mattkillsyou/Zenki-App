@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { generateId } from '../utils/generateId';
 
 const STORAGE_KEY = '@zenki_announcements';
 
@@ -55,7 +56,7 @@ export function AnnouncementProvider({ children }: { children: React.ReactNode }
   const addAnnouncement = useCallback((a: Omit<Announcement, 'id' | 'createdAt'>) => {
     const next: Announcement = {
       ...a,
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      id: generateId('ann'),
       createdAt: new Date().toISOString(),
     };
     setAnnouncements((prev) => [next, ...prev]);
