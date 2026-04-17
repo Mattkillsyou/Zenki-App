@@ -43,7 +43,7 @@ export function AchievementsScreen({ navigation }: any) {
         </View>
         <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
         <View style={styles.summaryCell}>
-          <Ionicons name="flame" size={20} color="#FF6B35" />
+          <Ionicons name="flame" size={20} color={colors.flames} />
           <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
             {state.flames || 0}
           </Text>

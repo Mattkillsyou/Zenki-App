@@ -88,7 +88,7 @@ export function NotificationsScreen({ navigation }: any) {
       list.push({
         id: 'streak',
         icon: 'flame',
-        iconColor: '#FF6B35',
+        iconColor: colors.flames,
         tint: '#FF6B3520',
         title: `${gamState.streak}-day streak — keep it alive!`,
         body: `Train today to push it to ${gamState.streak + 1}. One missed day resets.`,

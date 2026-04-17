@@ -117,7 +117,7 @@ export function AchievementDetailScreen({ navigation, route }: any) {
         {/* Rewards */}
         <View style={[styles.rewardsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.rewardCell}>
-            <Ionicons name="flame" size={26} color="#FF6B35" />
+            <Ionicons name="flame" size={26} color={colors.flames} />
             <Text style={[styles.rewardValue, { color: colors.textPrimary }]}>
               +{achievement.flameReward}
             </Text>

@@ -345,10 +345,14 @@ export function HomeScreen({ navigation }: any) {
 
   // ── Pull-to-Refresh ──
   const [refreshing, setRefreshing] = React.useState(false);
+  const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => {
+    return () => { if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current); };
+  }, []);
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    // Force a re-render by briefly toggling state
-    setTimeout(() => setRefreshing(false), 800);
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => setRefreshing(false), 800);
   }, []);
 
   return (

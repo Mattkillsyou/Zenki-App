@@ -204,16 +204,7 @@ const styles = StyleSheet.create({
   topBarLeft: {
     flex: 1,
   },
-  titleUnderline: {
-    alignSelf: 'flex-start',
-    borderBottomWidth: 3,
-    paddingBottom: 2,
-  },
-  screenTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    letterSpacing: 3,
-  },
+  // titleUnderline and screenTitle removed — unused dead code
   topBarRight: {
     flexDirection: 'row',
     alignItems: 'center',
