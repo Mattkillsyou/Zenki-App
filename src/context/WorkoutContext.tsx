@@ -1,41 +1,45 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { WOD, WorkoutLog } from '../types/workout';
+import { WorkoutLog, PersonalRecord } from '../types/workout';
+import { EXERCISES_BY_KEY } from '../data/exercises';
 import { useGamification } from './GamificationContext';
 
-const WODS_KEY = '@zenki_wods';
 const LOGS_KEY = '@zenki_workout_logs';
+const PRS_KEY = '@zenki_personal_records';
 
 const POINTS_PER_WORKOUT = 25;
+const POINTS_PER_PR = 50;
 
 interface WorkoutContextValue {
-  wods: WOD[];
   logs: WorkoutLog[];
-  todaysWOD: WOD | null;
+  prs: PersonalRecord[];
+
+  // Logs
   myLogs: (memberId: string) => WorkoutLog[];
   hasMemberLoggedToday: (memberId: string) => boolean;
-
-  // Admin
-  publishWOD: (wod: Omit<WOD, 'id' | 'createdAt'>) => WOD;
-  updateWOD: (id: string, patch: Partial<WOD>) => void;
-  removeWOD: (id: string) => void;
-
-  // Member
   logWorkout: (log: Omit<WorkoutLog, 'id' | 'createdAt'>) => WorkoutLog;
   removeLog: (id: string) => void;
+
+  // PRs
+  myPRs: (memberId: string) => PersonalRecord[];
+  prsForExercise: (memberId: string, exerciseKey: string) => PersonalRecord[];
+  currentBest: (memberId: string, exerciseKey: string) => PersonalRecord | null;
+  addPR: (pr: Omit<PersonalRecord, 'id' | 'createdAt'>) => PersonalRecord;
+  removePR: (id: string) => void;
 }
 
 const WorkoutContext = createContext<WorkoutContextValue>({
-  wods: [],
   logs: [],
-  todaysWOD: null,
+  prs: [],
   myLogs: () => [],
   hasMemberLoggedToday: () => false,
-  publishWOD: () => ({} as WOD),
-  updateWOD: () => {},
-  removeWOD: () => {},
   logWorkout: () => ({} as WorkoutLog),
   removeLog: () => {},
+  myPRs: () => [],
+  prsForExercise: () => [],
+  currentBest: () => null,
+  addPR: () => ({} as PersonalRecord),
+  removePR: () => {},
 });
 
 function todayISO(): string {
@@ -47,41 +51,34 @@ function genId(prefix: string): string {
 }
 
 export function WorkoutProvider({ children }: { children: React.ReactNode }) {
-  const [wods, setWods] = useState<WOD[]>([]);
   const [logs, setLogs] = useState<WorkoutLog[]>([]);
+  const [prs, setPRs] = useState<PersonalRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const { awardPoints, recordSession } = useGamification();
 
-  // Load from AsyncStorage
   useEffect(() => {
     (async () => {
       try {
-        const [wRaw, lRaw] = await Promise.all([
-          AsyncStorage.getItem(WODS_KEY),
+        const [lRaw, pRaw] = await Promise.all([
           AsyncStorage.getItem(LOGS_KEY),
+          AsyncStorage.getItem(PRS_KEY),
         ]);
-        if (wRaw) setWods(JSON.parse(wRaw));
         if (lRaw) setLogs(JSON.parse(lRaw));
+        if (pRaw) setPRs(JSON.parse(pRaw));
       } catch { /* ignore */ }
       setLoaded(true);
     })();
   }, []);
 
-  // Persist on change
-  useEffect(() => {
-    if (loaded) AsyncStorage.setItem(WODS_KEY, JSON.stringify(wods));
-  }, [wods, loaded]);
-
   useEffect(() => {
     if (loaded) AsyncStorage.setItem(LOGS_KEY, JSON.stringify(logs));
   }, [logs, loaded]);
 
-  const todaysWOD = useMemo(() => {
-    const t = todayISO();
-    // If admin published multiple for today, take the most recent
-    const todays = wods.filter((w) => w.date === t);
-    return todays.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
-  }, [wods]);
+  useEffect(() => {
+    if (loaded) AsyncStorage.setItem(PRS_KEY, JSON.stringify(prs));
+  }, [prs, loaded]);
+
+  // ── Logs ────────────────────────────────────────────
 
   const myLogs = useCallback(
     (memberId: string) =>
@@ -99,28 +96,6 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     [logs],
   );
 
-  // ── Admin ───────────────────────────────────────────
-
-  const publishWOD = useCallback((wod: Omit<WOD, 'id' | 'createdAt'>): WOD => {
-    const full: WOD = {
-      ...wod,
-      id: genId('wod'),
-      createdAt: new Date().toISOString(),
-    };
-    setWods((prev) => [full, ...prev]);
-    return full;
-  }, []);
-
-  const updateWOD = useCallback((id: string, patch: Partial<WOD>) => {
-    setWods((prev) => prev.map((w) => (w.id === id ? { ...w, ...patch } : w)));
-  }, []);
-
-  const removeWOD = useCallback((id: string) => {
-    setWods((prev) => prev.filter((w) => w.id !== id));
-  }, []);
-
-  // ── Member ──────────────────────────────────────────
-
   const logWorkout = useCallback(
     (log: Omit<WorkoutLog, 'id' | 'createdAt'>): WorkoutLog => {
       const full: WorkoutLog = {
@@ -129,7 +104,6 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         createdAt: new Date().toISOString(),
       };
       setLogs((prev) => [full, ...prev]);
-      // Credit the member — routes through existing streak + achievement system
       awardPoints(POINTS_PER_WORKOUT, 'workout_logged');
       recordSession();
       return full;
@@ -141,19 +115,72 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     setLogs((prev) => prev.filter((l) => l.id !== id));
   }, []);
 
+  // ── PRs ─────────────────────────────────────────────
+
+  const myPRs = useCallback(
+    (memberId: string) =>
+      prs
+        .filter((p) => p.memberId === memberId)
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    [prs],
+  );
+
+  const prsForExercise = useCallback(
+    (memberId: string, exerciseKey: string) =>
+      prs
+        .filter((p) => p.memberId === memberId && p.exerciseKey === exerciseKey)
+        .sort((a, b) => a.date.localeCompare(b.date)), // chronological for charting
+    [prs],
+  );
+
+  const currentBest = useCallback(
+    (memberId: string, exerciseKey: string): PersonalRecord | null => {
+      const exercise = EXERCISES_BY_KEY[exerciseKey];
+      if (!exercise) return null;
+      const list = prs.filter((p) => p.memberId === memberId && p.exerciseKey === exerciseKey);
+      if (list.length === 0) return null;
+      return list.reduce((best, curr) => {
+        if (exercise.lowerIsBetter) {
+          return curr.value < best.value ? curr : best;
+        }
+        return curr.value > best.value ? curr : best;
+      });
+    },
+    [prs],
+  );
+
+  const addPR = useCallback(
+    (pr: Omit<PersonalRecord, 'id' | 'createdAt'>): PersonalRecord => {
+      const full: PersonalRecord = {
+        ...pr,
+        id: genId('pr'),
+        createdAt: new Date().toISOString(),
+      };
+      setPRs((prev) => [full, ...prev]);
+      awardPoints(POINTS_PER_PR, 'pr_logged');
+      return full;
+    },
+    [awardPoints],
+  );
+
+  const removePR = useCallback((id: string) => {
+    setPRs((prev) => prev.filter((p) => p.id !== id));
+  }, []);
+
   return (
     <WorkoutContext.Provider
       value={{
-        wods,
         logs,
-        todaysWOD,
+        prs,
         myLogs,
         hasMemberLoggedToday,
-        publishWOD,
-        updateWOD,
-        removeWOD,
         logWorkout,
         removeLog,
+        myPRs,
+        prsForExercise,
+        currentBest,
+        addPR,
+        removePR,
       }}
     >
       {children}

@@ -21,7 +21,6 @@ import { useGamification } from '../context/GamificationContext';
 import { useAnnouncements } from '../context/AnnouncementContext';
 import { useAppointments } from '../context/AppointmentContext';
 import { useWorkouts } from '../context/WorkoutContext';
-import { WOD_FORMAT_LABEL } from '../types/workout';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { getDailyQuote } from '../data/quotes';
 import { getTodaysSchedule } from '../data/schedule';
@@ -69,7 +68,9 @@ export function HomeScreen({ navigation }: any) {
   React.useEffect(() => { recordAppOpen(); }, [recordAppOpen]);
   const { announcements } = useAnnouncements();
   const { myAppointments } = useAppointments();
-  const { todaysWOD } = useWorkouts();
+  const { myLogs, myPRs } = useWorkouts();
+  const userLogsCount = user?.id ? myLogs(user.id).length : 0;
+  const userPRsCount = user?.id ? myPRs(user.id).length : 0;
   const dailyQuote = getDailyQuote();
   const hasUnreadNotifications = useHasUnreadNotifications();
 
@@ -239,53 +240,52 @@ export function HomeScreen({ navigation }: any) {
         {/* ─── Member Content ─── */}
         {!isEmployee && (
           <>
-            {/* Workout of the Day */}
+            {/* Training — log workouts, track PRs */}
             <FadeInView delay={340} slideUp={16}>
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Workout of the Day</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Training</Text>
                   <TouchableOpacity
                     style={[styles.seeAllButton, { backgroundColor: colors.accentTint }]}
                     onPress={() => navigation.navigate('Workout')}
                   >
-                    <Text style={[styles.seeAllText, { color: colors.gold }]}>View</Text>
+                    <Text style={[styles.seeAllText, { color: colors.gold }]}>Open</Text>
                     <Ionicons name="chevron-forward" size={14} color={colors.gold} />
                   </TouchableOpacity>
                 </View>
 
-                <TouchableOpacity
-                  onPress={() => navigation.navigate('Workout')}
-                  activeOpacity={0.85}
-                  style={[styles.wodCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}
-                >
-                  <View style={styles.wodCardHeader}>
-                    <Ionicons name="barbell" size={22} color={colors.gold} />
-                    {todaysWOD && (
-                      <View style={[styles.wodFormatChip, { backgroundColor: colors.goldMuted }]}>
-                        <Text style={[styles.wodFormatChipText, { color: colors.gold }]}>
-                          {WOD_FORMAT_LABEL[todaysWOD.format]}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={[styles.wodCardTitle, { color: colors.textPrimary }]} numberOfLines={2}>
-                    {todaysWOD?.title ?? 'No WOD posted today'}
-                  </Text>
-                  <Text
-                    style={[styles.wodCardDesc, { color: colors.textSecondary }]}
-                    numberOfLines={3}
+                <View style={styles.trainingRow}>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('Workout')}
+                    activeOpacity={0.85}
+                    style={[styles.trainingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
                   >
-                    {todaysWOD?.description ?? 'Your coach hasn\'t posted one yet. Tap to log your own.'}
-                  </Text>
-                  {todaysWOD?.timeCapMinutes ? (
-                    <View style={styles.wodMetaRow}>
-                      <Ionicons name="stopwatch-outline" size={12} color={colors.gold} />
-                      <Text style={[styles.wodMetaText, { color: colors.textMuted }]}>
-                        Time cap: {todaysWOD.timeCapMinutes} min
-                      </Text>
+                    <View style={[styles.trainingIconWrap, { backgroundColor: colors.goldMuted }]}>
+                      <Ionicons name="barbell" size={22} color={colors.gold} />
                     </View>
-                  ) : null}
-                </TouchableOpacity>
+                    <Text style={[styles.trainingCardValue, { color: colors.textPrimary }]}>
+                      {userLogsCount}
+                    </Text>
+                    <Text style={[styles.trainingCardLabel, { color: colors.textMuted }]}>
+                      WORKOUTS
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('Workout')}
+                    activeOpacity={0.85}
+                    style={[styles.trainingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  >
+                    <View style={[styles.trainingIconWrap, { backgroundColor: colors.goldMuted }]}>
+                      <Ionicons name="trophy" size={22} color={colors.gold} />
+                    </View>
+                    <Text style={[styles.trainingCardValue, { color: colors.textPrimary }]}>
+                      {userPRsCount}
+                    </Text>
+                    <Text style={[styles.trainingCardLabel, { color: colors.textMuted }]}>
+                      PRs TRACKED
+                    </Text>
+                  </TouchableOpacity>
+                </View>
 
                 {/* Timer launcher chips */}
                 <View style={styles.timerLauncherRow}>
@@ -671,33 +671,30 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  // WOD card
-  wodCard: {
-    padding: 18,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    gap: 8,
+  // Training mini-cards (replaces WOD card)
+  trainingRow: {
+    flexDirection: 'row',
+    gap: 10,
     marginHorizontal: spacing.lg,
   },
-  wodCardHeader: {
-    flexDirection: 'row',
+  trainingCard: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingVertical: 18,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    gap: 4,
   },
-  wodFormatChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
+  trainingIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
-  wodFormatChipText: {
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 0.6,
-  },
-  wodCardTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3, textAlign: 'left' },
-  wodCardDesc: { fontSize: 13, lineHeight: 19, textAlign: 'left' },
-  wodMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-  wodMetaText: { fontSize: 11, fontWeight: '600' },
+  trainingCardValue: { fontSize: 24, fontWeight: '900' },
+  trainingCardLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
 
   // Timer launcher
   timerLauncherRow: {

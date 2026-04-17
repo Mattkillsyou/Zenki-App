@@ -26,9 +26,9 @@ import { AttendanceHistoryScreen } from '../screens/AttendanceHistoryScreen';
 import { AdminBroadcastScreen } from '../screens/AdminBroadcastScreen';
 import { AdminAnnouncementsScreen } from '../screens/AdminAnnouncementsScreen';
 import { AdminAppointmentsScreen } from '../screens/AdminAppointmentsScreen';
-import { AdminWorkoutsScreen } from '../screens/AdminWorkoutsScreen';
 import { WorkoutScreen } from '../screens/WorkoutScreen';
 import { TimerScreen } from '../screens/TimerScreen';
+import { PRDetailScreen } from '../screens/PRDetailScreen';
 import { BookingPaymentScreen } from '../screens/BookingPaymentScreen';
 import { PaymentMethodsScreen } from '../screens/PaymentMethodsScreen';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
@@ -267,9 +267,9 @@ export function RootNavigator() {
       <Stack.Screen name="AdminBroadcast" component={AdminBroadcastScreen} options={pushTransition} />
       <Stack.Screen name="AdminAnnouncements" component={AdminAnnouncementsScreen} options={pushTransition} />
       <Stack.Screen name="AdminAppointments" component={AdminAppointmentsScreen} options={pushTransition} />
-      <Stack.Screen name="AdminWorkouts" component={AdminWorkoutsScreen} options={pushTransition} />
       <Stack.Screen name="Workout" component={WorkoutScreen} options={pushTransition} />
       <Stack.Screen name="Timer" component={TimerScreen} options={pushTransition} />
+      <Stack.Screen name="PRDetail" component={PRDetailScreen} options={pushTransition} />
 
 
       {/* Community */}
