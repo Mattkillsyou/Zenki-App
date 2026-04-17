@@ -3,6 +3,9 @@ import {
   View, Text, StyleSheet, Animated, PanResponder, TouchableOpacity,
   Dimensions, Pressable,
 } from 'react-native';
+import Svg, {
+  Path, G, Defs, LinearGradient, Stop, Ellipse, Rect, Polygon, Line, Circle,
+} from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSenpai, MascotMood } from '../context/SenpaiContext';
 import { randomDialogue } from '../data/senpaiDialogue';
@@ -186,113 +189,343 @@ function SpeechBubble({ text, colors }: { text: string; colors: any }) {
   );
 }
 
-/* ─── Chibi Character (View-based) ────────────────────────────────────────── */
+/* ─── Chibi Character (SVG-based anime style) ───────────────────────────── */
+
+const HAIR_HI = '#DDF6F3';
+const HAIR_LO = '#9FE0DA';
+const HAIR_SHADE = '#7FCFC7';
+const SKIN_TONE = '#FFE5D4';
+const SKIN_SHADOW = '#F2C9B0';
+const IRIS_HI = '#E9CAE8';
+const IRIS_LO = '#9D7DC2';
+const LASH = '#2A2240';
+const LIP = '#D68799';
+const GI = '#F8F4ED';
+const GI_SHADOW = '#D9CFBE';
 
 function ChibiCharacter({ mood, beltColor }: { mood: MascotMood; beltColor: string }) {
   const armsRaised = mood === 'cheering' || mood === 'celebrating';
-  const eyeStyle = mood === 'sleeping' ? 'closed' : mood === 'impressed' ? 'stars' : 'normal';
-  const mouthStyle = mood === 'cheering' || mood === 'celebrating' ? 'open'
-    : mood === 'impressed' ? 'o'
-    : mood === 'disappointed' ? 'sad'
-    : mood === 'sleeping' ? 'sleep'
-    : 'smile';
 
   return (
     <View style={styles.chibi}>
-      {/* Arms (behind body when down, above when raised) */}
-      {!armsRaised && (
-        <>
-          <View style={[styles.arm, styles.armLeft]} />
-          <View style={[styles.arm, styles.armRight]} />
-        </>
-      )}
+      <Svg width={110} height={165} viewBox="0 0 110 165">
+        <Defs>
+          <LinearGradient id="hair" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={HAIR_HI} />
+            <Stop offset="1" stopColor={HAIR_LO} />
+          </LinearGradient>
+          <LinearGradient id="iris" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={IRIS_HI} />
+            <Stop offset="1" stopColor={IRIS_LO} />
+          </LinearGradient>
+          <LinearGradient id="giGrad" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor="#FFFFFF" />
+            <Stop offset="1" stopColor={GI} />
+          </LinearGradient>
+        </Defs>
 
-      {/* Hair back */}
-      <View style={styles.hairBack} />
+        {/* ── Back hair (short bob, flips slightly at the bottom) ── */}
+        <Path d="M 18 44
+                 Q 12 22 30 10
+                 Q 55 2 80 10
+                 Q 98 22 92 44
+                 L 94 74
+                 Q 92 82 84 82
+                 Q 80 78 78 62
+                 L 32 62
+                 Q 30 78 26 82
+                 Q 18 82 16 74 Z"
+              fill="url(#hair)" />
 
-      {/* Head */}
-      <View style={styles.head}>
-        {/* Hair bangs */}
-        <View style={styles.hairBangs}>
-          <View style={styles.bang1} />
-          <View style={styles.bang2} />
-          <View style={styles.bang3} />
-        </View>
+        {/* ── Ahoge (little antenna strand) ── */}
+        <Path d="M 52 10 Q 48 -2 54 -1 Q 55 4 54 10 Z" fill="url(#hair)" />
+        <Path d="M 58 10 Q 62 1 56 2 Q 55 5 56 10 Z" fill={HAIR_SHADE} opacity="0.6" />
 
-        {/* Side hair */}
-        <View style={[styles.sideHair, styles.sideHairLeft]} />
-        <View style={[styles.sideHair, styles.sideHairRight]} />
+        {/* ── Face ── */}
+        <Path d="M 31 44
+                 Q 31 66 38 74
+                 Q 46 82 55 82
+                 Q 64 82 72 74
+                 Q 79 66 79 44
+                 Q 79 30 55 30
+                 Q 31 30 31 44 Z"
+              fill={SKIN_TONE} />
 
-        {/* Eyes */}
-        <View style={styles.eyeRow}>
-          <Eye style={eyeStyle} />
-          <Eye style={eyeStyle} />
-        </View>
+        {/* Soft jaw shadow */}
+        <Path d="M 39 70 Q 55 82 71 70 Q 71 76 55 80 Q 39 76 39 70 Z" fill={SKIN_SHADOW} opacity="0.2" />
 
-        {/* Blush */}
-        <View style={[styles.blush, styles.blushLeft]} />
-        <View style={[styles.blush, styles.blushRight]} />
+        {/* ── Bangs (wavy soft sweep across forehead) ── */}
+        <Path d="M 18 46
+                 Q 22 28 32 34
+                 Q 42 22 50 32
+                 Q 55 26 60 32
+                 Q 68 22 78 34
+                 Q 88 28 92 46
+                 Q 82 14 55 12
+                 Q 28 14 18 46 Z"
+              fill="url(#hair)" />
 
-        {/* Mouth */}
-        <Mouth style={mouthStyle} />
-      </View>
+        {/* Bang shading for depth */}
+        <Path d="M 30 38 Q 42 28 48 32 Q 44 38 36 42 Z" fill={HAIR_SHADE} opacity="0.5" />
+        <Path d="M 80 38 Q 68 28 62 32 Q 66 38 74 42 Z" fill={HAIR_SHADE} opacity="0.5" />
 
-      {/* Body — gi */}
-      <View style={styles.body}>
-        {/* V-neck notch */}
-        <View style={styles.vneck} />
-        {/* Belt */}
-        <View style={[styles.belt, { backgroundColor: beltColor }]} />
-      </View>
+        {/* Hair highlight */}
+        <Path d="M 35 22 Q 45 18 55 18 Q 50 26 42 28 Z" fill="white" opacity="0.5" />
 
-      {/* Arms raised */}
-      {armsRaised && (
-        <>
-          <View style={[styles.arm, styles.armRaisedLeft]} />
-          <View style={[styles.arm, styles.armRaisedRight]} />
-        </>
-      )}
+        {/* ── Eyebrows ── */}
+        {mood !== 'sleeping' && (
+          <G>
+            <Path d={eyebrowPath(mood, 'left')} stroke="#7F6FB8" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+            <Path d={eyebrowPath(mood, 'right')} stroke="#7F6FB8" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+          </G>
+        )}
 
-      {/* Sleeping Zs */}
+        {/* ── Eyes ── */}
+        {renderEyes(mood)}
+
+        {/* ── Blush ── */}
+        <Ellipse cx="36" cy="63" rx="6" ry="3.2" fill="#FFA5C2" opacity="0.6" />
+        <Ellipse cx="74" cy="63" rx="6" ry="3.2" fill="#FFA5C2" opacity="0.6" />
+
+        {/* ── Nose hint ── */}
+        <Path d="M 54 60 Q 55 64 56 60" stroke={SKIN_SHADOW} strokeWidth="0.8" fill="none" strokeLinecap="round" />
+
+        {/* ── Mouth ── */}
+        {renderMouth(mood)}
+
+        {/* ── Neck ── */}
+        <Rect x="48" y="80" width="14" height="8" fill={SKIN_TONE} />
+        <Path d="M 48 84 Q 55 86 62 84" stroke={SKIN_SHADOW} strokeWidth="0.6" fill="none" opacity="0.5" />
+
+        {/* ── Gi pants (back layer so belt covers the top) ── */}
+        <Path d="M 24 120
+                 L 28 154
+                 Q 32 157 38 156
+                 L 42 156
+                 Q 48 155 50 150
+                 L 52 122
+                 L 58 122
+                 L 60 150
+                 Q 62 155 68 156
+                 L 72 156
+                 Q 78 157 82 154
+                 L 86 120 Z"
+              fill="url(#giGrad)" stroke={GI_SHADOW} strokeWidth="0.6" />
+        {/* Pant fold lines */}
+        <Path d="M 40 124 L 36 154" stroke={GI_SHADOW} strokeWidth="0.5" fill="none" opacity="0.4" />
+        <Path d="M 70 124 L 74 154" stroke={GI_SHADOW} strokeWidth="0.5" fill="none" opacity="0.4" />
+
+        {/* ── Bare feet (traditional karate is barefoot) ── */}
+        <Ellipse cx="38" cy="158" rx="8" ry="3.5" fill={SKIN_TONE} stroke={SKIN_SHADOW} strokeWidth="0.4" />
+        <Ellipse cx="72" cy="158" rx="8" ry="3.5" fill={SKIN_TONE} stroke={SKIN_SHADOW} strokeWidth="0.4" />
+
+        {/* ── Gi jacket (wrap-front, larger & fuller than before) ── */}
+        <Path d="M 22 92
+                 Q 18 108 22 122
+                 L 88 122
+                 Q 92 108 88 92
+                 Q 70 98 55 98
+                 Q 40 98 22 92 Z"
+              fill="url(#giGrad)" stroke={GI_SHADOW} strokeWidth="0.7" />
+
+        {/* Gi inner lapel shading (crossed front) */}
+        <Path d="M 34 92 L 55 114 L 76 92 L 70 92 L 55 108 L 40 92 Z" fill={GI_SHADOW} opacity="0.35" />
+        {/* Lapel edge lines */}
+        <Path d="M 34 92 L 55 114" stroke={GI_SHADOW} strokeWidth="0.8" fill="none" />
+        <Path d="M 76 92 L 55 114" stroke={GI_SHADOW} strokeWidth="0.8" fill="none" />
+
+        {/* V-neck showing skin */}
+        <Path d="M 44 92 Q 55 102 66 92 L 55 96 Z" fill={SKIN_TONE} />
+
+        {/* Shoulder folds */}
+        <Path d="M 22 92 Q 26 98 30 102 L 32 94 Z" fill={GI_SHADOW} opacity="0.3" />
+        <Path d="M 88 92 Q 84 98 80 102 L 78 94 Z" fill={GI_SHADOW} opacity="0.3" />
+
+        {/* ── Sleeves (gi sleeves — loose, past elbow) ── */}
+        {!armsRaised && (
+          <G>
+            {/* Left sleeve */}
+            <Path d="M 22 94
+                     Q 14 104 12 120
+                     Q 12 126 18 126
+                     Q 22 124 26 118
+                     L 30 96 Z"
+                  fill="url(#giGrad)" stroke={GI_SHADOW} strokeWidth="0.6" />
+            <Path d="M 12 120 L 26 120" stroke={GI_SHADOW} strokeWidth="0.6" opacity="0.5" />
+            {/* Right sleeve */}
+            <Path d="M 88 94
+                     Q 96 104 98 120
+                     Q 98 126 92 126
+                     Q 88 124 84 118
+                     L 80 96 Z"
+                  fill="url(#giGrad)" stroke={GI_SHADOW} strokeWidth="0.6" />
+            <Path d="M 84 120 L 98 120" stroke={GI_SHADOW} strokeWidth="0.6" opacity="0.5" />
+            {/* Hands */}
+            <Circle cx="17" cy="128" r="4.5" fill={SKIN_TONE} stroke={SKIN_SHADOW} strokeWidth="0.4" />
+            <Circle cx="93" cy="128" r="4.5" fill={SKIN_TONE} stroke={SKIN_SHADOW} strokeWidth="0.4" />
+          </G>
+        )}
+
+        {/* ── Raised arms (cheer pose) ── */}
+        {armsRaised && (
+          <G>
+            <Path d="M 24 96 Q 14 78 10 54 Q 9 48 14 46 Q 20 48 24 60 Q 28 78 32 98 Z" fill="url(#giGrad)" stroke={GI_SHADOW} strokeWidth="0.6" />
+            <Path d="M 86 96 Q 96 78 100 54 Q 101 48 96 46 Q 90 48 86 60 Q 82 78 78 98 Z" fill="url(#giGrad)" stroke={GI_SHADOW} strokeWidth="0.6" />
+            {/* Sleeve cuffs */}
+            <Path d="M 10 54 L 24 60" stroke={GI_SHADOW} strokeWidth="0.8" opacity="0.5" />
+            <Path d="M 100 54 L 86 60" stroke={GI_SHADOW} strokeWidth="0.8" opacity="0.5" />
+            {/* Raised fists */}
+            <Circle cx="12" cy="44" r="5" fill={SKIN_TONE} stroke={SKIN_SHADOW} strokeWidth="0.5" />
+            <Circle cx="98" cy="44" r="5" fill={SKIN_TONE} stroke={SKIN_SHADOW} strokeWidth="0.5" />
+          </G>
+        )}
+
+        {/* ── Belt (over the gi) ── */}
+        <Rect x="20" y="117" width="70" height="6" fill={beltColor} rx="1" />
+        <Rect x="20" y="117" width="70" height="1" fill="#000" opacity="0.18" />
+        {/* Belt knot */}
+        <Rect x="46" y="114" width="18" height="13" fill={beltColor} rx="2" />
+        <Path d="M 46 114 L 64 114" stroke="#000" strokeWidth="0.5" opacity="0.25" />
+        {/* Belt ends hanging down */}
+        <Path d="M 48 127 L 46 140 L 52 140 L 52 127 Z" fill={beltColor} />
+        <Path d="M 58 127 L 58 140 L 64 140 L 62 127 Z" fill={beltColor} />
+      </Svg>
+
       {mood === 'sleeping' && <SleepingZs />}
     </View>
   );
 }
 
-function Eye({ style }: { style: 'normal' | 'closed' | 'stars' }) {
-  if (style === 'closed') {
-    return <View style={styles.eyeClosed} />;
-  }
-  if (style === 'stars') {
+/* ── Eye renderers ───────────────────────────────────────────────────────── */
+
+function renderEyes(mood: MascotMood) {
+  if (mood === 'sleeping') {
     return (
-      <View style={styles.eyeStar}>
-        <View style={styles.starCore} />
-        <View style={[styles.starCore, { transform: [{ rotate: '45deg' }] }]} />
-      </View>
+      <G>
+        <Path d="M 30 52 Q 38 47 46 52" stroke={LASH} strokeWidth="2" fill="none" strokeLinecap="round" />
+        <Path d="M 64 52 Q 72 47 80 52" stroke={LASH} strokeWidth="2" fill="none" strokeLinecap="round" />
+        <Path d="M 32 54 Q 38 56 44 54" stroke={LASH} strokeWidth="1" fill="none" strokeLinecap="round" opacity="0.6" />
+        <Path d="M 66 54 Q 72 56 78 54" stroke={LASH} strokeWidth="1" fill="none" strokeLinecap="round" opacity="0.6" />
+      </G>
     );
   }
+  if (mood === 'impressed') {
+    return (
+      <G>
+        {starPoints(38, 52, 8)}
+        {starPoints(72, 52, 8)}
+      </G>
+    );
+  }
+  if (mood === 'cheering' || mood === 'celebrating') {
+    // Closed happy "^ ^" eyes
+    return (
+      <G>
+        <Path d="M 32 54 Q 38 46 44 54" stroke={LASH} strokeWidth="2.2" fill="none" strokeLinecap="round" />
+        <Path d="M 66 54 Q 72 46 78 54" stroke={LASH} strokeWidth="2.2" fill="none" strokeLinecap="round" />
+      </G>
+    );
+  }
+  // Default + disappointed (disappointed drops pupils)
+  const pupilY = mood === 'disappointed' ? 55 : 52;
   return (
-    <View style={styles.eye}>
-      <View style={styles.eyeShine} />
-    </View>
+    <G>
+      {animeEye(38, pupilY)}
+      {animeEye(72, pupilY)}
+    </G>
   );
 }
 
-function Mouth({ style }: { style: 'smile' | 'open' | 'o' | 'sad' | 'sleep' }) {
-  if (style === 'open') {
-    return <View style={styles.mouthOpen} />;
+function animeEye(cx: number, cy: number) {
+  return (
+    <G>
+      {/* Upper lash thick */}
+      <Path d={`M ${cx - 8} ${cy - 5} Q ${cx} ${cy - 10} ${cx + 8} ${cy - 5}`} stroke={LASH} strokeWidth="2.6" fill="none" strokeLinecap="round" />
+      {/* Sclera */}
+      <Ellipse cx={cx} cy={cy} rx="6.5" ry="7.5" fill="white" />
+      {/* Iris */}
+      <Ellipse cx={cx} cy={cy + 1} rx="5.2" ry="6.5" fill="url(#iris)" />
+      {/* Iris ring */}
+      <Ellipse cx={cx} cy={cy + 1} rx="5.2" ry="6.5" fill="none" stroke={IRIS_LO} strokeWidth="0.5" />
+      {/* Pupil */}
+      <Ellipse cx={cx} cy={cy + 2} rx="1.8" ry="3" fill="#120930" />
+      {/* Large highlight */}
+      <Ellipse cx={cx - 2} cy={cy - 3} rx="2.2" ry="2.8" fill="white" />
+      {/* Secondary highlight */}
+      <Ellipse cx={cx + 2} cy={cy + 3} rx="0.9" ry="1.2" fill="white" opacity="0.85" />
+      {/* Tiny shine */}
+      <Circle cx={cx - 3} cy={cy - 1} r="0.5" fill="white" opacity="0.7" />
+      {/* Lower lash hint */}
+      <Path d={`M ${cx - 5} ${cy + 6} Q ${cx} ${cy + 8} ${cx + 5} ${cy + 6}`} stroke={LASH} strokeWidth="0.8" fill="none" strokeLinecap="round" opacity="0.6" />
+    </G>
+  );
+}
+
+function starPoints(cx: number, cy: number, size: number) {
+  const pts: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const angle = (i * Math.PI) / 5 - Math.PI / 2;
+    const r = i % 2 === 0 ? size : size * 0.42;
+    pts.push(`${(cx + r * Math.cos(angle)).toFixed(2)},${(cy + r * Math.sin(angle)).toFixed(2)}`);
   }
-  if (style === 'o') {
-    return <View style={styles.mouthO} />;
+  return (
+    <G>
+      <Polygon points={pts.join(' ')} fill="#FFD94A" stroke="#E8A800" strokeWidth="0.8" />
+      <Circle cx={cx - 1.5} cy={cy - 2} r="1.2" fill="white" opacity="0.9" />
+    </G>
+  );
+}
+
+/* ── Mouth renderers ─────────────────────────────────────────────────────── */
+
+function renderMouth(mood: MascotMood) {
+  if (mood === 'sleeping') {
+    return <Line x1="52" y1="72" x2="58" y2="72" stroke={LIP} strokeWidth="1.2" strokeLinecap="round" />;
   }
-  if (style === 'sad') {
-    return <View style={styles.mouthSad} />;
+  if (mood === 'cheering' || mood === 'celebrating') {
+    return (
+      <G>
+        {/* Open happy mouth */}
+        <Path d="M 48 69 Q 55 79 62 69 Q 58 76 55 76.5 Q 52 76 48 69 Z" fill="#8B3A4A" />
+        <Path d="M 48 69 Q 55 74 62 69" stroke={LIP} strokeWidth="1" fill="none" strokeLinecap="round" />
+        {/* Tongue dot */}
+        <Ellipse cx="55" cy="74" rx="2" ry="1.2" fill="#FF8AA0" opacity="0.8" />
+      </G>
+    );
   }
-  if (style === 'sleep') {
-    return <View style={styles.mouthSleep} />;
+  if (mood === 'disappointed') {
+    return <Path d="M 49 72 Q 55 68 61 72" stroke={LIP} strokeWidth="1.5" fill="none" strokeLinecap="round" />;
   }
-  // smile
-  return <View style={styles.mouthSmile} />;
+  if (mood === 'impressed') {
+    return (
+      <G>
+        <Ellipse cx="55" cy="72" rx="2.5" ry="3" fill="#8B3A4A" />
+        <Ellipse cx="55" cy="72" rx="2.5" ry="3" fill="none" stroke={LIP} strokeWidth="0.8" />
+      </G>
+    );
+  }
+  // default smile
+  return (
+    <G>
+      <Path d="M 50 70 Q 55 74 60 70" stroke={LIP} strokeWidth="1.6" fill="none" strokeLinecap="round" />
+      <Path d="M 51 70.5 Q 55 73 59 70.5" stroke="#F89BAF" strokeWidth="0.8" fill="none" strokeLinecap="round" />
+    </G>
+  );
+}
+
+function eyebrowPath(mood: MascotMood, side: 'left' | 'right') {
+  const cx = side === 'left' ? 38 : 72;
+  if (mood === 'impressed' || mood === 'cheering' || mood === 'celebrating') {
+    // Raised
+    return `M ${cx - 7} 41 Q ${cx} 37 ${cx + 7} 41`;
+  }
+  if (mood === 'disappointed') {
+    // Furrowed — inner tips up
+    if (side === 'left') return `M ${cx - 7} 42 Q ${cx} 40 ${cx + 7} 44`;
+    return `M ${cx - 7} 44 Q ${cx} 40 ${cx + 7} 42`;
+  }
+  // Default — gentle arch
+  return `M ${cx - 7} 42 Q ${cx} 39 ${cx + 7} 42`;
 }
 
 function SleepingZs() {
@@ -341,14 +574,14 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     zIndex: 99990,
-    width: 80,
+    width: 110,
     alignItems: 'center',
   },
 
   // ── Speech bubble ──
   bubble: {
     position: 'absolute',
-    bottom: 125,
+    bottom: 172,
     right: -10,
     maxWidth: 180,
     padding: 8,
@@ -376,7 +609,7 @@ const styles = StyleSheet.create({
   closeBtnText: { color: '#FFF', fontSize: 10, fontWeight: '900' },
 
   // ── Chibi container ──
-  chibi: { width: 80, height: 115, alignItems: 'center', position: 'relative' },
+  chibi: { width: 110, height: 165, alignItems: 'center', position: 'relative' },
 
   // ── Hair ──
   hairBack: {
