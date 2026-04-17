@@ -12,6 +12,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
+import Svg, { Path, Circle as SvgCircle, G } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -20,6 +21,7 @@ import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
 import { FadeInView } from '../components';
 import { FoodSearchModal } from '../components/FoodSearchModal';
+import { MealType, MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from '../types/nutrition';
 
 function todayISO(): string {
   return new Date().toISOString().split('T')[0];
@@ -105,6 +107,7 @@ export function MacroTrackerScreen({ navigation }: any) {
   const [protein, setProtein] = useState('');
   const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
+  const [mealType, setMealType] = useState<MealType>('lunch');
 
   // Goals modal
   const [goalsOpen, setGoalsOpen] = useState(false);
@@ -184,6 +187,7 @@ export function MacroTrackerScreen({ navigation }: any) {
       protein: pro,
       carbs: carb,
       fat: ft,
+      mealType,
     });
     setName('');
     setCalories('');
@@ -409,6 +413,153 @@ export function MacroTrackerScreen({ navigation }: any) {
             </View>
           </FadeInView>
 
+          {/* Macro Distribution Donut Chart */}
+          {totals.calories > 0 && (
+            <FadeInView delay={70}>
+              <View style={[styles.donutCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.donutTitle, { color: colors.textMuted }]}>MACRO DISTRIBUTION</Text>
+                <View style={styles.donutRow}>
+                  {(() => {
+                    const total = totals.protein * 4 + totals.carbs * 4 + totals.fat * 9;
+                    if (total === 0) return null;
+                    const proteinPct = (totals.protein * 4) / total;
+                    const carbsPct = (totals.carbs * 4) / total;
+                    const fatPct = (totals.fat * 9) / total;
+
+                    const size = 120;
+                    const stroke = 18;
+                    const radius = (size - stroke) / 2;
+                    const cx = size / 2;
+                    const cy = size / 2;
+                    const circ = 2 * Math.PI * radius;
+
+                    // Arc helper
+                    const proteinDash = proteinPct * circ;
+                    const carbsDash = carbsPct * circ;
+                    const fatDash = fatPct * circ;
+
+                    const proteinOffset = 0;
+                    const carbsOffset = -(proteinDash);
+                    const fatOffset = -(proteinDash + carbsDash);
+
+                    return (
+                      <View style={styles.donutWrap}>
+                        <Svg width={size} height={size}>
+                          {/* Background track */}
+                          <SvgCircle cx={cx} cy={cy} r={radius} fill="none" stroke={colors.backgroundElevated} strokeWidth={stroke} />
+                          {/* Fat (gold) */}
+                          <SvgCircle
+                            cx={cx} cy={cy} r={radius}
+                            fill="none" stroke="#FFD166" strokeWidth={stroke}
+                            strokeDasharray={`${fatDash} ${circ - fatDash}`}
+                            strokeDashoffset={fatOffset}
+                            strokeLinecap="round"
+                            transform={`rotate(-90, ${cx}, ${cy})`}
+                          />
+                          {/* Carbs (teal) */}
+                          <SvgCircle
+                            cx={cx} cy={cy} r={radius}
+                            fill="none" stroke="#4ECDC4" strokeWidth={stroke}
+                            strokeDasharray={`${carbsDash} ${circ - carbsDash}`}
+                            strokeDashoffset={carbsOffset}
+                            strokeLinecap="round"
+                            transform={`rotate(-90, ${cx}, ${cy})`}
+                          />
+                          {/* Protein (red) */}
+                          <SvgCircle
+                            cx={cx} cy={cy} r={radius}
+                            fill="none" stroke="#FF6B6B" strokeWidth={stroke}
+                            strokeDasharray={`${proteinDash} ${circ - proteinDash}`}
+                            strokeDashoffset={proteinOffset}
+                            strokeLinecap="round"
+                            transform={`rotate(-90, ${cx}, ${cy})`}
+                          />
+                        </Svg>
+                        <View style={styles.donutCenter}>
+                          <Text style={[styles.donutCenterValue, { color: colors.textPrimary }]}>
+                            {Math.round(totals.calories)}
+                          </Text>
+                          <Text style={[styles.donutCenterLabel, { color: colors.textMuted }]}>
+                            / {goals.calories}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })()}
+
+                  <View style={styles.donutLegend}>
+                    <View style={styles.donutLegendRow}>
+                      <View style={[styles.donutLegendDot, { backgroundColor: '#FF6B6B' }]} />
+                      <Text style={[styles.donutLegendText, { color: colors.textSecondary }]}>
+                        Protein · {Math.round(totals.protein)}g · {totals.calories > 0 ? Math.round((totals.protein * 4 / (totals.protein * 4 + totals.carbs * 4 + totals.fat * 9)) * 100) : 0}%
+                      </Text>
+                    </View>
+                    <View style={styles.donutLegendRow}>
+                      <View style={[styles.donutLegendDot, { backgroundColor: '#4ECDC4' }]} />
+                      <Text style={[styles.donutLegendText, { color: colors.textSecondary }]}>
+                        Carbs · {Math.round(totals.carbs)}g · {totals.calories > 0 ? Math.round((totals.carbs * 4 / (totals.protein * 4 + totals.carbs * 4 + totals.fat * 9)) * 100) : 0}%
+                      </Text>
+                    </View>
+                    <View style={styles.donutLegendRow}>
+                      <View style={[styles.donutLegendDot, { backgroundColor: '#FFD166' }]} />
+                      <Text style={[styles.donutLegendText, { color: colors.textSecondary }]}>
+                        Fat · {Math.round(totals.fat)}g · {totals.calories > 0 ? Math.round((totals.fat * 9 / (totals.protein * 4 + totals.carbs * 4 + totals.fat * 9)) * 100) : 0}%
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </FadeInView>
+          )}
+
+          {/* Quick-add recent foods row */}
+          {recentFoods.length > 0 && (
+            <FadeInView delay={75}>
+              <View style={{ marginTop: spacing.sm }}>
+                <Text style={[styles.sectionLabel, { paddingHorizontal: spacing.lg, color: colors.textMuted }]}>QUICK ADD</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: 8 }}
+                >
+                  {recentFoods.slice(0, 10).map((food, i) => (
+                    <TouchableOpacity
+                      key={`${food.id}-${i}`}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        if (!user) return;
+                        addMacroEntry({
+                          memberId: user.id,
+                          date: selectedDate,
+                          name: food.brand ? `${food.brand} · ${food.name}` : food.name,
+                          calories: food.macros.calories,
+                          protein: food.macros.protein,
+                          carbs: food.macros.carbs,
+                          fat: food.macros.fat,
+                          mealType,
+                        });
+                      }}
+                      style={[styles.quickAddChip, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                    >
+                      <Text style={[styles.quickAddName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {food.name}
+                      </Text>
+                      <Text style={[styles.quickAddCal, { color: colors.textMuted }]}>
+                        {food.macros.calories} cal
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity
+                    onPress={() => setSearchOpen(true)}
+                    style={[styles.quickAddChip, styles.quickAddMore, { backgroundColor: colors.goldMuted, borderColor: colors.gold + '30' }]}
+                  >
+                    <Ionicons name="add" size={18} color={colors.gold} />
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+            </FadeInView>
+          )}
+
           {/* Expenditure card — adaptive TDEE */}
           {hasSetup && user && (() => {
             const profile = profileFor(user.id);
@@ -452,6 +603,32 @@ export function MacroTrackerScreen({ navigation }: any) {
                 value={name}
                 onChangeText={setName}
               />
+
+              {/* Meal type selector */}
+              <View style={[styles.mealTypeRow, { marginTop: spacing.sm }]}>
+                {(['breakfast', 'lunch', 'dinner', 'snacks'] as MealType[]).map((mt) => {
+                  const active = mealType === mt;
+                  return (
+                    <TouchableOpacity
+                      key={mt}
+                      style={[
+                        styles.mealTypeChip,
+                        {
+                          backgroundColor: active ? colors.gold : colors.surfaceSecondary,
+                          borderColor: active ? colors.gold : colors.border,
+                        },
+                      ]}
+                      onPress={() => setMealType(mt)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ fontSize: 12 }}>{MEAL_TYPE_ICONS[mt]}</Text>
+                      <Text style={[styles.mealTypeLabel, { color: active ? '#000' : colors.textSecondary }]}>
+                        {MEAL_TYPE_LABELS[mt]}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
 
               <View style={[styles.gridRow, { marginTop: spacing.sm }]}>
                 <View style={styles.gridCell}>
@@ -901,4 +1078,107 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalBtnText: { fontSize: 14, fontWeight: '800' },
+
+  // ── Meal type selector ──
+  mealTypeRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  mealTypeChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  mealTypeLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // ── Donut chart ──
+  donutCard: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+  },
+  donutTitle: {
+    fontSize: 10,
+    letterSpacing: 1.2,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
+  },
+  donutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  donutWrap: {
+    position: 'relative',
+    width: 120,
+    height: 120,
+  },
+  donutCenter: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  donutCenterValue: {
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  donutCenterLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  donutLegend: {
+    flex: 1,
+    gap: 8,
+  },
+  donutLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  donutLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  donutLegendText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
+  // ── Quick add ──
+  quickAddChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    maxWidth: 140,
+  },
+  quickAddName: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  quickAddCal: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  quickAddMore: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
 });

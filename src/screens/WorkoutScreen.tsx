@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,15 +9,18 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useWorkouts } from '../context/WorkoutContext';
 import { useGamification } from '../context/GamificationContext';
 import { spacing, borderRadius } from '../theme';
 import { FadeInView, LineChart } from '../components';
+import { EmptyState } from '../components/EmptyState';
 import { WORKOUT_FORMAT_LABEL, WodResult, WorkoutFormat } from '../types/workout';
 import {
   EXERCISES,
@@ -26,9 +29,27 @@ import {
   CATEGORY_LABEL,
   formatPRValue,
   estimate1RM,
+  STRUCTURED_EXERCISES,
+  searchStructuredExercises,
+  ALL_MUSCLE_GROUPS,
+  MUSCLE_GROUP_LABELS,
+  MUSCLE_GROUP_ICONS,
 } from '../data/exercises';
+import {
+  WorkoutSet,
+  LoggedExercise,
+  StructuredWorkoutLog,
+  WorkoutTemplate,
+  MuscleGroup,
+  volumeByMuscleGroup,
+  totalVolume as calcTotalVolume,
+  estimated1RM,
+} from '../types/activity';
 
 type Tab = 'log' | 'prs' | 'stats';
+
+const TEMPLATES_KEY = '@zenki_workout_templates';
+const STRUCTURED_LOGS_KEY = '@zenki_structured_logs';
 
 function todayISO(): string {
   return new Date().toISOString().split('T')[0];
@@ -437,6 +458,14 @@ function StatsTab({
 }) {
   const { colors } = useTheme();
 
+  // Load structured logs for volume tracking
+  const [structuredLogs, setStructuredLogs] = React.useState<StructuredWorkoutLog[]>([]);
+  React.useEffect(() => {
+    AsyncStorage.getItem(STRUCTURED_LOGS_KEY).then((raw) => {
+      if (raw) try { setStructuredLogs(JSON.parse(raw)); } catch {}
+    });
+  }, []);
+
   const stats = useMemo(() => {
     const thisWeekStart = (() => {
       const d = new Date();
@@ -458,8 +487,34 @@ function StatsTab({
       .sort((a, b) => b.pr.value - a.pr.value)
       .slice(0, 3);
 
-    return { thisWeek, thisMonth, rxCount, rxPct, strengthPRs };
-  }, [logs, prs]);
+    // Volume per muscle group from structured logs (last 12 weeks)
+    const twelveWeeksAgo = new Date();
+    twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84);
+    const recentStructured = structuredLogs.filter(
+      (l) => new Date(l.date) >= twelveWeeksAgo
+    );
+    const allExercises = recentStructured.flatMap((l) => l.exercises);
+    const volumeMap = volumeByMuscleGroup(allExercises);
+    const maxVol = Math.max(1, ...Object.values(volumeMap));
+
+    // Weekly volume for chart (last 12 weeks)
+    const weeklyVolume: { week: string; volume: number }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - i * 7 - weekStart.getDay());
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const weekLabel = `W${12 - i}`;
+      const weekLogs = structuredLogs.filter((l) => {
+        const d = new Date(l.date);
+        return d >= weekStart && d <= weekEnd;
+      });
+      const vol = weekLogs.reduce((sum, l) => sum + (l.totalVolume || 0), 0);
+      weeklyVolume.push({ week: weekLabel, volume: vol });
+    }
+
+    return { thisWeek, thisMonth, rxCount, rxPct, strengthPRs, volumeMap, maxVol, weeklyVolume };
+  }, [logs, prs, structuredLogs]);
 
   return (
     <View>
@@ -522,6 +577,70 @@ function StatsTab({
               </Text>
             </View>
           ))}
+        </View>
+      )}
+
+      {/* ── Volume per Muscle Group Heatmap ── */}
+      {Object.keys(stats.volumeMap).length > 0 && (
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: colors.gold }]}>VOLUME BY MUSCLE (12 WEEKS)</Text>
+          {ALL_MUSCLE_GROUPS.map((group) => {
+            const vol = (stats.volumeMap as Record<string, number>)[group] || 0;
+            if (vol === 0) return null;
+            const pct = Math.max(4, (vol / stats.maxVol) * 100);
+            return (
+              <View key={group} style={styles.volumeRow}>
+                <View style={styles.volumeLabel}>
+                  <Text style={{ fontSize: 14 }}>{MUSCLE_GROUP_ICONS[group]}</Text>
+                  <Text style={[styles.volumeGroupName, { color: colors.textSecondary }]}>
+                    {MUSCLE_GROUP_LABELS[group].toUpperCase()}
+                  </Text>
+                </View>
+                <View style={[styles.volumeBarBg, { backgroundColor: colors.surfaceSecondary }]}>
+                  <View
+                    style={[
+                      styles.volumeBarFill,
+                      { backgroundColor: colors.gold, width: `${pct}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={[styles.volumeValue, { color: colors.textMuted }]}>
+                  {vol >= 1000 ? `${(vol / 1000).toFixed(1)}K` : vol} LBS
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* ── Weekly Volume Chart ── */}
+      {stats.weeklyVolume.some((w) => w.volume > 0) && (
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: colors.gold }]}>WEEKLY VOLUME (12 WEEKS)</Text>
+          <View style={[styles.weeklyChart, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+            {stats.weeklyVolume.map((w, i) => {
+              const maxVol = Math.max(1, ...stats.weeklyVolume.map((x) => x.volume));
+              const barH = Math.max(4, (w.volume / maxVol) * 100);
+              return (
+                <View key={i} style={styles.weeklyBar}>
+                  <View style={styles.weeklyBarTrack}>
+                    <View
+                      style={[
+                        styles.weeklyBarFill,
+                        {
+                          backgroundColor: i === stats.weeklyVolume.length - 1 ? colors.gold : colors.gold + '60',
+                          height: `${barH}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={[styles.weeklyBarLabel, { color: colors.textMuted }]}>
+                    {i === stats.weeklyVolume.length - 1 ? 'NOW' : w.week}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
       )}
     </View>
@@ -716,4 +835,71 @@ const styles = StyleSheet.create({
   podiumName: { fontSize: 14, fontWeight: '700', textAlign: 'left' },
   podiumMeta: { fontSize: 11, fontWeight: '500', marginTop: 2, textAlign: 'left' },
   podiumValue: { fontSize: 16, fontWeight: '900' },
+
+  // ── Volume Heatmap ──
+  volumeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  volumeLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    width: 100,
+  },
+  volumeGroupName: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  volumeBarBg: {
+    flex: 1,
+    height: 16,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  volumeBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  volumeValue: {
+    fontSize: 9,
+    fontWeight: '700',
+    width: 60,
+    textAlign: 'right',
+  },
+
+  // ── Weekly Volume Chart ──
+  weeklyChart: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    height: 120,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 10,
+    paddingBottom: 20,
+    gap: 2,
+  },
+  weeklyBar: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  weeklyBarTrack: {
+    width: '80%',
+    height: 80,
+    justifyContent: 'flex-end',
+  },
+  weeklyBarFill: {
+    width: '100%',
+    borderRadius: 3,
+    minHeight: 4,
+  },
+  weeklyBarLabel: {
+    fontSize: 7,
+    fontWeight: '700',
+    marginTop: 4,
+    textAlign: 'center',
+  },
 });
