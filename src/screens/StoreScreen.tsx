@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,15 +11,28 @@ import {
   Dimensions,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  TextInput,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { CATEGORIES, Product } from '../data/products';
 import { useProducts } from '../context/ProductContext';
 import { useGamification } from '../context/GamificationContext';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
+
+const WISHLIST_KEY = '@zenki_wishlist';
+const CART_KEY = '@zenki_cart';
+
+const PROMO_CODES: Record<string, { discountPercent: number; label: string }> = {
+  ZENKI20: { discountPercent: 20, label: '20% off' },
+  DOJO10: { discountPercent: 10, label: '10% off' },
+  MEMBER: { discountPercent: 15, label: '15% Member Discount' },
+};
 
 // Conversion rate: $1 = 10 Dojo Points
 const POINTS_PER_DOLLAR = 10;
@@ -42,6 +55,51 @@ export function StoreScreen({ navigation }: any) {
   const [pageIdx, setPageIdx] = useState(0);
   const [pageWidth, setPageWidth] = useState(0);
   const pagerRef = useRef<ScrollView>(null);
+
+  // Wishlist
+  const [wishlist, setWishlist] = useState<string[]>([]);
+  const [showWishlist, setShowWishlist] = useState(false);
+
+  // Promo code
+  const [promoCode, setPromoCode] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountPercent: number; label: string } | null>(null);
+
+  // Persist cart and wishlist
+  useEffect(() => {
+    AsyncStorage.getItem(WISHLIST_KEY).then((raw) => { if (raw) try { setWishlist(JSON.parse(raw)); } catch {} });
+    AsyncStorage.getItem(CART_KEY).then((raw) => { if (raw) try { setCart(JSON.parse(raw)); } catch {} });
+  }, []);
+
+  useEffect(() => {
+    if (cart.length > 0) AsyncStorage.setItem(CART_KEY, JSON.stringify(cart));
+    else AsyncStorage.removeItem(CART_KEY);
+  }, [cart]);
+
+  useEffect(() => {
+    AsyncStorage.setItem(WISHLIST_KEY, JSON.stringify(wishlist));
+  }, [wishlist]);
+
+  const toggleWishlist = (productId: string) => {
+    setWishlist((prev) =>
+      prev.includes(productId)
+        ? prev.filter((id) => id !== productId)
+        : [...prev, productId],
+    );
+  };
+
+  const isWishlisted = (productId: string) => wishlist.includes(productId);
+
+  const applyPromo = () => {
+    const code = promoCode.trim().toUpperCase();
+    const promo = PROMO_CODES[code];
+    if (promo) {
+      setAppliedPromo({ code, ...promo });
+      setPromoCode('');
+      Alert.alert('Promo Applied!', promo.label);
+    } else {
+      Alert.alert('Invalid Code', 'This promo code is not valid.');
+    }
+  };
 
   const dojoPoints = gamState.dojoPoints || 0;
 
@@ -100,6 +158,18 @@ export function StoreScreen({ navigation }: any) {
             <Text style={styles.soldOutText}>SOLD OUT</Text>
           </View>
         )}
+        {/* Wishlist heart */}
+        <TouchableOpacity
+          style={styles.wishlistBtn}
+          onPress={(e) => { e.stopPropagation(); toggleWishlist(item.id); play('navigate'); }}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        >
+          <Ionicons
+            name={isWishlisted(item.id) ? 'heart' : 'heart-outline'}
+            size={18}
+            color={isWishlisted(item.id) ? colors.red : 'rgba(255,255,255,0.7)'}
+          />
+        </TouchableOpacity>
       </View>
       <View style={styles.productInfo}>
         <Text style={[styles.productName, { color: colors.textPrimary }]} numberOfLines={2}>
@@ -233,14 +303,49 @@ export function StoreScreen({ navigation }: any) {
                 </TouchableOpacity>
               )}
 
+              {/* Promo code */}
+              <View style={styles.promoRow}>
+                <TextInput
+                  style={[styles.promoInput, { backgroundColor: colors.backgroundElevated, color: colors.textPrimary, borderColor: colors.border }]}
+                  placeholder="Promo code"
+                  placeholderTextColor={colors.textMuted}
+                  value={promoCode}
+                  onChangeText={setPromoCode}
+                  autoCapitalize="characters"
+                />
+                <TouchableOpacity
+                  style={[styles.promoBtn, { backgroundColor: colors.gold }]}
+                  onPress={applyPromo}
+                >
+                  <Text style={styles.promoBtnText}>APPLY</Text>
+                </TouchableOpacity>
+              </View>
+              {appliedPromo && (
+                <View style={[styles.promoApplied, { backgroundColor: colors.successMuted }]}>
+                  <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                  <Text style={[styles.promoAppliedText, { color: colors.success }]}>
+                    {appliedPromo.label} ({appliedPromo.code})
+                  </Text>
+                  <TouchableOpacity onPress={() => setAppliedPromo(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close" size={14} color={colors.success} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {/* Total */}
               <View style={[styles.cartTotal, { borderTopColor: colors.divider }]}>
                 <Text style={[styles.cartTotalLabel, { color: colors.textMuted }]}>Total</Text>
                 {(() => {
                   const pointsDiscount = usePoints ? Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal) : 0;
-                  const finalTotal = Math.max(0, cartTotal - pointsDiscount);
+                  const promoDiscount = appliedPromo ? cartTotal * (appliedPromo.discountPercent / 100) : 0;
+                  const finalTotal = Math.max(0, cartTotal - pointsDiscount - promoDiscount);
                   return (
-                    <Text style={[styles.cartTotalAmount, { color: colors.gold }]}>${finalTotal.toFixed(2)}</Text>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      {promoDiscount > 0 && (
+                        <Text style={[styles.promoDiscountText, { color: colors.success }]}>-${promoDiscount.toFixed(2)} promo</Text>
+                      )}
+                      <Text style={[styles.cartTotalAmount, { color: colors.gold }]}>${finalTotal.toFixed(2)}</Text>
+                    </View>
                   );
                 })()}
               </View>
@@ -584,5 +689,65 @@ const styles = StyleSheet.create({
     ...typography.button,
     color: '#FFF',
     fontWeight: '900',
+  },
+
+  // ── Wishlist ──
+  wishlistBtn: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ── Promo code ──
+  promoRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  promoInput: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  promoBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  promoBtnText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 0.5,
+  },
+  promoApplied: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 6,
+  },
+  promoAppliedText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  promoDiscountText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

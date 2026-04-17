@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ScrollView,
   Modal,
   Pressable,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +21,9 @@ import { BeltDisplay } from '../components';
 import { BELT_DISPLAY_COLORS } from '../data/members';
 import { useGamification } from '../context/GamificationContext';
 import { useSpinWheel } from '../context/SpinWheelContext';
+import { useWorkouts } from '../context/WorkoutContext';
+import { useGpsActivity } from '../context/GpsActivityContext';
+import { useHeartRate } from '../context/HeartRateContext';
 import { formatCount } from '../utils/formatCount';
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -33,9 +37,43 @@ export function ProfileScreen({ navigation }: any) {
   const { user } = useAuth();
   const { state: gamState, levelInfo } = useGamification();
   const { freeDrinkCredits, freeShirtCredits, consumeFreeDrink, consumeFreeShirt } = useSpinWheel();
+  const { myLogs } = useWorkouts();
+  const { memberActivities } = useGpsActivity();
+  const { memberSessions } = useHeartRate();
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [showPhotoMenu, setShowPhotoMenu] = useState(false);
   const [activeVoucher, setActiveVoucher] = useState<null | 'drink' | 'shirt'>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editBio, setEditBio] = useState('');
+  const [editGoals, setEditGoals] = useState('');
+
+  // Training Summary
+  const trainingSummary = useMemo(() => {
+    if (!user) return null;
+    const logs = myLogs(user.id);
+    const gps = memberActivities(user.id);
+    const hr = memberSessions(user.id);
+    const totalSessions = logs.length + gps.length + hr.length;
+
+    // Most trained day of week
+    const dayCounts = [0, 0, 0, 0, 0, 0, 0]; // Sun-Sat
+    for (const l of logs) { const d = new Date(l.date); dayCounts[d.getDay()]++; }
+    for (const a of gps) { const d = new Date(a.startedAt); dayCounts[d.getDay()]++; }
+    for (const s of hr) { const d = new Date(s.startedAt); dayCounts[d.getDay()]++; }
+    const maxDayIdx = dayCounts.indexOf(Math.max(...dayCounts));
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const mostTrainedDay = dayCounts[maxDayIdx] > 0 ? dayNames[maxDayIdx] : 'N/A';
+
+    // Best streak
+    const bestStreak = gamState.longestStreak || gamState.streak || 0;
+
+    return {
+      totalSessions,
+      mostTrainedDay,
+      bestStreak,
+      memberSince: user?.memberSince?.split('-')[0] ?? '2024',
+    };
+  }, [user, gamState]);
 
   const handleRedeemVoucher = () => {
     if (activeVoucher === 'drink') consumeFreeDrink();
@@ -193,6 +231,35 @@ export function ProfileScreen({ navigation }: any) {
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Diamonds</Text>
           </View>
         </View>
+
+        {/* ── Training Summary ── */}
+        {trainingSummary && trainingSummary.totalSessions > 0 && (
+          <>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>TRAINING SUMMARY</Text>
+            <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryItem}>
+                  <Text style={[styles.summaryValue, { color: colors.gold }]}>{trainingSummary.totalSessions}</Text>
+                  <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Total Sessions</Text>
+                </View>
+                <View style={styles.summaryItem}>
+                  <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{trainingSummary.bestStreak}</Text>
+                  <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Best Streak</Text>
+                </View>
+              </View>
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryItem}>
+                  <Text style={[styles.summaryValue, { color: colors.textPrimary, fontSize: 14 }]}>{trainingSummary.mostTrainedDay}</Text>
+                  <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Favorite Day</Text>
+                </View>
+                <View style={styles.summaryItem}>
+                  <Text style={[styles.summaryValue, { color: colors.textPrimary, fontSize: 14 }]}>{trainingSummary.memberSince}</Text>
+                  <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Member Since</Text>
+                </View>
+              </View>
+            </View>
+          </>
+        )}
 
         {/* ── Vouchers (prizes won from the spin wheel) ── */}
         {(freeDrinkCredits > 0 || freeShirtCredits > 0) && (
@@ -737,5 +804,33 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     // intentionally no backgroundColor — fully transparent
+  },
+
+  // ── Training Summary ──
+  summaryCard: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginHorizontal: spacing.lg,
+    gap: 12,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  summaryValue: {
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  summaryLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
 });
