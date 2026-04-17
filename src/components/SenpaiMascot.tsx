@@ -22,14 +22,15 @@ export function SenpaiMascot() {
   const [hidden, setHidden] = useState(false);
   const [showClose, setShowClose] = useState(false);
 
-  // Position
-  const pan = useRef(new Animated.ValueXY({ x: SW - 96, y: SH - 220 })).current;
+  // Position state — use bottom/right as base, translate for drag offset
+  const [basePos, setBasePos] = useState({ x: 0, y: 0 });
+  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   useEffect(() => {
     AsyncStorage.getItem(POS_KEY).then((raw) => {
       if (raw) {
         try {
           const { x, y } = JSON.parse(raw);
-          pan.setValue({ x, y });
+          setBasePos({ x, y });
         } catch {}
       }
     });
@@ -37,7 +38,8 @@ export function SenpaiMascot() {
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 2 || Math.abs(gs.dy) > 2,
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 2 || Math.abs(gs.dy) > 2,
       onPanResponderGrant: () => {
         pan.setOffset({ x: (pan.x as any)._value, y: (pan.y as any)._value });
         pan.setValue({ x: 0, y: 0 });
@@ -45,9 +47,10 @@ export function SenpaiMascot() {
       onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
       onPanResponderRelease: () => {
         pan.flattenOffset();
-        // Save position
         const x = (pan.x as any)._value;
         const y = (pan.y as any)._value;
+        setBasePos({ x, y });
+        pan.setValue({ x: 0, y: 0 });
         AsyncStorage.setItem(POS_KEY, JSON.stringify({ x, y }));
       },
     }),
@@ -127,6 +130,8 @@ export function SenpaiMascot() {
       style={[
         styles.container,
         {
+          bottom: 110 - basePos.y,
+          right: 16 - basePos.x,
           transform: [
             { translateX: pan.x },
             { translateY: pan.y },

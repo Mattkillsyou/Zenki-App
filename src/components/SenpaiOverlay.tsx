@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
 import { useSenpai } from '../context/SenpaiContext';
 
-const { width: SW, height: SH } = Dimensions.get('window');
+const { width: SW } = Dimensions.get('window');
+const SH = Math.min(Dimensions.get('window').height, 932); // match phone frame
 
 /**
  * SenpaiOverlay — fullscreen particle effects when Senpai Mode is active.
