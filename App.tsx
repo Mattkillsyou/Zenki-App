@@ -14,6 +14,7 @@ import { AnnouncementProvider } from './src/context/AnnouncementContext';
 import { AppointmentProvider } from './src/context/AppointmentContext';
 import { EmployeeTaskProvider } from './src/context/EmployeeTaskContext';
 import { WorkoutProvider } from './src/context/WorkoutContext';
+import { NutritionProvider } from './src/context/NutritionContext';
 import { ProductProvider } from './src/context/ProductContext';
 import { SpinWheelProvider } from './src/context/SpinWheelContext';
 import { SoundProvider } from './src/context/SoundContext';
@@ -94,6 +95,7 @@ export default function App() {
                       <AppointmentProvider>
                         <EmployeeTaskProvider>
                         <WorkoutProvider>
+                        <NutritionProvider>
                         <ProductProvider>
                           <SpinWheelProvider>
                             <TimeClockProvider>
@@ -101,6 +103,7 @@ export default function App() {
                             </TimeClockProvider>
                           </SpinWheelProvider>
                         </ProductProvider>
+                        </NutritionProvider>
                         </WorkoutProvider>
                         </EmployeeTaskProvider>
                       </AppointmentProvider>

@@ -21,6 +21,17 @@ export { TimerScreen } from './TimerScreen';
 export { PRDetailScreen } from './PRDetailScreen';
 export { EmployeeChecklistScreen } from './EmployeeChecklistScreen';
 export { AdminEmployeeTasksScreen } from './AdminEmployeeTasksScreen';
+export { WeightTrackerScreen } from './WeightTrackerScreen';
+export { MacroTrackerScreen } from './MacroTrackerScreen';
+export { MacroSetupScreen } from './MacroSetupScreen';
+export { BarcodeScannerScreen } from './BarcodeScannerScreen';
+export { PhotoFoodScreen } from './PhotoFoodScreen';
+export { DexaScansScreen } from './DexaScansScreen';
+export { DexaUploadScreen } from './DexaUploadScreen';
+export { DexaScanDetailScreen } from './DexaScanDetailScreen';
+export { BloodworkScreen } from './BloodworkScreen';
+export { BloodworkUploadScreen } from './BloodworkUploadScreen';
+export { BloodworkReportDetailScreen } from './BloodworkReportDetailScreen';
 
 // Auth
 export { SignInScreen } from './auth/SignInScreen';

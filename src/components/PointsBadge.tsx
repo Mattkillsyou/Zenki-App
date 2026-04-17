@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useMotion } from '../context/MotionContext';
+import { formatCount } from '../utils/formatCount';
 
 interface PointsBadgeProps {
   points: number;
@@ -52,7 +53,7 @@ export function PointsBadge({ points, compact, onPress }: PointsBadgeProps) {
           { color: hasPoints ? colors.gold : colors.textMuted },
         ]}
       >
-        {points.toLocaleString()}
+        {formatCount(points)}
       </Text>
       {!compact && (
         <Text style={[styles.label, { color: hasPoints ? colors.textSecondary : colors.textMuted }]}>

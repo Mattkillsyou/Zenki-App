@@ -92,6 +92,46 @@ export function WorkoutScreen({ navigation }: any) {
             })}
           </View>
 
+          {/* Tools row — quick access to weight + macros */}
+          <View style={styles.toolsRow}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('WeightTracker')}
+              style={[styles.toolTile, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Ionicons name="scale-outline" size={22} color={colors.gold} />
+              <Text style={[styles.toolTitle, { color: colors.textPrimary }]}>Weight</Text>
+              <Text style={[styles.toolSub, { color: colors.textMuted }]}>Track trend</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('MacroTracker')}
+              style={[styles.toolTile, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Ionicons name="restaurant-outline" size={22} color={colors.gold} />
+              <Text style={[styles.toolTitle, { color: colors.textPrimary }]}>Macros</Text>
+              <Text style={[styles.toolSub, { color: colors.textMuted }]}>Log & goals</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('DexaScans')}
+              style={[styles.toolTile, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Ionicons name="body-outline" size={22} color={colors.gold} />
+              <Text style={[styles.toolTitle, { color: colors.textPrimary }]}>DEXA</Text>
+              <Text style={[styles.toolSub, { color: colors.textMuted }]}>Body comp</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('Bloodwork')}
+              style={[styles.toolTile, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Ionicons name="flask-outline" size={22} color={colors.gold} />
+              <Text style={[styles.toolTitle, { color: colors.textPrimary }]}>Labs</Text>
+              <Text style={[styles.toolSub, { color: colors.textMuted }]}>Blood work</Text>
+            </TouchableOpacity>
+          </View>
+
           {tab === 'log' && (
             <LogTab
               user={user}
@@ -564,6 +604,22 @@ const styles = StyleSheet.create({
     padding: 4,
     gap: 4,
   },
+  toolsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  toolTile: {
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  toolTitle: { fontSize: 14, fontWeight: '800' },
+  toolSub: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
   tab: {
     flex: 1,
     flexDirection: 'row',

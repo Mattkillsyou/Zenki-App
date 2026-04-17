@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useMotion } from '../context/MotionContext';
 import { typography, spacing, borderRadius } from '../theme';
+import { formatCount } from '../utils/formatCount';
 
 interface StreakBadgeProps {
   streak: number;
@@ -52,7 +53,7 @@ export function StreakBadge({ streak, compact }: StreakBadgeProps) {
         </Animated.View>
       </Animated.View>
       <Text style={[compact ? styles.compactCount : styles.count, { color: flameColor }]}>
-        {streak}
+        {formatCount(streak)}
       </Text>
       {!compact && (
         <Text style={[styles.label, { color: colors.textSecondary }]}>

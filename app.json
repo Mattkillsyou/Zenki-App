@@ -22,13 +22,20 @@
           "icon": "./assets/icon.png",
           "color": "#D4A017"
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Zenki Dojo uses your camera only to scan food barcodes for macro logging. Images are not stored or uploaded."
+        }
       ]
     ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.zenkidojo.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Zenki Dojo uses your location to automatically log your visits when you arrive at the dojo."
+        "NSLocationWhenInUseUsageDescription": "Zenki Dojo uses your location to automatically log your visits when you arrive at the dojo.",
+        "NSCameraUsageDescription": "Zenki Dojo uses your camera only to scan food barcodes for macro logging. Images are not stored or uploaded."
       }
     },
     "android": {

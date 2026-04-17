@@ -31,6 +31,17 @@ import { TimerScreen } from '../screens/TimerScreen';
 import { PRDetailScreen } from '../screens/PRDetailScreen';
 import { EmployeeChecklistScreen } from '../screens/EmployeeChecklistScreen';
 import { AdminEmployeeTasksScreen } from '../screens/AdminEmployeeTasksScreen';
+import { WeightTrackerScreen } from '../screens/WeightTrackerScreen';
+import { MacroTrackerScreen } from '../screens/MacroTrackerScreen';
+import { MacroSetupScreen } from '../screens/MacroSetupScreen';
+import { BarcodeScannerScreen } from '../screens/BarcodeScannerScreen';
+import { PhotoFoodScreen } from '../screens/PhotoFoodScreen';
+import { DexaScansScreen } from '../screens/DexaScansScreen';
+import { DexaUploadScreen } from '../screens/DexaUploadScreen';
+import { DexaScanDetailScreen } from '../screens/DexaScanDetailScreen';
+import { BloodworkScreen } from '../screens/BloodworkScreen';
+import { BloodworkUploadScreen } from '../screens/BloodworkUploadScreen';
+import { BloodworkReportDetailScreen } from '../screens/BloodworkReportDetailScreen';
 import { BookingPaymentScreen } from '../screens/BookingPaymentScreen';
 import { PaymentMethodsScreen } from '../screens/PaymentMethodsScreen';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
@@ -274,6 +285,17 @@ export function RootNavigator() {
       <Stack.Screen name="PRDetail" component={PRDetailScreen} options={pushTransition} />
       <Stack.Screen name="EmployeeChecklist" component={EmployeeChecklistScreen} options={pushTransition} />
       <Stack.Screen name="AdminEmployeeTasks" component={AdminEmployeeTasksScreen} options={pushTransition} />
+      <Stack.Screen name="WeightTracker" component={WeightTrackerScreen} options={pushTransition} />
+      <Stack.Screen name="MacroTracker" component={MacroTrackerScreen} options={pushTransition} />
+      <Stack.Screen name="MacroSetup" component={MacroSetupScreen} options={modalTransition} />
+      <Stack.Screen name="BarcodeScanner" component={BarcodeScannerScreen} options={modalTransition} />
+      <Stack.Screen name="PhotoFood" component={PhotoFoodScreen} options={modalTransition} />
+      <Stack.Screen name="DexaScans" component={DexaScansScreen} options={pushTransition} />
+      <Stack.Screen name="DexaUpload" component={DexaUploadScreen} options={modalTransition} />
+      <Stack.Screen name="DexaScanDetail" component={DexaScanDetailScreen} options={pushTransition} />
+      <Stack.Screen name="Bloodwork" component={BloodworkScreen} options={pushTransition} />
+      <Stack.Screen name="BloodworkUpload" component={BloodworkUploadScreen} options={modalTransition} />
+      <Stack.Screen name="BloodworkReportDetail" component={BloodworkReportDetailScreen} options={pushTransition} />
 
 
       {/* Community */}

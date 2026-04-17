@@ -20,6 +20,7 @@ import { BeltDisplay, AchievementGrid } from '../components';
 import { BELT_DISPLAY_COLORS } from '../data/members';
 import { useGamification } from '../context/GamificationContext';
 import { useSpinWheel } from '../context/SpinWheelContext';
+import { formatCount } from '../utils/formatCount';
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { value: 'light',  label: 'Light',  icon: 'sunny-outline' },
@@ -187,12 +188,12 @@ export function ProfileScreen({ navigation }: any) {
           </View>
           <View style={[styles.statTile, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
             <Ionicons name="flame-outline" size={18} color={colors.gold} />
-            <Text style={[styles.statNum, { color: colors.textPrimary }]}>{gamState.flames || 0}</Text>
+            <Text style={[styles.statNum, { color: colors.textPrimary }]}>{formatCount(gamState.flames || 0)}</Text>
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Flames</Text>
           </View>
           <View style={[styles.statTile, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
             <Ionicons name="diamond-outline" size={18} color={colors.gold} />
-            <Text style={[styles.statNum, { color: colors.textPrimary }]}>{gamState.dojoPoints || 0}</Text>
+            <Text style={[styles.statNum, { color: colors.textPrimary }]}>{formatCount(gamState.dojoPoints || 0)}</Text>
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>Diamonds</Text>
           </View>
         </View>

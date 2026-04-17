@@ -26,6 +26,7 @@ import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { getDailyQuote } from '../data/quotes';
 import { getTodaysSchedule } from '../data/schedule';
 import { useHasUnreadNotifications } from './NotificationsScreen';
+import { formatCount } from '../utils/formatCount';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -206,7 +207,7 @@ export function HomeScreen({ navigation }: any) {
                 <View style={[styles.flamesChip, { backgroundColor: colors.surface }]}>
                   <Ionicons name="flame" size={16} color="#FF6B35" />
                   <Text style={[styles.flamesChipText, { color: colors.textPrimary }]}>
-                    {(gamState.flames || 0).toLocaleString()}
+                    {formatCount(gamState.flames || 0)}
                   </Text>
                 </View>
               )}
