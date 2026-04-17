@@ -93,6 +93,11 @@ export function MacroTrackerScreen({ navigation }: any) {
   const [searchOpen, setSearchOpen] = useState(false);
 
   const today = todayISO();
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return { year: d.getFullYear(), month: d.getMonth() };
+  });
 
   // Log-entry form
   const [name, setName] = useState('');
@@ -109,8 +114,30 @@ export function MacroTrackerScreen({ navigation }: any) {
   const [goalFat, setGoalFat] = useState('');
 
   const goals = user ? goalsFor(user.id) : null;
-  const todayEntries = user ? macrosForDate(user.id, today) : [];
-  const totals = user ? totalsForDate(user.id, today) : { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  const todayEntries = user ? macrosForDate(user.id, selectedDate) : [];
+  const totals = user ? totalsForDate(user.id, selectedDate) : { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  const isToday = selectedDate === today;
+
+  // Build calendar data — which days have entries this month
+  const calendarDays = useMemo(() => {
+    if (!user) return [];
+    const { year, month } = calendarMonth;
+    const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const result: { day: number; date: string; hasEntries: boolean; hitGoal: boolean }[] = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const entries = macrosForDate(user.id, dateStr);
+      const dayTotals = totalsForDate(user.id, dateStr);
+      result.push({
+        day: d,
+        date: dateStr,
+        hasEntries: entries.length > 0,
+        hitGoal: goals ? dayTotals.calories >= goals.calories * 0.8 : false,
+      });
+    }
+    return { firstDay, days: result, monthLabel: new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) };
+  }, [user, calendarMonth, macrosForDate, totalsForDate, goals]);
 
   function openGoals() {
     if (!goals) return;
@@ -151,7 +178,7 @@ export function MacroTrackerScreen({ navigation }: any) {
     }
     addMacroEntry({
       memberId: user.id,
-      date: today,
+      date: selectedDate,
       name: name.trim(),
       calories: cal,
       protein: pro,
@@ -200,6 +227,107 @@ export function MacroTrackerScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
 
+          {/* Search + Scan + Photo — top action row */}
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => setSearchOpen(true)}
+              style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Ionicons name="search" size={20} color={colors.gold} />
+              <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Search</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('BarcodeScanner')}
+              style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Ionicons name="barcode-outline" size={20} color={colors.gold} />
+              <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Scan</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('PhotoFood')}
+              style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Ionicons name="sparkles-outline" size={20} color={colors.gold} />
+              <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Photo</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* ─── Food Calendar (MacroFactor style) ─── */}
+          <FadeInView delay={40}>
+            <View style={[styles.calendarCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              {/* Month nav */}
+              <View style={styles.calMonthRow}>
+                <TouchableOpacity onPress={() => setCalendarMonth((prev) => {
+                  const d = new Date(prev.year, prev.month - 1, 1);
+                  return { year: d.getFullYear(), month: d.getMonth() };
+                })}>
+                  <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
+                </TouchableOpacity>
+                <Text style={[styles.calMonthLabel, { color: colors.textPrimary }]}>
+                  {(calendarDays as any).monthLabel || ''}
+                </Text>
+                <TouchableOpacity onPress={() => setCalendarMonth((prev) => {
+                  const d = new Date(prev.year, prev.month + 1, 1);
+                  return { year: d.getFullYear(), month: d.getMonth() };
+                })}>
+                  <Ionicons name="chevron-forward" size={20} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Day-of-week header */}
+              <View style={styles.calWeekRow}>
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                  <Text key={i} style={[styles.calWeekDay, { color: colors.textMuted }]}>{d}</Text>
+                ))}
+              </View>
+
+              {/* Day grid */}
+              <View style={styles.calGrid}>
+                {/* Empty cells for offset */}
+                {Array.from({ length: (calendarDays as any).firstDay || 0 }).map((_, i) => (
+                  <View key={`empty-${i}`} style={styles.calCell} />
+                ))}
+                {((calendarDays as any).days || []).map((day: any) => {
+                  const isSelected = day.date === selectedDate;
+                  const isCurrentDay = day.date === today;
+                  return (
+                    <TouchableOpacity
+                      key={day.day}
+                      style={[
+                        styles.calCell,
+                        isSelected && { backgroundColor: colors.gold, borderRadius: 8 },
+                      ]}
+                      onPress={() => setSelectedDate(day.date)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[
+                        styles.calDayText,
+                        { color: isSelected ? '#000' : isCurrentDay ? colors.gold : colors.textPrimary },
+                        isCurrentDay && !isSelected && { fontWeight: '900' },
+                      ]}>
+                        {day.day}
+                      </Text>
+                      {day.hasEntries && !isSelected && (
+                        <View style={[
+                          styles.calDot,
+                          { backgroundColor: day.hitGoal ? '#22C55E' : colors.gold },
+                        ]} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </FadeInView>
+
+          {/* Selected date label */}
+          <Text style={[styles.dateLabel, { color: colors.textMuted }]}>
+            {isToday ? 'TODAY' : new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()}
+          </Text>
+
           {/* Setup CTA — shown until user completes the BMR wizard */}
           {!hasSetup && (
             <FadeInView>
@@ -222,7 +350,7 @@ export function MacroTrackerScreen({ navigation }: any) {
           {/* Calorie hero */}
           <FadeInView>
             <View style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.heroLabel, { color: colors.textMuted }]}>TODAY · CALORIES</Text>
+              <Text style={[styles.heroLabel, { color: colors.textMuted }]}>CALORIES</Text>
               <View style={styles.heroRow}>
                 <Text style={[styles.heroNum, { color: colors.gold }]}>{Math.round(totals.calories)}</Text>
                 <Text style={[styles.heroGoal, { color: colors.textSecondary }]}>
@@ -311,50 +439,6 @@ export function MacroTrackerScreen({ navigation }: any) {
             );
           })()}
 
-          {/* Search + scan CTAs */}
-          <FadeInView delay={100}>
-            <View style={styles.ctaRow}>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => setSearchOpen(true)}
-                style={[styles.searchCta, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              >
-                <Ionicons name="search" size={22} color={colors.gold} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.searchCtaTitle, { color: colors.textPrimary }]}>Search</Text>
-                  <Text style={[styles.searchCtaSub, { color: colors.textMuted }]}>
-                    USDA + OFF
-                  </Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => navigation.navigate('BarcodeScanner')}
-                style={[styles.searchCta, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              >
-                <Ionicons name="barcode-outline" size={22} color={colors.gold} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.searchCtaTitle, { color: colors.textPrimary }]}>Scan</Text>
-                  <Text style={[styles.searchCtaSub, { color: colors.textMuted }]}>
-                    Barcode
-                  </Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => navigation.navigate('PhotoFood')}
-                style={[styles.searchCta, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              >
-                <Ionicons name="sparkles-outline" size={22} color={colors.gold} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.searchCtaTitle, { color: colors.textPrimary }]}>Photo</Text>
-                  <Text style={[styles.searchCtaSub, { color: colors.textMuted }]}>
-                    AI recognize
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          </FadeInView>
 
           {/* Add-entry form */}
           <FadeInView delay={120}>
@@ -562,6 +646,78 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   title: { fontSize: 20, fontWeight: '800', letterSpacing: 0.5 },
+
+  // Action row (Search / Scan / Photo)
+  actionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  actionBtnLabel: { fontSize: 13, fontWeight: '700' },
+
+  // Food calendar
+  calendarCard: {
+    marginHorizontal: spacing.lg,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: spacing.sm,
+  },
+  calMonthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  calMonthLabel: { fontSize: 15, fontWeight: '800', letterSpacing: -0.2 },
+  calWeekRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  calWeekDay: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  calGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calCell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calDayText: { fontSize: 13, fontWeight: '600' },
+  calDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    marginTop: 2,
+    position: 'absolute',
+    bottom: 4,
+  },
+  dateLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    paddingHorizontal: spacing.lg,
+    marginBottom: 4,
+  },
 
   tdeeCard: {
     flexDirection: 'row',

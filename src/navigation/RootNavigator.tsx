@@ -42,6 +42,11 @@ import { DexaScanDetailScreen } from '../screens/DexaScanDetailScreen';
 import { BloodworkScreen } from '../screens/BloodworkScreen';
 import { BloodworkUploadScreen } from '../screens/BloodworkUploadScreen';
 import { BloodworkReportDetailScreen } from '../screens/BloodworkReportDetailScreen';
+import { WorkoutSessionScreen } from '../screens/WorkoutSessionScreen';
+import { SessionHistoryScreen } from '../screens/SessionHistoryScreen';
+import { ActivityTrackerScreen } from '../screens/ActivityTrackerScreen';
+import { WeeklyReportScreen } from '../screens/WeeklyReportScreen';
+import { BodyLabScreen } from '../screens/BodyLabScreen';
 import { BookingPaymentScreen } from '../screens/BookingPaymentScreen';
 import { PaymentMethodsScreen } from '../screens/PaymentMethodsScreen';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
@@ -296,6 +301,11 @@ export function RootNavigator() {
       <Stack.Screen name="Bloodwork" component={BloodworkScreen} options={pushTransition} />
       <Stack.Screen name="BloodworkUpload" component={BloodworkUploadScreen} options={modalTransition} />
       <Stack.Screen name="BloodworkReportDetail" component={BloodworkReportDetailScreen} options={pushTransition} />
+      <Stack.Screen name="WorkoutSession" component={WorkoutSessionScreen} options={modalTransition} />
+      <Stack.Screen name="SessionHistory" component={SessionHistoryScreen} options={pushTransition} />
+      <Stack.Screen name="ActivityTracker" component={ActivityTrackerScreen} options={modalTransition} />
+      <Stack.Screen name="WeeklyReport" component={WeeklyReportScreen} options={pushTransition} />
+      <Stack.Screen name="BodyLab" component={BodyLabScreen} options={pushTransition} />
 
 
       {/* Community */}

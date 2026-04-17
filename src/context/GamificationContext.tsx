@@ -41,6 +41,12 @@ interface GamificationContextValue {
   awardPoints: (amount: number, reason?: string) => void;
   awardFlames: (amount: number, reason?: string) => void;
   redeemFlames: (amount: number, reason?: string) => boolean;
+  recordHRSession: () => void;
+  recordMealLogged: () => void;
+  recordWeightLogged: () => void;
+  recordDexaScan: () => void;
+  recordBloodwork: () => void;
+  recordSpinWin: () => void;
   dismissCelebration: () => void;
 }
 
@@ -78,6 +84,12 @@ const defaultState: GamificationState = {
   memberSinceDate: '',
   sessionsThisWeek: 0,
   sessionsThisMonth: 0,
+  hrSessionsCount: 0,
+  mealsLoggedCount: 0,
+  weightLoggedCount: 0,
+  dexaScansCount: 0,
+  bloodworkReportsCount: 0,
+  spinWinsCount: 0,
   achievements: createInitialAchievements(),
   pendingCelebration: null,
 };
@@ -102,6 +114,12 @@ const GamificationContext = createContext<GamificationContextValue>({
   awardPoints: () => {},
   awardFlames: () => {},
   redeemFlames: () => false,
+  recordHRSession: () => {},
+  recordMealLogged: () => {},
+  recordWeightLogged: () => {},
+  recordDexaScan: () => {},
+  recordBloodwork: () => {},
+  recordSpinWin: () => {},
   dismissCelebration: () => {},
 });
 
@@ -380,6 +398,31 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     }));
   }, []);
 
+  // New module recording methods
+  const recordHRSession = useCallback(() => {
+    setState((prev) => checkAchievements({ ...prev, hrSessionsCount: (prev.hrSessionsCount || 0) + 1 }));
+  }, [checkAchievements]);
+
+  const recordMealLogged = useCallback(() => {
+    setState((prev) => checkAchievements({ ...prev, mealsLoggedCount: (prev.mealsLoggedCount || 0) + 1 }));
+  }, [checkAchievements]);
+
+  const recordWeightLogged = useCallback(() => {
+    setState((prev) => checkAchievements({ ...prev, weightLoggedCount: (prev.weightLoggedCount || 0) + 1 }));
+  }, [checkAchievements]);
+
+  const recordDexaScan = useCallback(() => {
+    setState((prev) => checkAchievements({ ...prev, dexaScansCount: (prev.dexaScansCount || 0) + 1 }));
+  }, [checkAchievements]);
+
+  const recordBloodwork = useCallback(() => {
+    setState((prev) => checkAchievements({ ...prev, bloodworkReportsCount: (prev.bloodworkReportsCount || 0) + 1 }));
+  }, [checkAchievements]);
+
+  const recordSpinWin = useCallback(() => {
+    setState((prev) => checkAchievements({ ...prev, spinWinsCount: (prev.spinWinsCount || 0) + 1 }));
+  }, [checkAchievements]);
+
   const redeemPoints = useCallback((amount: number): boolean => {
     let success = false;
     setState((prev) => {
@@ -428,6 +471,12 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         awardPoints,
         awardFlames,
         redeemFlames,
+        recordHRSession,
+        recordMealLogged,
+        recordWeightLogged,
+        recordDexaScan,
+        recordBloodwork,
+        recordSpinWin,
         dismissCelebration,
       }}
     >

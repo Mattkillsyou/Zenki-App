@@ -290,6 +290,50 @@ export function HomeScreen({ navigation }: any) {
               </View>
             )}
 
+            {/* Achievements pillbox with recent badge icons */}
+            {!isEmployee && (() => {
+              const unlocked = gamState.achievements.filter((a: any) => a.unlocked);
+              const recent = unlocked.slice(-4); // last 4 unlocked
+              return (
+                <TouchableOpacity
+                  style={[styles.homePill, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  onPress={() => navigation.navigate('Achievements')}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.homePillIcon, { backgroundColor: colors.goldMuted }]}>
+                    <Ionicons name="trophy" size={16} color={colors.gold} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.homePillTitle, { color: colors.textPrimary }]}>Achievements</Text>
+                    <Text style={[styles.homePillSub, { color: colors.textMuted }]}>
+                      {unlocked.length}/{gamState.achievements.length} unlocked · {gamState.flames || 0} 🔥
+                    </Text>
+                  </View>
+                  <View style={styles.recentBadges}>
+                    {recent.map((a: any) => (
+                      <View key={a.id} style={[styles.miniBadge, { backgroundColor: colors.goldMuted }]}>
+                        <Ionicons name={a.icon} size={12} color={colors.gold} />
+                      </View>
+                    ))}
+                    {recent.length === 0 && (
+                      <>
+                        <View style={[styles.miniBadge, { backgroundColor: colors.surfaceSecondary }]}>
+                          <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
+                        </View>
+                        <View style={[styles.miniBadge, { backgroundColor: colors.surfaceSecondary }]}>
+                          <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
+                        </View>
+                        <View style={[styles.miniBadge, { backgroundColor: colors.surfaceSecondary }]}>
+                          <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
+                        </View>
+                      </>
+                    )}
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </TouchableOpacity>
+              );
+            })()}
+
             <View style={[styles.quoteCard, { backgroundColor: colors.surface }]}>
               <Text style={[styles.quoteText, { color: colors.textPrimary }]}>{dailyQuote.text}</Text>
               <Text style={[styles.quoteAttr, { color: colors.gold }]}>— {dailyQuote.attribution}</Text>
@@ -313,71 +357,42 @@ export function HomeScreen({ navigation }: any) {
             {/* Training — log workouts, track PRs */}
             <FadeInView delay={340} slideUp={16}>
               <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Training</Text>
-                  <TouchableOpacity
-                    style={[styles.seeAllButton, { backgroundColor: colors.accentTint }]}
-                    onPress={() => navigation.navigate('Workout')}
-                  >
-                    <Text style={[styles.seeAllText, { color: colors.gold }]}>Open</Text>
-                    <Ionicons name="chevron-forward" size={14} color={colors.gold} />
-                  </TouchableOpacity>
-                </View>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 10 }]}>Training</Text>
 
-                <View style={styles.trainingRow}>
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate('Workout')}
-                    activeOpacity={0.85}
-                    style={[styles.trainingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  >
-                    <View style={[styles.trainingIconWrap, { backgroundColor: colors.goldMuted }]}>
-                      <Ionicons name="barbell" size={22} color={colors.gold} />
-                    </View>
-                    <Text style={[styles.trainingCardValue, { color: colors.textPrimary }]}>
-                      {userLogsCount}
-                    </Text>
-                    <Text style={[styles.trainingCardLabel, { color: colors.textMuted }]}>
-                      WORKOUTS
-                    </Text>
+                {/* Tools grid — all tools accessible from Home */}
+                <View style={styles.toolsGrid}>
+                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('WorkoutSession')} style={[styles.homeTool, { backgroundColor: colors.redMuted, borderColor: colors.red }]}>
+                    <Ionicons name="heart" size={20} color={colors.red} />
+                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>HR Session</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate('Workout')}
-                    activeOpacity={0.85}
-                    style={[styles.trainingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  >
-                    <View style={[styles.trainingIconWrap, { backgroundColor: colors.goldMuted }]}>
-                      <Ionicons name="trophy" size={22} color={colors.gold} />
-                    </View>
-                    <Text style={[styles.trainingCardValue, { color: colors.textPrimary }]}>
-                      {userPRsCount}
-                    </Text>
-                    <Text style={[styles.trainingCardLabel, { color: colors.textMuted }]}>
-                      PRs TRACKED
-                    </Text>
+                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Workout')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Ionicons name="barbell" size={20} color={colors.gold} />
+                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Workout</Text>
                   </TouchableOpacity>
-                </View>
-
-                {/* Timer launcher chips */}
-                <View style={styles.timerLauncherRow}>
-                  {(
-                    [
-                      { key: 'round', label: 'Round', icon: 'timer-outline' as const },
-                      { key: 'interval', label: 'HIIT', icon: 'fitness-outline' as const },
-                      { key: 'stopwatch', label: 'Watch', icon: 'stopwatch-outline' as const },
-                    ] as const
-                  ).map((t) => (
-                    <TouchableOpacity
-                      key={t.key}
-                      style={[styles.timerChip, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                      onPress={() => navigation.navigate('Timer', { mode: t.key })}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name={t.icon} size={16} color={colors.gold} />
-                      <Text style={[styles.timerChipLabel, { color: colors.textPrimary }]}>
-                        {t.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('MacroTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Ionicons name="restaurant-outline" size={20} color={colors.gold} />
+                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Food Log</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('WeightTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Ionicons name="scale-outline" size={20} color={colors.gold} />
+                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Weight</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Timer', { mode: 'round' })} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Ionicons name="timer-outline" size={20} color={colors.gold} />
+                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Timers</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('BodyLab')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Ionicons name="medkit-outline" size={20} color={colors.gold} />
+                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Body Lab</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('ActivityTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Ionicons name="navigate-outline" size={20} color={colors.gold} />
+                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>GPS</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('WeeklyReport')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Ionicons name="bar-chart-outline" size={20} color={colors.gold} />
+                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Report</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </FadeInView>
@@ -402,13 +417,12 @@ export function HomeScreen({ navigation }: any) {
             styles.spinFab,
             {
               backgroundColor: colors.gold,
-              // Sit flush above the tab bar (bottom-left corner of the content area)
-              bottom: 60 + insets.bottom + 4,
+              bottom: 100 + insets.bottom,
               shadowColor: colors.gold,
             },
           ]}
         >
-          <Ionicons name="disc-outline" size={24} color="#000" />
+          <Text style={styles.spinFabIcon}>🎡</Text>
         </TouchableOpacity>
       )}
 
@@ -717,16 +731,19 @@ const styles = StyleSheet.create({
   },
   spinFab: {
     position: 'absolute',
-    left: 12,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    left: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  spinFabIcon: {
+    fontSize: 24,
   },
   flamesChip: {
     flexDirection: 'row',
@@ -742,6 +759,76 @@ const styles = StyleSheet.create({
   },
 
   // Training mini-cards (replaces WOD card)
+  homePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  homePillIcon: {
+    width: 32, height: 32, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  homePillTitle: { fontSize: 13, fontWeight: '800' },
+  homePillSub: { fontSize: 10, fontWeight: '500', marginTop: 1 },
+  recentBadges: {
+    flexDirection: 'row',
+    gap: 4,
+    marginRight: 4,
+  },
+  miniBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  mapCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  mapImage: {
+    width: '100%',
+    height: 120,
+    backgroundColor: '#1a1a2e',
+  },
+  mapOverlay: {
+    padding: 12,
+  },
+  mapOverlayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  mapLabel: { fontSize: 14, fontWeight: '800' },
+  mapAddress: { fontSize: 11, fontWeight: '500', marginTop: 2 },
+
+  toolsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  homeTool: {
+    width: '23%',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 6,
+  },
+  homeToolLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textAlign: 'center',
+  },
   trainingRow: {
     flexDirection: 'row',
     gap: 10,

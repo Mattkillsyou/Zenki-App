@@ -34,7 +34,14 @@ export type AchievementType =
   | 'community_member' // joined community feed
   | 'quote_reader'     // opened home screen N days in a row
   | 'referral'         // invited another member
-  | 'completionist';   // collected 50 achievements
+  | 'completionist'    // collected 50 achievements
+  // ─── New module types ───
+  | 'hr_sessions'      // completed HR-tracked workout sessions
+  | 'meals_logged'     // food entries logged in macro tracker
+  | 'weight_logged'    // weigh-ins recorded
+  | 'dexa_scans'       // DEXA body comp scans uploaded
+  | 'bloodwork_reports' // bloodwork reports uploaded
+  | 'spin_wins';       // daily spin wheel prizes won
 
 export interface GamificationState {
   xp: number;
@@ -69,6 +76,13 @@ export interface GamificationState {
   referralCount: number;
   beltLevel: number;        // 1 white, 2 blue, 3 purple, 4 brown, 5 black
   stripesEarned: number;
+  // New module counters
+  hrSessionsCount: number;
+  mealsLoggedCount: number;
+  weightLoggedCount: number;
+  dexaScansCount: number;
+  bloodworkReportsCount: number;
+  spinWinsCount: number;
   memberSinceDate: string;  // ISO
   sessionsThisWeek: number;
   sessionsThisMonth: number;
@@ -136,6 +150,12 @@ export function getCurrentValue(type: AchievementType, state: GamificationState)
     case 'quote_reader':      return state.quoteReadStreak;
     case 'referral':          return state.referralCount;
     case 'completionist':     return state.achievements.filter((a) => a.unlocked).length;
+    case 'hr_sessions':       return state.hrSessionsCount || 0;
+    case 'meals_logged':      return state.mealsLoggedCount || 0;
+    case 'weight_logged':     return state.weightLoggedCount || 0;
+    case 'dexa_scans':        return state.dexaScansCount || 0;
+    case 'bloodwork_reports': return state.bloodworkReportsCount || 0;
+    case 'spin_wins':         return state.spinWinsCount || 0;
     default:                  return 0;
   }
 }

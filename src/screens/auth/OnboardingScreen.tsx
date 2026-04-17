@@ -534,20 +534,80 @@ export function OnboardingScreen({ navigation, route }: any) {
       case 8: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
-            <Ionicons name="location-outline" size={64} color={colors.gold} />
+            <Ionicons name="shield-checkmark-outline" size={64} color={colors.gold} />
           </Animated.View>
-          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Enable location access</Text>
+          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>App Permissions</Text>
           <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-            We'll automatically log your visits when you arrive at the dojo. Your location is only checked while the app is open.
+            These help the app work at its best. All are optional — you can change them later in Settings.
           </Text>
+
+          {/* Location */}
           <TouchableOpacity
-            style={[styles.photoOption, { backgroundColor: colors.surface, borderWidth: 1, borderColor: 'transparent' }]}
+            style={[styles.permRow, { backgroundColor: colors.surface, borderColor: locationGranted ? colors.success + '40' : colors.border }]}
             onPress={requestLocationPermission}
           >
-            <Ionicons name={locationGranted ? 'checkmark-circle' : 'navigate-outline'} size={24} color={locationGranted ? colors.success : colors.gold} />
-            <Text style={[styles.photoOptionText, { color: colors.textPrimary }]}>
-              {locationGranted ? 'Location Enabled' : 'Allow Location Access'}
-            </Text>
+            <View style={[styles.permIcon, { backgroundColor: '#3B82F620' }]}>
+              <Ionicons name="location-outline" size={20} color="#3B82F6" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Location</Text>
+              <Text style={[styles.permDesc, { color: colors.textMuted }]}>Auto check-in when you arrive at the dojo + GPS workout tracking</Text>
+            </View>
+            <Ionicons name={locationGranted ? 'checkmark-circle' : 'chevron-forward'} size={20} color={locationGranted ? colors.success : colors.textMuted} />
+          </TouchableOpacity>
+
+          {/* Camera */}
+          <TouchableOpacity
+            style={[styles.permRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={async () => {
+              try { await ImagePicker.requestCameraPermissionsAsync(); } catch {}
+            }}
+          >
+            <View style={[styles.permIcon, { backgroundColor: '#F9731620' }]}>
+              <Ionicons name="camera-outline" size={20} color="#F97316" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Camera</Text>
+              <Text style={[styles.permDesc, { color: colors.textMuted }]}>Scan barcodes for food logging + take progress photos + profile pic</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
+
+          {/* Notifications */}
+          <TouchableOpacity
+            style={[styles.permRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={async () => {
+              try {
+                const Notifications = require('expo-notifications');
+                await Notifications.requestPermissionsAsync();
+              } catch {}
+            }}
+          >
+            <View style={[styles.permIcon, { backgroundColor: '#EF444420' }]}>
+              <Ionicons name="notifications-outline" size={20} color="#EF4444" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Notifications</Text>
+              <Text style={[styles.permDesc, { color: colors.textMuted }]}>Class reminders 1hr before, achievement unlocks, and dojo announcements</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
+
+          {/* Photo Library */}
+          <TouchableOpacity
+            style={[styles.permRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={async () => {
+              try { await ImagePicker.requestMediaLibraryPermissionsAsync(); } catch {}
+            }}
+          >
+            <View style={[styles.permIcon, { backgroundColor: '#22C55E20' }]}>
+              <Ionicons name="images-outline" size={20} color="#22C55E" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Photo Library</Text>
+              <Text style={[styles.permDesc, { color: colors.textMuted }]}>Upload food photos for AI macro tracking + share to the community feed</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
       );
@@ -727,6 +787,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: borderRadius.lg,
   },
   photoOptionText: { ...typography.body, fontWeight: '600' },
+
+  // Permissions rows
+  permRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 10,
+    width: '100%',
+  },
+  permIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permTitle: { fontSize: 14, fontWeight: '800' },
+  permDesc: { fontSize: 11, lineHeight: 15, marginTop: 2 },
+
   waiverBox: {
     width: '100%',
     maxHeight: 260,

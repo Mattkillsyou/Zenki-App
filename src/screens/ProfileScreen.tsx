@@ -16,7 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { BeltDisplay, AchievementGrid } from '../components';
+import { BeltDisplay } from '../components';
 import { BELT_DISPLAY_COLORS } from '../data/members';
 import { useGamification } from '../context/GamificationContext';
 import { useSpinWheel } from '../context/SpinWheelContext';
@@ -168,10 +168,6 @@ export function ProfileScreen({ navigation }: any) {
           </View>
         </View>
 
-        {/* ── Achievements (under XP bar, above stats) ── */}
-        <View style={styles.achievementsWrap}>
-          <AchievementGrid achievements={gamState.achievements} maxShow={8} />
-        </View>
 
         {/* ── Stats strip — 4 bold numbers ── */}
         <View style={styles.statsRow}>
@@ -274,32 +270,11 @@ export function ProfileScreen({ navigation }: any) {
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>MENU</Text>
         <View style={styles.menuGrid}>
           <MenuTile
-            icon="trophy-outline"
-            label="Achievements"
-            sub={`${unlockedCount}/${gamState.achievements.length} · ${gamState.flames || 0} 🔥`}
-            onPress={() => navigation.navigate('Achievements')}
-          />
-          <MenuTile
             icon="settings-outline"
             label="Settings"
             sub="Notifications, account"
             onPress={() => navigation.navigate('Settings')}
           />
-          {isAdmin ? (
-            <MenuTile
-              icon="shield-outline"
-              label="Admin Panel"
-              sub="Members, products, schedule"
-              onPress={() => navigation.navigate('Admin')}
-            />
-          ) : (
-            <MenuTile
-              icon="card-outline"
-              label="Payment Methods"
-              sub="Manage cards"
-              onPress={() => navigation.navigate('PaymentMethods')}
-            />
-          )}
           <MenuTile
             icon="chatbubbles-outline"
             label="Contact IT"
@@ -307,6 +282,22 @@ export function ProfileScreen({ navigation }: any) {
             onPress={() => navigation.navigate('ContactSupport')}
             accent
           />
+          {isAdmin && (
+            <MenuTile
+              icon="shield-outline"
+              label="Admin Panel"
+              sub="Members, products, schedule"
+              onPress={() => navigation.navigate('Admin')}
+            />
+          )}
+          {isAdmin && (
+            <MenuTile
+              icon="people-outline"
+              label="Employee Mode"
+              sub="View as staff member"
+              onPress={() => navigation.navigate('EmployeeChecklist')}
+            />
+          )}
         </View>
 
         <View style={{ height: 24 }} />
@@ -488,6 +479,24 @@ const styles = StyleSheet.create({
   xpBarFill: { height: '100%', borderRadius: 3 },
 
   // Stats strip
+  achievementsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: spacing.lg,
+    marginTop: 10,
+    marginBottom: 4,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  achievementsPillIcon: {
+    width: 36, height: 36, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  achievementsPillTitle: { fontSize: 14, fontWeight: '800' },
+  achievementsPillSub: { fontSize: 11, fontWeight: '500', marginTop: 1 },
+
   achievementsWrap: {
     paddingHorizontal: spacing.lg,
     marginTop: 14,

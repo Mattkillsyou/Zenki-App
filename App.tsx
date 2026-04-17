@@ -14,6 +14,8 @@ import { AnnouncementProvider } from './src/context/AnnouncementContext';
 import { AppointmentProvider } from './src/context/AppointmentContext';
 import { EmployeeTaskProvider } from './src/context/EmployeeTaskContext';
 import { WorkoutProvider } from './src/context/WorkoutContext';
+import { HeartRateProvider } from './src/context/HeartRateContext';
+import { GpsActivityProvider } from './src/context/GpsActivityContext';
 import { NutritionProvider } from './src/context/NutritionContext';
 import { ProductProvider } from './src/context/ProductContext';
 import { SpinWheelProvider } from './src/context/SpinWheelContext';
@@ -95,6 +97,8 @@ export default function App() {
                       <AppointmentProvider>
                         <EmployeeTaskProvider>
                         <WorkoutProvider>
+                        <HeartRateProvider>
+                        <GpsActivityProvider>
                         <NutritionProvider>
                         <ProductProvider>
                           <SpinWheelProvider>
@@ -104,6 +108,8 @@ export default function App() {
                           </SpinWheelProvider>
                         </ProductProvider>
                         </NutritionProvider>
+                        </GpsActivityProvider>
+                        </HeartRateProvider>
                         </WorkoutProvider>
                         </EmployeeTaskProvider>
                       </AppointmentProvider>

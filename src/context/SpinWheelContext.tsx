@@ -143,7 +143,7 @@ function weightedPick(weights: number[], total: number): number {
 export function SpinWheelProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<SpinWheelState>(defaultState);
   const [loaded, setLoaded] = useState(false);
-  const { awardPoints, awardFlames } = useGamification();
+  const { awardPoints, awardFlames, recordSpinWin } = useGamification();
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
@@ -219,6 +219,7 @@ export function SpinWheelProvider({ children }: { children: React.ReactNode }) {
     // Grant immediately
     if (prize.type === 'points') awardPoints(prize.amount);
     else if (prize.type === 'flames') awardFlames(prize.amount);
+    recordSpinWin();
     // free_drink / free_shirt stored as credits in this context
 
     setState((prev) => ({
