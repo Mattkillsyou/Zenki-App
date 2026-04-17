@@ -35,6 +35,8 @@ import { useHasUnreadNotifications } from './NotificationsScreen';
 import { formatCount } from '../utils/formatCount';
 import { formatDistance, distanceUnit, formatDurationHuman } from '../utils/gps';
 import { useCycleTracker } from '../context/CycleTrackerContext';
+import { useSenpai } from '../context/SenpaiContext';
+import { randomDialogue } from '../data/senpaiDialogue';
 import { PHASE_LABELS, PHASE_COLORS, PHASE_ICONS } from '../types/cycle';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -141,7 +143,14 @@ export function HomeScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const isEmployee = user?.isEmployee === true;
   const { state: gamState, levelInfo, dismissCelebration, recordAppOpen } = useGamification();
+  const { state: senpaiState, triggerReaction: senpaiReact } = useSenpai();
   React.useEffect(() => { recordAppOpen(); }, [recordAppOpen]);
+  React.useEffect(() => {
+    if (!senpaiState.enabled) return;
+    const hour = new Date().getHours();
+    const key = hour < 12 ? 'morning' : hour >= 18 ? 'evening' : 'appOpen';
+    setTimeout(() => senpaiReact('encouraging', randomDialogue(key), 4000), 1500);
+  }, [senpaiState.enabled]);
   const { announcements } = useAnnouncements();
   const { myAppointments } = useAppointments();
   const { myLogs, myPRs } = useWorkouts();

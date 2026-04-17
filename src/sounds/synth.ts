@@ -84,7 +84,8 @@ export type SoundTheme =
   | 'jurassic'
   | 'ghost'
   | 'bladerunner'
-  | 'sheikah';
+  | 'sheikah'
+  | 'senpai';
 
 export type SoundEvent = 'tap' | 'success' | 'error' | 'navigate' | 'open' | 'close';
 
@@ -114,6 +115,7 @@ export function playSynth(theme: SoundTheme, event: SoundEvent) {
     case 'ghost':       return ghostSound(ctx, event);
     case 'bladerunner': return bladerunnerSound(ctx, event);
     case 'sheikah':     return sheikahSound(ctx, event);
+    case 'senpai':      return senpaiSound(ctx, event);
     default:            return defaultSound(ctx, event);
   }
 }
@@ -315,6 +317,56 @@ function bladerunnerSound(ctx: any, e: SoundEvent) {
     case 'close':    return chord(ctx, [{ freq: 450, wave: 'sine', duration: 0.25, gain: 0.06, attack: 0.04, sweep: 150 }]);
     default:         return chord(ctx, [{ freq: 300, wave: 'sine', duration: 0.06, gain: 0.05 }]);
   }
+}
+
+// Senpai Mode: bright sparkly anime sounds — magical girl vibes
+function senpaiSound(ctx: any, e: SoundEvent) {
+  switch (e) {
+    case 'tap':      return chord(ctx, [
+      { freq: 1400, wave: 'sine', duration: 0.08, gain: 0.10 },
+      { freq: 1407, wave: 'sine', duration: 0.08, gain: 0.07, detune: 12 },
+    ]);
+    case 'success':  return chord(ctx, [
+      { freq: 523, wave: 'sine', duration: 0.12, gain: 0.11 },
+      { freq: 659, wave: 'sine', duration: 0.12, gain: 0.10, delay: 0.04 },
+      { freq: 784, wave: 'sine', duration: 0.12, gain: 0.09, delay: 0.08 },
+      { freq: 1047, wave: 'sine', duration: 0.12, gain: 0.08, delay: 0.12 },
+      { freq: 1319, wave: 'sine', duration: 0.12, gain: 0.07, delay: 0.16 },
+    ]);
+    case 'error':    return chord(ctx, [
+      { freq: 400, wave: 'triangle', duration: 0.10, gain: 0.10, sweep: 200 },
+      { freq: 200, wave: 'triangle', duration: 0.20, gain: 0.12, delay: 0.10, sweep: 100 },
+    ]);
+    case 'navigate': return chord(ctx, [
+      { freq: 880, wave: 'sine', duration: 0.06, gain: 0.08 },
+      { freq: 1100, wave: 'sine', duration: 0.08, gain: 0.07, delay: 0.04 },
+    ]);
+    case 'open':     return chord(ctx, [
+      { freq: 400, wave: 'sine', duration: 0.25, gain: 0.09, sweep: 1200 },
+      { freq: 403, wave: 'sine', duration: 0.25, gain: 0.06, sweep: 1206, detune: 5 },
+    ]);
+    case 'close':    return chord(ctx, [{ freq: 1000, wave: 'sine', duration: 0.15, gain: 0.07, sweep: 400 }]);
+    default:         return chord(ctx, [{ freq: 1200, wave: 'sine', duration: 0.05, gain: 0.06 }]);
+  }
+}
+
+/** "Senpai noticed me" jingle — 8-note melody played when mode is first enabled. */
+export function senpaiJingle() {
+  const ctx = getCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') { try { ctx.resume(); } catch {} }
+  // C5, E5, G5, A5, G5, E5, G5, C6
+  const notes = [523, 659, 784, 880, 784, 659, 784, 1047];
+  const delays = [0, 0.08, 0.16, 0.24, 0.36, 0.44, 0.52, 0.60];
+  notes.forEach((freq, i) => {
+    playTone(ctx, {
+      freq,
+      wave: 'sine',
+      duration: i === notes.length - 1 ? 0.25 : 0.10,
+      gain: 0.08,
+      delay: delays[i],
+    });
+  });
 }
 
 // Sheikah Slate: clean musical chimes — bright sine bells

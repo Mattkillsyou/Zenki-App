@@ -20,6 +20,9 @@ import { NutritionProvider } from './src/context/NutritionContext';
 import { ProductProvider } from './src/context/ProductContext';
 import { SpinWheelProvider } from './src/context/SpinWheelContext';
 import { CycleTrackerProvider } from './src/context/CycleTrackerContext';
+import { SenpaiProvider } from './src/context/SenpaiContext';
+import { SenpaiMascot } from './src/components/SenpaiMascot';
+import { SenpaiOverlay } from './src/components/SenpaiOverlay';
 import { SoundProvider } from './src/context/SoundContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ThemeOverlay } from './src/components/ThemeOverlay';
@@ -49,6 +52,8 @@ function AppContent() {
     <NavigationContainer theme={navTheme}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <RootNavigator />
+      <SenpaiMascot />
+      <SenpaiOverlay />
       <ThemeOverlay />
     </NavigationContainer>
   );
@@ -111,9 +116,11 @@ export default function App() {
                         <ProductProvider>
                           <SpinWheelProvider>
                           <CycleTrackerProvider>
+                          <SenpaiProvider>
                             <TimeClockProvider>
                               <AppContent />
                             </TimeClockProvider>
+                          </SenpaiProvider>
                           </CycleTrackerProvider>
                           </SpinWheelProvider>
                         </ProductProvider>

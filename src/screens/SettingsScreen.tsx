@@ -19,6 +19,9 @@ import { ALL_THEMES } from '../theme/themes';
 import type { ThemeDefinition } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
+import { useSenpai } from '../context/SenpaiContext';
+import { senpaiJingle } from '../sounds/synth';
+import { randomDialogue } from '../data/senpaiDialogue';
 import { ADMIN_PASSWORD_OVERRIDE_KEY } from '../data/members';
 import { typography, spacing, borderRadius } from '../theme';
 
@@ -47,6 +50,7 @@ export function SettingsScreen({ navigation }: any) {
   const isAdmin = user?.isAdmin === true;
   useScreenSoundTheme('settings');
   const { play } = useSound();
+  const { state: senpaiState, setEnabled: setSenpaiEnabled, triggerReaction } = useSenpai();
   const [pushEnabled, setPushEnabled] = useState(true);
   const [classReminders, setClassReminders] = useState(true);
   const [emailUpdates, setEmailUpdates] = useState(false);
@@ -444,6 +448,33 @@ export function SettingsScreen({ navigation }: any) {
               }},
             ]);
           }, true)}
+        </View>
+
+        {/* Secret Lab */}
+        {renderSectionHeader('SECRET LAB \uD83E\uDDEA')}
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+          <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Senpai Mode</Text>
+              <Text style={[styles.settingDesc, { color: colors.textMuted }]}>Your personal anime cheerleader</Text>
+            </View>
+            <Switch
+              value={senpaiState.enabled}
+              onValueChange={(val) => {
+                setSenpaiEnabled(val);
+                if (val) {
+                  senpaiJingle();
+                  triggerReaction('celebrating', 'SENPAI NOTICED ME!!', 4000);
+                  Alert.alert(
+                    '\u26A0\uFE0F Warning',
+                    'May contain excessive enthusiasm and sparkles. Not responsible for increased motivation.',
+                  );
+                }
+              }}
+              trackColor={{ false: colors.surfaceSecondary, true: '#FF69B4' }}
+              thumbColor={colors.background}
+            />
+          </View>
         </View>
 
         {/* About */}
