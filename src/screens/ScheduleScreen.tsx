@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,12 +19,21 @@ import { DAYS as SCHED_DAYS, SCHEDULES as SHARED_SCHEDULES, PILATES_ENTRY as SHA
 
 const DAYS = SCHED_DAYS as unknown as string[];
 
-// Generate current week's dates dynamically
-const getWeekDates = (): number[] => {
+type ClassFilter = 'all' | 'bjj' | 'muay-thai' | 'pilates' | 'open-mat';
+const FILTER_OPTIONS: { key: ClassFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'bjj', label: 'BJJ' },
+  { key: 'muay-thai', label: 'Muay Thai' },
+  { key: 'pilates', label: 'Pilates' },
+  { key: 'open-mat', label: 'Open Mat' },
+];
+
+// Generate week dates with offset from current week
+const getWeekDates = (weekOffset: number = 0): number[] => {
   const now = new Date();
   const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon...
   const monday = new Date(now);
-  monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7)); // Back to Monday
+  monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7) + weekOffset * 7);
   return DAYS.map((_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
@@ -31,9 +41,12 @@ const getWeekDates = (): number[] => {
   });
 };
 
-const getMonthYear = (): string => {
+const getMonthYear = (weekOffset: number = 0): string => {
   const now = new Date();
-  return now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const dayOfWeek = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7) + weekOffset * 7);
+  return monday.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 };
 
 const getTodayIndex = (): number => {
@@ -57,11 +70,11 @@ function formatAppointmentTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-function dateForWeekdayIndex(index: number): Date {
+function dateForWeekdayIndex(index: number, weekOff: number = 0): Date {
   const now = new Date();
   const dayOfWeek = now.getDay();
   const monday = new Date(now);
-  monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
+  monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7) + weekOff * 7);
   const d = new Date(monday);
   d.setDate(monday.getDate() + index);
   return d;
@@ -73,10 +86,12 @@ export function ScheduleScreen({ navigation }: any) {
   const { user } = useAuth();
   const { myAppointments } = useAppointments();
   const [selectedDay, setSelectedDay] = useState(getTodayIndex());
-  const weekDates = getWeekDates();
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [filter, setFilter] = useState<ClassFilter>('all');
+  const weekDates = getWeekDates(weekOffset);
 
   // Member's private bookings that fall on the selected weekday of this week
-  const selectedDate = dateForWeekdayIndex(selectedDay);
+  const selectedDate = dateForWeekdayIndex(selectedDay, weekOffset);
   const mySelectedDayBookings = myAppointments
     .filter((a) => a.memberId === user?.id && a.status !== 'cancelled' && a.status !== 'completed')
     .filter((a) => {
@@ -90,7 +105,15 @@ export function ScheduleScreen({ navigation }: any) {
     .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
 
   const dayKey = DAYS[selectedDay];
-  const filtered = [...(SCHEDULES[dayKey] || []), PILATES_ENTRY];
+  const allClasses = [...(SCHEDULES[dayKey] || []), PILATES_ENTRY];
+  const filtered = filter === 'all' ? allClasses : allClasses.filter((cls: any) => {
+    const type = (cls.type || '').toLowerCase();
+    if (filter === 'bjj') return type.includes('jiu') || type.includes('bjj');
+    if (filter === 'muay-thai') return type.includes('muay') || type.includes('thai') || type.includes('kickbox');
+    if (filter === 'pilates') return type.includes('pilates') || type.includes('mobility');
+    if (filter === 'open-mat') return type.includes('open') || type.includes('mat');
+    return true;
+  });
 
   const todayIdx = getTodayIndex();
   const selectedFullLabel = (() => {
@@ -105,20 +128,57 @@ export function ScheduleScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Header — month + class count chip */}
+      {/* Header — month + week nav */}
       <View style={styles.scheduleHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Ionicons name="calendar" size={22} color={colors.gold} />
           <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>
-            {getMonthYear()}
+            {getMonthYear(weekOffset)}
           </Text>
         </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <TouchableOpacity onPress={() => setWeekOffset((w) => w - 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="chevron-back" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+          {weekOffset !== 0 && (
+            <TouchableOpacity
+              onPress={() => { setWeekOffset(0); setSelectedDay(getTodayIndex()); }}
+              style={[styles.todayBtn, { backgroundColor: colors.goldMuted }]}
+            >
+              <Text style={[styles.todayBtnText, { color: colors.gold }]}>Today</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={() => setWeekOffset((w) => w + 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Filter chips */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+        {FILTER_OPTIONS.map((f) => {
+          const active = filter === f.key;
+          return (
+            <TouchableOpacity
+              key={f.key}
+              style={[styles.filterChip, {
+                backgroundColor: active ? colors.gold : colors.surface,
+                borderColor: active ? colors.gold : colors.border,
+              }]}
+              onPress={() => setFilter(f.key)}
+            >
+              <Text style={[styles.filterChipText, { color: active ? '#000' : colors.textSecondary }]}>
+                {f.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
         <View style={[styles.countChip, { backgroundColor: colors.goldMuted, borderColor: colors.gold }]}>
           <Text style={[styles.countChipText, { color: colors.gold }]}>
             {filtered.length} {filtered.length === 1 ? 'class' : 'classes'}
           </Text>
         </View>
-      </View>
+      </ScrollView>
 
       {/* Divider under header */}
       <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
@@ -391,4 +451,27 @@ const styles = StyleSheet.create({
   emptyState: { paddingVertical: 48, alignItems: 'center', gap: 16 },
   emptyIcon: { marginBottom: 8 },
   emptyText: { fontSize: 15 },
+
+  // ── Week nav ──
+  todayBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  todayBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  // ── Filter chips ──
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  filterChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
 });

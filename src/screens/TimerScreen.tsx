@@ -9,14 +9,28 @@ import {
   ScrollView,
   TextInput,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useSound } from '../context/SoundContext';
 import { spacing, borderRadius } from '../theme';
+import { TimerPreset, TimerSessionLog } from '../types/activity';
 
 type TimerTab = 'round' | 'interval' | 'stopwatch' | 'meditate';
+
+const TIMER_PRESETS_KEY = '@zenki_timer_presets';
+const TIMER_HISTORY_KEY = '@zenki_timer_history';
+
+/** Default presets available out of the box. */
+const DEFAULT_PRESETS: TimerPreset[] = [
+  { id: 'preset-tabata', name: 'Tabata', type: 'interval', rounds: 8, workSeconds: 20, restSeconds: 10, createdAt: '' },
+  { id: 'preset-emom10', name: 'EMOM 10', type: 'emom', rounds: 10, workSeconds: 60, restSeconds: 0, createdAt: '' },
+  { id: 'preset-hiit', name: '20-10 HIIT', type: 'interval', rounds: 12, workSeconds: 20, restSeconds: 10, createdAt: '' },
+  { id: 'preset-fight', name: '5-Round Fight', type: 'custom', rounds: 5, workSeconds: 300, restSeconds: 60, createdAt: '' },
+];
 
 function pad2(n: number): string {
   return n.toString().padStart(2, '0');
@@ -32,6 +46,42 @@ export function TimerScreen({ navigation, route }: any) {
   const { play } = useSound();
   const initialTab: TimerTab = (route?.params?.mode as TimerTab) ?? 'round';
   const [tab, setTab] = useState<TimerTab>(initialTab);
+
+  // Saved presets
+  const [presets, setPresets] = useState<TimerPreset[]>(DEFAULT_PRESETS);
+  const [history, setHistory] = useState<TimerSessionLog[]>([]);
+
+  useEffect(() => {
+    AsyncStorage.getItem(TIMER_PRESETS_KEY).then((raw) => {
+      if (raw) try { const parsed = JSON.parse(raw); if (parsed.length > 0) setPresets(parsed); } catch {}
+    });
+    AsyncStorage.getItem(TIMER_HISTORY_KEY).then((raw) => {
+      if (raw) try { setHistory(JSON.parse(raw)); } catch {}
+    });
+  }, []);
+
+  const savePreset = (preset: TimerPreset) => {
+    const next = [preset, ...presets.filter((p) => p.id !== preset.id)];
+    setPresets(next);
+    AsyncStorage.setItem(TIMER_PRESETS_KEY, JSON.stringify(next));
+  };
+
+  const logSession = (session: TimerSessionLog) => {
+    const next = [session, ...history].slice(0, 50);
+    setHistory(next);
+    AsyncStorage.setItem(TIMER_HISTORY_KEY, JSON.stringify(next));
+  };
+
+  // Weekly summary
+  const weekMinutes = React.useMemo(() => {
+    const now = Date.now();
+    const weekMs = 7 * 86400000;
+    return Math.round(
+      history
+        .filter((h) => now - new Date(h.date).getTime() < weekMs)
+        .reduce((sum, h) => sum + h.totalDurationSeconds, 0) / 60
+    );
+  }, [history]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -73,10 +123,34 @@ export function TimerScreen({ navigation, route }: any) {
         })}
       </View>
 
-      {tab === 'round' && <RoundTimer onBeep={() => play('navigate')} />}
-      {tab === 'interval' && <IntervalTimer onBeep={() => play('navigate')} />}
+      {tab === 'round' && <RoundTimer onBeep={() => play('navigate')} onComplete={logSession} />}
+      {tab === 'interval' && <IntervalTimer onBeep={() => play('navigate')} onComplete={logSession} presets={presets} onSavePreset={savePreset} />}
       {tab === 'stopwatch' && <StopwatchAndCountdown />}
-      {tab === 'meditate' && <MeditationTimer />}
+      {tab === 'meditate' && <MeditationTimer onComplete={logSession} />}
+
+      {/* Timer history (collapsible) */}
+      {history.length > 0 && tab !== 'meditate' && (
+        <View style={[styles.historySection, { borderTopColor: colors.border }]}>
+          <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={[styles.historyTitle, { color: colors.textMuted }]}>TIMER HISTORY</Text>
+              <Text style={[styles.historySummary, { color: colors.gold }]}>{weekMinutes}m this week</Text>
+            </View>
+            {history.slice(0, 5).map((h) => (
+              <View key={h.id} style={[styles.historyRow, { borderBottomColor: colors.borderSubtle }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.historyName, { color: colors.textPrimary }]}>
+                    {h.presetName || h.type}
+                  </Text>
+                  <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
+                    {new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {Math.round(h.totalDurationSeconds / 60)}m · {h.roundsCompleted}/{h.roundsTarget} rounds
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -85,7 +159,7 @@ export function TimerScreen({ navigation, route }: any) {
 // Round Timer — configurable work / rest / rounds
 // ═════════════════════════════════════════════════════
 
-function RoundTimer({ onBeep }: { onBeep: () => void }) {
+function RoundTimer({ onBeep, onComplete }: { onBeep: () => void; onComplete?: (log: TimerSessionLog) => void }) {
   const { colors } = useTheme();
   const [workMin, setWorkMin] = useState(5);
   const [restMin, setRestMin] = useState(1);
@@ -144,6 +218,15 @@ function RoundTimer({ onBeep }: { onBeep: () => void }) {
           }
           setRunning(false);
           setPhase('done');
+          onComplete?.({
+            id: 'tl_' + Date.now().toString(36),
+            memberId: '',
+            type: 'round',
+            totalDurationSeconds: rounds * (workMin + restMin) * 60,
+            roundsCompleted: rounds,
+            roundsTarget: rounds,
+            date: new Date().toISOString(),
+          });
           return 0;
         } else if (phase === 'rest') {
           if (currentRound < rounds) {
@@ -153,6 +236,15 @@ function RoundTimer({ onBeep }: { onBeep: () => void }) {
           }
           setRunning(false);
           setPhase('done');
+          onComplete?.({
+            id: 'tl_' + Date.now().toString(36),
+            memberId: '',
+            type: 'round',
+            totalDurationSeconds: rounds * (workMin + restMin) * 60,
+            roundsCompleted: rounds,
+            roundsTarget: rounds,
+            date: new Date().toISOString(),
+          });
           return 0;
         }
         return 0;
@@ -238,7 +330,12 @@ function RoundTimer({ onBeep }: { onBeep: () => void }) {
 // Interval Timer — Tabata preset + custom
 // ═════════════════════════════════════════════════════
 
-function IntervalTimer({ onBeep }: { onBeep: () => void }) {
+function IntervalTimer({ onBeep, onComplete, presets, onSavePreset }: {
+  onBeep: () => void;
+  onComplete?: (log: TimerSessionLog) => void;
+  presets?: TimerPreset[];
+  onSavePreset?: (preset: TimerPreset) => void;
+}) {
   const { colors } = useTheme();
   const [workSec, setWorkSec] = useState(20);
   const [restSec, setRestSec] = useState(10);
@@ -374,20 +471,70 @@ function IntervalTimer({ onBeep }: { onBeep: () => void }) {
         )}
       </View>
 
-      <TouchableOpacity
-        style={[styles.presetBtn, { backgroundColor: colors.goldMuted, borderColor: colors.gold }]}
-        onPress={applyTabata}
-        disabled={phase !== 'idle'}
-      >
-        <Ionicons name="flash" size={16} color={colors.gold} />
-        <Text style={[styles.presetBtnText, { color: colors.gold }]}>Tabata preset (20/10 × 8)</Text>
-      </TouchableOpacity>
+      {/* Saved presets row */}
+      {presets && presets.length > 0 && phase === 'idle' && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+          {presets.map((p) => (
+            <TouchableOpacity
+              key={p.id}
+              style={[styles.presetBtn, { backgroundColor: colors.surface, borderColor: colors.border, paddingHorizontal: 14 }]}
+              onPress={() => {
+                setWorkSec(p.workSeconds);
+                setRestSec(p.restSeconds);
+                setRounds(p.rounds);
+              }}
+            >
+              <Ionicons name="bookmark" size={14} color={colors.gold} />
+              <Text style={[styles.presetBtnText, { color: colors.textPrimary }]}>{p.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
 
       <View style={[styles.configCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <NumberRow label="Work (sec)" value={workSec} setValue={setWorkSec} step={5} disabled={phase !== 'idle'} />
         <NumberRow label="Rest (sec)" value={restSec} setValue={setRestSec} step={5} disabled={phase !== 'idle'} />
         <NumberRow label="Rounds" value={rounds} setValue={setRounds} min={1} disabled={phase !== 'idle'} />
       </View>
+
+      {/* Save as Preset button */}
+      {phase === 'idle' && onSavePreset && (
+        <TouchableOpacity
+          style={[styles.presetBtn, { backgroundColor: colors.goldMuted, borderColor: colors.gold }]}
+          onPress={() => {
+            Alert.prompt
+              ? Alert.prompt('Save Preset', 'Enter a name for this timer preset', (name: string) => {
+                  if (name.trim()) {
+                    onSavePreset({
+                      id: 'tp_' + Date.now().toString(36),
+                      name: name.trim(),
+                      type: 'interval',
+                      rounds,
+                      workSeconds: workSec,
+                      restSeconds: restSec,
+                      createdAt: new Date().toISOString(),
+                    });
+                  }
+                })
+              : (() => {
+                  const name = `${workSec}/${restSec} × ${rounds}`;
+                  onSavePreset({
+                    id: 'tp_' + Date.now().toString(36),
+                    name,
+                    type: 'interval',
+                    rounds,
+                    workSeconds: workSec,
+                    restSeconds: restSec,
+                    createdAt: new Date().toISOString(),
+                  });
+                  Alert.alert('Saved', `Preset "${name}" saved.`);
+                })()
+          }}
+        >
+          <Ionicons name="bookmark-outline" size={16} color={colors.gold} />
+          <Text style={[styles.presetBtnText, { color: colors.gold }]}>Save as Preset</Text>
+        </TouchableOpacity>
+      )}
     </ScrollView>
   );
 }
@@ -618,7 +765,7 @@ const MEDITATION_PRESETS = [
   { minutes: 60, label: 'Extended' },
 ];
 
-function MeditationTimer() {
+function MeditationTimer({ onComplete }: { onComplete?: (log: TimerSessionLog) => void } = {}) {
   const { colors } = useTheme();
   const [selectedMinutes, setSelectedMinutes] = useState(21);
   const [remaining, setRemaining] = useState(21 * 60);
@@ -933,4 +1080,33 @@ const styles = StyleSheet.create({
   lapRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   lapIndex: { fontSize: 13, fontWeight: '700' },
   lapValue: { fontSize: 14, fontWeight: '800', fontVariant: ['tabular-nums'] },
+
+  // ── Timer history ──
+  historySection: {
+    borderTopWidth: 1,
+    marginTop: spacing.sm,
+  },
+  historyTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    marginBottom: 8,
+  },
+  historySummary: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  historyRow: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+  },
+  historyName: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  historyMeta: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 2,
+  },
 });
