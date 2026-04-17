@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useRef } from 'react';
+import React, { useMemo, useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,14 @@ import {
   Animated,
   RefreshControl,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius, shadows } from '../theme';
 import { ClassCard, AnimatedLogo, FadeInView, PressableScale, TimeClock, StreakBadge, PointsBadge, XPProgressBar, AchievementGrid, CelebrationModal } from '../components';
+import { ReorderableSections, ReorderableItem } from '../components/ReorderableSections';
 import { Skeleton } from '../components/Skeleton';
 import { SpinWheelModal } from '../components/SpinWheelModal';
 import { NotificationsModal } from '../components/NotificationsModal';
@@ -302,16 +304,7 @@ export function HomeScreen({ navigation }: any) {
       });
     }
 
-    // 2. Current streak
-    const streak = gamState.streak || 0;
-    stats.push({
-      label: 'Streak',
-      value: `${streak} day${streak !== 1 ? 's' : ''}`,
-      sub: streak >= 7 ? 'On fire!' : 'Keep going',
-      icon: 'flame',
-    });
-
-    // 3. Latest PR
+    // 2. Latest PR
     const prs = user.id ? myPRs(user.id) : [];
     if (prs.length > 0) {
       const latest = prs[prs.length - 1] as any;
@@ -372,9 +365,65 @@ export function HomeScreen({ navigation }: any) {
     refreshTimerRef.current = setTimeout(() => setRefreshing(false), 800);
   }, []);
 
+  // ── Module reorder (drag to rearrange) + show/hide ──
+  const DEFAULT_MODULE_ORDER = ['training', 'announcements', 'xpBar', 'achievements', 'quote', 'dashboard', 'quickStats', 'schedule'];
+  const [moduleOrder, setModuleOrder] = useState<string[]>(DEFAULT_MODULE_ORDER);
+  const [moduleVisibility, setModuleVisibility] = useState<Record<string, boolean>>({});
+  const [editMode, setEditMode] = useState(false);
+  const orderStorageKey = user?.id ? `@zenki_home_order_${user.id}` : null;
+  const visibilityStorageKey = user?.id ? `@zenki_home_visibility_${user.id}` : null;
+
+  useEffect(() => {
+    if (!orderStorageKey) return;
+    AsyncStorage.getItem(orderStorageKey).then((raw) => {
+      if (!raw) return;
+      try {
+        const saved = JSON.parse(raw);
+        if (!Array.isArray(saved)) return;
+        const merged = [
+          ...saved.filter((id: string) => DEFAULT_MODULE_ORDER.includes(id)),
+          ...DEFAULT_MODULE_ORDER.filter((id) => !saved.includes(id)),
+        ];
+        setModuleOrder(merged);
+      } catch { /* ignore */ }
+    });
+  }, [orderStorageKey]);
+
+  useEffect(() => {
+    if (!visibilityStorageKey) return;
+    AsyncStorage.getItem(visibilityStorageKey).then((raw) => {
+      if (!raw) return;
+      try {
+        const saved = JSON.parse(raw);
+        if (saved && typeof saved === 'object') setModuleVisibility(saved);
+      } catch { /* ignore */ }
+    });
+  }, [visibilityStorageKey]);
+
+  const handleReorder = useCallback((next: string[]) => {
+    setModuleOrder(next);
+    if (orderStorageKey) AsyncStorage.setItem(orderStorageKey, JSON.stringify(next));
+  }, [orderStorageKey]);
+
+  const toggleVisibility = useCallback((id: string) => {
+    setModuleVisibility((prev) => {
+      const next = { ...prev, [id]: prev[id] === false };
+      if (visibilityStorageKey) AsyncStorage.setItem(visibilityStorageKey, JSON.stringify(next));
+      return next;
+    });
+  }, [visibilityStorageKey]);
+
+  const isModuleVisible = useCallback((id: string) => moduleVisibility[id] !== false, [moduleVisibility]);
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <View style={{ flex: 1 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />
+        }
+      >
 
         {/* ─── Header (compact with corner logo) ─── */}
         <FadeInView delay={0} slideUp={0}>
@@ -411,118 +460,25 @@ export function HomeScreen({ navigation }: any) {
           </View>
         </FadeInView>
 
-        {/* ─── Welcome (above announcements) ─── */}
+        {/* ─── Welcome row (name + Edit pill) ─── */}
         <FadeInView delay={40} slideUp={12}>
-          <View style={[styles.welcomeSection, { paddingBottom: 0 }]}>
-            <Text style={styles.welcomeLine} numberOfLines={1}>
+          <View style={[styles.welcomeSection, { paddingBottom: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+            <Text style={[styles.welcomeLine, { flex: 1 }]} numberOfLines={1}>
               <Text style={[styles.welcomeLabel, { color: colors.textTertiary }]}>Welcome back, </Text>
               <Text style={[styles.welcomeName, { color: colors.textPrimary }]}>
                 {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Member'}
               </Text>
             </Text>
-          </View>
-        </FadeInView>
-
-        {/* ─── Announcements (admin-editable, below welcome) ─── */}
-        {!isEmployee && announcements.length > 0 && (
-          <FadeInView delay={80} slideUp={12}>
-            <View style={[styles.announcementsWrap, { marginTop: 12 }]}>
-              {announcements.slice(0, 3).map((a) => (
-                <PressableScale key={a.id}>
-                  <View style={[styles.announcementCard, { backgroundColor: colors.goldMuted }]}>
-                    <View style={[styles.announcementIcon, { backgroundColor: colors.gold + '20' }]}>
-                      <Ionicons name="megaphone-outline" size={20} color={colors.gold} />
-                    </View>
-                    <View style={styles.announcementContent}>
-                      <Text style={[styles.announcementTitle, { color: colors.textPrimary }]} numberOfLines={2}>{a.title}</Text>
-                      {a.description ? (
-                        <Text style={[styles.announcementDesc, { color: colors.textSecondary }]} numberOfLines={2}>{a.description}</Text>
-                      ) : null}
-                    </View>
-                  </View>
-                </PressableScale>
-              ))}
-            </View>
-          </FadeInView>
-        )}
-
-        {/* ─── Compact XP + Daily Quote ─── */}
-        <FadeInView delay={120} slideUp={20}>
-          <View style={[styles.welcomeSection, { paddingTop: 12 }]}>
-
-            {/* Compact XP row — only for members */}
-            {!isEmployee && (
-              <View style={[styles.compactXpRow, { backgroundColor: colors.surface }]}>
-                <View style={[styles.compactLevelCircle, { backgroundColor: colors.gold }]}>
-                  <Text style={styles.compactLevelText}>{levelInfo.level}</Text>
-                </View>
-                <View style={styles.compactXpBody}>
-                  <View style={styles.compactXpLabels}>
-                    <Text style={[styles.compactXpText, { color: colors.textSecondary }]}>
-                      Level {levelInfo.level}
-                    </Text>
-                    <Text style={[styles.compactXpText, { color: colors.gold }]}>
-                      {levelInfo.currentXP} / {levelInfo.nextLevelXP} XP
-                    </Text>
-                  </View>
-                  <View style={[styles.compactXpBarBg, { backgroundColor: colors.backgroundElevated }]}>
-                    <View style={[styles.compactXpBarFill, {
-                      backgroundColor: colors.gold,
-                      width: `${Math.max(4, levelInfo.progress * 100)}%`,
-                    }]} />
-                  </View>
-                </View>
-              </View>
+            {!isEmployee && !editMode && (
+              <TouchableOpacity
+                onPress={() => setEditMode(true)}
+                activeOpacity={0.8}
+                style={[styles.editPill, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              >
+                <Ionicons name="create-outline" size={11} color={colors.textSecondary} />
+                <Text style={[styles.editPillText, { color: colors.textSecondary }]}>Edit</Text>
+              </TouchableOpacity>
             )}
-
-            {/* Achievements pillbox with recent badge icons */}
-            {!isEmployee && (() => {
-              const unlocked = gamState.achievements.filter((a: any) => a.unlocked);
-              const recent = unlocked.slice(-4); // last 4 unlocked
-              return (
-                <TouchableOpacity
-                  style={[styles.homePill, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  onPress={() => navigation.navigate('Achievements')}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.homePillIcon, { backgroundColor: colors.goldMuted }]}>
-                    <Ionicons name="trophy" size={16} color={colors.gold} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.homePillTitle, { color: colors.textPrimary }]}>Achievements</Text>
-                    <Text style={[styles.homePillSub, { color: colors.textMuted }]}>
-                      {unlocked.length}/{gamState.achievements.length} unlocked · {gamState.flames || 0} 🔥
-                    </Text>
-                  </View>
-                  <View style={styles.recentBadges}>
-                    {recent.map((a: any) => (
-                      <View key={a.id} style={[styles.miniBadge, { backgroundColor: colors.goldMuted }]}>
-                        <Ionicons name={a.icon} size={12} color={colors.gold} />
-                      </View>
-                    ))}
-                    {recent.length === 0 && (
-                      <>
-                        <View style={[styles.miniBadge, { backgroundColor: colors.surfaceSecondary }]}>
-                          <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
-                        </View>
-                        <View style={[styles.miniBadge, { backgroundColor: colors.surfaceSecondary }]}>
-                          <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
-                        </View>
-                        <View style={[styles.miniBadge, { backgroundColor: colors.surfaceSecondary }]}>
-                          <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
-                        </View>
-                      </>
-                    )}
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-                </TouchableOpacity>
-              );
-            })()}
-
-            <View style={[styles.quoteCard, { backgroundColor: colors.surface }]}>
-              <Text style={[styles.quoteText, { color: colors.textPrimary }]}>{dailyQuote.text}</Text>
-              <Text style={[styles.quoteAttr, { color: colors.gold }]}>— {dailyQuote.attribution}</Text>
-            </View>
           </View>
         </FadeInView>
 
@@ -536,15 +492,9 @@ export function HomeScreen({ navigation }: any) {
         {/* ─── Employee Checklist (employee-only) ─── */}
         {isEmployee && <EmployeeChecklistCard navigation={navigation} memberId={user?.id ?? ''} />}
 
-        {/* ─── Member Content (scrollable) ─── */}
+        {/* ─── Member Content ─── */}
         {!isEmployee && (
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />
-            }
-          >
+          <>
             {/* ── Cycle Phase Pill (female users only) ── */}
             {showCyclePhase && cycleInfo && (
               <FadeInView delay={180} slideUp={10}>
@@ -567,240 +517,325 @@ export function HomeScreen({ navigation }: any) {
               </FadeInView>
             )}
 
-            {/* ── 1.1 Today's Dashboard Panel ── */}
-            <FadeInView delay={200} slideUp={16}>
-              <View style={[styles.section, { marginTop: 4 }]}>
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 10, fontSize: 16, fontWeight: '800' }]}>YOUR DAY</Text>
-                <View style={styles.dashGrid}>
-                  {/* Workouts Today */}
-                  <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-                    <View style={[styles.dashIconWrap, { backgroundColor: colors.redMuted }]}>
-                      <Ionicons name="barbell" size={18} color={colors.red} />
-                    </View>
-                    <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.workouts}</Text>
-                    <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Workouts</Text>
-                    <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
-                      <View style={[styles.dashProgressFill, { backgroundColor: colors.red, width: `${Math.min(100, todayStats.workouts * 100)}%` }]} />
-                    </View>
-                  </View>
-
-                  {/* Calories Burned */}
-                  <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-                    <View style={[styles.dashIconWrap, { backgroundColor: colors.warningMuted }]}>
-                      <Ionicons name="flame" size={18} color={colors.warning} />
-                    </View>
-                    <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.caloriesBurned}</Text>
-                    <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Cal Burned</Text>
-                    <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
-                      <View style={[styles.dashProgressFill, { backgroundColor: colors.warning, width: `${Math.min(100, (todayStats.caloriesBurned / 500) * 100)}%` }]} />
-                    </View>
-                  </View>
-
-                  {/* Macros Hit */}
-                  <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-                    <View style={[styles.dashIconWrap, { backgroundColor: colors.successMuted }]}>
-                      <Ionicons name="nutrition" size={18} color={colors.success} />
-                    </View>
-                    <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.macrosPct}%</Text>
-                    <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Macros Hit</Text>
-                    <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
-                      <View style={[styles.dashProgressFill, { backgroundColor: colors.success, width: `${todayStats.macrosPct}%` }]} />
-                    </View>
-                  </View>
-
-                  {/* Active Minutes */}
-                  <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-                    <View style={[styles.dashIconWrap, { backgroundColor: colors.infoMuted }]}>
-                      <Ionicons name="time" size={18} color={colors.info} />
-                    </View>
-                    <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.activeMinutes}</Text>
-                    <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Active Min</Text>
-                    <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
-                      <View style={[styles.dashProgressFill, { backgroundColor: colors.info, width: `${Math.min(100, (todayStats.activeMinutes / 30) * 100)}%` }]} />
-                    </View>
-                  </View>
-                </View>
+            {/* ── Edit-mode bar: shown while reordering ── */}
+            {editMode && (
+              <View style={[styles.editBar, { backgroundColor: colors.surface, borderColor: colors.gold + '40' }]}>
+                <Ionicons name="move-outline" size={16} color={colors.gold} />
+                <Text style={[styles.editHint, { color: colors.textSecondary }]}>
+                  Drag to rearrange · tap − to hide
+                </Text>
+                <TouchableOpacity
+                  style={[styles.doneBtn, { backgroundColor: colors.gold }]}
+                  onPress={() => setEditMode(false)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.doneBtnText, { color: '#000' }]}>DONE</Text>
+                </TouchableOpacity>
               </View>
-            </FadeInView>
+            )}
 
-            {/* ── 1.2 Next Class Countdown ── */}
-            <FadeInView delay={260} slideUp={16}>
-              <View style={[styles.section, { marginTop: 6 }]}>
-                {nextClass ? (
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    onPress={() => navigation.navigate('Schedule')}
-                    style={[styles.nextClassCard, { backgroundColor: colors.surface, borderColor: colors.gold + '30' }]}
-                  >
-                    <View style={styles.nextClassLeft}>
-                      <View style={[styles.nextClassDot, { backgroundColor: colors.gold }]} />
-                      <View>
-                        <Text style={[styles.nextClassName, { color: colors.textPrimary }]}>{nextClass.name}</Text>
-                        <Text style={[styles.nextClassMeta, { color: colors.textSecondary }]}>
-                          {nextClass.instructor} · {nextClass.time}
-                        </Text>
+            {/* ── Reorderable sections ── */}
+            {(() => {
+              const sectionsById: Record<string, React.ReactElement | null> = {
+                announcements: announcements.length > 0 ? (
+                  <FadeInView delay={80} slideUp={12}>
+                    <View style={[styles.announcementsWrap, { marginTop: 4 }]}>
+                      {announcements.slice(0, 3).map((a) => (
+                        <PressableScale key={a.id}>
+                          <View style={[styles.announcementCard, { backgroundColor: colors.goldMuted }]}>
+                            <View style={[styles.announcementIcon, { backgroundColor: colors.gold + '20' }]}>
+                              <Ionicons name="megaphone-outline" size={20} color={colors.gold} />
+                            </View>
+                            <View style={styles.announcementContent}>
+                              <Text style={[styles.announcementTitle, { color: colors.textPrimary }]} numberOfLines={2}>{a.title}</Text>
+                              {a.description ? (
+                                <Text style={[styles.announcementDesc, { color: colors.textSecondary }]} numberOfLines={2}>{a.description}</Text>
+                              ) : null}
+                            </View>
+                          </View>
+                        </PressableScale>
+                      ))}
+                    </View>
+                  </FadeInView>
+                ) : null,
+                xpBar: (
+                  <FadeInView delay={100} slideUp={16}>
+                    <View style={{ paddingHorizontal: 24, marginTop: 4 }}>
+                      <View style={[styles.compactXpRow, { backgroundColor: colors.surface, marginBottom: 0 }]}>
+                        <View style={[styles.compactLevelCircle, { backgroundColor: colors.gold }]}>
+                          <Text style={styles.compactLevelText}>{levelInfo.level}</Text>
+                        </View>
+                        <View style={styles.compactXpBody}>
+                          <View style={styles.compactXpLabels}>
+                            <Text style={[styles.compactXpText, { color: colors.textSecondary }]}>
+                              Level {levelInfo.level}
+                            </Text>
+                            <Text style={[styles.compactXpText, { color: colors.gold }]}>
+                              {levelInfo.currentXP} / {levelInfo.nextLevelXP} XP
+                            </Text>
+                          </View>
+                          <View style={[styles.compactXpBarBg, { backgroundColor: colors.backgroundElevated }]}>
+                            <View style={[styles.compactXpBarFill, {
+                              backgroundColor: colors.gold,
+                              width: `${Math.max(4, levelInfo.progress * 100)}%`,
+                            }]} />
+                          </View>
+                        </View>
                       </View>
                     </View>
-                    <View style={styles.nextClassRight}>
-                      <Text style={[styles.nextClassCountdown, { color: colors.gold }]}>{countdown}</Text>
-                      {!nextClass.booked && (
-                        <TouchableOpacity
-                          style={[styles.bookNowBtn, { backgroundColor: colors.gold }]}
-                          onPress={() => navigation.navigate('Book')}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[styles.bookNowText, { color: '#000' }]}>BOOK</Text>
-                        </TouchableOpacity>
-                      )}
-                      {nextClass.booked && (
-                        <View style={[styles.bookedBadge, { backgroundColor: colors.successMuted }]}>
-                          <Ionicons name="checkmark-circle" size={12} color={colors.success} />
-                          <Text style={[styles.bookedText, { color: colors.success }]}>BOOKED</Text>
-                        </View>
-                      )}
+                  </FadeInView>
+                ),
+                achievements: (
+                  <FadeInView delay={120} slideUp={16}>
+                    <View style={{ paddingHorizontal: 24, marginTop: 6 }}>
+                      {(() => {
+                        const unlocked = gamState.achievements.filter((a: any) => a.unlocked);
+                        const recent = unlocked.slice(-4);
+                        return (
+                          <TouchableOpacity
+                            style={[styles.homePill, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 0 }]}
+                            onPress={() => !editMode && navigation.navigate('Achievements')}
+                            activeOpacity={0.8}
+                          >
+                            <View style={[styles.homePillIcon, { backgroundColor: colors.goldMuted }]}>
+                              <Ionicons name="trophy" size={16} color={colors.gold} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.homePillTitle, { color: colors.textPrimary }]}>Achievements</Text>
+                              <Text style={[styles.homePillSub, { color: colors.textMuted }]}>
+                                {unlocked.length}/{gamState.achievements.length} unlocked · {gamState.flames || 0} 🔥
+                              </Text>
+                            </View>
+                            <View style={styles.recentBadges}>
+                              {recent.map((a: any) => (
+                                <View key={a.id} style={[styles.miniBadge, { backgroundColor: colors.goldMuted }]}>
+                                  <Ionicons name={a.icon} size={12} color={colors.gold} />
+                                </View>
+                              ))}
+                              {recent.length === 0 && (
+                                <>
+                                  <View style={[styles.miniBadge, { backgroundColor: colors.surfaceSecondary }]}>
+                                    <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
+                                  </View>
+                                  <View style={[styles.miniBadge, { backgroundColor: colors.surfaceSecondary }]}>
+                                    <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
+                                  </View>
+                                  <View style={[styles.miniBadge, { backgroundColor: colors.surfaceSecondary }]}>
+                                    <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
+                                  </View>
+                                </>
+                              )}
+                            </View>
+                            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                          </TouchableOpacity>
+                        );
+                      })()}
                     </View>
-                  </TouchableOpacity>
-                ) : (
-                  <View style={[styles.nextClassCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-                    <Ionicons name="moon-outline" size={18} color={colors.textMuted} />
-                    <Text style={[styles.nextClassMeta, { color: colors.textMuted, marginLeft: 8 }]}>
-                      NO CLASSES REMAINING TODAY
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </FadeInView>
-
-            {/* ── 1.3 Quick Stats Carousel ── */}
-            {quickStats.length > 0 && (
-              <FadeInView delay={300} slideUp={16}>
-                <View style={{ marginTop: 10 }}>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={{ paddingHorizontal: 24, gap: 10 }}
-                    decelerationRate="fast"
-                    snapToInterval={150}
-                  >
-                    {quickStats.map((stat, i) => (
-                      <View
-                        key={i}
-                        style={[styles.quickStatCard, { backgroundColor: colors.surface, borderColor: colors.gold + '20' }]}
+                  </FadeInView>
+                ),
+                quote: (
+                  <FadeInView delay={140} slideUp={16}>
+                    <View style={{ paddingHorizontal: 24, marginTop: 6 }}>
+                      <View style={[styles.quoteCard, { backgroundColor: colors.surface }]}>
+                        <Text style={[styles.quoteText, { color: colors.textPrimary }]}>{dailyQuote.text}</Text>
+                        <Text style={[styles.quoteAttr, { color: colors.gold }]}>— {dailyQuote.attribution}</Text>
+                      </View>
+                    </View>
+                  </FadeInView>
+                ),
+                dashboard: (
+                  <FadeInView delay={200} slideUp={16}>
+                    <View style={[styles.section, { marginTop: 4 }]}>
+                      <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 10, fontSize: 16, fontWeight: '800' }]}>YOUR DAY</Text>
+                      <View style={styles.dashGrid}>
+                        <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+                          <View style={[styles.dashIconWrap, { backgroundColor: colors.redMuted }]}>
+                            <Ionicons name="barbell" size={18} color={colors.red} />
+                          </View>
+                          <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.workouts}</Text>
+                          <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Workouts</Text>
+                          <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
+                            <View style={[styles.dashProgressFill, { backgroundColor: colors.red, width: `${Math.min(100, todayStats.workouts * 100)}%` }]} />
+                          </View>
+                        </View>
+                        <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+                          <View style={[styles.dashIconWrap, { backgroundColor: colors.warningMuted }]}>
+                            <Ionicons name="flame" size={18} color={colors.warning} />
+                          </View>
+                          <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.caloriesBurned}</Text>
+                          <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Cal Burned</Text>
+                          <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
+                            <View style={[styles.dashProgressFill, { backgroundColor: colors.warning, width: `${Math.min(100, (todayStats.caloriesBurned / 500) * 100)}%` }]} />
+                          </View>
+                        </View>
+                        <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+                          <View style={[styles.dashIconWrap, { backgroundColor: colors.successMuted }]}>
+                            <Ionicons name="nutrition" size={18} color={colors.success} />
+                          </View>
+                          <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.macrosPct}%</Text>
+                          <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Macros Hit</Text>
+                          <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
+                            <View style={[styles.dashProgressFill, { backgroundColor: colors.success, width: `${todayStats.macrosPct}%` }]} />
+                          </View>
+                        </View>
+                        <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+                          <View style={[styles.dashIconWrap, { backgroundColor: colors.infoMuted }]}>
+                            <Ionicons name="time" size={18} color={colors.info} />
+                          </View>
+                          <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.activeMinutes}</Text>
+                          <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Active Min</Text>
+                          <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
+                            <View style={[styles.dashProgressFill, { backgroundColor: colors.info, width: `${Math.min(100, (todayStats.activeMinutes / 30) * 100)}%` }]} />
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  </FadeInView>
+                ),
+                quickStats: quickStats.length > 0 ? (
+                  <FadeInView delay={300} slideUp={16}>
+                    <View style={{ marginTop: 10 }}>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ paddingHorizontal: 24, gap: 10 }}
+                        decelerationRate="fast"
+                        snapToInterval={150}
+                        scrollEnabled={!editMode}
                       >
-                        <View style={[styles.quickStatIconWrap, { backgroundColor: colors.goldMuted }]}>
-                          <Ionicons name={stat.icon as any} size={16} color={colors.gold} />
-                        </View>
-                        <Text style={[styles.quickStatValue, { color: colors.textPrimary }]}>{stat.value}</Text>
-                        <Text style={[styles.quickStatLabel, { color: colors.textMuted }]}>{stat.label}</Text>
-                        <Text style={[styles.quickStatSub, { color: colors.textTertiary }]}>{stat.sub}</Text>
+                        {quickStats.map((stat, i) => (
+                          <View
+                            key={i}
+                            style={[styles.quickStatCard, { backgroundColor: colors.surface, borderColor: colors.gold + '20' }]}
+                          >
+                            <View style={[styles.quickStatIconWrap, { backgroundColor: colors.goldMuted }]}>
+                              <Ionicons name={stat.icon as any} size={16} color={colors.gold} />
+                            </View>
+                            <Text style={[styles.quickStatValue, { color: colors.textPrimary }]}>{stat.value}</Text>
+                            <Text style={[styles.quickStatLabel, { color: colors.textMuted }]}>{stat.label}</Text>
+                            <Text style={[styles.quickStatSub, { color: colors.textTertiary }]}>{stat.sub}</Text>
+                          </View>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  </FadeInView>
+                ) : null,
+                training: (
+                  <FadeInView delay={340} slideUp={16}>
+                    <View style={styles.section}>
+                      <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 10 }]}>Training</Text>
+                      <View style={styles.toolsGrid}>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('WorkoutSession')} style={[styles.homeTool, { backgroundColor: colors.redMuted, borderColor: colors.red }]}>
+                          <Ionicons name="heart" size={20} color={colors.red} />
+                          <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>HR Session</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('Workout')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                          <Ionicons name="barbell" size={20} color={colors.gold} />
+                          <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Workout</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('MacroTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                          <Ionicons name="restaurant-outline" size={20} color={colors.gold} />
+                          <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Food Log</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('WeightTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                          <Ionicons name="scale-outline" size={20} color={colors.gold} />
+                          <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Weight</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('Timer', { mode: 'round' })} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                          <Ionicons name="timer-outline" size={20} color={colors.gold} />
+                          <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Timers</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('BodyLab')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                          <Ionicons name="medkit-outline" size={20} color={colors.gold} />
+                          <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Body Lab</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('ActivityTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                          <Ionicons name="navigate-outline" size={20} color={colors.gold} />
+                          <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>GPS</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('WeeklyReport')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                          <Ionicons name="bar-chart-outline" size={20} color={colors.gold} />
+                          <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Report</Text>
+                        </TouchableOpacity>
+                        {isFemale && (
+                          <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('CycleTracker')} style={[styles.homeTool, { backgroundColor: 'rgba(230, 57, 70, 0.08)', borderColor: '#E63946' + '40' }]}>
+                            <Ionicons name="heart-circle-outline" size={20} color="#E63946" />
+                            <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Cycle</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
-                    ))}
-                  </ScrollView>
-                </View>
-              </FadeInView>
-            )}
-
-            {/* Training — log workouts, track PRs */}
-            <FadeInView delay={340} slideUp={16}>
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 10 }]}>Training</Text>
-
-                {/* Tools grid — all tools accessible from Home */}
-                <View style={styles.toolsGrid}>
-                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('WorkoutSession')} style={[styles.homeTool, { backgroundColor: colors.redMuted, borderColor: colors.red }]}>
-                    <Ionicons name="heart" size={20} color={colors.red} />
-                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>HR Session</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Workout')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Ionicons name="barbell" size={20} color={colors.gold} />
-                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Workout</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('MacroTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Ionicons name="restaurant-outline" size={20} color={colors.gold} />
-                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Food Log</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('WeightTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Ionicons name="scale-outline" size={20} color={colors.gold} />
-                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Weight</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Timer', { mode: 'round' })} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Ionicons name="timer-outline" size={20} color={colors.gold} />
-                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Timers</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('BodyLab')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Ionicons name="medkit-outline" size={20} color={colors.gold} />
-                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Body Lab</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('ActivityTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Ionicons name="navigate-outline" size={20} color={colors.gold} />
-                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>GPS</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('WeeklyReport')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Ionicons name="bar-chart-outline" size={20} color={colors.gold} />
-                    <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Report</Text>
-                  </TouchableOpacity>
-                  {isFemale && (
-                    <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('CycleTracker')} style={[styles.homeTool, { backgroundColor: 'rgba(230, 57, 70, 0.08)', borderColor: '#E63946' + '40' }]}>
-                      <Ionicons name="heart-circle-outline" size={20} color="#E63946" />
-                      <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Cycle</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            </FadeInView>
-
-            {/* ── Today's Schedule ── */}
-            {todaysFullSchedule.length > 0 && (
-              <FadeInView delay={400} slideUp={16}>
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
-                    <Text style={[styles.sectionTitle, { color: colors.textPrimary, fontSize: 18 }]}>Today's Schedule</Text>
-                    <TouchableOpacity
-                      style={[styles.seeAllButton, { backgroundColor: colors.accentTint }]}
-                      onPress={() => navigation.navigate('Schedule')}
-                    >
-                      <Text style={[styles.seeAllText, { color: colors.gold }]}>All</Text>
-                      <Ionicons name="chevron-forward" size={14} color={colors.gold} />
-                    </TouchableOpacity>
-                  </View>
-                  {todaysFullSchedule.slice(0, 5).map((cls) => (
-                    <TouchableOpacity
-                      key={cls.key}
-                      activeOpacity={0.85}
-                      onPress={() => navigation.navigate('Schedule')}
-                      style={[styles.scheduleRow, { borderColor: colors.borderSubtle }]}
-                    >
-                      <View style={[styles.scheduleTimeBadge, {
-                        backgroundColor: cls.booked ? colors.successMuted : colors.surfaceSecondary,
-                      }]}>
-                        <Text style={[styles.scheduleTime, {
-                          color: cls.booked ? colors.success : colors.textSecondary,
-                        }]}>{cls.time}</Text>
+                    </View>
+                  </FadeInView>
+                ),
+                schedule: todaysFullSchedule.length > 0 ? (
+                  <FadeInView delay={400} slideUp={16}>
+                    <View style={styles.section}>
+                      <View style={styles.sectionHeader}>
+                        <Text style={[styles.sectionTitle, { color: colors.textPrimary, fontSize: 18 }]}>Today's Schedule</Text>
+                        <TouchableOpacity
+                          style={[styles.seeAllButton, { backgroundColor: colors.accentTint }]}
+                          onPress={() => !editMode && navigation.navigate('Schedule')}
+                        >
+                          <Text style={[styles.seeAllText, { color: colors.gold }]}>All</Text>
+                          <Ionicons name="chevron-forward" size={14} color={colors.gold} />
+                        </TouchableOpacity>
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.scheduleClassName, { color: colors.textPrimary }]}>{cls.name}</Text>
-                        <Text style={[styles.scheduleInstructor, { color: colors.textMuted }]}>
-                          {cls.instructor} · {cls.duration}
-                        </Text>
-                      </View>
-                      {cls.booked && (
-                        <View style={[styles.bookedBadge, { backgroundColor: colors.successMuted }]}>
-                          <Ionicons name="checkmark" size={12} color={colors.success} />
-                        </View>
-                      )}
-                      {!cls.booked && cls.spotsLeft !== undefined && cls.spotsLeft > 0 && cls.spotsLeft <= 3 && (
-                        <Text style={[styles.spotsLeft, { color: colors.warning }]}>{cls.spotsLeft} left</Text>
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </FadeInView>
-            )}
+                      {todaysFullSchedule.slice(0, 5).map((cls) => (
+                        <TouchableOpacity
+                          key={cls.key}
+                          activeOpacity={0.85}
+                          onPress={() => !editMode && navigation.navigate('Schedule')}
+                          style={[styles.scheduleRow, { borderColor: colors.borderSubtle }]}
+                        >
+                          <View style={[styles.scheduleTimeBadge, {
+                            backgroundColor: cls.booked ? colors.successMuted : colors.surfaceSecondary,
+                          }]}>
+                            <Text style={[styles.scheduleTime, {
+                              color: cls.booked ? colors.success : colors.textSecondary,
+                            }]}>{cls.time}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.scheduleClassName, { color: colors.textPrimary }]}>{cls.name}</Text>
+                            <Text style={[styles.scheduleInstructor, { color: colors.textMuted }]}>
+                              {cls.instructor} · {cls.duration}
+                            </Text>
+                          </View>
+                          {cls.booked && (
+                            <View style={[styles.bookedBadge, { backgroundColor: colors.successMuted }]}>
+                              <Ionicons name="checkmark" size={12} color={colors.success} />
+                            </View>
+                          )}
+                          {!cls.booked && cls.spotsLeft !== undefined && cls.spotsLeft > 0 && cls.spotsLeft <= 3 && (
+                            <Text style={[styles.spotsLeft, { color: colors.warning }]}>{cls.spotsLeft} left</Text>
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </FadeInView>
+                ) : null,
+              };
+              const items: ReorderableItem[] = [];
+              for (const id of moduleOrder) {
+                const n = sectionsById[id];
+                if (!n) continue;
+                const visible = isModuleVisible(id);
+                if (!visible && !editMode) continue;
+                items.push({ id, node: n, hidden: !visible });
+              }
+              return (
+                <ReorderableSections
+                  items={items}
+                  editMode={editMode}
+                  onReorder={handleReorder}
+                  onToggleVisibility={toggleVisibility}
+                />
+              );
+            })()}
 
-          </ScrollView>
+          </>
         )}
 
-      </View>
+      </ScrollView>
 
       {!isEmployee && (
         <CelebrationModal celebration={gamState.pendingCelebration} onDismiss={dismissCelebration} />
@@ -1444,6 +1479,52 @@ const styles = StyleSheet.create({
   spotsLeft: {
     fontSize: 10,
     fontWeight: '700',
+  },
+
+  // ── Edit pillbox (enters reorder mode) ──
+  editPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginLeft: 8,
+  },
+  editPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+
+  // ── Edit-mode bar (reorder) ──
+  editBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 24,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  editHint: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  doneBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  doneBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
 
   // ── Cycle phase pill ──

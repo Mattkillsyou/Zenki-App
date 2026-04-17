@@ -87,6 +87,19 @@ export const MEMBERS: Member[] = [
     totalSessions: 0,
     weekStreak: 0,
   },
+  {
+    id: '4',
+    username: 'admin',
+    firstName: 'Admin',
+    lastName: '',
+    email: 'admin@zenkidojo.com',
+    belt: 'black',
+    stripes: 4,
+    memberSince: '2026-04-17',
+    isAdmin: true,
+    totalSessions: 0,
+    weekStreak: 0,
+  },
 ];
 
 // Login credentials — username → { password, memberId }
@@ -99,6 +112,7 @@ export const CREDENTIALS: Record<string, { password: string; memberId: string }>
   'matt.b': { password: 'password', memberId: '2' },
   'mattbrowntheemail@gmail.com': { password: 'password', memberId: '2' },
   apple: { password: 'password', memberId: '3' },
+  admin: { password: 'password', memberId: '4' },
 };
 
 /**
