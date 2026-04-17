@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,9 +16,16 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { useScreenSoundTheme } from '../context/SoundContext';
+import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { ADMIN_PASSWORD_OVERRIDE_KEY } from '../data/members';
 import { typography, spacing, borderRadius } from '../theme';
+
+const UNITS_KEY = '@zenki_units_pref';
+const SOUND_ENABLED_KEY = '@zenki_sound_enabled';
+const SOUND_THEME_KEY = '@zenki_sound_theme';
+
+type UnitPref = 'imperial' | 'metric';
+type SoundTheme = 'default' | 'retro' | 'zen' | 'pipboy';
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { value: 'light', label: 'Light', icon: 'sunny-outline' },
@@ -31,10 +38,38 @@ export function SettingsScreen({ navigation }: any) {
   const { user } = useAuth();
   const isAdmin = user?.isAdmin === true;
   useScreenSoundTheme('settings');
+  const { play } = useSound();
   const [pushEnabled, setPushEnabled] = useState(true);
   const [classReminders, setClassReminders] = useState(true);
   const [emailUpdates, setEmailUpdates] = useState(false);
+  const [streakAlerts, setStreakAlerts] = useState(true);
+  const [achievementAlerts, setAchievementAlerts] = useState(true);
+  const [weeklyReportNotif, setWeeklyReportNotif] = useState(true);
   const [calendarSync, setCalendarSync] = useState(false);
+
+  // Preferences
+  const [unitPref, setUnitPref] = useState<UnitPref>('imperial');
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundTheme, setSoundTheme] = useState<SoundTheme>('default');
+
+  useEffect(() => {
+    AsyncStorage.getItem(UNITS_KEY).then((v) => { if (v === 'metric') setUnitPref('metric'); });
+    AsyncStorage.getItem(SOUND_ENABLED_KEY).then((v) => { if (v === 'false') setSoundEnabled(false); });
+    AsyncStorage.getItem(SOUND_THEME_KEY).then((v) => { if (v) setSoundTheme(v as SoundTheme); });
+  }, []);
+
+  const handleUnitChange = (u: UnitPref) => {
+    setUnitPref(u);
+    AsyncStorage.setItem(UNITS_KEY, u);
+  };
+  const handleSoundToggle = (val: boolean) => {
+    setSoundEnabled(val);
+    AsyncStorage.setItem(SOUND_ENABLED_KEY, String(val));
+  };
+  const handleSoundTheme = (theme: SoundTheme) => {
+    setSoundTheme(theme);
+    AsyncStorage.setItem(SOUND_THEME_KEY, theme);
+  };
 
   // Password change state
   const [pwModalOpen, setPwModalOpen] = useState(false);
@@ -182,6 +217,75 @@ export function SettingsScreen({ navigation }: any) {
           })}
         </View>
 
+        {/* Preferences */}
+        {renderSectionHeader('PREFERENCES')}
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+          {/* Units toggle */}
+          <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Units</Text>
+              <Text style={[styles.settingDesc, { color: colors.textMuted }]}>Distance, weight, elevation display</Text>
+            </View>
+            <View style={[styles.unitToggle, { backgroundColor: colors.backgroundElevated }]}>
+              <TouchableOpacity
+                onPress={() => handleUnitChange('imperial')}
+                style={[styles.unitBtn, unitPref === 'imperial' && { backgroundColor: colors.gold }]}
+              >
+                <Text style={[styles.unitBtnText, { color: unitPref === 'imperial' ? '#000' : colors.textSecondary }]}>mi</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => handleUnitChange('metric')}
+                style={[styles.unitBtn, unitPref === 'metric' && { backgroundColor: colors.gold }]}
+              >
+                <Text style={[styles.unitBtnText, { color: unitPref === 'metric' ? '#000' : colors.textSecondary }]}>km</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Sound toggle */}
+          {renderToggleRow(
+            'Sound Effects',
+            'Plays audio on actions and transitions',
+            soundEnabled,
+            handleSoundToggle,
+          )}
+
+          {/* Sound theme */}
+          <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Sound Theme</Text>
+            </View>
+          </View>
+          <View style={styles.soundThemeRow}>
+            {([
+              { key: 'default' as SoundTheme, label: 'Default', icon: 'volume-high-outline' as const },
+              { key: 'retro' as SoundTheme, label: 'Retro', icon: 'game-controller-outline' as const },
+              { key: 'zen' as SoundTheme, label: 'Zen', icon: 'leaf-outline' as const },
+              { key: 'pipboy' as SoundTheme, label: 'Pip-Boy', icon: 'radio-outline' as const },
+            ]).map((opt) => {
+              const active = soundTheme === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[
+                    styles.soundThemeChip,
+                    {
+                      backgroundColor: active ? colors.gold : colors.surfaceSecondary,
+                      borderColor: active ? colors.gold : colors.border,
+                    },
+                  ]}
+                  onPress={() => handleSoundTheme(opt.key)}
+                >
+                  <Ionicons name={opt.icon} size={14} color={active ? '#000' : colors.textMuted} />
+                  <Text style={[styles.soundThemeLabel, { color: active ? '#000' : colors.textSecondary }]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
         {/* Notifications */}
         {renderSectionHeader('NOTIFICATIONS')}
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
@@ -196,6 +300,24 @@ export function SettingsScreen({ navigation }: any) {
             '30 min before your booked class',
             classReminders,
             setClassReminders,
+          )}
+          {renderToggleRow(
+            'Streak Alerts',
+            'Reminder if your streak is about to end',
+            streakAlerts,
+            setStreakAlerts,
+          )}
+          {renderToggleRow(
+            'Achievement Unlocks',
+            'When you earn a new badge',
+            achievementAlerts,
+            setAchievementAlerts,
+          )}
+          {renderToggleRow(
+            'Weekly Report',
+            'Summary delivered every Monday',
+            weeklyReportNotif,
+            setWeeklyReportNotif,
           )}
           {renderToggleRow(
             'Email Updates',
@@ -227,6 +349,50 @@ export function SettingsScreen({ navigation }: any) {
             navigation.navigate('PaymentMethods')
           )}
           {isAdmin && renderNavRow('key-outline', 'Change Password', () => setPwModalOpen(true))}
+        </View>
+
+        {/* Data */}
+        {renderSectionHeader('DATA')}
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+          {renderNavRow('download-outline', 'Export All Data', () => {
+            Alert.alert('Export Data', 'This will compile all your data into a downloadable JSON file.', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Export', onPress: async () => {
+                try {
+                  const keys = await AsyncStorage.getAllKeys();
+                  const stores = await AsyncStorage.multiGet(keys);
+                  const data: Record<string, any> = {};
+                  for (const [key, val] of stores) {
+                    if (key.startsWith('@zenki_') && val) {
+                      try { data[key] = JSON.parse(val); } catch { data[key] = val; }
+                    }
+                  }
+                  Alert.alert('Data Ready', `Exported ${Object.keys(data).length} data stores. In production, this would download as a JSON file.`);
+                } catch {
+                  Alert.alert('Error', 'Could not export data.');
+                }
+              }},
+            ]);
+          })}
+          {renderNavRow('trash-outline', 'Clear Workout History', () => {
+            Alert.alert('Clear Workouts?', 'This will delete all workout logs. This cannot be undone.', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Clear', style: 'destructive', onPress: () => {
+                AsyncStorage.removeItem('@zenki_workout_logs');
+                Alert.alert('Cleared', 'Workout history has been reset.');
+              }},
+            ]);
+          }, true)}
+          {renderNavRow('trash-outline', 'Clear Nutrition Data', () => {
+            Alert.alert('Clear Nutrition?', 'This will delete all macro entries and weight logs. This cannot be undone.', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Clear', style: 'destructive', onPress: () => {
+                AsyncStorage.removeItem('@zenki_macro_entries');
+                AsyncStorage.removeItem('@zenki_weight_entries');
+                Alert.alert('Cleared', 'Nutrition data has been reset.');
+              }},
+            ]);
+          }, true)}
         </View>
 
         {/* About */}
@@ -454,5 +620,46 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     marginBottom: spacing.sm,
     opacity: 0.7,
+  },
+
+  // ── Unit toggle ──
+  unitToggle: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    padding: 2,
+    gap: 2,
+  },
+  unitBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unitBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  // ── Sound theme ──
+  soundThemeRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 18,
+    paddingBottom: 14,
+  },
+  soundThemeChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  soundThemeLabel: {
+    fontSize: 10,
+    fontWeight: '700',
   },
 });

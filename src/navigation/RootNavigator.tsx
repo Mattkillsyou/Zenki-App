@@ -8,6 +8,18 @@ import { TabNavigator } from './TabNavigator';
 import { useAuth } from '../context/AuthContext';
 import { easing, duration, scale, opacity } from '../theme';
 import { palette } from '../theme/colors';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+
+/** Wrap a screen component in an ErrorBoundary. */
+function withErrorBoundary(ScreenComponent: React.ComponentType<any>, screenName: string) {
+  return function WrappedScreen(props: any) {
+    return (
+      <ErrorBoundary screenName={screenName}>
+        <ScreenComponent {...props} />
+      </ErrorBoundary>
+    );
+  };
+}
 
 // Auth screens
 import { SignInScreen } from '../screens/auth/SignInScreen';
@@ -285,13 +297,13 @@ export function RootNavigator() {
       <Stack.Screen name="AdminBroadcast" component={AdminBroadcastScreen} options={pushTransition} />
       <Stack.Screen name="AdminAnnouncements" component={AdminAnnouncementsScreen} options={pushTransition} />
       <Stack.Screen name="AdminAppointments" component={AdminAppointmentsScreen} options={pushTransition} />
-      <Stack.Screen name="Workout" component={WorkoutScreen} options={pushTransition} />
-      <Stack.Screen name="Timer" component={TimerScreen} options={pushTransition} />
+      <Stack.Screen name="Workout" component={withErrorBoundary(WorkoutScreen, 'Workout')} options={pushTransition} />
+      <Stack.Screen name="Timer" component={withErrorBoundary(TimerScreen, 'Timer')} options={pushTransition} />
       <Stack.Screen name="PRDetail" component={PRDetailScreen} options={pushTransition} />
       <Stack.Screen name="EmployeeChecklist" component={EmployeeChecklistScreen} options={pushTransition} />
       <Stack.Screen name="AdminEmployeeTasks" component={AdminEmployeeTasksScreen} options={pushTransition} />
-      <Stack.Screen name="WeightTracker" component={WeightTrackerScreen} options={pushTransition} />
-      <Stack.Screen name="MacroTracker" component={MacroTrackerScreen} options={pushTransition} />
+      <Stack.Screen name="WeightTracker" component={withErrorBoundary(WeightTrackerScreen, 'Weight Tracker')} options={pushTransition} />
+      <Stack.Screen name="MacroTracker" component={withErrorBoundary(MacroTrackerScreen, 'Macro Tracker')} options={pushTransition} />
       <Stack.Screen name="MacroSetup" component={MacroSetupScreen} options={modalTransition} />
       <Stack.Screen name="BarcodeScanner" component={BarcodeScannerScreen} options={modalTransition} />
       <Stack.Screen name="PhotoFood" component={PhotoFoodScreen} options={modalTransition} />
