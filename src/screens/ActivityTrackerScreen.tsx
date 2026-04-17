@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Alert, Platform,
+  View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useGpsActivity } from '../context/GpsActivityContext';
 import {
@@ -19,21 +18,25 @@ import {
   paceUnit,
 } from '../utils/gps';
 import { formatDuration } from '../utils/heartRate';
-import { spacing } from '../theme';
-
+import { pipboy } from '../theme/colors';
+import { pipboyFont } from '../theme/typography';
 import * as Location from 'expo-location';
 
 const ACTIVITY_TYPES: GpsActivityType[] = ['run', 'walk', 'bike', 'hike'];
-
-// Default center (dojo) — overridden by user's actual location on mount
 const DEFAULT_LAT = 34.1006;
 const DEFAULT_LNG = -118.2916;
 
+const PB = pipboy; // shorthand
+
+// ─── Pip-Boy tabs ───
+type PipTab = 'STAT' | 'MAP' | 'DATA' | 'RADIO';
+const PIP_TABS: PipTab[] = ['STAT', 'MAP', 'DATA', 'RADIO'];
+
 /**
- * Leaflet map component — web only.
- * Uses CartoDB dark tiles (free, no API key, matches brand).
+ * Leaflet map with Pip-Boy green monochrome filter.
+ * CartoDB dark tiles + CSS hue-rotate to force green terminal look.
  */
-function LeafletMap({ routeCoords, userLat, userLng }: {
+function PipBoyMap({ routeCoords, userLat, userLng }: {
   routeCoords: { lat: number; lng: number }[];
   userLat: number;
   userLng: number;
@@ -45,10 +48,9 @@ function LeafletMap({ routeCoords, userLat, userLng }: {
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    // Dynamically import leaflet on web only
     const L = require('leaflet');
 
-    // Inject Leaflet CSS if not already present
+    // Inject Leaflet CSS + VT323 font
     if (!document.getElementById('leaflet-css')) {
       const link = document.createElement('link');
       link.id = 'leaflet-css';
@@ -56,10 +58,54 @@ function LeafletMap({ routeCoords, userLat, userLng }: {
       link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
       document.head.appendChild(link);
     }
+    if (!document.getElementById('vt323-font')) {
+      const link = document.createElement('link');
+      link.id = 'vt323-font';
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=VT323&display=swap';
+      document.head.appendChild(link);
+    }
+    // Inject CRT scanline + flicker CSS
+    if (!document.getElementById('pipboy-css')) {
+      const style = document.createElement('style');
+      style.id = 'pipboy-css';
+      style.textContent = `
+        @keyframes pipboy-flicker {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.97; }
+          75% { opacity: 0.99; }
+        }
+        .pipboy-scanlines {
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background: repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 2px,
+            rgba(0, 255, 65, 0.03) 2px,
+            rgba(0, 255, 65, 0.03) 4px
+          );
+          pointer-events: none;
+          z-index: 9999;
+        }
+        .pipboy-screen {
+          animation: pipboy-flicker 4s infinite;
+        }
+        .pipboy-map-filter {
+          filter: grayscale(1) brightness(0.6) sepia(1) hue-rotate(70deg) saturate(8);
+        }
+        .leaflet-container {
+          z-index: 1 !important;
+        }
+        .leaflet-pane {
+          z-index: 1 !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
 
     if (!mapContainerRef.current) return;
 
-    // Initialize map
     const map = L.map(mapContainerRef.current, {
       center: [userLat || DEFAULT_LAT, userLng || DEFAULT_LNG],
       zoom: 16,
@@ -67,29 +113,29 @@ function LeafletMap({ routeCoords, userLat, userLng }: {
       attributionControl: false,
     });
 
-    // Dark tile layer (CartoDB Dark Matter — free, no key)
+    // Dark tiles — the CSS filter on the container forces green monochrome
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 20,
     }).addTo(map);
 
-    // User location marker (blue pulsing dot)
+    // User marker — blinking green crosshair
     const userIcon = L.divIcon({
       html: `<div style="
-        width: 16px; height: 16px;
-        background: #3B82F6;
-        border: 3px solid #93C5FD;
-        border-radius: 50%;
-        box-shadow: 0 0 12px rgba(59,130,246,0.6);
+        width: 14px; height: 14px;
+        border: 2px solid #00ff41;
+        background: transparent;
+        box-shadow: 0 0 8px #00ff41, 0 0 16px #00ff4140;
+        animation: pipboy-flicker 1s infinite;
       "></div>`,
-      iconSize: [16, 16],
-      iconAnchor: [8, 8],
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
       className: '',
     });
     markerRef.current = L.marker([userLat || DEFAULT_LAT, userLng || DEFAULT_LNG], { icon: userIcon }).addTo(map);
 
-    // Route polyline
+    // Route polyline — terminal green
     polylineRef.current = L.polyline([], {
-      color: '#3B82F6',
+      color: '#00ff41',
       weight: 4,
       opacity: 0.9,
       smoothFactor: 1,
@@ -97,22 +143,19 @@ function LeafletMap({ routeCoords, userLat, userLng }: {
 
     mapRef.current = map;
 
-    return () => {
-      map.remove();
-      mapRef.current = null;
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // Apply the green filter to the tile pane
+    const tilePane = map.getPane('tilePane');
+    if (tilePane) tilePane.classList.add('pipboy-map-filter');
 
-  // Update marker + polyline + center on new coords
+    return () => { map.remove(); mapRef.current = null; };
+  }, []);
+
   useEffect(() => {
     if (!mapRef.current) return;
-    const L = require('leaflet');
-
     if (userLat && userLng) {
       markerRef.current?.setLatLng([userLat, userLng]);
       mapRef.current.setView([userLat, userLng], mapRef.current.getZoom(), { animate: true });
     }
-
     if (routeCoords.length > 0) {
       polylineRef.current?.setLatLngs(routeCoords.map((c: any) => [c.lat, c.lng]));
     }
@@ -128,29 +171,41 @@ function LeafletMap({ routeCoords, userLat, userLng }: {
   );
 }
 
+// ─── Dot-leader stat row (e.g. "DIST......... 2.34 MI") ───
+function StatRow({ label, value, unit }: { label: string; value: string; unit?: string }) {
+  const dots = '.'.repeat(Math.max(2, 22 - label.length - value.length - (unit?.length || 0)));
+  return (
+    <View style={pb.statRow}>
+      <Text style={pb.statLabel}>{label}</Text>
+      <Text style={pb.statDots}>{dots}</Text>
+      <Text style={pb.statValue}>{value}</Text>
+      {unit && <Text style={pb.statUnit}> {unit}</Text>}
+    </View>
+  );
+}
+
 export function ActivityTrackerScreen({ navigation }: any) {
-  const { colors } = useTheme();
   const { user } = useAuth();
   const {
-    isTracking,
-    currentActivityType,
-    liveDistance,
-    liveDuration,
-    livePace,
-    liveElevGain,
-    liveSpeed,
-    currentPosition,
-    startTracking,
-    stopTracking,
-    memberActivities,
+    isTracking, currentActivityType,
+    liveDistance, liveDuration, livePace, liveElevGain, liveSpeed,
+    currentPosition, startTracking, stopTracking, memberActivities,
   } = useGpsActivity();
 
   const [selectedType, setSelectedType] = useState<GpsActivityType>('run');
   const [routeCoords, setRouteCoords] = useState<{ lat: number; lng: number }[]>([]);
   const [initialLat, setInitialLat] = useState(DEFAULT_LAT);
   const [initialLng, setInitialLng] = useState(DEFAULT_LNG);
+  const [blinkVisible, setBlinkVisible] = useState(true);
+  const [activeTab, setActiveTab] = useState<PipTab>('MAP');
 
-  // Get user's real location on mount for map centering
+  // Blinking cursor
+  useEffect(() => {
+    const t = setInterval(() => setBlinkVisible((v) => !v), 600);
+    return () => clearInterval(t);
+  }, []);
+
+  // Get user's real location on mount
   useEffect(() => {
     (async () => {
       try {
@@ -160,17 +215,14 @@ export function ActivityTrackerScreen({ navigation }: any) {
           setInitialLat(loc.coords.latitude);
           setInitialLng(loc.coords.longitude);
         }
-      } catch { /* use default */ }
+      } catch {}
     })();
   }, []);
 
-  // Accumulate route coordinates for the polyline
+  // Accumulate route
   useEffect(() => {
     if (currentPosition) {
-      setRouteCoords((prev) => [...prev, {
-        lat: currentPosition.latitude,
-        lng: currentPosition.longitude,
-      }]);
+      setRouteCoords((prev) => [...prev, { lat: currentPosition.latitude, lng: currentPosition.longitude }]);
     }
   }, [currentPosition]);
 
@@ -178,27 +230,22 @@ export function ActivityTrackerScreen({ navigation }: any) {
     if (!user) return;
     setRouteCoords([]);
     const ok = await startTracking(selectedType, user.id);
-    if (!ok) {
-      Alert.alert('Location Required', 'Please allow location access to track your activity.');
-    }
+    if (!ok) Alert.alert('LOCATION REQUIRED', 'Enable location access to track activity.');
   };
 
   const handleStop = () => {
     Alert.alert(
-      'End Activity?',
+      'END ACTIVITY?',
       `${formatDistance(liveDistance)} ${distanceUnit()} · ${formatDuration(liveDuration)}`,
       [
-        { text: 'Keep Going', style: 'cancel' },
+        { text: 'NEGATIVE', style: 'cancel' },
         {
-          text: 'End & Save',
+          text: 'AFFIRMATIVE',
           style: 'destructive',
           onPress: () => {
             const activity = stopTracking();
             if (activity) {
-              Alert.alert(
-                'Activity Saved',
-                `${formatDistance(activity.distanceMeters)} ${distanceUnit()} in ${formatDuration(activity.durationSeconds)}`,
-              );
+              Alert.alert('DATA LOGGED', `${formatDistance(activity.distanceMeters)} ${distanceUnit()} recorded.`);
               setRouteCoords([]);
             }
           },
@@ -209,238 +256,423 @@ export function ActivityTrackerScreen({ navigation }: any) {
 
   const userLat = currentPosition?.latitude || initialLat;
   const userLng = currentPosition?.longitude || initialLng;
+  const history = user ? memberActivities(user.id) : [];
 
   return (
-    <View style={styles.container}>
-      {/* ── Full-screen map background (Strava-style) ── */}
+    <View style={pb.container}>
+      {/* Full-screen green-filtered map (z-index 1 — below UI panels) */}
       {Platform.OS === 'web' && (
-        <LeafletMap
-          routeCoords={routeCoords}
-          userLat={userLat}
-          userLng={userLng}
-        />
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 }}>
+          <PipBoyMap routeCoords={routeCoords} userLat={userLat} userLng={userLng} />
+        </View>
       )}
 
-      {/* ── Top bar (floating over map) ── */}
-      <SafeAreaView style={styles.topBar} edges={['top']}>
-        <TouchableOpacity
-          onPress={() => {
-            if (isTracking) {
-              Alert.alert('Activity Running', 'Stop the activity before leaving.');
-            } else {
-              navigation.goBack();
-            }
-          }}
-          style={[styles.backBtn, { backgroundColor: 'rgba(0,0,0,0.6)' }]}
-        >
-          <Ionicons name="chevron-back" size={22} color="#FFF" />
-        </TouchableOpacity>
-        <View style={[styles.titlePill, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
-          <Text style={styles.titleText}>
-            {isTracking ? GPS_ACTIVITY_LABELS[currentActivityType].toUpperCase() : 'TRACK ACTIVITY'}
-          </Text>
+      {/* CRT scanline overlay (z-index 50 — above map, below UI) */}
+      {Platform.OS === 'web' && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 }} pointerEvents="none">
+          <div className="pipboy-scanlines" />
         </View>
-        <View style={{ width: 36 }} />
+      )}
+
+      {/* ═══ Top: Pip-Boy tab bar ═══ */}
+      <SafeAreaView style={pb.topBar} edges={['top']}>
+        <TouchableOpacity onPress={() => { if (!isTracking) navigation.goBack(); }} style={pb.backBtn}>
+          <Text style={pb.backText}>{'< BACK'}</Text>
+        </TouchableOpacity>
+
+        <View style={pb.tabBar}>
+          {PIP_TABS.map((t) => (
+            <TouchableOpacity key={t} style={[pb.tab, t === activeTab && pb.tabActive]} onPress={() => setActiveTab(t)} activeOpacity={0.7}>
+              <Text style={[pb.tabText, t === activeTab && pb.tabTextActive]}>{t}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </SafeAreaView>
 
-      {/* ── Bottom panel (floating over map) ── */}
-      <View style={[styles.bottomPanel, { backgroundColor: colors.background + 'F0' }]}>
-        {/* Live stats — during tracking */}
-        {isTracking ? (
-          <>
-            <View style={styles.liveStatsRow}>
-              <View style={styles.liveStat}>
-                <Text style={[styles.liveStatValue, { color: colors.gold }]}>
-                  {formatDistance(liveDistance)}
-                </Text>
-                <Text style={[styles.liveStatUnit, { color: colors.textMuted }]}>{distanceUnit()}</Text>
+      {/* ═══ Bottom: Tab-aware panel ═══ */}
+      <View style={pb.bottomPanel}>
+        {/* Terminal header with blinking cursor */}
+        <View style={pb.terminalHeader}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={pb.terminalTitle}>
+              {isTracking
+                ? `TRACKING: ${GPS_ACTIVITY_LABELS[currentActivityType].toUpperCase()}`
+                : activeTab === 'STAT' ? 'VITAL STATISTICS'
+                : activeTab === 'DATA' ? 'ACTIVITY LOG'
+                : activeTab === 'RADIO' ? 'ZENKI RADIO'
+                : 'ZENKI GPS TRACKER v1.0'}
+            </Text>
+            <Text style={[pb.terminalTitle, { opacity: blinkVisible ? 1 : 0, width: 14 }]}>▮</Text>
+          </View>
+        </View>
+
+        {/* ─── MAP TAB ─── */}
+        {activeTab === 'MAP' && (
+          isTracking ? (
+            <>
+              <View style={pb.statsBlock}>
+                <StatRow label="DIST" value={formatDistance(liveDistance)} unit={distanceUnit().toUpperCase()} />
+                <StatRow label="TIME" value={formatDuration(liveDuration)} />
+                <StatRow label="PACE" value={formatPaceForUnit(livePace)} unit={paceUnit().toUpperCase()} />
+                <StatRow label="ELEV" value={`${Math.round(liveElevGain * 3.281)}`} unit="FT" />
+                <StatRow label="SPEED" value={`${(liveSpeed * 2.237).toFixed(1)}`} unit="MPH" />
+                <StatRow label="COORDS" value={`${userLat.toFixed(4)},${userLng.toFixed(4)}`} />
               </View>
-              <View style={styles.liveStat}>
-                <Text style={[styles.liveStatValue, { color: colors.textPrimary }]}>
-                  {formatDuration(liveDuration)}
-                </Text>
-                <Text style={[styles.liveStatUnit, { color: colors.textMuted }]}>time</Text>
+              <TouchableOpacity style={pb.stopBtn} onPress={handleStop} activeOpacity={0.8}>
+                <Text style={pb.stopBtnText}>[ TERMINATE TRACKING ]</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <View style={pb.typeRow}>
+                {ACTIVITY_TYPES.map((type) => {
+                  const active = type === selectedType;
+                  return (
+                    <TouchableOpacity key={type} style={[pb.typeChip, active && pb.typeChipActive]} onPress={() => setSelectedType(type)}>
+                      <Text style={[pb.typeText, active && pb.typeTextActive]}>{GPS_ACTIVITY_LABELS[type].toUpperCase()}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-              <View style={styles.liveStat}>
-                <Text style={[styles.liveStatValue, { color: colors.textPrimary }]}>
-                  {formatPaceForUnit(livePace)}
+              <TouchableOpacity style={pb.startBtn} onPress={handleStart} activeOpacity={0.8}>
+                <Text style={pb.startBtnText}>[ INITIATE {GPS_ACTIVITY_LABELS[selectedType].toUpperCase()} ]</Text>
+              </TouchableOpacity>
+            </>
+          )
+        )}
+
+        {/* ─── STAT TAB — full stats overview ─── */}
+        {activeTab === 'STAT' && (
+          <View style={pb.statsBlock}>
+            <StatRow label="TOTAL RUNS" value={`${history.filter((a) => a.type === 'run').length}`} />
+            <StatRow label="TOTAL WALKS" value={`${history.filter((a) => a.type === 'walk').length}`} />
+            <StatRow label="TOTAL BIKES" value={`${history.filter((a) => a.type === 'bike').length}`} />
+            <StatRow label="TOTAL HIKES" value={`${history.filter((a) => a.type === 'hike').length}`} />
+            <StatRow label="ALL TIME DIST" value={formatDistance(history.reduce((s, a) => s + a.distanceMeters, 0))} unit={distanceUnit().toUpperCase()} />
+            <StatRow label="ALL TIME CAL" value={`${history.reduce((s, a) => s + a.calories, 0)}`} unit="KCAL" />
+            <StatRow label="TOTAL TIME" value={formatDuration(history.reduce((s, a) => s + a.durationSeconds, 0))} />
+            <StatRow label="BEST PACE" value={history.length > 0 ? formatPaceForUnit(Math.min(...history.filter(a => a.avgPaceSecsPerKm > 0).map(a => a.avgPaceSecsPerKm))) : '--:--'} unit={paceUnit().toUpperCase()} />
+            <StatRow label="LOCATION" value={`${userLat.toFixed(4)}, ${userLng.toFixed(4)}`} />
+            <StatRow label="STATUS" value={isTracking ? 'ACTIVE' : 'STANDBY'} />
+          </View>
+        )}
+
+        {/* ─── DATA TAB — activity log ─── */}
+        {activeTab === 'DATA' && (
+          <View style={pb.statsBlock}>
+            {history.length === 0 ? (
+              <Text style={pb.logEntry}>{'> NO ACTIVITIES RECORDED'}</Text>
+            ) : (
+              history.slice(0, 8).map((a) => (
+                <Text key={a.id} style={pb.logEntry}>
+                  {new Date(a.startedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })}
+                  {' '}{GPS_ACTIVITY_LABELS[a.type].toUpperCase().padEnd(6)}
+                  {' '}{formatDistance(a.distanceMeters).padStart(5)} {distanceUnit()}
+                  {' '}{formatDuration(a.durationSeconds)}
+                  {' '}{a.calories}cal
                 </Text>
-                <Text style={[styles.liveStatUnit, { color: colors.textMuted }]}>pace {paceUnit()}</Text>
-              </View>
-            </View>
-            <View style={styles.liveStatsRow}>
-              <View style={styles.liveStat}>
-                <Text style={[styles.liveStatValue, { color: colors.textPrimary }]}>
-                  {Math.round(liveElevGain)}
-                </Text>
-                <Text style={[styles.liveStatUnit, { color: colors.textMuted }]}>ft gain</Text>
-              </View>
-              <View style={styles.liveStat}>
-                <Text style={[styles.liveStatValue, { color: colors.textPrimary }]}>
-                  {(liveSpeed * 2.237).toFixed(1)}
-                </Text>
-                <Text style={[styles.liveStatUnit, { color: colors.textMuted }]}>mph</Text>
-              </View>
-              <View style={styles.liveStat}>
-                <Text style={[styles.liveStatValue, { color: colors.textPrimary }]}>
-                  {routeCoords.length}
-                </Text>
-                <Text style={[styles.liveStatUnit, { color: colors.textMuted }]}>points</Text>
-              </View>
-            </View>
-            <TouchableOpacity style={[styles.stopBtn, { backgroundColor: colors.red }]} onPress={handleStop}>
-              <Ionicons name="stop" size={22} color="#FFF" />
-              <Text style={styles.btnText}>STOP</Text>
+              ))
+            )}
+          </View>
+        )}
+
+        {/* ─── RADIO TAB — music service launcher ─── */}
+        {activeTab === 'RADIO' && (
+          <View style={pb.statsBlock}>
+            <Text style={pb.logEntry}>{'> ZENKI RADIO · SELECT SOURCE'}</Text>
+            <Text style={pb.logEntry}>{' '}</Text>
+
+            <TouchableOpacity
+              style={pb.radioBtn}
+              onPress={() => Linking.openURL('https://open.spotify.com').catch(() => {})}
+              activeOpacity={0.7}
+            >
+              <Text style={pb.radioBtnText}>{'  ♫  SPOTIFY          [ LAUNCH ]'}</Text>
             </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            {/* Activity type picker */}
-            <View style={styles.typeRow}>
-              {ACTIVITY_TYPES.map((type) => {
-                const active = type === selectedType;
-                return (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.typeChip,
-                      {
-                        backgroundColor: active ? colors.gold : colors.surface,
-                        borderColor: active ? colors.gold : colors.border,
-                      },
-                    ]}
-                    onPress={() => setSelectedType(type)}
-                  >
-                    <Ionicons
-                      name={GPS_ACTIVITY_ICONS[type] as any}
-                      size={20}
-                      color={active ? '#000' : colors.textSecondary}
-                    />
-                    <Text style={[styles.typeLabel, { color: active ? '#000' : colors.textSecondary }]}>
-                      {GPS_ACTIVITY_LABELS[type]}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <TouchableOpacity style={[styles.startBtn, { backgroundColor: colors.gold }]} onPress={handleStart}>
-              <Ionicons name="play" size={22} color="#000" />
-              <Text style={[styles.btnText, { color: '#000' }]}>
-                START {GPS_ACTIVITY_LABELS[selectedType].toUpperCase()}
-              </Text>
+
+            <TouchableOpacity
+              style={pb.radioBtn}
+              onPress={() => Linking.openURL('https://music.apple.com').catch(() => {})}
+              activeOpacity={0.7}
+            >
+              <Text style={pb.radioBtnText}>{'  ♫  APPLE MUSIC      [ LAUNCH ]'}</Text>
             </TouchableOpacity>
-          </>
+
+            <TouchableOpacity
+              style={pb.radioBtn}
+              onPress={() => Linking.openURL('https://youtube.com/music').catch(() => {})}
+              activeOpacity={0.7}
+            >
+              <Text style={pb.radioBtnText}>{'  ♫  YOUTUBE MUSIC    [ LAUNCH ]'}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={pb.radioBtn}
+              onPress={() => Linking.openURL('https://soundcloud.com').catch(() => {})}
+              activeOpacity={0.7}
+            >
+              <Text style={pb.radioBtnText}>{'  ♫  SOUNDCLOUD       [ LAUNCH ]'}</Text>
+            </TouchableOpacity>
+
+            <Text style={pb.logEntry}>{' '}</Text>
+            <Text style={pb.logEntry}>{'> SIGNAL: STRONG'}</Text>
+            <Text style={pb.logEntry}>{'> "TRAIN HARD. FIGHT SMART."'}</Text>
+          </View>
         )}
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+// ═══════════════════════════════════════════════
+// Pip-Boy StyleSheet — green monochrome terminal
+// ═══════════════════════════════════════════════
+const pb = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0d1117', // dark fallback if map hasn't loaded
+    backgroundColor: PB.bg,
   },
 
-  // Top bar — floats over map
+  // Top bar
   topBar: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
-    zIndex: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 8,
+    zIndex: 100,
+    elevation: 100,
+    backgroundColor: PB.bg + 'F0',
+    paddingHorizontal: 12,
+    paddingTop: 4,
+    paddingBottom: 4,
+    borderBottomWidth: 2,
+    borderBottomColor: PB.primary,
   },
   backBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  titlePill: {
-    paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 14,
+    paddingHorizontal: 8,
   },
-  titleText: {
-    color: '#FFF',
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 1.5,
+  backText: {
+    color: PB.dim,
+    fontSize: 14,
+    ...pipboyFont,
+    // @ts-ignore web text-shadow
+    textShadowColor: PB.primary,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    borderTopWidth: 2,
+    borderTopColor: PB.primary,
+    marginTop: 4,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: PB.dark,
+  },
+  tabActive: {
+    borderBottomColor: PB.primary,
+    backgroundColor: PB.primary + '15',
+  },
+  tabText: {
+    color: PB.dark,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 3,
+    ...pipboyFont,
+  },
+  tabTextActive: {
+    color: PB.primary,
+    // @ts-ignore
+    textShadowColor: PB.primary,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
   },
 
-  // Bottom panel — floats over map
+  // Bottom panel
   bottomPanel: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
-    zIndex: 10,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: spacing.lg,
-    paddingTop: 20,
-    paddingBottom: 36,
+    zIndex: 100,
+    elevation: 100,
+    backgroundColor: PB.bg + 'F5',
+    borderTopWidth: 2,
+    borderTopColor: PB.primary,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 32,
   },
 
-  // Live stats
-  liveStatsRow: {
-    flexDirection: 'row',
+  // Terminal header
+  terminalHeader: {
+    borderBottomWidth: 1,
+    borderBottomColor: PB.dark,
+    paddingBottom: 8,
+    marginBottom: 10,
+  },
+  terminalTitle: {
+    color: PB.primary,
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 2,
+    ...pipboyFont,
+    // @ts-ignore
+    textShadowColor: PB.primary,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+
+  // Stats block — dot-leader rows
+  statsBlock: {
     marginBottom: 12,
   },
-  liveStat: {
-    flex: 1,
-    alignItems: 'center',
+  statRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    paddingVertical: 3,
   },
-  liveStatValue: {
-    fontSize: 28,
-    fontWeight: '900',
-    letterSpacing: -1,
-  },
-  liveStatUnit: {
-    fontSize: 10,
+  statLabel: {
+    color: PB.dim,
+    fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginTop: 2,
+    letterSpacing: 1,
+    ...pipboyFont,
+  },
+  statDots: {
+    color: PB.dark,
+    fontSize: 16,
+    flex: 1,
+    letterSpacing: 1,
+    ...pipboyFont,
+  },
+  statValue: {
+    color: PB.primary,
+    fontSize: 18,
+    fontWeight: '700',
+    ...pipboyFont,
+    // @ts-ignore
+    textShadowColor: PB.primary,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
+  },
+  statUnit: {
+    color: PB.dim,
+    fontSize: 14,
+    ...pipboyFont,
   },
 
-  // Activity type picker
+  // Activity type selector
   typeRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
+    gap: 6,
+    marginBottom: 12,
   },
   typeChip: {
     flex: 1,
+    paddingVertical: 10,
     alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    gap: 6,
+    borderWidth: 2,
+    borderColor: PB.dark,
+    borderRadius: 0, // sharp terminal corners
   },
-  typeLabel: { fontSize: 12, fontWeight: '700' },
+  typeChipActive: {
+    borderColor: PB.primary,
+    backgroundColor: PB.primary + '20',
+  },
+  typeText: {
+    color: PB.dark,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 1,
+    ...pipboyFont,
+  },
+  typeTextActive: {
+    color: PB.primary,
+    // @ts-ignore
+    textShadowColor: PB.primary,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
+  },
 
   // Buttons
   startBtn: {
-    flexDirection: 'row',
+    borderWidth: 2,
+    borderColor: PB.primary,
+    paddingVertical: 14,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-    borderRadius: 16,
+    borderRadius: 0,
+  },
+  startBtnText: {
+    color: PB.primary,
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 2,
+    ...pipboyFont,
+    // @ts-ignore
+    textShadowColor: PB.primary,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   stopBtn: {
-    flexDirection: 'row',
+    borderWidth: 2,
+    borderColor: '#ff3333',
+    paddingVertical: 14,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
-    borderRadius: 16,
-    marginTop: 4,
+    borderRadius: 0,
+    backgroundColor: '#ff333315',
   },
-  btnText: {
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 1.5,
-    color: '#FFF',
+  stopBtnText: {
+    color: '#ff3333',
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 2,
+    ...pipboyFont,
+    // @ts-ignore
+    textShadowColor: '#ff3333',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
+  },
+
+  // Activity log
+  logBlock: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: PB.dark,
+    paddingTop: 8,
+  },
+  logHeader: {
+    color: PB.dim,
+    fontSize: 14,
+    letterSpacing: 2,
+    textAlign: 'center',
+    marginBottom: 6,
+    ...pipboyFont,
+  },
+  logEntry: {
+    color: PB.dim,
+    fontSize: 14,
+    ...pipboyFont,
+    paddingVertical: 2,
+    letterSpacing: 0.5,
+  },
+  radioBtn: {
+    borderWidth: 1,
+    borderColor: PB.dark,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    marginBottom: 6,
+    borderRadius: 0,
+  },
+  radioBtnText: {
+    color: PB.primary,
+    fontSize: 14,
+    ...pipboyFont,
+    letterSpacing: 0.5,
+    // @ts-ignore
+    textShadowColor: PB.primary,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
   },
 });

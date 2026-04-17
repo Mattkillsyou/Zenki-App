@@ -92,9 +92,3 @@ export const typography: Record<string, TextStyle> = {
     textAlign: 'center',
   },
 };
-
-// ─── Pip-Boy terminal font (Fallout) ───
-// VT323 loaded via Google Fonts <link> on web; Courier New fallback everywhere.
-export const pipboyFont = {
-  fontFamily: '"VT323", "Share Tech Mono", "Courier New", monospace',
-};

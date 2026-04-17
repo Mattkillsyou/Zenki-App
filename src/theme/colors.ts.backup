@@ -187,14 +187,3 @@ export const lightColors: ThemeColors = {
 };
 
 export const colors = darkColors;
-
-// ─── Pip-Boy terminal palette (Fallout) ───
-// Used ONLY by ActivityTrackerScreen — does not affect other screens.
-export const pipboy = {
-  primary:  '#00ff41',    // bright terminal green
-  dim:      '#00cc33',    // dimmer green for secondary text
-  dark:     '#003b00',    // darkest green for borders/tracks
-  bg:       '#0a0f0a',    // near-black with green tint
-  black:    '#000000',
-  amber:    '#ffb000',    // for warnings / highlights
-};

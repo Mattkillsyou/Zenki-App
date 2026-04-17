@@ -16,7 +16,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useSound } from '../context/SoundContext';
 import { spacing, borderRadius } from '../theme';
 
-type TimerTab = 'round' | 'interval' | 'stopwatch';
+type TimerTab = 'round' | 'interval' | 'stopwatch' | 'meditate';
 
 function pad2(n: number): string {
   return n.toString().padStart(2, '0');
@@ -52,8 +52,9 @@ export function TimerScreen({ navigation, route }: any) {
         {(
           [
             { key: 'round' as TimerTab, label: 'Round', icon: 'timer-outline' as const },
-            { key: 'interval' as TimerTab, label: 'Interval', icon: 'fitness-outline' as const },
-            { key: 'stopwatch' as TimerTab, label: 'Stopwatch', icon: 'stopwatch-outline' as const },
+            { key: 'interval' as TimerTab, label: 'HIIT', icon: 'fitness-outline' as const },
+            { key: 'stopwatch' as TimerTab, label: 'Watch', icon: 'stopwatch-outline' as const },
+            { key: 'meditate' as TimerTab, label: 'Meditate', icon: 'leaf-outline' as const },
           ]
         ).map((t) => {
           const active = tab === t.key;
@@ -75,6 +76,7 @@ export function TimerScreen({ navigation, route }: any) {
       {tab === 'round' && <RoundTimer onBeep={() => play('navigate')} />}
       {tab === 'interval' && <IntervalTimer onBeep={() => play('navigate')} />}
       {tab === 'stopwatch' && <StopwatchAndCountdown />}
+      {tab === 'meditate' && <MeditationTimer />}
     </SafeAreaView>
   );
 }
@@ -572,6 +574,199 @@ function NumberRow({
   );
 }
 
+// ═════════════════════════════════════════════════════
+// Meditation Timer — gentle singing bowl tones
+// Presets: 21 min, 30 min, 60 min
+// ═════════════════════════════════════════════════════
+
+/** Play a pleasant singing-bowl tone via Web Audio API. */
+function playSingingBowl(isEnd: boolean = false) {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    Vibration.vibrate(isEnd ? [0, 300, 200, 300] : [0, 200]);
+    return;
+  }
+  try {
+    const AC: any = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+
+    // Layer 3 sine oscillators at harmonic intervals for a rich bowl sound
+    const freqs = isEnd ? [261.63, 392, 523.25] : [392, 523.25, 783.99]; // C4-G4-C5 or G4-C5-G5
+    const duration = isEnd ? 4.0 : 2.5;
+
+    freqs.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+
+      // Gentle attack, long natural decay
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.12 - i * 0.02, ctx.currentTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(ctx.currentTime + i * 0.15); // slight stagger for shimmer
+      osc.stop(ctx.currentTime + duration + 0.1);
+    });
+  } catch { /* ignore */ }
+}
+
+const MEDITATION_PRESETS = [
+  { minutes: 21, label: 'Focus' },
+  { minutes: 30, label: 'Deep' },
+  { minutes: 60, label: 'Extended' },
+];
+
+function MeditationTimer() {
+  const { colors } = useTheme();
+  const [selectedMinutes, setSelectedMinutes] = useState(21);
+  const [remaining, setRemaining] = useState(21 * 60);
+  const [running, setRunning] = useState(false);
+  const [done, setDone] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef = useRef(0);
+  const totalSecsRef = useRef(21 * 60);
+
+  // Reset when preset changes while not running
+  useEffect(() => {
+    if (!running && !done) {
+      setRemaining(selectedMinutes * 60);
+      totalSecsRef.current = selectedMinutes * 60;
+    }
+  }, [selectedMinutes, running, done]);
+
+  const handleStart = () => {
+    playSingingBowl(false); // opening bell
+    setDone(false);
+    setRunning(true);
+    startTimeRef.current = Date.now();
+    totalSecsRef.current = remaining;
+
+    intervalRef.current = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+      const left = Math.max(0, totalSecsRef.current - elapsed);
+      setRemaining(left);
+      if (left <= 0) {
+        clearInterval(intervalRef.current!);
+        intervalRef.current = null;
+        setRunning(false);
+        setDone(true);
+        playSingingBowl(true); // closing bell — richer, longer
+      }
+    }, 250);
+  };
+
+  const handleStop = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    setRunning(false);
+  };
+
+  const handleReset = () => {
+    handleStop();
+    setDone(false);
+    setRemaining(selectedMinutes * 60);
+  };
+
+  useEffect(() => {
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, []);
+
+  const minutes = Math.floor(remaining / 60);
+  const seconds = remaining % 60;
+  const progress = totalSecsRef.current > 0 ? 1 - (remaining / totalSecsRef.current) : 0;
+
+  return (
+    <View style={styles.meditationWrap}>
+      {/* Preset buttons */}
+      <View style={styles.meditationPresets}>
+        {MEDITATION_PRESETS.map((p) => {
+          const active = selectedMinutes === p.minutes && !running;
+          return (
+            <TouchableOpacity
+              key={p.minutes}
+              style={[
+                styles.meditationPreset,
+                {
+                  backgroundColor: active ? colors.gold : colors.surface,
+                  borderColor: active ? colors.gold : colors.border,
+                },
+              ]}
+              onPress={() => { if (!running) { setSelectedMinutes(p.minutes); setDone(false); } }}
+              disabled={running}
+            >
+              <Text style={[styles.meditationPresetTime, { color: active ? '#000' : colors.textPrimary }]}>
+                {p.minutes}
+              </Text>
+              <Text style={[styles.meditationPresetLabel, { color: active ? '#000' : colors.textMuted }]}>
+                {p.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Large timer display */}
+      <Text style={[styles.meditationTimer, { color: done ? colors.gold : colors.textPrimary }]}>
+        {pad2(minutes)}:{pad2(seconds)}
+      </Text>
+
+      {/* Status */}
+      <Text style={[styles.meditationStatus, { color: done ? colors.gold : running ? colors.success : colors.textMuted }]}>
+        {done ? 'SESSION COMPLETE' : running ? 'BREATHE' : 'READY'}
+      </Text>
+
+      {/* Progress bar */}
+      {(running || done) && (
+        <View style={{ width: '80%', height: 4, borderRadius: 2, backgroundColor: colors.backgroundElevated, marginBottom: 24, overflow: 'hidden' }}>
+          <View style={{ width: `${Math.min(100, progress * 100)}%`, height: '100%', backgroundColor: done ? colors.gold : colors.success, borderRadius: 2 }} />
+        </View>
+      )}
+
+      {/* Control button */}
+      {!running && !done && (
+        <TouchableOpacity
+          style={[styles.meditationBtn, { backgroundColor: colors.gold }]}
+          onPress={handleStart}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="play" size={32} color="#000" />
+        </TouchableOpacity>
+      )}
+      {running && (
+        <TouchableOpacity
+          style={[styles.meditationBtn, { backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.border }]}
+          onPress={handleStop}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="pause" size={32} color={colors.textPrimary} />
+        </TouchableOpacity>
+      )}
+      {done && (
+        <TouchableOpacity
+          style={[styles.meditationBtn, { backgroundColor: colors.gold }]}
+          onPress={handleReset}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="refresh" size={32} color="#000" />
+        </TouchableOpacity>
+      )}
+
+      {/* Hint text */}
+      <Text style={[styles.meditationHint, { color: colors.textMuted }]}>
+        {running
+          ? 'Close your eyes. Focus on your breath. The bell will ring when your session is complete.'
+          : done
+          ? `${selectedMinutes} minutes of stillness. Well done.`
+          : 'Choose a duration and press play. A gentle bowl tone will mark the beginning and end of your session.'}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
@@ -675,6 +870,65 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 6,
   },
+  // Meditation
+  meditationWrap: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    alignItems: 'center',
+  },
+  meditationPresets: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 24,
+  },
+  meditationPreset: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    gap: 4,
+  },
+  meditationPresetTime: {
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  meditationPresetLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  meditationTimer: {
+    fontSize: 64,
+    fontWeight: '200',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -2,
+    marginBottom: 8,
+  },
+  meditationStatus: {
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 1.5,
+    marginBottom: 24,
+  },
+  meditationBtn: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  meditationHint: {
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 32,
+    fontStyle: 'italic',
+  },
+
   lapsHeader: { fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginBottom: 6 },
   lapRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   lapIndex: { fontSize: 13, fontWeight: '700' },
