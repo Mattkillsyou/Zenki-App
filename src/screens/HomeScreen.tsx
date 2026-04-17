@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Dimensions,
   Platform,
+  Animated,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +16,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius, shadows } from '../theme';
 import { ClassCard, AnimatedLogo, FadeInView, PressableScale, TimeClock, StreakBadge, PointsBadge, XPProgressBar, AchievementGrid, CelebrationModal } from '../components';
+import { Skeleton } from '../components/Skeleton';
 import { SpinWheelModal } from '../components/SpinWheelModal';
 import { NotificationsModal } from '../components/NotificationsModal';
 import { useSpinWheel } from '../context/SpinWheelContext';
@@ -21,12 +24,16 @@ import { useGamification } from '../context/GamificationContext';
 import { useAnnouncements } from '../context/AnnouncementContext';
 import { useAppointments } from '../context/AppointmentContext';
 import { useWorkouts } from '../context/WorkoutContext';
+import { useHeartRate } from '../context/HeartRateContext';
+import { useGpsActivity } from '../context/GpsActivityContext';
+import { useNutrition } from '../context/NutritionContext';
 import { useEmployeeTasks } from '../context/EmployeeTaskContext';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { getDailyQuote } from '../data/quotes';
 import { getTodaysSchedule } from '../data/schedule';
 import { useHasUnreadNotifications } from './NotificationsScreen';
 import { formatCount } from '../utils/formatCount';
+import { formatDistance, distanceUnit, formatDurationHuman } from '../utils/gps';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -186,6 +193,163 @@ export function HomeScreen({ navigation }: any) {
       status: a.status,
     })),
   ].sort((x, y) => x.sortKey - y.sortKey);
+
+  // ── Today's Dashboard Metrics ──
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const { totalsForDate, latestWeight, myWeights } = useNutrition();
+  const { sessions: hrSessions } = useHeartRate();
+  const { memberActivities } = useGpsActivity();
+
+  const todayNutrition = user?.id ? totalsForDate(user.id, todayISO) : { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  const goalsCtx = useNutrition();
+  const todayGoals = user?.id ? goalsCtx.goalsFor(user.id) : { calories: 2200, protein: 160, carbs: 220, fat: 70 };
+
+  const todayStats = useMemo(() => {
+    if (!user?.id) return { workouts: 0, caloriesBurned: 0, macrosPct: 0, activeMinutes: 0 };
+
+    // Workouts today
+    const todayLogs = myLogs(user.id).filter((l: any) => l.date?.startsWith(todayISO));
+    const workoutsToday = todayLogs.length;
+
+    // HR sessions today calories
+    const todayHRCals = (hrSessions || [])
+      .filter((s: any) => s.memberId === user.id && s.date?.startsWith(todayISO))
+      .reduce((sum: number, s: any) => sum + (s.calories || 0), 0);
+
+    // GPS activities today calories
+    const todayGPS = memberActivities(user.id)
+      .filter((a) => a.startedAt?.startsWith(todayISO));
+    const todayGPSCals = todayGPS.reduce((sum, a) => sum + (a.calories || 0), 0);
+
+    // Total active minutes (HR sessions + GPS + workout logs)
+    const hrMinutes = (hrSessions || [])
+      .filter((s: any) => s.memberId === user.id && s.date?.startsWith(todayISO))
+      .reduce((sum: number, s: any) => sum + (s.durationSeconds || 0) / 60, 0);
+    const gpsMinutes = todayGPS.reduce((sum, a) => sum + a.durationSeconds / 60, 0);
+    const logMinutes = todayLogs.reduce((sum: number, l: any) => sum + (l.durationMinutes || 0), 0);
+    const activeMinutes = Math.round(hrMinutes + gpsMinutes + logMinutes);
+
+    // Macros percentage
+    const macrosPct = todayGoals.calories > 0
+      ? Math.min(100, Math.round((todayNutrition.calories / todayGoals.calories) * 100))
+      : 0;
+
+    const caloriesBurned = todayHRCals + todayGPSCals;
+
+    return { workouts: workoutsToday, caloriesBurned, macrosPct, activeMinutes };
+  }, [user?.id, todayISO, hrSessions, todayNutrition, todayGoals]);
+
+  // ── Next Class Countdown ──
+  const nextClass = useMemo(() => {
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    for (const cls of todaysFullSchedule) {
+      if (cls.sortKey > currentMinutes) return cls;
+    }
+    return null;
+  }, [todaysFullSchedule]);
+
+  const [countdown, setCountdown] = React.useState('');
+  React.useEffect(() => {
+    if (!nextClass) return;
+    const update = () => {
+      const now = new Date();
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const diff = nextClass.sortKey - nowMin;
+      if (diff <= 0) { setCountdown('NOW'); return; }
+      const h = Math.floor(diff / 60);
+      const m = diff % 60;
+      setCountdown(h > 0 ? `IN ${h}H ${m}M` : `IN ${m}M`);
+    };
+    update();
+    const timer = setInterval(update, 30000);
+    return () => clearInterval(timer);
+  }, [nextClass]);
+
+  // ── Quick Stats ──
+  const quickStats = useMemo(() => {
+    if (!user?.id) return [];
+    const stats: { label: string; value: string; sub: string; icon: string }[] = [];
+
+    // 1. Latest weight + 7-day trend
+    const weights = myWeights(user.id);
+    if (weights.length > 0) {
+      const latest = weights[0];
+      const weekAgo = weights.find((w: any) => {
+        const d = new Date(w.date);
+        const diff = (Date.now() - d.getTime()) / 86400000;
+        return diff >= 6 && diff <= 8;
+      });
+      const arrow = weekAgo
+        ? latest.weight > weekAgo.weight ? '↑' : latest.weight < weekAgo.weight ? '↓' : '→'
+        : '→';
+      stats.push({
+        label: 'Weight',
+        value: `${latest.weight} ${latest.unit}`,
+        sub: `7d trend ${arrow}`,
+        icon: 'scale-outline',
+      });
+    }
+
+    // 2. Current streak
+    const streak = gamState.streak || 0;
+    stats.push({
+      label: 'Streak',
+      value: `${streak} day${streak !== 1 ? 's' : ''}`,
+      sub: streak >= 7 ? 'On fire!' : 'Keep going',
+      icon: 'flame',
+    });
+
+    // 3. Latest PR
+    const prs = user.id ? myPRs(user.id) : [];
+    if (prs.length > 0) {
+      const latest = prs[prs.length - 1] as any;
+      stats.push({
+        label: 'Latest PR',
+        value: `${latest.value || '--'}`,
+        sub: latest.exerciseName || 'Exercise',
+        icon: 'trophy-outline',
+      });
+    }
+
+    // 4. Last GPS activity
+    const gpsActs = memberActivities(user.id);
+    if (gpsActs.length > 0) {
+      const last = gpsActs[0];
+      stats.push({
+        label: 'Last Activity',
+        value: formatDistance(last.distanceMeters),
+        sub: `${formatDurationHuman(last.durationSeconds)} ${last.type}`,
+        icon: 'navigate-outline',
+      });
+    }
+
+    // 5. Weekly strain average
+    const weekHR = (hrSessions || []).filter((s: any) => {
+      if (s.memberId !== user.id) return false;
+      const d = new Date(s.date);
+      return (Date.now() - d.getTime()) / 86400000 <= 7;
+    });
+    if (weekHR.length > 0) {
+      const avgStrain = weekHR.reduce((sum: number, s: any) => sum + (s.strain || 0), 0) / weekHR.length;
+      stats.push({
+        label: 'Avg Strain',
+        value: avgStrain.toFixed(1),
+        sub: `${weekHR.length} session${weekHR.length !== 1 ? 's' : ''} this week`,
+        icon: 'pulse-outline',
+      });
+    }
+
+    return stats;
+  }, [user?.id, gamState.streak, hrSessions]);
+
+  // ── Pull-to-Refresh ──
+  const [refreshing, setRefreshing] = React.useState(false);
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    // Force a re-render by briefly toggling state
+    setTimeout(() => setRefreshing(false), 800);
+  }, []);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -351,9 +515,148 @@ export function HomeScreen({ navigation }: any) {
         {/* ─── Employee Checklist (employee-only) ─── */}
         {isEmployee && <EmployeeChecklistCard navigation={navigation} memberId={user?.id ?? ''} />}
 
-        {/* ─── Member Content ─── */}
+        {/* ─── Member Content (scrollable) ─── */}
         {!isEmployee && (
-          <>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />
+            }
+          >
+            {/* ── 1.1 Today's Dashboard Panel ── */}
+            <FadeInView delay={200} slideUp={16}>
+              <View style={[styles.section, { marginTop: 4 }]}>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 10, fontSize: 16, fontWeight: '800' }]}>YOUR DAY</Text>
+                <View style={styles.dashGrid}>
+                  {/* Workouts Today */}
+                  <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+                    <View style={[styles.dashIconWrap, { backgroundColor: colors.redMuted }]}>
+                      <Ionicons name="barbell" size={18} color={colors.red} />
+                    </View>
+                    <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.workouts}</Text>
+                    <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Workouts</Text>
+                    <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
+                      <View style={[styles.dashProgressFill, { backgroundColor: colors.red, width: `${Math.min(100, todayStats.workouts * 100)}%` }]} />
+                    </View>
+                  </View>
+
+                  {/* Calories Burned */}
+                  <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+                    <View style={[styles.dashIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                      <Ionicons name="flame" size={18} color="#F59E0B" />
+                    </View>
+                    <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.caloriesBurned}</Text>
+                    <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Cal Burned</Text>
+                    <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
+                      <View style={[styles.dashProgressFill, { backgroundColor: '#F59E0B', width: `${Math.min(100, (todayStats.caloriesBurned / 500) * 100)}%` }]} />
+                    </View>
+                  </View>
+
+                  {/* Macros Hit */}
+                  <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+                    <View style={[styles.dashIconWrap, { backgroundColor: colors.successMuted }]}>
+                      <Ionicons name="nutrition" size={18} color={colors.success} />
+                    </View>
+                    <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.macrosPct}%</Text>
+                    <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Macros Hit</Text>
+                    <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
+                      <View style={[styles.dashProgressFill, { backgroundColor: colors.success, width: `${todayStats.macrosPct}%` }]} />
+                    </View>
+                  </View>
+
+                  {/* Active Minutes */}
+                  <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+                    <View style={[styles.dashIconWrap, { backgroundColor: colors.infoMuted }]}>
+                      <Ionicons name="time" size={18} color={colors.info} />
+                    </View>
+                    <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.activeMinutes}</Text>
+                    <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Active Min</Text>
+                    <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
+                      <View style={[styles.dashProgressFill, { backgroundColor: colors.info, width: `${Math.min(100, (todayStats.activeMinutes / 30) * 100)}%` }]} />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </FadeInView>
+
+            {/* ── 1.2 Next Class Countdown ── */}
+            <FadeInView delay={260} slideUp={16}>
+              <View style={[styles.section, { marginTop: 6 }]}>
+                {nextClass ? (
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => navigation.navigate('Schedule')}
+                    style={[styles.nextClassCard, { backgroundColor: colors.surface, borderColor: colors.gold + '30' }]}
+                  >
+                    <View style={styles.nextClassLeft}>
+                      <View style={[styles.nextClassDot, { backgroundColor: colors.gold }]} />
+                      <View>
+                        <Text style={[styles.nextClassName, { color: colors.textPrimary }]}>{nextClass.name}</Text>
+                        <Text style={[styles.nextClassMeta, { color: colors.textSecondary }]}>
+                          {nextClass.instructor} · {nextClass.time}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.nextClassRight}>
+                      <Text style={[styles.nextClassCountdown, { color: colors.gold }]}>{countdown}</Text>
+                      {!nextClass.booked && (
+                        <TouchableOpacity
+                          style={[styles.bookNowBtn, { backgroundColor: colors.gold }]}
+                          onPress={() => navigation.navigate('Book')}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.bookNowText, { color: '#000' }]}>BOOK</Text>
+                        </TouchableOpacity>
+                      )}
+                      {nextClass.booked && (
+                        <View style={[styles.bookedBadge, { backgroundColor: colors.successMuted }]}>
+                          <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                          <Text style={[styles.bookedText, { color: colors.success }]}>BOOKED</Text>
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={[styles.nextClassCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+                    <Ionicons name="moon-outline" size={18} color={colors.textMuted} />
+                    <Text style={[styles.nextClassMeta, { color: colors.textMuted, marginLeft: 8 }]}>
+                      NO CLASSES REMAINING TODAY
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </FadeInView>
+
+            {/* ── 1.3 Quick Stats Carousel ── */}
+            {quickStats.length > 0 && (
+              <FadeInView delay={300} slideUp={16}>
+                <View style={{ marginTop: 10 }}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingHorizontal: 24, gap: 10 }}
+                    decelerationRate="fast"
+                    snapToInterval={150}
+                  >
+                    {quickStats.map((stat, i) => (
+                      <View
+                        key={i}
+                        style={[styles.quickStatCard, { backgroundColor: colors.surface, borderColor: colors.gold + '20' }]}
+                      >
+                        <View style={[styles.quickStatIconWrap, { backgroundColor: colors.goldMuted }]}>
+                          <Ionicons name={stat.icon as any} size={16} color={colors.gold} />
+                        </View>
+                        <Text style={[styles.quickStatValue, { color: colors.textPrimary }]}>{stat.value}</Text>
+                        <Text style={[styles.quickStatLabel, { color: colors.textMuted }]}>{stat.label}</Text>
+                        <Text style={[styles.quickStatSub, { color: colors.textTertiary }]}>{stat.sub}</Text>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              </FadeInView>
+            )}
+
             {/* Training — log workouts, track PRs */}
             <FadeInView delay={340} slideUp={16}>
               <View style={styles.section}>
@@ -397,7 +700,55 @@ export function HomeScreen({ navigation }: any) {
               </View>
             </FadeInView>
 
-          </>
+            {/* ── Today's Schedule ── */}
+            {todaysFullSchedule.length > 0 && (
+              <FadeInView delay={400} slideUp={16}>
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={[styles.sectionTitle, { color: colors.textPrimary, fontSize: 18 }]}>Today's Schedule</Text>
+                    <TouchableOpacity
+                      style={[styles.seeAllButton, { backgroundColor: colors.accentTint }]}
+                      onPress={() => navigation.navigate('Schedule')}
+                    >
+                      <Text style={[styles.seeAllText, { color: colors.gold }]}>All</Text>
+                      <Ionicons name="chevron-forward" size={14} color={colors.gold} />
+                    </TouchableOpacity>
+                  </View>
+                  {todaysFullSchedule.slice(0, 5).map((cls) => (
+                    <TouchableOpacity
+                      key={cls.key}
+                      activeOpacity={0.85}
+                      onPress={() => navigation.navigate('Schedule')}
+                      style={[styles.scheduleRow, { borderColor: colors.borderSubtle }]}
+                    >
+                      <View style={[styles.scheduleTimeBadge, {
+                        backgroundColor: cls.booked ? colors.successMuted : colors.surfaceSecondary,
+                      }]}>
+                        <Text style={[styles.scheduleTime, {
+                          color: cls.booked ? colors.success : colors.textSecondary,
+                        }]}>{cls.time}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.scheduleClassName, { color: colors.textPrimary }]}>{cls.name}</Text>
+                        <Text style={[styles.scheduleInstructor, { color: colors.textMuted }]}>
+                          {cls.instructor} · {cls.duration}
+                        </Text>
+                      </View>
+                      {cls.booked && (
+                        <View style={[styles.bookedBadge, { backgroundColor: colors.successMuted }]}>
+                          <Ionicons name="checkmark" size={12} color={colors.success} />
+                        </View>
+                      )}
+                      {!cls.booked && cls.spotsLeft !== undefined && cls.spotsLeft > 0 && cls.spotsLeft <= 3 && (
+                        <Text style={[styles.spotsLeft, { color: colors.warning }]}>{cls.spotsLeft} left</Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </FadeInView>
+            )}
+
+          </ScrollView>
         )}
 
       </View>
@@ -871,4 +1222,178 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   timerChipLabel: { fontSize: 13, fontWeight: '700' },
+
+  // ── Dashboard 2x2 grid ──
+  dashGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  dashCard: {
+    width: '48%',
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 12,
+    alignItems: 'center',
+    gap: 4,
+  },
+  dashIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  dashValue: {
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: -0.3,
+  },
+  dashLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  dashProgressBg: {
+    width: '100%',
+    height: 4,
+    borderRadius: 2,
+    marginTop: 4,
+    overflow: 'hidden',
+  },
+  dashProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+
+  // ── Next Class Countdown ──
+  nextClassCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+  },
+  nextClassLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  nextClassDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  nextClassName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  nextClassMeta: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  nextClassRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  nextClassCountdown: {
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  bookNowBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  bookNowText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  bookedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  bookedText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+
+  // ── Quick Stats Carousel ──
+  quickStatCard: {
+    width: 140,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 12,
+    alignItems: 'center',
+    gap: 3,
+  },
+  quickStatIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  quickStatValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: -0.3,
+  },
+  quickStatLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  quickStatSub: {
+    fontSize: 9,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+
+  // ── Schedule rows ──
+  scheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  scheduleTimeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  scheduleTime: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  scheduleClassName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  scheduleInstructor: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  spotsLeft: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
 });

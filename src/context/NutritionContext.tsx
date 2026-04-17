@@ -7,6 +7,7 @@ import {
   MacroTotals,
   NutritionProfile,
   DEFAULT_MACRO_GOALS,
+  MealType,
 } from '../types/nutrition';
 import {
   calculateBMR,
@@ -47,6 +48,10 @@ interface NutritionContextValue {
   totalsForDate: (memberId: string, dateISO: string) => MacroTotals;
   addMacroEntry: (entry: Omit<MacroEntry, 'id' | 'createdAt'>) => MacroEntry;
   removeMacroEntry: (id: string) => void;
+
+  // Macros — meal type grouping
+  macrosForDateByMeal: (memberId: string, dateISO: string) => Record<MealType, MacroEntry[]>;
+  totalsForDateByMeal: (memberId: string, dateISO: string) => Record<MealType, MacroTotals>;
 
   // Goals
   goalsFor: (memberId: string) => MacroGoals;
@@ -102,6 +107,13 @@ const NutritionContext = createContext<NutritionContextValue>({
   totalsForDate: () => ({ calories: 0, protein: 0, carbs: 0, fat: 0 }),
   addMacroEntry: () => ({} as MacroEntry),
   removeMacroEntry: () => {},
+  macrosForDateByMeal: () => ({ breakfast: [], lunch: [], dinner: [], snacks: [] }),
+  totalsForDateByMeal: () => ({
+    breakfast: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+    lunch: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+    dinner: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+    snacks: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+  }),
   goalsFor: () => ({ memberId: '', ...DEFAULT_MACRO_GOALS, updatedAt: new Date().toISOString() }),
   updateGoals: () => {},
   profileFor: () => null,
@@ -273,6 +285,47 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   const removeMacroEntry = useCallback((id: string) => {
     setMacros((prev) => prev.filter((m) => m.id !== id));
   }, []);
+
+  const macrosForDateByMeal = useCallback(
+    (memberId: string, dateISO: string): Record<MealType, MacroEntry[]> => {
+      const dayEntries = macros.filter((m) => m.memberId === memberId && m.date === dateISO);
+      const grouped: Record<MealType, MacroEntry[]> = {
+        breakfast: [],
+        lunch: [],
+        dinner: [],
+        snacks: [],
+      };
+      for (const entry of dayEntries) {
+        const mt = entry.mealType || 'snacks';
+        grouped[mt].push(entry);
+      }
+      return grouped;
+    },
+    [macros],
+  );
+
+  const totalsForDateByMeal = useCallback(
+    (memberId: string, dateISO: string): Record<MealType, MacroTotals> => {
+      const grouped = macrosForDateByMeal(memberId, dateISO);
+      const sumEntries = (entries: MacroEntry[]): MacroTotals =>
+        entries.reduce(
+          (acc, m) => ({
+            calories: acc.calories + (Number(m.calories) || 0),
+            protein: acc.protein + (Number(m.protein) || 0),
+            carbs: acc.carbs + (Number(m.carbs) || 0),
+            fat: acc.fat + (Number(m.fat) || 0),
+          }),
+          { calories: 0, protein: 0, carbs: 0, fat: 0 },
+        );
+      return {
+        breakfast: sumEntries(grouped.breakfast),
+        lunch: sumEntries(grouped.lunch),
+        dinner: sumEntries(grouped.dinner),
+        snacks: sumEntries(grouped.snacks),
+      };
+    },
+    [macrosForDateByMeal],
+  );
 
   // ── Goals ──
   const goalsFor = useCallback(
@@ -592,6 +645,8 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       totalsForDate,
       addMacroEntry,
       removeMacroEntry,
+      macrosForDateByMeal,
+      totalsForDateByMeal,
       goalsFor,
       updateGoals,
       profileFor,
@@ -628,6 +683,8 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       totalsForDate,
       addMacroEntry,
       removeMacroEntry,
+      macrosForDateByMeal,
+      totalsForDateByMeal,
       goalsFor,
       updateGoals,
       profileFor,

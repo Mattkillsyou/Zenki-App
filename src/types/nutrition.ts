@@ -46,6 +46,23 @@ export interface WeightEntry {
   createdAt: string;    // ISO
 }
 
+/** Meal type for grouping logged food items. */
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snacks';
+
+export const MEAL_TYPE_LABELS: Record<MealType, string> = {
+  breakfast: 'Breakfast',
+  lunch: 'Lunch',
+  dinner: 'Dinner',
+  snacks: 'Snacks',
+};
+
+export const MEAL_TYPE_ICONS: Record<MealType, string> = {
+  breakfast: '🌅',
+  lunch: '☀️',
+  dinner: '🌙',
+  snacks: '🍎',
+};
+
 /**
  * One logged food item. Totals for the day are derived by summing entries
  * whose date matches today.
@@ -59,6 +76,7 @@ export interface MacroEntry {
   protein: number;      // grams
   carbs: number;        // grams
   fat: number;          // grams
+  mealType?: MealType;  // breakfast, lunch, dinner, snacks (optional for backward compat)
   createdAt: string;    // ISO
 }
 

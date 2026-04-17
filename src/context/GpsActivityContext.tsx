@@ -15,12 +15,15 @@ import {
   computeSplits,
   estimateCaloriesMET,
   downsampleRoute,
+  computeActivityTotals,
+  ActivityTotals,
 } from '../utils/gps';
 
 const STORAGE_KEY = '@zenki_gps_activities';
 
 interface GpsActivityContextValue {
   isTracking: boolean;
+  isPaused: boolean;
   currentActivityType: GpsActivityType;
   liveDistance: number;
   liveDuration: number;
@@ -30,12 +33,17 @@ interface GpsActivityContextValue {
   currentPosition: GpsPoint | null;
   startTracking: (type: GpsActivityType, memberId: string) => Promise<boolean>;
   stopTracking: (weightKg?: number) => GpsActivity | null;
+  pauseTracking: () => void;
+  resumeTracking: () => void;
+  removeActivity: (id: string) => void;
   activities: GpsActivity[];
   memberActivities: (memberId: string) => GpsActivity[];
+  totalStats: (memberId: string) => ActivityTotals;
 }
 
 const GpsActivityContext = createContext<GpsActivityContextValue>({
   isTracking: false,
+  isPaused: false,
   currentActivityType: 'run',
   liveDistance: 0,
   liveDuration: 0,
@@ -45,8 +53,17 @@ const GpsActivityContext = createContext<GpsActivityContextValue>({
   currentPosition: null,
   startTracking: async () => false,
   stopTracking: () => null,
+  pauseTracking: () => {},
+  resumeTracking: () => {},
+  removeActivity: () => {},
   activities: [],
   memberActivities: () => [],
+  totalStats: () => ({
+    totalActivities: 0, totalDistanceMeters: 0, totalDurationSeconds: 0,
+    totalElevationGainMeters: 0, totalCalories: 0, avgPaceSecsPerKm: 0,
+    longestDistanceMeters: 0, longestDurationSeconds: 0, fastestPaceSecsPerKm: 0,
+    activitiesByType: {},
+  }),
 });
 
 function randomId(): string {
@@ -57,6 +74,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
   const [activities, setActivities] = useState<GpsActivity[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [currentActivityType, setCurrentActivityType] = useState<GpsActivityType>('run');
   const [liveDistance, setLiveDistance] = useState(0);
   const [liveDuration, setLiveDuration] = useState(0);
@@ -71,6 +89,9 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
   const watchRef = useRef<Location.LocationSubscription | null>(null);
   const simTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pausedTimeRef = useRef(0);        // accumulated paused time in ms
+  const pauseStartRef = useRef(0);        // when current pause started
+  const isPausedRef = useRef(false);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
@@ -102,6 +123,10 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     startTimeRef.current = Date.now();
     setCurrentActivityType(type);
     setIsTracking(true);
+    setIsPaused(false);
+    isPausedRef.current = false;
+    pausedTimeRef.current = 0;
+    pauseStartRef.current = 0;
     setLiveDistance(0);
     setLiveDuration(0);
     setLivePace(0);
@@ -230,18 +255,99 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     return activity;
   }, [cleanupTimers]);
 
+  const pauseTracking = useCallback(() => {
+    if (!isTracking || isPausedRef.current) return;
+    isPausedRef.current = true;
+    setIsPaused(true);
+    pauseStartRef.current = Date.now();
+
+    // Stop GPS watch / simulation during pause
+    watchRef.current?.remove();
+    watchRef.current = null;
+    if (simTimerRef.current) { clearInterval(simTimerRef.current); simTimerRef.current = null; }
+    // Keep duration timer running — it shows elapsed time
+  }, [isTracking]);
+
+  const resumeTracking = useCallback(async () => {
+    if (!isTracking || !isPausedRef.current) return;
+    // Accumulate paused time
+    pausedTimeRef.current += Date.now() - pauseStartRef.current;
+    isPausedRef.current = false;
+    setIsPaused(false);
+
+    // Restart GPS watch / simulation
+    const lastPoint = routeRef.current[routeRef.current.length - 1];
+    const updateStats = () => {
+      const dist = totalDistance(routeRef.current);
+      setLiveDistance(dist);
+      setLiveElevGain(totalElevationGain(routeRef.current));
+      const activeTime = (Date.now() - startTimeRef.current - pausedTimeRef.current) / 1000;
+      setLivePace(paceSecsPerKm(dist, activeTime));
+    };
+
+    try {
+      watchRef.current = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 5, timeInterval: 3000 },
+        (loc) => {
+          if (isPausedRef.current) return;
+          const point: GpsPoint = {
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+            altitude: loc.coords.altitude,
+            speed: loc.coords.speed,
+            timestamp: loc.timestamp,
+          };
+          routeRef.current.push(point);
+          setCurrentPosition(point);
+          setLiveSpeed(Math.max(0, loc.coords.speed || 0));
+          updateStats();
+        },
+      );
+    } catch {
+      if (Platform.OS === 'web') {
+        let simLat = lastPoint?.latitude ?? 34.1006;
+        let simLon = lastPoint?.longitude ?? -118.2916;
+        simTimerRef.current = setInterval(() => {
+          if (isPausedRef.current) return;
+          simLat += (Math.random() - 0.5) * 0.0002;
+          simLon += (Math.random() - 0.5) * 0.0002;
+          const point: GpsPoint = {
+            latitude: simLat, longitude: simLon,
+            altitude: 150 + Math.random() * 5,
+            speed: 2.5 + Math.random() * 2,
+            timestamp: Date.now(),
+          };
+          routeRef.current.push(point);
+          setCurrentPosition(point);
+          setLiveSpeed(point.speed || 0);
+          updateStats();
+        }, 3000);
+      }
+    }
+  }, [isTracking]);
+
+  const removeActivity = useCallback((id: string) => {
+    setActivities((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
   const memberActivities = useCallback(
     (memberId: string) => activities.filter((a) => a.memberId === memberId),
+    [activities],
+  );
+
+  const totalStats = useCallback(
+    (memberId: string) => computeActivityTotals(activities.filter((a) => a.memberId === memberId)),
     [activities],
   );
 
   return (
     <GpsActivityContext.Provider
       value={{
-        isTracking, currentActivityType,
+        isTracking, isPaused, currentActivityType,
         liveDistance, liveDuration, livePace, liveElevGain, liveSpeed,
         currentPosition, startTracking, stopTracking,
-        activities, memberActivities,
+        pauseTracking, resumeTracking, removeActivity,
+        activities, memberActivities, totalStats,
       }}
     >
       {children}
