@@ -71,6 +71,7 @@ import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { MessagesListScreen } from '../screens/MessagesListScreen';
 import { MessagesChatScreen } from '../screens/MessagesChatScreen';
 import { UserSearchScreen } from '../screens/UserSearchScreen';
+import { CycleTrackerScreen } from '../screens/CycleTrackerScreen';
 
 const Stack = createStackNavigator();
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -332,6 +333,7 @@ export function RootNavigator() {
       <Stack.Screen name="MessagesList" component={withErrorBoundary(MessagesListScreen, 'Messages')} options={pushTransition} />
       <Stack.Screen name="MessagesChat" component={withErrorBoundary(MessagesChatScreen, 'Chat')} options={pushTransition} />
       <Stack.Screen name="UserSearch" component={withErrorBoundary(UserSearchScreen, 'Search')} options={pushTransition} />
+      <Stack.Screen name="CycleTracker" component={withErrorBoundary(CycleTrackerScreen, 'Cycle Tracker')} options={pushTransition} />
     </Stack.Navigator>
   );
 }

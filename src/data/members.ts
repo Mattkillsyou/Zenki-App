@@ -40,7 +40,10 @@ export interface Member {
   nickname?: string;  // Optional nickname / title shown next to display name
   isVisibleInFeed?: boolean;   // Whether this member shows up in the community feed (default true)
   messagingEnabled?: boolean;  // Whether other members can DM them (default true)
+  biologicalSex?: 'male' | 'female' | 'other';  // Used for health feature personalization
 }
+
+export type BiologicalSex = 'male' | 'female' | 'other';
 
 export const MEMBERS: Member[] = [
   {

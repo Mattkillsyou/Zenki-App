@@ -34,6 +34,8 @@ import { getTodaysSchedule } from '../data/schedule';
 import { useHasUnreadNotifications } from './NotificationsScreen';
 import { formatCount } from '../utils/formatCount';
 import { formatDistance, distanceUnit, formatDurationHuman } from '../utils/gps';
+import { useCycleTracker } from '../context/CycleTrackerContext';
+import { PHASE_LABELS, PHASE_COLORS, PHASE_ICONS } from '../types/cycle';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -343,6 +345,12 @@ export function HomeScreen({ navigation }: any) {
     return stats;
   }, [user?.id, gamState.streak, hrSessions]);
 
+  // ── Cycle Phase (female users only) ──
+  const { memberCycleInfo, settings: cycleSettings } = useCycleTracker();
+  const isFemale = user?.biologicalSex === 'female';
+  const cycleInfo = isFemale && user?.id ? memberCycleInfo(user.id) : null;
+  const showCyclePhase = isFemale && cycleInfo && cycleSettings.showOnDashboard;
+
   // ── Pull-to-Refresh ──
   const [refreshing, setRefreshing] = React.useState(false);
   const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -528,6 +536,28 @@ export function HomeScreen({ navigation }: any) {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />
             }
           >
+            {/* ── Cycle Phase Pill (female users only) ── */}
+            {showCyclePhase && cycleInfo && (
+              <FadeInView delay={180} slideUp={10}>
+                <TouchableOpacity
+                  style={[styles.cyclePill, { backgroundColor: PHASE_COLORS[cycleInfo.currentPhase] + '18', borderColor: PHASE_COLORS[cycleInfo.currentPhase] + '40' }]}
+                  onPress={() => navigation.navigate('CycleTracker')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ fontSize: 14 }}>{PHASE_ICONS[cycleInfo.currentPhase]}</Text>
+                  <Text style={[styles.cyclePillText, { color: PHASE_COLORS[cycleInfo.currentPhase] }]}>
+                    {PHASE_LABELS[cycleInfo.currentPhase]} · Day {cycleInfo.cycleDay}
+                  </Text>
+                  {cycleInfo.daysUntilNextPeriod <= 5 && !cycleInfo.isOnPeriod && (
+                    <Text style={[styles.cyclePillAlert, { color: PHASE_COLORS.menstrual }]}>
+                      {cycleInfo.daysUntilNextPeriod}d
+                    </Text>
+                  )}
+                  <Ionicons name="chevron-forward" size={14} color={PHASE_COLORS[cycleInfo.currentPhase]} />
+                </TouchableOpacity>
+              </FadeInView>
+            )}
+
             {/* ── 1.1 Today's Dashboard Panel ── */}
             <FadeInView delay={200} slideUp={16}>
               <View style={[styles.section, { marginTop: 4 }]}>
@@ -700,6 +730,12 @@ export function HomeScreen({ navigation }: any) {
                     <Ionicons name="bar-chart-outline" size={20} color={colors.gold} />
                     <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Report</Text>
                   </TouchableOpacity>
+                  {isFemale && (
+                    <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('CycleTracker')} style={[styles.homeTool, { backgroundColor: 'rgba(230, 57, 70, 0.08)', borderColor: '#E63946' + '40' }]}>
+                      <Ionicons name="heart-circle-outline" size={20} color="#E63946" />
+                      <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Cycle</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             </FadeInView>
@@ -1399,5 +1435,27 @@ const styles = StyleSheet.create({
   spotsLeft: {
     fontSize: 10,
     fontWeight: '700',
+  },
+
+  // ── Cycle phase pill ──
+  cyclePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: 24,
+    marginTop: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  cyclePillText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cyclePillAlert: {
+    fontSize: 10,
+    fontWeight: '800',
   },
 });

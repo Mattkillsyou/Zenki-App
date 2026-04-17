@@ -18,7 +18,7 @@ import { renderWaiverText, WAIVER_VERSION, WaiverSignature } from '../../data/wa
 import { pushWaiverToSheets, pushWaiverToFirestore } from '../../services/waiverSync';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const TOTAL_STEPS = 10;
+const TOTAL_STEPS = 11;
 
 interface OnboardingData {
   email: string;
@@ -34,6 +34,7 @@ interface OnboardingData {
   instagram: string;
   twitter: string;
   website: string;
+  biologicalSex: 'male' | 'female' | 'other' | '';
   belt: BeltLevel;
   stripes: number;
   signedName: string;
@@ -50,7 +51,7 @@ export function OnboardingScreen({ navigation, route }: any) {
   const [data, setData] = useState<OnboardingData>({
     email: '', password: '', confirmPassword: '',
     firstName: '', lastName: '', phone: '', photo: null, bio: '', funFact: '', nickname: '',
-    instagram: '', twitter: '', website: '', belt: 'none', stripes: 0,
+    instagram: '', twitter: '', website: '', biologicalSex: '', belt: 'none', stripes: 0,
     signedName: '', emailWaiverCopy: false,
   });
 
@@ -130,6 +131,7 @@ export function OnboardingScreen({ navigation, route }: any) {
       profilePhoto: data.photo || undefined,
       funFact: data.funFact.trim() || undefined,
       nickname: data.nickname.trim() || undefined,
+      biologicalSex: data.biologicalSex || undefined,
       totalSessions: 0,
       weekStreak: 0,
     };
@@ -184,9 +186,9 @@ export function OnboardingScreen({ navigation, route }: any) {
   };
 
   const stepIcons: (keyof typeof Ionicons.glyphMap)[] = [
-    'lock-closed-outline', 'person-outline', 'camera-outline', 'create-outline',
-    'share-social-outline', 'ribbon-outline', 'document-text-outline',
-    'location-outline', 'checkmark-circle',
+    'lock-closed-outline', 'person-outline', 'call-outline', 'body-outline',
+    'camera-outline', 'create-outline', 'share-social-outline', 'ribbon-outline',
+    'document-text-outline', 'location-outline', 'checkmark-circle',
   ];
 
   const renderStep = () => {
@@ -291,8 +293,66 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 3: Photo
+      // Step 3: Biological Sex
       case 3: return (
+        <View style={styles.stepContent}>
+          <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
+            <Ionicons name="body-outline" size={64} color={colors.gold} />
+          </Animated.View>
+          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Biological Sex</Text>
+          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
+            Used to personalize health tracking features
+          </Text>
+
+          <View style={styles.sexOptions}>
+            {([
+              { value: 'male' as const, label: 'Male', icon: 'male-outline' as const },
+              { value: 'female' as const, label: 'Female', icon: 'female-outline' as const },
+              { value: 'other' as const, label: 'Prefer not to say', icon: 'remove-circle-outline' as const },
+            ]).map((opt) => {
+              const isSelected = data.biologicalSex === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[
+                    styles.sexOption,
+                    {
+                      backgroundColor: isSelected ? colors.gold : colors.surface,
+                      borderColor: isSelected ? colors.gold : 'transparent',
+                    },
+                  ]}
+                  onPress={() => setData({ ...data, biologicalSex: opt.value })}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={opt.icon}
+                    size={28}
+                    color={isSelected ? '#000' : colors.textSecondary}
+                  />
+                  <Text style={[
+                    styles.sexOptionLabel,
+                    { color: isSelected ? '#000' : colors.textPrimary },
+                  ]}>
+                    {opt.label}
+                  </Text>
+                  {isSelected && (
+                    <View style={styles.sexCheck}>
+                      <Ionicons name="checkmark" size={16} color="#000" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={[styles.sexPrivacyNote, { color: colors.textMuted }]}>
+            This information is kept private and is only used to customize health features like cycle tracking and calorie calculations.
+          </Text>
+        </View>
+      );
+
+      // Step 4: Photo
+      case 4: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             {data.photo ? (
@@ -318,8 +378,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 4: Fun fact + auto-suggested nickname
-      case 4: return (
+      // Step 5: Fun fact + auto-suggested nickname
+      case 5: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="sparkles-outline" size={64} color={colors.gold} />
@@ -361,8 +421,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 5: Socials
-      case 5: return (
+      // Step 6: Socials
+      case 6: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="globe-outline" size={64} color={colors.gold} />
@@ -405,8 +465,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 6: Belt + Stripes
-      case 6: return (
+      // Step 7: Belt + Stripes
+      case 7: return (
         <View style={[styles.stepContent, { gap: spacing.md }]}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="ribbon-outline" size={48} color={colors.gold} />
@@ -486,8 +546,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 7: Liability Waiver
-      case 7: return (
+      // Step 8: Liability Waiver
+      case 8: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="document-text-outline" size={64} color={colors.gold} />
@@ -530,8 +590,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 8: Location permission
-      case 8: return (
+      // Step 9: Location permission
+      case 9: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="shield-checkmark-outline" size={64} color={colors.gold} />
@@ -612,8 +672,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 9: Welcome
-      case 9: return (
+      // Step 10: Welcome
+      case 10: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="checkmark-circle" size={80} color={colors.gold} />
@@ -636,7 +696,8 @@ export function OnboardingScreen({ navigation, route }: any) {
       return data.email.includes('@') && pwHasLength && pwHasUpper && pwHasNumber && pwMatch;
     }
     if (step === 1) return data.firstName.trim().length > 0;
-    if (step === 7) {
+    if (step === 3) return data.biologicalSex !== ''; // must select one
+    if (step === 8) {
       // Waiver step — signed name must reasonably match first + last name
       const expected = `${data.firstName} ${data.lastName}`.trim().toLowerCase();
       const signed = data.signedName.trim().toLowerCase();
@@ -864,4 +925,42 @@ const styles = StyleSheet.create({
   skipText: { ...typography.bodySmall, fontWeight: '500' },
   subtleLoginRow: { alignItems: 'center', paddingBottom: spacing.md, paddingTop: spacing.xs },
   subtleLoginText: { fontSize: 12, fontWeight: '400' },
+
+  // ── Biological sex step ──
+  sexOptions: {
+    width: '100%',
+    gap: 10,
+    marginTop: spacing.md,
+  },
+  sexOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    borderWidth: 2,
+  },
+  sexOptionLabel: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  sexCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sexPrivacyNote: {
+    fontSize: 11,
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 16,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    fontStyle: 'italic',
+  },
 });

@@ -19,6 +19,7 @@ import { GpsActivityProvider } from './src/context/GpsActivityContext';
 import { NutritionProvider } from './src/context/NutritionContext';
 import { ProductProvider } from './src/context/ProductContext';
 import { SpinWheelProvider } from './src/context/SpinWheelContext';
+import { CycleTrackerProvider } from './src/context/CycleTrackerContext';
 import { SoundProvider } from './src/context/SoundContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ThemeOverlay } from './src/components/ThemeOverlay';
@@ -109,9 +110,11 @@ export default function App() {
                         <NutritionProvider>
                         <ProductProvider>
                           <SpinWheelProvider>
+                          <CycleTrackerProvider>
                             <TimeClockProvider>
                               <AppContent />
                             </TimeClockProvider>
+                          </CycleTrackerProvider>
                           </SpinWheelProvider>
                         </ProductProvider>
                         </NutritionProvider>
