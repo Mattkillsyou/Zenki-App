@@ -16,6 +16,9 @@ export { AttendanceHistoryScreen } from './AttendanceHistoryScreen';
 export { AdminBroadcastScreen } from './AdminBroadcastScreen';
 export { AdminAnnouncementsScreen } from './AdminAnnouncementsScreen';
 export { AdminAppointmentsScreen } from './AdminAppointmentsScreen';
+export { AdminWorkoutsScreen } from './AdminWorkoutsScreen';
+export { WorkoutScreen } from './WorkoutScreen';
+export { TimerScreen } from './TimerScreen';
 
 // Auth
 export { SignInScreen } from './auth/SignInScreen';

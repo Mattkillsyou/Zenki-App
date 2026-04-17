@@ -20,6 +20,8 @@ import { useSpinWheel } from '../context/SpinWheelContext';
 import { useGamification } from '../context/GamificationContext';
 import { useAnnouncements } from '../context/AnnouncementContext';
 import { useAppointments } from '../context/AppointmentContext';
+import { useWorkouts } from '../context/WorkoutContext';
+import { WOD_FORMAT_LABEL } from '../types/workout';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { getDailyQuote } from '../data/quotes';
 import { getTodaysSchedule } from '../data/schedule';
@@ -67,6 +69,7 @@ export function HomeScreen({ navigation }: any) {
   React.useEffect(() => { recordAppOpen(); }, [recordAppOpen]);
   const { announcements } = useAnnouncements();
   const { myAppointments } = useAppointments();
+  const { todaysWOD } = useWorkouts();
   const dailyQuote = getDailyQuote();
   const hasUnreadNotifications = useHasUnreadNotifications();
 
@@ -236,47 +239,76 @@ export function HomeScreen({ navigation }: any) {
         {/* ─── Member Content ─── */}
         {!isEmployee && (
           <>
-            {/* Today's Schedule — full studio classes + user bookings merged */}
+            {/* Workout of the Day */}
             <FadeInView delay={340} slideUp={16}>
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Today's Schedule</Text>
-                  <TouchableOpacity style={[styles.seeAllButton, { backgroundColor: colors.accentTint }]} onPress={() => navigation.navigate('Schedule')}>
-                    <Text style={[styles.seeAllText, { color: colors.gold }]}>See All</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Workout of the Day</Text>
+                  <TouchableOpacity
+                    style={[styles.seeAllButton, { backgroundColor: colors.accentTint }]}
+                    onPress={() => navigation.navigate('Workout')}
+                  >
+                    <Text style={[styles.seeAllText, { color: colors.gold }]}>View</Text>
                     <Ionicons name="chevron-forward" size={14} color={colors.gold} />
                   </TouchableOpacity>
                 </View>
-                {todaysFullSchedule.length > 0 ? (
-                  todaysFullSchedule.map((cls) => (
-                    <ClassCard
-                      key={cls.key}
-                      name={cls.name}
-                      instructor={cls.instructor}
-                      time={cls.time}
-                      duration={cls.duration}
-                      spotsLeft={cls.spotsLeft}
-                      type={cls.type}
-                      booked={cls.booked}
-                      status={cls.status}
-                      onBook={() => navigation.navigate(cls.booked ? 'Schedule' : 'Book')}
-                    />
-                  ))
-                ) : (
-                  <TouchableOpacity
-                    onPress={() => navigation.navigate('Schedule')}
-                    activeOpacity={0.8}
-                    style={[styles.noBookingsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('Workout')}
+                  activeOpacity={0.85}
+                  style={[styles.wodCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}
+                >
+                  <View style={styles.wodCardHeader}>
+                    <Ionicons name="barbell" size={22} color={colors.gold} />
+                    {todaysWOD && (
+                      <View style={[styles.wodFormatChip, { backgroundColor: colors.goldMuted }]}>
+                        <Text style={[styles.wodFormatChipText, { color: colors.gold }]}>
+                          {WOD_FORMAT_LABEL[todaysWOD.format]}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.wodCardTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                    {todaysWOD?.title ?? 'No WOD posted today'}
+                  </Text>
+                  <Text
+                    style={[styles.wodCardDesc, { color: colors.textSecondary }]}
+                    numberOfLines={3}
                   >
-                    <View style={[styles.noBookingsIcon, { backgroundColor: colors.goldMuted }]}>
-                      <Ionicons name="calendar-outline" size={22} color={colors.gold} />
+                    {todaysWOD?.description ?? 'Your coach hasn\'t posted one yet. Tap to log your own.'}
+                  </Text>
+                  {todaysWOD?.timeCapMinutes ? (
+                    <View style={styles.wodMetaRow}>
+                      <Ionicons name="stopwatch-outline" size={12} color={colors.gold} />
+                      <Text style={[styles.wodMetaText, { color: colors.textMuted }]}>
+                        Time cap: {todaysWOD.timeCapMinutes} min
+                      </Text>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.noBookingsTitle, { color: colors.textPrimary }]}>Rest day</Text>
-                      <Text style={[styles.noBookingsDesc, { color: colors.textSecondary }]}>No classes scheduled today. Browse the week.</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-                  </TouchableOpacity>
-                )}
+                  ) : null}
+                </TouchableOpacity>
+
+                {/* Timer launcher chips */}
+                <View style={styles.timerLauncherRow}>
+                  {(
+                    [
+                      { key: 'round', label: 'Round', icon: 'timer-outline' as const },
+                      { key: 'interval', label: 'HIIT', icon: 'fitness-outline' as const },
+                      { key: 'stopwatch', label: 'Watch', icon: 'stopwatch-outline' as const },
+                    ] as const
+                  ).map((t) => (
+                    <TouchableOpacity
+                      key={t.key}
+                      style={[styles.timerChip, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                      onPress={() => navigation.navigate('Timer', { mode: t.key })}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name={t.icon} size={16} color={colors.gold} />
+                      <Text style={[styles.timerChipLabel, { color: colors.textPrimary }]}>
+                        {t.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
             </FadeInView>
 
@@ -638,4 +670,51 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+
+  // WOD card
+  wodCard: {
+    padding: 18,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    gap: 8,
+    marginHorizontal: spacing.lg,
+  },
+  wodCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  wodFormatChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  wodFormatChipText: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+  },
+  wodCardTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3, textAlign: 'left' },
+  wodCardDesc: { fontSize: 13, lineHeight: 19, textAlign: 'left' },
+  wodMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  wodMetaText: { fontSize: 11, fontWeight: '600' },
+
+  // Timer launcher
+  timerLauncherRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginHorizontal: spacing.lg,
+    marginTop: 10,
+  },
+  timerChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  timerChipLabel: { fontSize: 13, fontWeight: '700' },
 });

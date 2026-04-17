@@ -10,6 +10,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useScreenSoundTheme } from '../context/SoundContext';
+import { useAuth } from '../context/AuthContext';
+import { useAppointments } from '../context/AppointmentContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { ClassCard } from '../components';
 import { DAYS as SCHED_DAYS, SCHEDULES as SHARED_SCHEDULES, PILATES_ENTRY as SHARED_PILATES } from '../data/schedule';
@@ -43,11 +45,49 @@ const SCHEDULES = SHARED_SCHEDULES;
 const PILATES_ENTRY = SHARED_PILATES;
 
 
+function sessionTypeToClassType(s: string): 'jiu-jitsu' | 'muay-thai' | 'pilates' | 'open-mat' {
+  const lc = s.toLowerCase();
+  if (lc.includes('jiu') || lc.includes('bjj')) return 'jiu-jitsu';
+  if (lc.includes('muay') || lc.includes('thai') || lc.includes('kickbox')) return 'muay-thai';
+  if (lc.includes('pilates') || lc.includes('mobility')) return 'pilates';
+  return 'open-mat';
+}
+
+function formatAppointmentTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+function dateForWeekdayIndex(index: number): Date {
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
+  const d = new Date(monday);
+  d.setDate(monday.getDate() + index);
+  return d;
+}
+
 export function ScheduleScreen({ navigation }: any) {
   const { colors } = useTheme();
   useScreenSoundTheme('schedule');
+  const { user } = useAuth();
+  const { myAppointments } = useAppointments();
   const [selectedDay, setSelectedDay] = useState(getTodayIndex());
   const weekDates = getWeekDates();
+
+  // Member's private bookings that fall on the selected weekday of this week
+  const selectedDate = dateForWeekdayIndex(selectedDay);
+  const mySelectedDayBookings = myAppointments
+    .filter((a) => a.memberId === user?.id && a.status !== 'cancelled' && a.status !== 'completed')
+    .filter((a) => {
+      const d = new Date(a.startsAt);
+      return (
+        d.getFullYear() === selectedDate.getFullYear() &&
+        d.getMonth() === selectedDate.getMonth() &&
+        d.getDate() === selectedDate.getDate()
+      );
+    })
+    .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
 
   const dayKey = DAYS[selectedDay];
   const filtered = [...(SCHEDULES[dayKey] || []), PILATES_ENTRY];
@@ -148,6 +188,28 @@ export function ScheduleScreen({ navigation }: any) {
         contentContainerStyle={styles.classListContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Member's private bookings for this day — shown inline above studio classes */}
+        {mySelectedDayBookings.length > 0 && (
+          <View style={styles.mySessionsBlock}>
+            <Text style={[styles.mySessionsLabel, { color: colors.gold }]}>MY PRIVATE SESSIONS</Text>
+            {mySelectedDayBookings.map((a) => (
+              <ClassCard
+                key={`mybooking-${a.id}`}
+                name={a.sessionType}
+                instructor={a.instructor}
+                time={formatAppointmentTime(a.startsAt)}
+                duration={`${a.durationMinutes} min`}
+                spotsLeft={0}
+                type={sessionTypeToClassType(a.sessionType)}
+                booked={true}
+                status={a.status}
+                onBook={() => {}}
+              />
+            ))}
+            <View style={[styles.blockSeparator, { backgroundColor: colors.border }]} />
+          </View>
+        )}
+
         {filtered.map((cls, i) => (
           <React.Fragment key={`${cls.name}-${cls.time}`}>
             <ClassCard {...cls} onBook={() => navigation.navigate('Book')} />
@@ -318,6 +380,14 @@ const styles = StyleSheet.create({
   },
   classList: { flex: 1 },
   classListContent: { paddingHorizontal: 24, gap: 12 },
+  mySessionsBlock: { gap: 12 },
+  mySessionsLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    textAlign: 'center',
+  },
+  blockSeparator: { height: 1, marginVertical: 4 },
   emptyState: { paddingVertical: 48, alignItems: 'center', gap: 16 },
   emptyIcon: { marginBottom: 8 },
   emptyText: { fontSize: 15 },
