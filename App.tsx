@@ -21,6 +21,7 @@ import { ProductProvider } from './src/context/ProductContext';
 import { SpinWheelProvider } from './src/context/SpinWheelContext';
 import { SoundProvider } from './src/context/SoundContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { ThemeOverlay } from './src/components/ThemeOverlay';
 
 function AppContent() {
   const { colors, isDark } = useTheme();
@@ -28,12 +29,12 @@ function AppContent() {
   const navTheme = {
     dark: isDark,
     colors: {
-      primary: colors.gold,
+      primary: colors.accent || colors.gold,
       background: colors.background,
       card: colors.background,
       text: colors.textPrimary,
       border: colors.divider,
-      notification: colors.gold,
+      notification: colors.accent || colors.gold,
     },
     fonts: {
       regular: { fontFamily: 'System', fontWeight: '400' as const },
@@ -47,6 +48,7 @@ function AppContent() {
     <NavigationContainer theme={navTheme}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <RootNavigator />
+      <ThemeOverlay />
     </NavigationContainer>
   );
 
@@ -54,7 +56,14 @@ function AppContent() {
   if (Platform.OS === 'web') {
     return (
       <View style={webStyles.outerContainer}>
-        <View style={[webStyles.phoneFrame, { backgroundColor: colors.background }]}>
+        <View style={[
+          webStyles.phoneFrame,
+          {
+            backgroundColor: colors.background,
+            // @ts-ignore — web-only boxShadow
+            boxShadow: colors.frameGlow || '0 0 80px rgba(0, 255, 65, 0.06), 0 0 0 1px rgba(0,255,65,0.08)',
+          },
+        ]}>
           {content}
         </View>
       </View>
@@ -77,8 +86,6 @@ const webStyles = StyleSheet.create({
     height: '100%',
     maxHeight: 932,
     overflow: 'hidden',
-    // @ts-ignore — web-only boxShadow
-    boxShadow: '0 0 80px rgba(0, 255, 65, 0.06), 0 0 0 1px rgba(0,255,65,0.08)',
     borderRadius: 0,
   },
 });

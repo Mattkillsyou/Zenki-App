@@ -1,0 +1,429 @@
+import React, { useEffect, useRef, useMemo } from 'react';
+import { View, StyleSheet, Platform, Animated, Dimensions } from 'react-native';
+import { useTheme } from '../context/ThemeContext';
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
+/**
+ * ThemeOverlay — renders scanlines, vignette, flicker, particles, and textures
+ * based on the active theme's overlay config.
+ *
+ * Placed in App.tsx as the last child, positioned absolutely over all content.
+ * pointerEvents="none" ensures no touch interception.
+ *
+ * Web-only effects use injected <style> tags. Native falls back to RN Animated.
+ */
+export function ThemeOverlay() {
+  const { overlay, colors } = useTheme();
+
+  // No effects needed
+  if (
+    !overlay.scanlines &&
+    !overlay.flicker &&
+    !overlay.vignette &&
+    overlay.particles === 'none' &&
+    overlay.texture === 'none'
+  ) {
+    return null;
+  }
+
+  return (
+    <View style={styles.container} pointerEvents="none">
+      {overlay.scanlines && <Scanlines color={overlay.scanlineColor} opacity={overlay.scanlineOpacity} />}
+      {overlay.vignette && <Vignette color={overlay.vignetteColor} />}
+      {overlay.flicker && <Flicker intensity={overlay.flickerIntensity} />}
+      {overlay.texture !== 'none' && <Texture type={overlay.texture} opacity={overlay.textureOpacity} />}
+      {overlay.particles !== 'none' && (
+        <Particles type={overlay.particles} color={overlay.particleColor} opacity={overlay.particleOpacity} />
+      )}
+    </View>
+  );
+}
+
+/* ─── Scanlines ──────────────────────────────────────────────────────────── */
+
+function Scanlines({ color, opacity }: { color: string; opacity: number }) {
+  if (Platform.OS === 'web') {
+    return (
+      <View
+        style={[
+          styles.fullScreen,
+          {
+            // @ts-ignore — web-only
+            backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 2px, ${color} 2px, ${color} 4px)`,
+            opacity,
+          },
+        ]}
+      />
+    );
+  }
+  // Native: approximate with semi-transparent bars
+  return (
+    <View style={[styles.fullScreen, { opacity }]}>
+      {Array.from({ length: Math.floor(SCREEN_H / 4) }).map((_, i) => (
+        <View
+          key={i}
+          style={{
+            height: 2,
+            marginBottom: 2,
+            backgroundColor: color,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+/* ─── Vignette ───────────────────────────────────────────────────────────── */
+
+function Vignette({ color }: { color: string }) {
+  if (Platform.OS === 'web') {
+    return (
+      <View
+        style={[
+          styles.fullScreen,
+          {
+            // @ts-ignore — web-only
+            backgroundImage: `radial-gradient(ellipse at center, transparent 50%, ${color} 100%)`,
+          },
+        ]}
+      />
+    );
+  }
+  // Native: approximate with border overlay
+  return (
+    <View
+      style={[
+        styles.fullScreen,
+        {
+          borderWidth: 60,
+          borderColor: color,
+          borderRadius: 0,
+          opacity: 0.5,
+        },
+      ]}
+    />
+  );
+}
+
+/* ─── Flicker ────────────────────────────────────────────────────────────── */
+
+function Flicker({ intensity }: { intensity: number }) {
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const flickerLoop = () => {
+      const dip = intensity + Math.random() * (1 - intensity);
+      const dur = 50 + Math.random() * 200;
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: dip,
+          duration: dur,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: dur * 0.6,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        // Random pause between flickers
+        setTimeout(flickerLoop, 500 + Math.random() * 3000);
+      });
+    };
+    const timer = setTimeout(flickerLoop, 1000);
+    return () => clearTimeout(timer);
+  }, [intensity]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.fullScreen,
+        {
+          backgroundColor: 'rgba(0,0,0,0.15)',
+          opacity: Animated.subtract(1, opacity),
+        },
+      ]}
+    />
+  );
+}
+
+/* ─── Texture ────────────────────────────────────────────────────────────── */
+
+function Texture({ type, opacity }: { type: string; opacity: number }) {
+  if (Platform.OS !== 'web') return null; // texture only on web
+
+  let backgroundStyle: any = {};
+
+  switch (type) {
+    case 'noise':
+      // SVG filter noise via inline data URI
+      backgroundStyle = {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='${opacity}'/%3E%3C/svg%3E")`,
+        backgroundSize: '200px 200px',
+      };
+      break;
+    case 'grid':
+      backgroundStyle = {
+        backgroundImage: `
+          repeating-linear-gradient(0deg, rgba(255,255,255,${opacity}) 0px, transparent 1px, transparent 40px),
+          repeating-linear-gradient(90deg, rgba(255,255,255,${opacity}) 0px, transparent 1px, transparent 40px)
+        `,
+      };
+      break;
+    case 'hex':
+      // Simple hex pattern via repeating SVG
+      backgroundStyle = {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg width='28' height='49' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M14 0l14 24.5L14 49 0 24.5z' fill='none' stroke='rgba(255,255,255,${opacity})' stroke-width='0.5'/%3E%3C/svg%3E")`,
+        backgroundSize: '28px 49px',
+      };
+      break;
+    case 'paper':
+      backgroundStyle = {
+        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3CfeColorMatrix values='0 0 0 0 0.95 0 0 0 0 0.92 0 0 0 0 0.87 0 0 0 ${opacity} 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)'/%3E%3C/svg%3E")`,
+        backgroundSize: '100px 100px',
+      };
+      break;
+    default:
+      return null;
+  }
+
+  return <View style={[styles.fullScreen, backgroundStyle]} />;
+}
+
+/* ─── Particles ──────────────────────────────────────────────────────────── */
+
+function Particles({ type, color, opacity }: { type: string; color: string; opacity: number }) {
+  switch (type) {
+    case 'matrix-rain':
+      return <MatrixRain color={color} opacity={opacity} />;
+    case 'rain-drops':
+      return <RainDrops color={color} opacity={opacity} />;
+    case 'static-noise':
+      return <StaticNoise color={color} opacity={opacity} />;
+    case 'data-streams':
+      return <DataStreams color={color} opacity={opacity} />;
+    default:
+      return null;
+  }
+}
+
+/* ─── Matrix Rain (Web Canvas) ───────────────────────────────────────────── */
+
+function MatrixRain({ color, opacity }: { color: string; opacity: number }) {
+  const canvasRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+
+    const styleId = 'zenki-matrix-rain';
+    let existing = document.getElementById(styleId);
+    if (existing) existing.remove();
+
+    const canvas = document.createElement('canvas');
+    canvas.id = styleId;
+    canvas.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 99999; opacity: ${opacity};
+    `;
+    document.body.appendChild(canvas);
+    canvasRef.current = canvas;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    const fontSize = 14;
+    const columns = Math.floor(canvas.width / fontSize);
+    const drops: number[] = Array(columns).fill(1);
+    const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEF';
+
+    let animId: number;
+    const draw = () => {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = color;
+      ctx.font = `${fontSize}px monospace`;
+
+      for (let i = 0; i < drops.length; i++) {
+        const char = chars[Math.floor(Math.random() * chars.length)];
+        ctx.fillText(char, i * fontSize, drops[i] * fontSize);
+        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+          drops[i] = 0;
+        }
+        drops[i]++;
+      }
+      animId = requestAnimationFrame(draw);
+    };
+    animId = requestAnimationFrame(draw);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener('resize', resize);
+      canvas.remove();
+    };
+  }, [color, opacity]);
+
+  return null; // Rendered via DOM canvas
+}
+
+/* ─── Rain Drops ─────────────────────────────────────────────────────────── */
+
+function RainDrops({ color, opacity }: { color: string; opacity: number }) {
+  const drops = useMemo(() => {
+    return Array.from({ length: 50 }).map((_, i) => ({
+      key: i,
+      x: Math.random() * 100,
+      length: 20 + Math.random() * 40,
+      speed: 800 + Math.random() * 1200,
+      delay: Math.random() * 2000,
+    }));
+  }, []);
+
+  return (
+    <View style={[styles.fullScreen, { opacity }]}>
+      {drops.map((drop) => (
+        <RainDrop key={drop.key} drop={drop} color={color} />
+      ))}
+    </View>
+  );
+}
+
+function RainDrop({ drop, color }: { drop: any; color: string }) {
+  const translateY = useRef(new Animated.Value(-drop.length)).current;
+
+  useEffect(() => {
+    const animate = () => {
+      translateY.setValue(-drop.length);
+      Animated.timing(translateY, {
+        toValue: SCREEN_H + drop.length,
+        duration: drop.speed,
+        useNativeDriver: true,
+      }).start(() => animate());
+    };
+    const timer = setTimeout(animate, drop.delay);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <Animated.View
+      style={{
+        position: 'absolute',
+        left: `${drop.x}%`,
+        width: 1,
+        height: drop.length,
+        backgroundColor: color,
+        transform: [{ translateY }, { rotate: '3deg' }],
+      }}
+    />
+  );
+}
+
+/* ─── Static Noise ───────────────────────────────────────────────────────── */
+
+function StaticNoise({ color, opacity }: { color: string; opacity: number }) {
+  if (Platform.OS !== 'web') return null;
+
+  return (
+    <View
+      style={[
+        styles.fullScreen,
+        {
+          opacity,
+          // @ts-ignore — web-only SVG filter
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' seed='${Math.floor(Math.random() * 100)}'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.55 0 0 0 0 0 0 0 0 0.3 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23s)'/%3E%3C/svg%3E")`,
+          backgroundSize: '256px 256px',
+        },
+      ]}
+    />
+  );
+}
+
+/* ─── Data Streams (Ghost in the Shell) ──────────────────────────────────── */
+
+function DataStreams({ color, opacity }: { color: string; opacity: number }) {
+  const streams = useMemo(() => {
+    const items = [
+      '0x4F2A', '攻殻', '01101', 'FFAE', '機動隊', '0xB7C3', '10010',
+      '0x9D1E', 'メモリ', '11010', '0xA4F2', 'ゴースト', '01011',
+      '0x3B8C', 'サイバー', '10101', '0xE6D4', 'ネット', '00110',
+    ];
+    return Array.from({ length: 15 }).map((_, i) => ({
+      key: i,
+      text: items[i % items.length],
+      x: 5 + Math.random() * 90,
+      speed: 8000 + Math.random() * 12000,
+      delay: Math.random() * 5000,
+      size: 10 + Math.random() * 6,
+    }));
+  }, []);
+
+  return (
+    <View style={[styles.fullScreen, { opacity }]}>
+      {streams.map((s) => (
+        <DataStreamItem key={s.key} stream={s} color={color} />
+      ))}
+    </View>
+  );
+}
+
+function DataStreamItem({ stream, color }: { stream: any; color: string }) {
+  const translateY = useRef(new Animated.Value(SCREEN_H + 20)).current;
+  const fade = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animate = () => {
+      translateY.setValue(SCREEN_H + 20);
+      fade.setValue(0);
+      Animated.parallel([
+        Animated.timing(translateY, {
+          toValue: -40,
+          duration: stream.speed,
+          useNativeDriver: true,
+        }),
+        Animated.sequence([
+          Animated.timing(fade, { toValue: 1, duration: stream.speed * 0.2, useNativeDriver: true }),
+          Animated.timing(fade, { toValue: 1, duration: stream.speed * 0.6, useNativeDriver: true }),
+          Animated.timing(fade, { toValue: 0, duration: stream.speed * 0.2, useNativeDriver: true }),
+        ]),
+      ]).start(() => animate());
+    };
+    const timer = setTimeout(animate, stream.delay);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <Animated.Text
+      style={{
+        position: 'absolute',
+        left: `${stream.x}%`,
+        fontSize: stream.size,
+        color,
+        opacity: fade,
+        transform: [{ translateY }],
+        fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
+      }}
+    >
+      {stream.text}
+    </Animated.Text>
+  );
+}
+
+/* ─── Styles ─────────────────────────────────────────────────────────────── */
+
+const styles = StyleSheet.create({
+  container: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 99999,
+    overflow: 'hidden',
+  },
+  fullScreen: {
+    ...StyleSheet.absoluteFillObject,
+  },
+});

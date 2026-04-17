@@ -15,6 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
+import { ALL_THEMES } from '../theme/themes';
+import type { ThemeDefinition } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { ADMIN_PASSWORD_OVERRIDE_KEY } from '../data/members';
@@ -27,11 +29,7 @@ const SOUND_THEME_KEY = '@zenki_sound_theme';
 type UnitPref = 'imperial' | 'metric';
 type SoundTheme = 'default' | 'retro' | 'zen' | 'pipboy';
 
-const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { value: 'light', label: 'Light', icon: 'sunny-outline' },
-  { value: 'dark', label: 'Dark', icon: 'moon-outline' },
-  { value: 'system', label: 'System', icon: 'phone-portrait-outline' },
-];
+// Old THEME_OPTIONS removed — replaced by visual theme picker grid using ALL_THEMES
 
 export function SettingsScreen({ navigation }: any) {
   const { colors, mode, setMode } = useTheme();
@@ -186,32 +184,44 @@ export function SettingsScreen({ navigation }: any) {
           <View style={styles.backButton} />
         </View>
 
-        {/* Appearance */}
-        {renderSectionHeader('APPEARANCE')}
-        <View style={[styles.themeToggle, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
-          {THEME_OPTIONS.map((opt, idx) => {
-            const isActive = mode === opt.value;
+        {/* Visual Theme Picker */}
+        {renderSectionHeader('VISUAL THEME')}
+        <View style={styles.themeGrid}>
+          {ALL_THEMES.map((t: ThemeDefinition) => {
+            const isActive = mode === t.id;
+            const c = t.colors;
             return (
               <TouchableOpacity
-                key={opt.value}
+                key={t.id}
                 style={[
-                  styles.themeOption,
-                  { borderRightWidth: idx < THEME_OPTIONS.length - 1 ? 1 : 0, borderRightColor: colors.border },
-                  isActive && { backgroundColor: colors.gold + '15', borderColor: colors.gold },
+                  styles.themeCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: isActive ? colors.accent : colors.border,
+                    borderWidth: isActive ? 2 : 1,
+                  },
                 ]}
-                onPress={() => setMode(opt.value)}
+                onPress={() => { play('navigate'); setMode(t.id as ThemeMode); }}
+                activeOpacity={0.7}
               >
-                <Ionicons
-                  name={opt.icon}
-                  size={20}
-                  color={isActive ? colors.gold : colors.textMuted}
-                />
-                <Text style={[
-                  styles.themeOptionLabel,
-                  { color: isActive ? colors.gold : colors.textMuted, fontWeight: isActive ? '700' : '500' },
-                ]}>
-                  {opt.label}
+                {/* Color swatch — 4 circles */}
+                <View style={styles.themeSwatches}>
+                  <View style={[styles.themeSwatch, { backgroundColor: c.background }]} />
+                  <View style={[styles.themeSwatch, { backgroundColor: c.accent || c.gold }]} />
+                  <View style={[styles.themeSwatch, { backgroundColor: c.textPrimary }]} />
+                  <View style={[styles.themeSwatch, { backgroundColor: c.surface }]} />
+                </View>
+                <Text style={[styles.themeCardName, { color: isActive ? colors.accent : colors.textPrimary }]} numberOfLines={1}>
+                  {t.name}
                 </Text>
+                <Text style={[styles.themeCardDesc, { color: colors.textMuted }]} numberOfLines={1}>
+                  {t.description}
+                </Text>
+                {isActive && (
+                  <View style={[styles.themeCheck, { backgroundColor: colors.accent }]}>
+                    <Ionicons name="checkmark" size={10} color={colors.textInverse} />
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -620,6 +630,54 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     marginBottom: spacing.sm,
     opacity: 0.7,
+  },
+
+  // ── Theme picker grid ──
+  themeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: spacing.lg,
+  },
+  themeCard: {
+    width: '31%',
+    borderRadius: 14,
+    padding: 10,
+    alignItems: 'center',
+    gap: 4,
+    position: 'relative',
+  },
+  themeSwatches: {
+    flexDirection: 'row',
+    gap: 3,
+    marginBottom: 4,
+  },
+  themeSwatch: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  themeCardName: {
+    fontSize: 11,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  themeCardDesc: {
+    fontSize: 8,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  themeCheck: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // ── Unit toggle ──

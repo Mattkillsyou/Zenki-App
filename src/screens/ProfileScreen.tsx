@@ -27,8 +27,8 @@ import { useHeartRate } from '../context/HeartRateContext';
 import { formatCount } from '../utils/formatCount';
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { value: 'light',  label: 'Light',  icon: 'sunny-outline' },
-  { value: 'dark',   label: 'Dark',   icon: 'moon-outline' },
+  { value: 'clean-light',  label: 'Light',  icon: 'sunny-outline' },
+  { value: 'clean-dark',   label: 'Dark',   icon: 'moon-outline' },
   { value: 'system', label: 'Auto',   icon: 'phone-portrait-outline' },
 ];
 

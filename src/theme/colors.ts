@@ -86,6 +86,33 @@ export interface ThemeColors {
 
   // Interactive
   accentTint: string;
+
+  // === THEME METADATA FIELDS ===
+  /** Primary accent color for this theme */
+  accent: string;
+  accentDim: string;
+  accentDark: string;
+  /** Map tile CSS filter (web only) */
+  mapTileFilter: string;
+  /** Route polyline color on map */
+  mapRouteColor: string;
+  /** Glow/bloom CSS text-shadow (web only) — empty string for no glow */
+  textGlow: string;
+  textGlowSubtle: string;
+  /** Box glow CSS box-shadow (web only) */
+  boxGlow: string;
+  /** Web frame glow for App.tsx outer container */
+  frameGlow: string;
+  /** Font family override — empty string means use system default */
+  fontFamily: string;
+  /** Font family for native (React Native fontFamily prop) */
+  fontFamilyNative: string;
+  /** Whether headers should be forced UPPERCASE */
+  uppercaseHeaders: boolean;
+  /** Loading spinner color */
+  spinner: string;
+  /** Switch track active color */
+  switchTrack: string;
 }
 
 export const darkColors: ThemeColors = {
@@ -139,6 +166,22 @@ export const darkColors: ThemeColors = {
 
   // Interactive
   accentTint: 'rgba(212, 160, 23, 0.08)',
+
+  // Theme metadata
+  accent: '#D4A017',
+  accentDim: '#B8890F',
+  accentDark: '#8A6A0A',
+  mapTileFilter: '',
+  mapRouteColor: '#D4A017',
+  textGlow: '',
+  textGlowSubtle: '',
+  boxGlow: '',
+  frameGlow: '0 0 80px rgba(212, 160, 23, 0.06), 0 0 0 1px rgba(255,255,255,0.08)',
+  fontFamily: '',
+  fontFamilyNative: 'System',
+  uppercaseHeaders: false,
+  spinner: '#D4A017',
+  switchTrack: '#D4A017',
 };
 
 export const lightColors: ThemeColors = {
@@ -184,9 +227,61 @@ export const lightColors: ThemeColors = {
   tabBarBorder: 'rgba(0, 0, 0, 0.08)',
 
   accentTint: 'rgba(184, 137, 15, 0.06)',
+
+  // Theme metadata
+  accent: '#B8890F',
+  accentDim: '#8A6A0A',
+  accentDark: '#5C4607',
+  mapTileFilter: '',
+  mapRouteColor: '#B8890F',
+  textGlow: '',
+  textGlowSubtle: '',
+  boxGlow: '',
+  frameGlow: '0 0 80px rgba(184, 137, 15, 0.06), 0 0 0 1px rgba(0,0,0,0.08)',
+  fontFamily: '',
+  fontFamilyNative: 'System',
+  uppercaseHeaders: false,
+  spinner: '#B8890F',
+  switchTrack: '#B8890F',
 };
 
 export const colors = darkColors;
+
+// ─── Theme overlay configuration ───
+export interface ThemeOverlayConfig {
+  scanlines: boolean;
+  scanlineColor: string;
+  scanlineOpacity: number;
+  flicker: boolean;
+  flickerIntensity: number;
+  vignette: boolean;
+  vignetteColor: string;
+  particles: 'none' | 'matrix-rain' | 'rain-drops' | 'static-noise' | 'data-streams' | 'dust' | 'dna-helix';
+  particleColor: string;
+  particleOpacity: number;
+  texture: 'none' | 'noise' | 'grid' | 'paper' | 'hex';
+  textureOpacity: number;
+}
+
+export const NO_OVERLAY: ThemeOverlayConfig = {
+  scanlines: false, scanlineColor: '', scanlineOpacity: 0,
+  flicker: false, flickerIntensity: 1,
+  vignette: false, vignetteColor: '',
+  particles: 'none', particleColor: '', particleOpacity: 0,
+  texture: 'none', textureOpacity: 0,
+};
+
+export interface ThemeDefinition {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  isDark: boolean;
+  colors: ThemeColors;
+  overlay: ThemeOverlayConfig;
+  soundTheme: string;
+  webFontUrl?: string;
+}
 
 // ─── Pip-Boy terminal palette (Fallout) ───
 // Used ONLY by ActivityTrackerScreen — does not affect other screens.
