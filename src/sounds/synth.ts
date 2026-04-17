@@ -83,7 +83,8 @@ export type SoundTheme =
   | 'alien'
   | 'jurassic'
   | 'ghost'
-  | 'bladerunner';
+  | 'bladerunner'
+  | 'sheikah';
 
 export type SoundEvent = 'tap' | 'success' | 'error' | 'navigate' | 'open' | 'close';
 
@@ -112,6 +113,7 @@ export function playSynth(theme: SoundTheme, event: SoundEvent) {
     case 'jurassic':    return jurassicSound(ctx, event);
     case 'ghost':       return ghostSound(ctx, event);
     case 'bladerunner': return bladerunnerSound(ctx, event);
+    case 'sheikah':     return sheikahSound(ctx, event);
     default:            return defaultSound(ctx, event);
   }
 }
@@ -222,97 +224,114 @@ function defaultSound(ctx: any, e: SoundEvent) {
 
 // ──────────────────── THEMED SOUNDS ────────────────────────
 
+// Matrix: 1990s hacker terminal — square wave blips and buzzes
 function matrixSound(ctx: any, e: SoundEvent) {
   switch (e) {
-    case 'tap':      return chord(ctx, [{ freq: 2000, wave: 'square', duration: 0.02, gain: 0.05 }]);
-    case 'success':  return chord(ctx, [{ freq: 800, wave: 'sine', duration: 0.15, gain: 0.08, sweep: 1200 }]);
-    case 'error':    return chord(ctx, [{ freq: 300, wave: 'sawtooth', duration: 0.20, gain: 0.10, sweep: 100 }]);
-    case 'navigate': return chord(ctx, [{ freq: 600, wave: 'sine', duration: 0.10, gain: 0.06, sweep: 1200 }]);
-    case 'open':     return chord(ctx, [{ freq: 1000, wave: 'sine', duration: 0.20, gain: 0.07, sweep: 400 }]);
-    case 'close':    return chord(ctx, [{ freq: 400, wave: 'sine', duration: 0.15, gain: 0.07, sweep: 1000 }]);
-    default:         return chord(ctx, [{ freq: 1500, wave: 'square', duration: 0.02, gain: 0.04 }]);
+    case 'tap':      return chord(ctx, [{ freq: 800, wave: 'square', duration: 0.04, gain: 0.08 }]);
+    case 'success':  return chord(ctx, [
+      { freq: 400, wave: 'square', duration: 0.06, gain: 0.10 },
+      { freq: 600, wave: 'square', duration: 0.06, gain: 0.09, delay: 0.05 },
+      { freq: 900, wave: 'square', duration: 0.10, gain: 0.08, delay: 0.10 },
+    ]);
+    case 'error':    return chord(ctx, [{ freq: 120, wave: 'sawtooth', duration: 0.25, gain: 0.14, sweep: 60 }]);
+    case 'navigate': return chord(ctx, [{ freq: 550, wave: 'square', duration: 0.05, gain: 0.07 }]);
+    case 'open':     return chord(ctx, [{ freq: 300, wave: 'square', duration: 0.12, gain: 0.09, sweep: 800 }]);
+    case 'close':    return chord(ctx, [{ freq: 700, wave: 'square', duration: 0.10, gain: 0.08, sweep: 200 }]);
+    default:         return chord(ctx, [{ freq: 600, wave: 'square', duration: 0.03, gain: 0.06 }]);
   }
 }
 
+// Nostromo: slow, heavy, institutional — low thuds and slow sweeps
 function alienSound(ctx: any, e: SoundEvent) {
   switch (e) {
-    case 'tap':      return chord(ctx, [{ freq: 400, wave: 'square', duration: 0.04, gain: 0.08 }]);
+    case 'tap':      return chord(ctx, [{ freq: 180, wave: 'triangle', duration: 0.08, gain: 0.12 }]);
     case 'success':  return chord(ctx, [
-      { freq: 600, wave: 'sine', duration: 0.10, gain: 0.08 },
-      { freq: 800, wave: 'sine', duration: 0.10, gain: 0.07, delay: 0.10 },
+      { freq: 220, wave: 'sine', duration: 0.20, gain: 0.10 },
+      { freq: 440, wave: 'sine', duration: 0.25, gain: 0.09, delay: 0.15 },
     ]);
-    case 'error':    return chord(ctx, [
-      { freq: 200, wave: 'sawtooth', duration: 0.10, gain: 0.12 },
-      { freq: 200, wave: 'sawtooth', duration: 0.10, gain: 0.12, delay: 0.12 },
-      { freq: 200, wave: 'sawtooth', duration: 0.10, gain: 0.12, delay: 0.24 },
-    ]);
-    case 'navigate': return chord(ctx, [{ freq: 1200, wave: 'sine', duration: 0.15, gain: 0.05, sweep: 800 }]);
-    case 'open':     return chord(ctx, [{ freq: 80, wave: 'sine', duration: 0.30, gain: 0.10, sweep: 40 }]);
-    case 'close':    return chord(ctx, [{ freq: 40, wave: 'sine', duration: 0.30, gain: 0.10, sweep: 80 }]);
-    default:         return chord(ctx, [{ freq: 500, wave: 'square', duration: 0.03, gain: 0.06 }]);
+    case 'error':    return chord(ctx, [{ freq: 180, wave: 'sawtooth', duration: 0.40, gain: 0.16, sweep: 60 }]);
+    case 'navigate': return chord(ctx, [{ freq: 300, wave: 'triangle', duration: 0.06, gain: 0.08 }]);
+    case 'open':     return chord(ctx, [{ freq: 150, wave: 'sine', duration: 0.25, gain: 0.10, sweep: 400 }]);
+    case 'close':    return chord(ctx, [{ freq: 350, wave: 'sine', duration: 0.20, gain: 0.09, sweep: 100 }]);
+    default:         return chord(ctx, [{ freq: 200, wave: 'triangle', duration: 0.05, gain: 0.07 }]);
   }
 }
 
+// Jurassic Park: clean workstation — digital clicks and chimes
 function jurassicSound(ctx: any, e: SoundEvent) {
   switch (e) {
-    case 'tap':      return chord(ctx, [{ freq: 3000, wave: 'square', duration: 0.015, gain: 0.07 }]);
+    case 'tap':      return chord(ctx, [{ freq: 1000, wave: 'triangle', duration: 0.03, gain: 0.09 }]);
     case 'success':  return chord(ctx, [
-      { freq: 880, wave: 'sine', duration: 0.08, gain: 0.08 },
-      { freq: 1760, wave: 'sine', duration: 0.08, gain: 0.06, delay: 0.06 },
+      { freq: 523, wave: 'sine', duration: 0.12, gain: 0.11 },
+      { freq: 659, wave: 'sine', duration: 0.12, gain: 0.10, delay: 0.08 },
+      { freq: 784, wave: 'sine', duration: 0.18, gain: 0.09, delay: 0.16 },
     ]);
-    case 'error':    return chord(ctx, [{ freq: 220, wave: 'square', duration: 0.40, gain: 0.12 }]);
-    case 'navigate': return chord(ctx, [{ freq: 1046, wave: 'sine', duration: 0.08, gain: 0.06 }]);
-    case 'open':     return chord(ctx, [{ freq: 200, wave: 'sawtooth', duration: 0.20, gain: 0.06, sweep: 400, detune: 50 }]);
-    case 'close':    return chord(ctx, [{ freq: 1500, wave: 'sine', duration: 0.01, gain: 0.06 }]);
-    default:         return chord(ctx, [{ freq: 2500, wave: 'square', duration: 0.01, gain: 0.05 }]);
+    case 'error':    return chord(ctx, [
+      { freq: 440, wave: 'triangle', duration: 0.10, gain: 0.13 },
+      { freq: 330, wave: 'triangle', duration: 0.14, gain: 0.12, delay: 0.08 },
+    ]);
+    case 'navigate': return chord(ctx, [{ freq: 800, wave: 'triangle', duration: 0.03, gain: 0.07 }]);
+    case 'open':     return chord(ctx, [{ freq: 400, wave: 'sine', duration: 0.10, gain: 0.08, sweep: 700 }]);
+    case 'close':    return chord(ctx, [{ freq: 600, wave: 'sine', duration: 0.08, gain: 0.07, sweep: 300 }]);
+    default:         return chord(ctx, [{ freq: 700, wave: 'triangle', duration: 0.02, gain: 0.06 }]);
   }
 }
 
+// Ghost in the Shell: ethereal crystalline — detuned sines, airy
 function ghostSound(ctx: any, e: SoundEvent) {
   switch (e) {
-    case 'tap':      return chord(ctx, [{ freq: 1400, wave: 'sine', duration: 0.10, gain: 0.04, release: 0.20 }]);
+    case 'tap':      return chord(ctx, [
+      { freq: 1200, wave: 'sine', duration: 0.08, gain: 0.07 },
+      { freq: 1205, wave: 'sine', duration: 0.08, gain: 0.04, detune: 8 },
+    ]);
     case 'success':  return chord(ctx, [
-      { freq: 880,  wave: 'sine', duration: 0.08, gain: 0.04 },
-      { freq: 1320, wave: 'sine', duration: 0.08, gain: 0.035, delay: 0.06 },
-      { freq: 1760, wave: 'sine', duration: 0.08, gain: 0.03, delay: 0.12 },
+      { freq: 440, wave: 'sine', duration: 0.30, gain: 0.08, sweep: 550 },
+      { freq: 660, wave: 'sine', duration: 0.30, gain: 0.07, sweep: 770, delay: 0.03 },
+      { freq: 880, wave: 'sine', duration: 0.35, gain: 0.06, sweep: 990, delay: 0.06 },
     ]);
     case 'error':    return chord(ctx, [
-      { freq: 150, wave: 'sawtooth', duration: 0.10, gain: 0.08 },
-      { freq: 50,  wave: 'sine', duration: 0.10, gain: 0.06 },
+      { freq: 200, wave: 'sine', duration: 0.20, gain: 0.12 },
+      { freq: 203, wave: 'sine', duration: 0.20, gain: 0.10 },
     ]);
-    case 'navigate': return chord(ctx, [
-      { freq: 2000, wave: 'sine', duration: 0.12, gain: 0.04, sweep: 800 },
-      { freq: 2005, wave: 'sine', duration: 0.12, gain: 0.035, sweep: 795, detune: 5 },
-    ]);
-    case 'open':     return chord(ctx, [
-      { freq: 600,  wave: 'triangle', duration: 0.06, gain: 0.04 },
-      { freq: 900,  wave: 'triangle', duration: 0.06, gain: 0.035, delay: 0.05 },
-      { freq: 1200, wave: 'triangle', duration: 0.06, gain: 0.03, delay: 0.10 },
-    ]);
-    case 'close':    return chord(ctx, [
-      { freq: 1200, wave: 'triangle', duration: 0.06, gain: 0.04 },
-      { freq: 900,  wave: 'triangle', duration: 0.06, gain: 0.035, delay: 0.05 },
-      { freq: 600,  wave: 'triangle', duration: 0.06, gain: 0.03, delay: 0.10 },
-    ]);
-    default:         return chord(ctx, [{ freq: 1200, wave: 'sine', duration: 0.06, gain: 0.03 }]);
+    case 'navigate': return chord(ctx, [{ freq: 900, wave: 'sine', duration: 0.06, gain: 0.06 }]);
+    case 'open':     return chord(ctx, [{ freq: 300, wave: 'sine', duration: 0.20, gain: 0.07, sweep: 900 }]);
+    case 'close':    return chord(ctx, [{ freq: 800, wave: 'sine', duration: 0.18, gain: 0.06, sweep: 250 }]);
+    default:         return chord(ctx, [{ freq: 1000, wave: 'sine', duration: 0.05, gain: 0.04 }]);
   }
 }
 
+// Blade Runner: Vangelis pads — warm sine chords, slow attacks
 function bladerunnerSound(ctx: any, e: SoundEvent) {
   switch (e) {
-    case 'tap':      return chord(ctx, [{ freq: 2500, wave: 'sine', duration: 0.03, gain: 0.06, sweep: 1200 }]);
+    case 'tap':      return chord(ctx, [{ freq: 250, wave: 'sine', duration: 0.10, gain: 0.08, attack: 0.02 }]);
     case 'success':  return chord(ctx, [
-      { freq: 440, wave: 'sine', duration: 0.30, gain: 0.06, attack: 0.10, release: 0.15 },
-      { freq: 554, wave: 'sine', duration: 0.30, gain: 0.05, attack: 0.10, release: 0.15 },
-      { freq: 659, wave: 'sine', duration: 0.30, gain: 0.04, attack: 0.10, release: 0.15 },
+      { freq: 261, wave: 'sine', duration: 0.40, gain: 0.08, attack: 0.05 },
+      { freq: 329, wave: 'sine', duration: 0.40, gain: 0.07, attack: 0.05, delay: 0.02 },
+      { freq: 392, wave: 'sine', duration: 0.50, gain: 0.06, attack: 0.05, delay: 0.04 },
+    ]);
+    case 'error':    return chord(ctx, [{ freq: 150, wave: 'sine', duration: 0.35, gain: 0.12, attack: 0.03, sweep: 100 }]);
+    case 'navigate': return chord(ctx, [{ freq: 700, wave: 'sine', duration: 0.08, gain: 0.06, attack: 0.01 }]);
+    case 'open':     return chord(ctx, [{ freq: 200, wave: 'sine', duration: 0.30, gain: 0.07, attack: 0.06, sweep: 500 }]);
+    case 'close':    return chord(ctx, [{ freq: 450, wave: 'sine', duration: 0.25, gain: 0.06, attack: 0.04, sweep: 150 }]);
+    default:         return chord(ctx, [{ freq: 300, wave: 'sine', duration: 0.06, gain: 0.05 }]);
+  }
+}
+
+// Sheikah Slate: clean musical chimes — bright sine bells
+function sheikahSound(ctx: any, e: SoundEvent) {
+  switch (e) {
+    case 'tap':      return chord(ctx, [{ freq: 880, wave: 'sine', duration: 0.10, gain: 0.09 }]);
+    case 'success':  return chord(ctx, [
+      { freq: 659, wave: 'sine', duration: 0.18, gain: 0.10 },
+      { freq: 988, wave: 'sine', duration: 0.25, gain: 0.09, delay: 0.10 },
     ]);
     case 'error':    return chord(ctx, [
-      { freq: 110, wave: 'triangle', duration: 0.20, gain: 0.10 },
-      { freq: 220, wave: 'triangle', duration: 0.20, gain: 0.06 },
+      { freq: 330, wave: 'triangle', duration: 0.18, gain: 0.11 },
+      { freq: 349, wave: 'triangle', duration: 0.18, gain: 0.09 },
     ]);
-    case 'navigate': return chord(ctx, [{ freq: 330, wave: 'sawtooth', duration: 0.08, gain: 0.04 }]);
-    case 'open':     return chord(ctx, [{ freq: 220, wave: 'sine', duration: 0.25, gain: 0.06, sweep: 440, attack: 0.10 }]);
-    case 'close':    return chord(ctx, [{ freq: 440, wave: 'sine', duration: 0.20, gain: 0.06, sweep: 220 }]);
-    default:         return chord(ctx, [{ freq: 400, wave: 'sine', duration: 0.05, gain: 0.05 }]);
+    case 'navigate': return chord(ctx, [{ freq: 1047, wave: 'sine', duration: 0.06, gain: 0.07 }]);
+    case 'open':     return chord(ctx, [{ freq: 523, wave: 'sine', duration: 0.15, gain: 0.08, sweep: 880 }]);
+    case 'close':    return chord(ctx, [{ freq: 784, wave: 'sine', duration: 0.12, gain: 0.07, sweep: 440 }]);
+    default:         return chord(ctx, [{ freq: 700, wave: 'sine', duration: 0.05, gain: 0.06 }]);
   }
 }

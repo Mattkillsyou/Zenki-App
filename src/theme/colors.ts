@@ -270,7 +270,7 @@ export interface ThemeOverlayConfig {
   flickerIntensity: number;
   vignette: boolean;
   vignetteColor: string;
-  particles: 'none' | 'matrix-rain' | 'rain-drops' | 'static-noise' | 'data-streams' | 'dust' | 'dna-helix';
+  particles: 'none' | 'matrix-rain' | 'rain-drops' | 'static-noise' | 'data-streams' | 'dust' | 'dna-helix' | 'sheikah-runes';
   particleColor: string;
   particleOpacity: number;
   texture: 'none' | 'noise' | 'grid' | 'paper' | 'hex';

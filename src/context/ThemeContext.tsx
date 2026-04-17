@@ -12,7 +12,8 @@ export type ThemeMode =
   | 'alien'
   | 'jurassic'
   | 'ghost'
-  | 'bladerunner';
+  | 'bladerunner'
+  | 'sheikah';
 
 interface ThemeContextValue {
   mode: ThemeMode;

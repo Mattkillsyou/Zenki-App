@@ -203,6 +203,8 @@ function Particles({ type, color, opacity }: { type: string; color: string; opac
       return <StaticNoise color={color} opacity={opacity} />;
     case 'data-streams':
       return <DataStreams color={color} opacity={opacity} />;
+    case 'sheikah-runes':
+      return <SheikahRunes color={color} opacity={opacity} />;
     default:
       return null;
   }
@@ -412,6 +414,126 @@ function DataStreamItem({ stream, color }: { stream: any; color: string }) {
     >
       {stream.text}
     </Animated.Text>
+  );
+}
+
+/* ─── Sheikah Runes (Zelda BotW) ─────────────────────────────────────────── */
+
+function SheikahRunes({ color, opacity }: { color: string; opacity: number }) {
+  const runes = useMemo(() => {
+    const shapes: ('circle' | 'diamond' | 'triangle')[] = ['circle', 'diamond', 'triangle'];
+    return Array.from({ length: 12 }).map((_, i) => ({
+      key: i,
+      shape: shapes[i % 3],
+      x: 5 + Math.random() * 90,
+      startY: 33 + Math.random() * 67, // lower 2/3 of screen
+      size: 4 + Math.random() * 4,
+      speed: 8000 + Math.random() * 7000, // 8-15 seconds
+      delay: Math.random() * 5000,
+      rotationSpeed: 20000 + Math.random() * 10000, // 20-30 seconds per rotation
+    }));
+  }, []);
+
+  return (
+    <View style={[styles.fullScreen, { opacity }]}>
+      {runes.map((r) => (
+        <SheikahRune key={r.key} rune={r} color={color} />
+      ))}
+    </View>
+  );
+}
+
+function SheikahRune({ rune, color }: { rune: any; color: string }) {
+  const translateY = useRef(new Animated.Value(0)).current;
+  const fade = useRef(new Animated.Value(0)).current;
+  const rotation = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Slow continuous rotation
+    Animated.loop(
+      Animated.timing(rotation, {
+        toValue: 1,
+        duration: rune.rotationSpeed,
+        useNativeDriver: true,
+      }),
+    ).start();
+
+    // Float upward cycle
+    const animate = () => {
+      const startPx = (rune.startY / 100) * SCREEN_H;
+      translateY.setValue(startPx);
+      fade.setValue(0);
+
+      Animated.parallel([
+        Animated.timing(translateY, {
+          toValue: -20,
+          duration: rune.speed,
+          useNativeDriver: true,
+        }),
+        Animated.sequence([
+          Animated.timing(fade, { toValue: 1, duration: rune.speed * 0.2, useNativeDriver: true }),
+          Animated.timing(fade, { toValue: 1, duration: rune.speed * 0.6, useNativeDriver: true }),
+          Animated.timing(fade, { toValue: 0, duration: rune.speed * 0.2, useNativeDriver: true }),
+        ]),
+      ]).start(() => animate());
+    };
+
+    const timer = setTimeout(animate, rune.delay);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const rotateInterpolation = rotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  // Shape rendering
+  const shapeStyle: any = {
+    width: rune.size,
+    height: rune.size,
+    backgroundColor: color,
+  };
+
+  if (rune.shape === 'circle') {
+    shapeStyle.borderRadius = rune.size / 2;
+  } else if (rune.shape === 'diamond') {
+    shapeStyle.transform = [{ rotate: '45deg' }];
+    shapeStyle.borderRadius = 1;
+  } else {
+    // Triangle: use border trick
+    return (
+      <Animated.View
+        style={{
+          position: 'absolute',
+          left: `${rune.x}%`,
+          opacity: fade,
+          transform: [{ translateY }, { rotate: rotateInterpolation }],
+        }}
+      >
+        <View style={{
+          width: 0, height: 0,
+          borderLeftWidth: rune.size / 2,
+          borderRightWidth: rune.size / 2,
+          borderBottomWidth: rune.size,
+          borderLeftColor: 'transparent',
+          borderRightColor: 'transparent',
+          borderBottomColor: color,
+        }} />
+      </Animated.View>
+    );
+  }
+
+  return (
+    <Animated.View
+      style={{
+        position: 'absolute',
+        left: `${rune.x}%`,
+        opacity: fade,
+        transform: [{ translateY }, { rotate: rotateInterpolation }],
+      }}
+    >
+      <View style={shapeStyle} />
+    </Animated.View>
   );
 }
 
