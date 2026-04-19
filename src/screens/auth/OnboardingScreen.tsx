@@ -135,7 +135,10 @@ export function OnboardingScreen({ navigation, route }: any) {
       totalSessions: 0,
       weekStreak: 0,
     };
-    await createAccount(member);
+    // Pass password so AuthContext provisions a real Firebase Auth user
+    // alongside the local Member record. Without this, signup is local-only
+    // and the user can't sign back in through Firebase after signing out.
+    await createAccount(member, data.password);
 
     // Record the signed waiver (fire-and-forget)
     const signature: WaiverSignature = {

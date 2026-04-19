@@ -102,10 +102,17 @@ export const MEMBERS: Member[] = [
   },
 ];
 
-// Login credentials — username → { password, memberId }
-// Admins are limited to sensei.tim and matt.b. Default password = 'password'.
-// Admins can change their password in Settings → the override is saved to
-// AsyncStorage under ADMIN_PASSWORD_OVERRIDE_KEY (see AuthContext / SettingsScreen).
+// Seeded test credentials — username → { password, memberId }.
+//
+// On the first sign-in attempt for a seeded account, SignInScreen calls
+// firebaseSignInOrSeedAccount which creates the real Firebase Auth record
+// using the password the user typed. Subsequent sign-ins go straight through
+// Firebase. The default passwords below are only used on that first attempt,
+// and only survive until the user changes their password (via
+// Settings → Change Password, which calls updatePassword on Firebase).
+//
+// For offline / Firebase-unavailable dev, SignInScreen has a legacy
+// CREDENTIALS-only path that accepts these passwords literally.
 export const CREDENTIALS: Record<string, { password: string; memberId: string }> = {
   'sensei.tim': { password: 'password', memberId: '1' },
   'tim@zenkidojo.com': { password: 'password', memberId: '1' },
@@ -114,12 +121,6 @@ export const CREDENTIALS: Record<string, { password: string; memberId: string }>
   apple: { password: 'password', memberId: '3' },
   admin: { password: 'password', memberId: '4' },
 };
-
-/**
- * AsyncStorage key for password overrides set from Settings.
- * Shape: { [memberId: string]: string }  — only stores changed passwords.
- */
-export const ADMIN_PASSWORD_OVERRIDE_KEY = '@zenki_admin_passwords';
 
 export const BELT_ORDER: BeltLevel[] = ['none', 'white', 'blue', 'purple', 'brown', 'black'];
 

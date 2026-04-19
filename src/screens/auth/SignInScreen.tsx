@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components';
-import { MEMBERS, CREDENTIALS, ADMIN_PASSWORD_OVERRIDE_KEY } from '../../data/members';
+import { MEMBERS, CREDENTIALS } from '../../data/members';
 import { spacing, borderRadius } from '../../theme';
 import { FIREBASE_CONFIGURED } from '../../config/firebase';
 import {
@@ -118,24 +118,17 @@ export function SignInScreen({ navigation }: any) {
     }
   };
 
-  /** Offline / Firebase-unavailable path — uses the local CREDENTIALS map. */
+  /**
+   * Offline / Firebase-unavailable path — uses the local CREDENTIALS map.
+   * The old AsyncStorage-based admin password override was removed in v7.2
+   * (password changes now go through Firebase updatePassword).
+   */
   const legacyLocalSignIn = async () => {
     try {
       const cred = CREDENTIALS[username.toLowerCase()];
-      if (cred) {
-        let expectedPassword = cred.password;
-        try {
-          const raw = await AsyncStorage.getItem(ADMIN_PASSWORD_OVERRIDE_KEY);
-          if (raw) {
-            const overrides = JSON.parse(raw) as Record<string, string>;
-            if (overrides[cred.memberId]) expectedPassword = overrides[cred.memberId];
-          }
-        } catch { /* ignore */ }
-
-        if (expectedPassword === password) {
-          const member = MEMBERS.find((m) => m.id === cred.memberId);
-          if (member) { await auth.signIn(member); navigation.replace('Main'); return; }
-        }
+      if (cred && cred.password === password) {
+        const member = MEMBERS.find((m) => m.id === cred.memberId);
+        if (member) { await auth.signIn(member); navigation.replace('Main'); return; }
       }
       Alert.alert('Invalid Credentials', 'Check your username and password.');
     } finally {

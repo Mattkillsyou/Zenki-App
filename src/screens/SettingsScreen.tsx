@@ -24,14 +24,19 @@ import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { useSenpai } from '../context/SenpaiContext';
 import { senpaiJingle } from '../sounds/synth';
 import { randomDialogue } from '../data/senpaiDialogue';
-import { ADMIN_PASSWORD_OVERRIDE_KEY } from '../data/members';
 import { typography, spacing, borderRadius } from '../theme';
 import { AI_FUNCTION_BASE_URL } from '../config/api';
-import { FIREBASE_CONFIGURED } from '../config/firebase';
+import { FIREBASE_CONFIGURED, auth as firebaseAuth } from '../config/firebase';
 import {
   firebaseDeleteCurrentUser,
   getCurrentIdToken,
+  emailForMember,
 } from '../services/firebaseAuth';
+import {
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+  updatePassword,
+} from 'firebase/auth';
 
 const UNITS_KEY = '@zenki_units_pref';
 const SOUND_ENABLED_KEY = '@zenki_sound_enabled';
@@ -42,15 +47,6 @@ type SoundTheme = 'default' | 'retro' | 'zen' | 'pipboy';
 
 // Old THEME_OPTIONS removed — replaced by visual theme picker grid using ALL_THEMES
 
-/** Simple deterministic hash for password storage (not crypto-grade, but prevents plaintext). */
-function simpleHash(str: string): string {
-  let hash = 0x811c9dc5; // FNV offset basis
-  for (let i = 0; i < str.length; i++) {
-    hash ^= str.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193); // FNV prime
-  }
-  return 'h_' + (hash >>> 0).toString(36);
-}
 
 export function SettingsScreen({ navigation }: any) {
   const { colors, mode, setMode } = useTheme();
@@ -240,35 +236,45 @@ export function SettingsScreen({ navigation }: any) {
       return;
     }
 
+    if (!FIREBASE_CONFIGURED || !firebaseAuth?.currentUser) {
+      Alert.alert(
+        'Not signed in',
+        'Your Firebase session is missing. Please sign out and back in, then try again.',
+      );
+      return;
+    }
+
     setSaving(true);
     try {
-      // Verify current password against stored hash
-      const raw = await AsyncStorage.getItem(ADMIN_PASSWORD_OVERRIDE_KEY);
-      const overrides: Record<string, string> = raw ? JSON.parse(raw) : {};
-      const storedHash = overrides[user.id];
-      const currentHash = simpleHash(currentPw);
-      // Support both old plaintext and new hash format during migration
-      if (storedHash && storedHash !== currentPw && storedHash !== currentHash) {
-        Alert.alert('Incorrect password', 'Your current password is wrong.');
-        setSaving(false);
-        return;
-      }
-      if (!storedHash) {
-        // First-time password change — no stored password yet
-        // Accept any current password input for initial setup
-      }
+      const currentUser = firebaseAuth.currentUser;
+      const email = currentUser.email ?? emailForMember(user);
 
-      // Save new password as hash
-      overrides[user.id] = simpleHash(newPw);
-      await AsyncStorage.setItem(ADMIN_PASSWORD_OVERRIDE_KEY, JSON.stringify(overrides));
+      // Firebase requires a recent sign-in for sensitive ops — re-authenticate
+      // with the user's current password first.
+      const credential = EmailAuthProvider.credential(email, currentPw);
+      await reauthenticateWithCredential(currentUser, credential);
+
+      // Issue the password change
+      await updatePassword(currentUser, newPw);
 
       setPwModalOpen(false);
       setCurrentPw('');
       setNewPw('');
       setConfirmPw('');
       Alert.alert('Password updated', 'Your sign-in password has been changed.');
-    } catch (err) {
-      Alert.alert('Error', 'Could not save password. Please try again.');
+    } catch (err: any) {
+      const code = err?.code ?? '';
+      const msg =
+        code === 'auth/wrong-password' || code === 'auth/invalid-credential'
+          ? 'Your current password is wrong.'
+          : code === 'auth/weak-password'
+            ? 'Firebase considers that password too weak.'
+            : code === 'auth/too-many-requests'
+              ? 'Too many attempts. Wait a minute and try again.'
+              : code === 'auth/network-request-failed'
+                ? 'Network error. Check your connection.'
+                : 'Could not save password. Please try again.';
+      Alert.alert('Error', msg);
     } finally {
       setSaving(false);
     }

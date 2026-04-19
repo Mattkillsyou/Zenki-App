@@ -14,9 +14,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../../theme';
 import { Button } from '../../components';
+import { useAuth } from '../../context/AuthContext';
+import { MEMBERS, CREDENTIALS } from '../../data/members';
+import { FIREBASE_CONFIGURED } from '../../config/firebase';
+import { firebaseSignInOrSeedAccount, emailForMember } from '../../services/firebaseAuth';
 
 export function SetPasswordScreen({ navigation, route }: any) {
   const { colors } = useTheme();
+  const auth = useAuth();
   const username = route?.params?.username || '';
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -28,7 +33,7 @@ export function SetPasswordScreen({ navigation, route }: any) {
   const hasNumber = /[0-9]/.test(password);
   const passwordsMatch = password === confirmPassword && password.length > 0;
 
-  const handleSetPassword = () => {
+  const handleSetPassword = async () => {
     if (!meetsLength || !hasUpper || !hasNumber) {
       Alert.alert('Error', 'Please meet all password requirements');
       return;
@@ -37,16 +42,46 @@ export function SetPasswordScreen({ navigation, route }: any) {
       Alert.alert('Error', 'Passwords do not match');
       return;
     }
+
     setLoading(true);
-    // Simulate password update — replace with real API
-    setTimeout(() => {
+    try {
+      const cred = CREDENTIALS[username.toLowerCase()];
+      if (!cred) {
+        Alert.alert('Unknown user', `No member named ${username}.`);
+        setLoading(false);
+        return;
+      }
+      const member = MEMBERS.find((m) => m.id === cred.memberId);
+      if (!member) {
+        Alert.alert('Setup error', 'Member record missing — contact support.');
+        setLoading(false);
+        return;
+      }
+
+      // Provision the Firebase Auth record with the real password the user just
+      // typed. On subsequent sign-ins, Firebase is the source of truth.
+      if (FIREBASE_CONFIGURED) {
+        await firebaseSignInOrSeedAccount(emailForMember(member), password, member);
+      }
+      await auth.signIn(member);
+
       setLoading(false);
       Alert.alert(
         'Password Set',
-        'Your password has been created. You can now sign in.',
+        'Your password has been saved. Welcome in.',
         [{ text: 'Continue', onPress: () => navigation.replace('Main') }],
       );
-    }, 1500);
+    } catch (e: any) {
+      setLoading(false);
+      const code = e?.code ?? '';
+      const msg =
+        code === 'auth/weak-password'
+          ? 'Password too weak — Firebase requires at least 6 characters.'
+          : code === 'auth/network-request-failed'
+            ? 'Network error. Check your connection and try again.'
+            : 'Could not set password. Please try again.';
+      Alert.alert('Error', msg);
+    }
   };
 
   const renderRequirement = (label: string, met: boolean) => (
