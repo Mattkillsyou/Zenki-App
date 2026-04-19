@@ -21,6 +21,9 @@ import { formatDuration } from '../utils/heartRate';
 import { pipboy } from '../theme/colors';
 import { pipboyFont } from '../theme/typography';
 import * as Location from 'expo-location';
+import { PipBoyMap } from '../components/PipBoyMap';
+// Metro resolves this to PipBoyMap.web.tsx on web, PipBoyMap.native.tsx on
+// native — so the Leaflet dependency stays out of the native bundle.
 
 const ACTIVITY_TYPES: GpsActivityType[] = ['run', 'walk', 'bike', 'hike'];
 const DEFAULT_LAT = 34.1006;
@@ -31,145 +34,6 @@ const PB = pipboy; // shorthand
 // ─── Pip-Boy tabs ───
 type PipTab = 'STAT' | 'MAP' | 'DATA' | 'RADIO';
 const PIP_TABS: PipTab[] = ['STAT', 'MAP', 'DATA', 'RADIO'];
-
-/**
- * Leaflet map with Pip-Boy green monochrome filter.
- * CartoDB dark tiles + CSS hue-rotate to force green terminal look.
- */
-function PipBoyMap({ routeCoords, userLat, userLng }: {
-  routeCoords: { lat: number; lng: number }[];
-  userLat: number;
-  userLng: number;
-}) {
-  const mapRef = useRef<any>(null);
-  const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const polylineRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const L = require('leaflet');
-
-    // Inject Leaflet CSS + VT323 font
-    if (!document.getElementById('leaflet-css')) {
-      const link = document.createElement('link');
-      link.id = 'leaflet-css';
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
-    }
-    if (!document.getElementById('vt323-font')) {
-      const link = document.createElement('link');
-      link.id = 'vt323-font';
-      link.rel = 'stylesheet';
-      link.href = 'https://fonts.googleapis.com/css2?family=VT323&display=swap';
-      document.head.appendChild(link);
-    }
-    // Inject CRT scanline + flicker CSS
-    if (!document.getElementById('pipboy-css')) {
-      const style = document.createElement('style');
-      style.id = 'pipboy-css';
-      style.textContent = `
-        @keyframes pipboy-flicker {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.97; }
-          75% { opacity: 0.99; }
-        }
-        .pipboy-scanlines {
-          position: absolute;
-          top: 0; left: 0; right: 0; bottom: 0;
-          background: repeating-linear-gradient(
-            0deg,
-            transparent,
-            transparent 2px,
-            rgba(0, 255, 65, 0.03) 2px,
-            rgba(0, 255, 65, 0.03) 4px
-          );
-          pointer-events: none;
-          z-index: 9999;
-        }
-        .pipboy-screen {
-          animation: pipboy-flicker 4s infinite;
-        }
-        .pipboy-map-filter {
-          filter: grayscale(1) brightness(0.6) sepia(1) hue-rotate(70deg) saturate(8);
-        }
-        .leaflet-container {
-          z-index: 1 !important;
-        }
-        .leaflet-pane {
-          z-index: 1 !important;
-        }
-      `;
-      document.head.appendChild(style);
-    }
-
-    if (!mapContainerRef.current) return;
-
-    const map = L.map(mapContainerRef.current, {
-      center: [userLat || DEFAULT_LAT, userLng || DEFAULT_LNG],
-      zoom: 16,
-      zoomControl: false,
-      attributionControl: false,
-    });
-
-    // Dark tiles — the CSS filter on the container forces green monochrome
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 20,
-    }).addTo(map);
-
-    // User marker — blinking green crosshair
-    const userIcon = L.divIcon({
-      html: `<div style="
-        width: 14px; height: 14px;
-        border: 2px solid #00ff41;
-        background: transparent;
-        box-shadow: 0 0 8px #00ff41, 0 0 16px #00ff4140;
-        animation: pipboy-flicker 1s infinite;
-      "></div>`,
-      iconSize: [14, 14],
-      iconAnchor: [7, 7],
-      className: '',
-    });
-    markerRef.current = L.marker([userLat || DEFAULT_LAT, userLng || DEFAULT_LNG], { icon: userIcon }).addTo(map);
-
-    // Route polyline — terminal green
-    polylineRef.current = L.polyline([], {
-      color: '#00ff41',
-      weight: 4,
-      opacity: 0.9,
-      smoothFactor: 1,
-    }).addTo(map);
-
-    mapRef.current = map;
-
-    // Apply the green filter to the tile pane
-    const tilePane = map.getPane('tilePane');
-    if (tilePane) tilePane.classList.add('pipboy-map-filter');
-
-    return () => { map.remove(); mapRef.current = null; };
-  }, []);
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-    if (userLat && userLng) {
-      markerRef.current?.setLatLng([userLat, userLng]);
-      mapRef.current.setView([userLat, userLng], mapRef.current.getZoom(), { animate: true });
-    }
-    if (routeCoords.length > 0) {
-      polylineRef.current?.setLatLngs(routeCoords.map((c: any) => [c.lat, c.lng]));
-    }
-  }, [userLat, userLng, routeCoords]);
-
-  if (Platform.OS !== 'web') return null;
-
-  return (
-    <div
-      ref={mapContainerRef as any}
-      style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}
-    />
-  );
-}
 
 // ─── Dot-leader stat row (e.g. "DIST......... 2.34 MI") ───
 function StatRow({ label, value, unit }: { label: string; value: string; unit?: string }) {
