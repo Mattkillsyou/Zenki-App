@@ -83,15 +83,15 @@ ASC presents this as ~12 yes/no questions. Answer set below produces **12+** rat
 
 **Expected rating: 12+**
 
-### ⚠ UGC moderation requirement (Apple 1.2)
+### UGC moderation (Apple 1.2) — ✓ implemented in v7.0
 
-If you answer **Yes** to User-Generated Content, Apple requires:
-1. A method to filter objectionable content from the app
-2. A mechanism for users to flag/report offensive content
-3. The ability to block abusive users
-4. Published developer contact info (your support URL)
+Apple requires all four for UGC apps:
+1. ✓ Filtering — content from blocked users is hidden from feed + DMs
+2. ✓ Report mechanism — **•••** menu on every post, DM, and user profile → Report with categorized reasons
+3. ✓ Block mechanism — **•••** menu on every post, DM, and user profile → Block user; managed list in Settings → Privacy & Safety → Blocked Users
+4. ✓ Contact info — published in SUPPORT.md and in-app Settings
 
-**Verify before submit:** does the app have **Report** and **Block** buttons on posts and in DMs? If not, add them or admin will reject on first review. Search for "report" and "block" in `src/` — if zero matches, this is a blocker. (Not audited in depth during the original audit — flag to verify.)
+Backend: `reports` collection receives user reports (admin-reviewable); `blocks/{uid}/blocked/{blockedUid}` tracks each user's block list. Rules enforce write-only reports and owner-only block lists.
 
 ---
 

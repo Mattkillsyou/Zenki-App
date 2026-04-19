@@ -51,10 +51,10 @@ Settings → **Danger Zone** → **Delete Account**. Confirms once, then permane
 This cannot be undone.
 
 ### I see something inappropriate on the feed
-Use the **Report** button on the post, or email us directly with a screenshot and we'll review. *(Coming in v1.0.1 — report button will be on every post and DM.)*
+Tap the **•••** menu in the top-right of the post, choose **Report post**, and pick a reason. Our team reviews reports and takes action. You can also **Block user** from the same menu to immediately hide all their content from your feed and messages.
 
 ### Someone is messaging me I don't want to hear from
-Use the **Block** button on their profile, or email us and we'll intervene. *(Coming in v1.0.1 — block button will be on every user profile.)*
+Open the conversation, tap **•••** in the header → **Block user**. They'll vanish from your feed and messages. Alternatively, from their profile tap **•••** → **Block user**. To undo: Settings → Privacy & Safety → Blocked Users → **Unblock**.
 
 ### I uploaded a bloodwork or DEXA scan — who sees it?
 Only you. Admins cannot view your health uploads without explicit consent. Images are processed by Anthropic Claude AI to extract biomarker values; the image itself is not retained by Anthropic.
@@ -82,8 +82,7 @@ Admin features are in the Admin tab (visible only when `isAdmin: true`). Need ad
 Email `mattbrowntheemail@gmail.com` with **[Feature Request]** in the subject.
 
 We're currently planning for v1.0.1:
-- Report and block buttons on community content and direct messages
-- In-app admin moderation queue
+- In-app admin moderation queue (triage reports + take action)
 - Push notification for pending booking confirmations
 - GPS route overlay on iOS
 - Group chats

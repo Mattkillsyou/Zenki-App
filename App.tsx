@@ -24,6 +24,7 @@ import { SenpaiProvider } from './src/context/SenpaiContext';
 import { SenpaiMascot } from './src/components/SenpaiMascot';
 import { SenpaiOverlay } from './src/components/SenpaiOverlay';
 import { SoundProvider } from './src/context/SoundContext';
+import { BlocksProvider } from './src/context/BlocksContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ThemeOverlay } from './src/components/ThemeOverlay';
 
@@ -100,6 +101,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
+        <BlocksProvider>
         <MotionProvider>
           <ThemeProvider>
             <SoundProvider>
@@ -137,6 +139,7 @@ export default function App() {
             </SoundProvider>
           </ThemeProvider>
         </MotionProvider>
+        </BlocksProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

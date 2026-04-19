@@ -1,10 +1,13 @@
-import React, { useRef } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Animated } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Alert, ActionSheetIOS, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useMotion } from '../context/MotionContext';
+import { useBlocks } from '../context/BlocksContext';
+import { useAuth } from '../context/AuthContext';
 import { Post } from '../services/firebasePosts';
-import { typography, spacing } from '../theme';
+import { ReportModal } from './ReportModal';
+import { typography } from '../theme';
 
 interface PostCardProps {
   post: Post;
@@ -24,8 +27,61 @@ interface PostCardProps {
 export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
   const { colors } = useTheme();
   const { reduceMotion } = useMotion();
+  const { user } = useAuth();
+  const { blockUser } = useBlocks();
   const heartAnim = useRef(new Animated.Value(1)).current;
   const dblTapRef = useRef<number>(0);
+  const [reportOpen, setReportOpen] = useState(false);
+
+  const isOwn = user?.id === post.userId;
+
+  const openMenu = () => {
+    // Skip menu on own posts for now (no edit/delete wired at card level yet)
+    if (isOwn) return;
+
+    const options = ['Report post', 'Block user', 'Cancel'];
+    const cancelIndex = options.length - 1;
+    const destructiveIndex = 1;
+
+    const handleIndex = (idx?: number) => {
+      if (idx === 0) setReportOpen(true);
+      else if (idx === 1) confirmBlock();
+    };
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetFromView?.(
+        { options, cancelButtonIndex: cancelIndex, destructiveButtonIndex: destructiveIndex, title: post.displayName },
+        handleIndex,
+      ) ?? ActionSheetIOS.showActionSheetWithOptions(
+        { options, cancelButtonIndex: cancelIndex, destructiveButtonIndex: destructiveIndex, title: post.displayName },
+        handleIndex,
+      );
+    } else {
+      // Android / Web fallback — use Alert as an action sheet
+      Alert.alert(post.displayName, undefined, [
+        { text: 'Report post', onPress: () => handleIndex(0) },
+        { text: 'Block user', style: 'destructive', onPress: () => handleIndex(1) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  };
+
+  const confirmBlock = () => {
+    Alert.alert(
+      `Block ${post.displayName}?`,
+      `You won't see their posts or messages anymore. You can unblock them later in Settings → Blocked Users.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            await blockUser(post.userId);
+          },
+        },
+      ],
+    );
+  };
 
   const pulseHeart = () => {
     if (reduceMotion) return;
@@ -86,10 +142,23 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
             <Text style={[styles.timeAgo, { color: colors.textMuted }]}>{timeAgo}</Text>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          onPress={openMenu}
+          accessibilityLabel={`Post options from ${post.displayName}`}
+        >
           <Ionicons name="ellipsis-horizontal" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
+
+      <ReportModal
+        visible={reportOpen}
+        onClose={() => setReportOpen(false)}
+        targetType="post"
+        targetId={post.id}
+        targetUserId={post.userId}
+        targetPreview={post.caption?.slice(0, 80)}
+      />
 
       {/* Media (photo/video) OR text caption prominence */}
       {post.mediaUrl && !mediaErrored ? (

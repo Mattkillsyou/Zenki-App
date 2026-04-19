@@ -9,11 +9,13 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useBlocks } from '../context/BlocksContext';
 import { spacing } from '../theme';
 import {
   Message,
@@ -22,10 +24,12 @@ import {
   markConversationRead,
   getOrCreateConversation,
 } from '../services/firebaseMessages';
+import { ReportModal } from '../components/ReportModal';
 
 export function MessagesChatScreen({ navigation, route }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const { isBlocked, blockUser, unblockUser } = useBlocks();
   const initial = route.params || {};
   const [conversationId, setConversationId] = useState<string | null>(initial.conversationId || null);
   const otherUserId: string | undefined = initial.otherUserId;
@@ -34,7 +38,45 @@ export function MessagesChatScreen({ navigation, route }: any) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const listRef = useRef<FlatList<Message>>(null);
+  const blocked = !!otherUserId && isBlocked(otherUserId);
+
+  const openChatMenu = () => {
+    if (!otherUserId) return;
+    Alert.alert(otherUserName, undefined, [
+      {
+        text: blocked ? 'Unblock user' : 'Block user',
+        style: blocked ? 'default' : 'destructive',
+        onPress: () => {
+          if (blocked) {
+            Alert.alert(`Unblock ${otherUserName}?`, '', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Unblock', onPress: () => unblockUser(otherUserId) },
+            ]);
+          } else {
+            Alert.alert(
+              `Block ${otherUserName}?`,
+              `You won't see their messages anymore. You can unblock them later in Settings.`,
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Block',
+                  style: 'destructive',
+                  onPress: async () => {
+                    await blockUser(otherUserId);
+                    navigation.goBack();
+                  },
+                },
+              ],
+            );
+          }
+        },
+      },
+      { text: 'Report conversation', onPress: () => setReportOpen(true) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
 
   // Ensure conversation exists
   useEffect(() => {
@@ -120,8 +162,23 @@ export function MessagesChatScreen({ navigation, route }: any) {
               {otherUserName}
             </Text>
           </TouchableOpacity>
-          <View style={{ width: 36 }} />
+          <TouchableOpacity
+            onPress={openChatMenu}
+            style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            accessibilityLabel="More options"
+          >
+            <Ionicons name="ellipsis-horizontal" size={20} color={colors.textPrimary} />
+          </TouchableOpacity>
         </View>
+
+        <ReportModal
+          visible={reportOpen}
+          onClose={() => setReportOpen(false)}
+          targetType="message"
+          targetId={conversationId || 'unknown'}
+          targetUserId={otherUserId || ''}
+          targetPreview={`Conversation with ${otherUserName}`}
+        />
 
         <FlatList
           ref={listRef}
@@ -140,6 +197,13 @@ export function MessagesChatScreen({ navigation, route }: any) {
           }
         />
 
+        {blocked ? (
+          <View style={[styles.inputBar, { backgroundColor: colors.background, borderTopColor: colors.border, justifyContent: 'center' }]}>
+            <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center' }}>
+              You've blocked {otherUserName}. Unblock from the ••• menu above to resume messaging.
+            </Text>
+          </View>
+        ) : (
         <View style={[styles.inputBar, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
           <TextInput
             style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}
@@ -161,6 +225,7 @@ export function MessagesChatScreen({ navigation, route }: any) {
             <Ionicons name="arrow-up" size={20} color={draft.trim() ? '#000' : colors.textMuted} />
           </TouchableOpacity>
         </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

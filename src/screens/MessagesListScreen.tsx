@@ -11,14 +11,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useBlocks } from '../context/BlocksContext';
 import { spacing } from '../theme';
 import { Conversation, fetchUserProfile, subscribeToInbox } from '../services/firebaseMessages';
 
 export function MessagesListScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const { isBlocked } = useBlocks();
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
+  // Hide threads with blocked users
+  const visibleConvs = convs.filter((c) => !c.otherUserId || !isBlocked(c.otherUserId));
 
   useEffect(() => {
     const unsub = subscribeToInbox(async (list) => {
@@ -110,7 +114,7 @@ export function MessagesListScreen({ navigation }: any) {
         <View style={styles.empty}>
           <Text style={{ color: colors.textMuted }}>Loading…</Text>
         </View>
-      ) : convs.length === 0 ? (
+      ) : visibleConvs.length === 0 ? (
         <View style={styles.empty}>
           <Ionicons name="paper-plane-outline" size={48} color={colors.textMuted} />
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No messages yet</Text>
@@ -120,7 +124,7 @@ export function MessagesListScreen({ navigation }: any) {
         </View>
       ) : (
         <FlatList
-          data={convs}
+          data={visibleConvs}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}

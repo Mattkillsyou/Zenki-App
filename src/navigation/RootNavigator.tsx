@@ -30,6 +30,7 @@ import { OnboardingScreen } from '../screens/auth/OnboardingScreen';
 
 // Main stack screens
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { BlockedUsersScreen } from '../screens/BlockedUsersScreen';
 import { AdminScreen } from '../screens/AdminScreen';
 import { AdminMembersScreen } from '../screens/AdminMembersScreen';
 import { AdminProductsScreen } from '../screens/AdminProductsScreen';
@@ -284,6 +285,7 @@ export function RootNavigator() {
 
       {/* Modals — slide up */}
       <Stack.Screen name="Settings" component={withErrorBoundary(SettingsScreen, 'Settings')} options={modalTransition} />
+      <Stack.Screen name="BlockedUsers" component={withErrorBoundary(BlockedUsersScreen, 'Blocked Users')} options={pushTransition} />
       <Stack.Screen name="Admin" component={withErrorBoundary(AdminScreen, 'Admin')} options={modalTransition} />
 
       {/* Admin sub-screens — push */}

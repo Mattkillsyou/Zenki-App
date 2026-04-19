@@ -3,10 +3,12 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useBlocks } from '../context/BlocksContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { getUserProfile, updateProfile, followUser, unfollowUser, isFollowing, getFollowerCount, getFollowingCount, UserProfile } from '../services/firebaseFollow';
 import { getUserPosts, Post } from '../services/firebasePosts';
 import { getCurrentUid } from '../services/firebaseAuth';
+import { ReportModal } from '../components/ReportModal';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const GRID_SIZE = (SCREEN_WIDTH - spacing.lg * 2 - spacing.xs * 2) / 3;
@@ -15,6 +17,7 @@ export function UserProfileScreen({ navigation, route }: any) {
   const { colors } = useTheme();
   const { userId } = route.params;
   const isOwnProfile = userId === getCurrentUid();
+  const { isBlocked, blockUser, unblockUser } = useBlocks();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -26,6 +29,41 @@ export function UserProfileScreen({ navigation, route }: any) {
   const [editInstagram, setEditInstagram] = useState('');
   const [editTwitter, setEditTwitter] = useState('');
   const [editWebsite, setEditWebsite] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
+  const userBlocked = !isOwnProfile && isBlocked(userId);
+
+  const handleBlockToggle = () => {
+    if (userBlocked) {
+      Alert.alert(
+        `Unblock ${profile?.displayName ?? 'this user'}?`,
+        `Their posts and messages will be visible to you again.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Unblock', onPress: () => unblockUser(userId) },
+        ],
+      );
+    } else {
+      Alert.alert(
+        `Block ${profile?.displayName ?? 'this user'}?`,
+        `You won't see their posts or messages anymore. You can unblock them later in Settings → Blocked Users.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Block',
+            style: 'destructive',
+            onPress: async () => {
+              await blockUser(userId);
+              if (following) {
+                await unfollowUser(userId);
+                setFollowing(false);
+                setFollowers((p) => Math.max(0, p - 1));
+              }
+            },
+          },
+        ],
+      );
+    }
+  };
 
   useEffect(() => {
     loadProfile();
@@ -177,24 +215,56 @@ export function UserProfileScreen({ navigation, route }: any) {
               <TouchableOpacity
                 style={[styles.actionButton, { backgroundColor: following ? colors.surface : colors.red, borderColor: colors.border, borderWidth: following ? 1 : 0, flex: 1 }]}
                 onPress={handleFollow}
+                disabled={userBlocked}
               >
-                <Text style={[styles.actionButtonText, { color: following ? colors.textPrimary : '#FFF' }]}>
+                <Text style={[styles.actionButtonText, { color: following ? colors.textPrimary : '#FFF', opacity: userBlocked ? 0.4 : 1 }]}>
                   {following ? 'Following' : 'Follow'}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, flex: 1 }]}
-                onPress={() => navigation.navigate('MessagesChat', {
+                style={[styles.actionButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, flex: 1, opacity: userBlocked ? 0.4 : 1 }]}
+                onPress={() => !userBlocked && navigation.navigate('MessagesChat', {
                   otherUserId: userId,
                   otherUserName: profile?.displayName,
                   otherUserAvatar: profile?.avatar,
                 })}
+                disabled={userBlocked}
               >
                 <Ionicons name="paper-plane-outline" size={16} color={colors.textPrimary} />
                 <Text style={[styles.actionButtonText, { color: colors.textPrimary }]}>Message</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, paddingHorizontal: spacing.sm }]}
+                onPress={() => {
+                  Alert.alert(profile?.displayName || 'User', undefined, [
+                    { text: userBlocked ? 'Unblock user' : 'Block user', style: userBlocked ? 'default' : 'destructive', onPress: handleBlockToggle },
+                    { text: 'Report user', onPress: () => setReportOpen(true) },
+                    { text: 'Cancel', style: 'cancel' },
+                  ]);
+                }}
+                accessibilityLabel="More options"
+              >
+                <Ionicons name="ellipsis-horizontal" size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
             </View>
           )}
+
+          {userBlocked && (
+            <View style={{ paddingHorizontal: spacing.lg, marginTop: spacing.sm }}>
+              <Text style={{ fontSize: 12, color: colors.textMuted, textAlign: 'center' }}>
+                You have blocked this user. Their posts and messages are hidden from you.
+              </Text>
+            </View>
+          )}
+
+          <ReportModal
+            visible={reportOpen}
+            onClose={() => setReportOpen(false)}
+            targetType="user"
+            targetId={userId}
+            targetUserId={userId}
+            targetPreview={profile?.displayName}
+          />
         </View>
 
         {/* Edit Profile Section */}

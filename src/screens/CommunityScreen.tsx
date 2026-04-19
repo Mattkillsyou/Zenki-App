@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useBlocks } from '../context/BlocksContext';
 import { spacing, typography } from '../theme';
 import { PostCard } from '../components/PostCard';
 import { AnimatedLogo } from '../components/AnimatedLogo';
@@ -28,6 +29,7 @@ interface StoryItem {
 export function CommunityScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const { filterBlocked, blockedIds } = useBlocks();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -43,6 +45,11 @@ export function CommunityScreen({ navigation }: any) {
       setRefreshing(false);
     }
   }, []);
+
+  // Re-filter whenever the blocked list changes so unblocks show instantly.
+  const visiblePosts = filterBlocked(posts, 'userId');
+  // (blockedIds referenced so the hook re-runs derived render on block changes)
+  void blockedIds;
 
   useEffect(() => {
     loadFeed();
@@ -76,9 +83,9 @@ export function CommunityScreen({ navigation }: any) {
     navigation.navigate('UserProfile', { userId });
   };
 
-  // Stories rail — unique recent posters.
+  // Stories rail — unique recent posters (blocked users excluded).
   const stories: StoryItem[] = Array.from(
-    new Map(posts.map((p) => [p.userId, { userId: p.userId, displayName: p.displayName, avatar: p.avatar } as StoryItem])).values(),
+    new Map(visiblePosts.map((p) => [p.userId, { userId: p.userId, displayName: p.displayName, avatar: p.avatar } as StoryItem])).values(),
   );
 
   const renderHeader = () =>
@@ -148,7 +155,7 @@ export function CommunityScreen({ navigation }: any) {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.gold} />
         </View>
-      ) : posts.length === 0 ? (
+      ) : visiblePosts.length === 0 ? (
         <ScrollView
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.gold} />}
           contentContainerStyle={{ flex: 1 }}
@@ -164,7 +171,7 @@ export function CommunityScreen({ navigation }: any) {
         </ScrollView>
       ) : (
         <FlatList
-          data={posts}
+          data={visiblePosts}
           renderItem={({ item }) => (
             <PostCard post={item} onLike={handleLike} onUserPress={handleUserPress} />
           )}

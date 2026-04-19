@@ -103,6 +103,25 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Blocks — each user owns a /blocks/{uid}/blocked subcollection of
+    // UIDs they've blocked. Only the owner can read or write their own list.
+    match /blocks/{uid}/blocked/{blockedUid} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // Reports — users can file a report (write-only from client).
+    // Admin review happens server-side (Cloud Function / Admin SDK).
+    match /reports/{reportId} {
+      allow read: if false;
+      allow create: if isSignedIn()
+                    && request.resource.data.reporterId == request.auth.uid
+                    && request.resource.data.targetType in ['post', 'message', 'user', 'comment']
+                    && request.resource.data.reason is string
+                    && request.resource.data.targetId is string
+                    && request.resource.data.targetUserId is string;
+      allow update, delete: if false;
+    }
+
     // Default deny — anything not listed above is locked.
     match /{document=**} {
       allow read, write: if false;

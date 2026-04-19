@@ -512,6 +512,12 @@ export function SettingsScreen({ navigation }: any) {
           </>
         )}
 
+        {/* Privacy & Safety */}
+        {renderSectionHeader('PRIVACY & SAFETY')}
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+          {renderNavRow('person-remove-outline', 'Blocked Users', () => navigation.navigate('BlockedUsers'))}
+        </View>
+
         {/* Account */}
         {isAdmin && renderSectionHeader('ACCOUNT')}
         {isAdmin && (
