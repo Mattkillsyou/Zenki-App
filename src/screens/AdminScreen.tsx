@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { typography, spacing, borderRadius } from '../theme';
 import { FadeInView, PressableScale } from '../components';
 import { MEMBERS } from '../data/members';
 import { useProducts } from '../context/ProductContext';
+import { countOpenReports } from '../services/firebaseModeration';
 
 interface AdminCardProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -50,6 +51,18 @@ export function AdminScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { products: PRODUCTS } = useProducts();
   const { todayVisitors } = useAttendance();
+
+  // Live badge: number of open reports. Refresh every time this screen mounts.
+  const [openReportsCount, setOpenReportsCount] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    countOpenReports().then((n) => {
+      if (!cancelled) setOpenReportsCount(n);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -195,6 +208,20 @@ export function AdminScreen({ navigation }: any) {
               count={0}
               accentColor={colors.info}
               onPress={() => navigation.navigate('AdminEmployeeTasks')}
+            />
+          </FadeInView>
+        </View>
+        <View style={[styles.grid, { gap: 14 }]}>
+          <FadeInView delay={440} slideUp={12} style={styles.gridItem}>
+            <AdminCard
+              icon="flag-outline"
+              title={openReportsCount && openReportsCount > 0
+                ? `Reports (${openReportsCount} open)`
+                : 'Reports'}
+              subtitle="Moderate user-reported content"
+              count={openReportsCount ?? 0}
+              accentColor={openReportsCount && openReportsCount > 0 ? colors.red : colors.warning}
+              onPress={() => navigation.navigate('AdminReports')}
             />
           </FadeInView>
         </View>

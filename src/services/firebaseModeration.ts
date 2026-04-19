@@ -14,8 +14,10 @@
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import {
   collection, addDoc, deleteDoc, doc, setDoc, getDocs, getDoc,
+  query, where, orderBy,
 } from 'firebase/firestore';
-import { getCurrentUid } from './firebaseAuth';
+import { getCurrentUid, getCurrentIdToken } from './firebaseAuth';
+import { AI_FUNCTION_BASE_URL } from '../config/api';
 
 // ─────────────────────────────────────────────
 // Blocks
@@ -117,7 +119,7 @@ export interface ReportInput {
 }
 
 /**
- * File a report. Admins review the `reports` collection (admin tool TBD).
+ * File a report. Admins review via /reports (AdminReportsScreen).
  * Reports cannot be read by end users — only written.
  */
 export async function submitReport(input: ReportInput): Promise<boolean> {
@@ -140,4 +142,81 @@ export async function submitReport(input: ReportInput): Promise<boolean> {
     console.warn('[Moderation] submitReport failed:', e);
     return false;
   }
+}
+
+// ─────────────────────────────────────────────
+// Admin-side readers + actions
+// ─────────────────────────────────────────────
+
+export type ReportStatus = 'open' | 'dismissed' | 'actioned';
+
+export interface Report extends ReportInput {
+  id: string;
+  reporterId: string;
+  status: ReportStatus;
+  createdAt: string;
+  resolvedBy?: string;
+  resolvedAt?: string;
+}
+
+/**
+ * Load all open reports sorted newest first. Requires the caller to pass the
+ * Firestore /admins/{uid} rule check (see AdminReportsScreen).
+ */
+export async function listOpenReports(): Promise<Report[]> {
+  if (!FIREBASE_CONFIGURED || !db) return [];
+  try {
+    const q = query(
+      collection(db, 'reports'),
+      where('status', '==', 'open'),
+      orderBy('createdAt', 'desc'),
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as Report[];
+  } catch (e) {
+    console.warn('[Moderation] listOpenReports failed:', e);
+    return [];
+  }
+}
+
+/**
+ * Admin-only action on a report. Calls the `adminActionReport` Cloud Function
+ * so content deletion happens via the Admin SDK (bypassing Firestore rules).
+ *
+ *   'dismiss'         — just mark the report resolved, leave content
+ *   'removeAndBlock'  — delete target content + block target user from reporter
+ */
+export async function adminActionReport(
+  reportId: string,
+  action: 'dismiss' | 'removeAndBlock',
+): Promise<{ ok: boolean; error?: string }> {
+  if (!FIREBASE_CONFIGURED) return { ok: false, error: 'firebase-unavailable' };
+  const token = await getCurrentIdToken();
+  if (!token) return { ok: false, error: 'no-auth' };
+  try {
+    const res = await fetch(`${AI_FUNCTION_BASE_URL}/adminActionReport`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ reportId, action }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      return { ok: false, error: `HTTP ${res.status}: ${text}` };
+    }
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? 'unknown' };
+  }
+}
+
+/**
+ * Fast count of open reports — used to decorate the admin dashboard badge.
+ * Returns 0 if the user isn't actually an admin (rule-denied read).
+ */
+export async function countOpenReports(): Promise<number> {
+  const list = await listOpenReports();
+  return list.length;
 }

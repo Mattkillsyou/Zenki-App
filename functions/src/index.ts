@@ -24,6 +24,9 @@ import {
 // Re-export the deleteAccount endpoint from its own file.
 export { deleteAccount } from './deleteAccount';
 
+// Re-export the admin moderation endpoint.
+export { adminActionReport } from './adminActionReport';
+
 // ─────────────────────────────────────────────
 // Setup
 // ─────────────────────────────────────────────

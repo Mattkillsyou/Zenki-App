@@ -14,6 +14,16 @@ service cloud.firestore {
     function isSignedIn() { return request.auth != null; }
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
 
+    // Admin check — either a custom claim (token.admin == true) or a seeded
+    // doc at /admins/{uid}. The doc path is the easy bootstrap; wire custom
+    // claims via a Cloud Function later. See ADMIN_SETUP.md.
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.admin == true ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
     // Member profiles keyed by Firebase Auth uid.
     // Anyone signed in can read profiles (for community features).
     // Only the owner can create/update/delete their own profile.
@@ -110,9 +120,10 @@ service cloud.firestore {
     }
 
     // Reports — users can file a report (write-only from client).
-    // Admin review happens server-side (Cloud Function / Admin SDK).
+    // Admins can read the queue via AdminReportsScreen; updates happen
+    // server-side via the adminActionReport Cloud Function.
     match /reports/{reportId} {
-      allow read: if false;
+      allow read: if isAdmin();
       allow create: if isSignedIn()
                     && request.resource.data.reporterId == request.auth.uid
                     && request.resource.data.targetType in ['post', 'message', 'user', 'comment']
@@ -120,6 +131,13 @@ service cloud.firestore {
                     && request.resource.data.targetId is string
                     && request.resource.data.targetUserId is string;
       allow update, delete: if false;
+    }
+
+    // Admins collection — the /admins/{uid} doc opens up isAdmin() for that
+    // user. Only other admins (or the console) can write.
+    match /admins/{uid} {
+      allow read: if isAdmin() || isOwner(uid);
+      allow write: if isAdmin();
     }
 
     // Default deny — anything not listed above is locked.

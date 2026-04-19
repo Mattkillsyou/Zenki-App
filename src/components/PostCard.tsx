@@ -49,7 +49,8 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
     };
 
     if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetFromView?.(
+      // showActionSheetFromView isn't in the type defs but exists at runtime
+      (ActionSheetIOS as any).showActionSheetFromView?.(
         { options, cancelButtonIndex: cancelIndex, destructiveButtonIndex: destructiveIndex, title: post.displayName },
         handleIndex,
       ) ?? ActionSheetIOS.showActionSheetWithOptions(
