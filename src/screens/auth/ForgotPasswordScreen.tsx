@@ -12,6 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../../theme';
 import { Button } from '../../components';
+import { FIREBASE_CONFIGURED } from '../../config/firebase';
+import { firebaseSendPasswordReset } from '../../services/firebaseAuth';
 
 export function ForgotPasswordScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -19,16 +21,36 @@ export function ForgotPasswordScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
-  const handleReset = () => {
-    if (!email) {
+  const handleReset = async () => {
+    const trimmed = email.trim();
+    if (!trimmed) {
       Alert.alert('Error', 'Please enter your email address');
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      if (FIREBASE_CONFIGURED) {
+        await firebaseSendPasswordReset(trimmed);
+        // Firebase deliberately doesn't disclose whether an email exists — we
+        // always show the "sent" state so reviewers and real users see the
+        // same UX. That's Apple-compliant + prevents account enumeration.
+      }
       setSent(true);
-    }, 1500);
+    } catch (error: any) {
+      const code = error?.code ?? '';
+      // auth/user-not-found → still show success (account enumeration mitigation)
+      if (code === 'auth/user-not-found' || code === 'auth/invalid-email' || code === 'auth/missing-email') {
+        setSent(true);
+      } else if (code === 'auth/too-many-requests') {
+        Alert.alert('Too many attempts', 'Please wait a few minutes before trying again.');
+      } else if (code === 'auth/network-request-failed') {
+        Alert.alert('Network error', 'Check your connection and try again.');
+      } else {
+        Alert.alert('Could not send reset link', 'Please try again shortly.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

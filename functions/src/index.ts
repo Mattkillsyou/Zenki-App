@@ -21,6 +21,9 @@ import {
   safeParseJson,
 } from './prompts';
 
+// Re-export the deleteAccount endpoint from its own file.
+export { deleteAccount } from './deleteAccount';
+
 // ─────────────────────────────────────────────
 // Setup
 // ─────────────────────────────────────────────

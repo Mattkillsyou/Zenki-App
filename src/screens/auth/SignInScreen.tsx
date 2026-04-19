@@ -11,6 +11,12 @@ import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components';
 import { MEMBERS, CREDENTIALS, ADMIN_PASSWORD_OVERRIDE_KEY } from '../../data/members';
 import { spacing, borderRadius } from '../../theme';
+import { FIREBASE_CONFIGURED } from '../../config/firebase';
+import {
+  firebaseSignInWithPassword,
+  firebaseSignInOrSeedAccount,
+  emailForMember,
+} from '../../services/firebaseAuth';
 
 const INVITE_CODE = 'dragon';
 const INVITE_VERIFIED_KEY = '@zenki_invite_verified';
@@ -53,12 +59,70 @@ export function SignInScreen({ navigation }: any) {
   };
 
   const handleSignIn = async () => {
-    if (!username || !password) { Alert.alert('Error', 'Please enter your username and password'); return; }
+    if (!username || !password) {
+      Alert.alert('Error', 'Please enter your username and password');
+      return;
+    }
     setLoading(true);
-    setTimeout(async () => {
+
+    // "temp" password is the short-circuit to the admin-onboarding set-password flow.
+    if (password === 'temp') {
+      navigation.navigate('SetPassword', { username });
+      setLoading(false);
+      return;
+    }
+
+    const cred = CREDENTIALS[username.toLowerCase()];
+    const member = cred ? MEMBERS.find((m) => m.id === cred.memberId) : null;
+
+    // Custom member (non-hardcoded user) — try Firebase directly via username@domain
+    const email = member ? emailForMember(member) : `${username.toLowerCase()}@zenkidojo.app`;
+
+    // When Firebase is unreachable we fall back to the pre-existing local password
+    // path so dev / offline can still sign in. Production always goes through Firebase.
+    if (!FIREBASE_CONFIGURED) {
+      await legacyLocalSignIn();
+      return;
+    }
+
+    try {
+      if (member) {
+        // Seeded test accounts: auto-create Firebase record on first correct password
+        const { isNewAccount } = await firebaseSignInOrSeedAccount(email, password, member);
+        if (isNewAccount) {
+          console.log('[SignIn] Seeded Firebase account for', username);
+        }
+        await auth.signIn(member);
+        navigation.replace('Main');
+      } else {
+        // Unknown username — pure Firebase sign-in attempt
+        await firebaseSignInWithPassword(email, password);
+        // We have no Member record client-side for custom accounts yet — the
+        // onboarding flow is the authoritative creation path. Until we wire
+        // Firestore → Member hydration, fall through to invalid-credentials.
+        throw new Error('custom-accounts-need-onboarding');
+      }
+    } catch (error: any) {
+      const code = error?.code ?? error?.message ?? 'unknown';
+      const userMessage =
+        code === 'auth/wrong-password' || code === 'auth/invalid-credential'
+          ? 'Check your username and password.'
+          : code === 'auth/too-many-requests'
+            ? 'Too many attempts. Wait a minute and try again.'
+            : code === 'auth/network-request-failed'
+              ? 'Network error. Please check your connection.'
+              : 'Check your username and password.';
+      Alert.alert('Invalid Credentials', userMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /** Offline / Firebase-unavailable path — uses the local CREDENTIALS map. */
+  const legacyLocalSignIn = async () => {
+    try {
       const cred = CREDENTIALS[username.toLowerCase()];
       if (cred) {
-        // Check for an admin-set password override first, fall back to default
         let expectedPassword = cred.password;
         try {
           const raw = await AsyncStorage.getItem(ADMIN_PASSWORD_OVERRIDE_KEY);
@@ -73,10 +137,10 @@ export function SignInScreen({ navigation }: any) {
           if (member) { await auth.signIn(member); navigation.replace('Main'); return; }
         }
       }
-      if (password === 'temp') { navigation.navigate('SetPassword', { username }); setLoading(false); return; }
-      setLoading(false);
       Alert.alert('Invalid Credentials', 'Check your username and password.');
-    }, 1500);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (checkingInvite) return null;

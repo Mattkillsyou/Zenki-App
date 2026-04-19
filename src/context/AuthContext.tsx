@@ -3,6 +3,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Member, MEMBERS } from '../data/members';
 import { pushMemberToSheets, pushMemberToFirestore } from '../services/memberSync';
 import { registerForPushNotifications, savePushTokenToFirestore } from '../services/pushNotifications';
+import {
+  firebaseCreateAccount,
+  firebaseSignOut,
+  emailForMember,
+} from '../services/firebaseAuth';
+import { FIREBASE_CONFIGURED } from '../config/firebase';
 
 const STORAGE_KEY = '@zenki_current_user';
 const CUSTOM_MEMBER_KEY = '@zenki_custom_member';
@@ -11,7 +17,11 @@ interface AuthContextValue {
   user: Member | null;
   isLoading: boolean;
   signIn: (member: Member) => Promise<void>;
-  createAccount: (member: Member) => Promise<void>;
+  /**
+   * Create a local account. If a password is provided AND Firebase is configured,
+   * also provisions a real Firebase Auth user. Otherwise local-only (dev mode).
+   */
+  createAccount: (member: Member, password?: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -28,25 +38,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then(async (id) => {
-      if (id) {
-        // Check hardcoded members first
+    let cancelled = false;
+    (async () => {
+      try {
+        const id = await AsyncStorage.getItem(STORAGE_KEY);
+        if (!id) return;
         const member = MEMBERS.find((m) => m.id === id);
         if (member) {
-          setUser(member);
-        } else {
-          // Check for a custom-created member
-          const raw = await AsyncStorage.getItem(CUSTOM_MEMBER_KEY);
-          if (raw) {
-            try {
-              const custom: Member = JSON.parse(raw);
-              if (custom.id === id) setUser(custom);
-            } catch { /* ignore */ }
+          if (!cancelled) setUser(member);
+          return;
+        }
+        const raw = await AsyncStorage.getItem(CUSTOM_MEMBER_KEY);
+        if (raw) {
+          try {
+            const custom: Member = JSON.parse(raw);
+            if (custom.id === id && !cancelled) setUser(custom);
+          } catch {
+            /* ignore */
           }
         }
+      } catch {
+        /* ignore — start signed-out */
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
-      setIsLoading(false);
-    });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const signIn = useCallback(async (member: Member) => {
@@ -54,27 +73,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem(STORAGE_KEY, member.id);
   }, []);
 
-  const createAccount = useCallback(async (member: Member) => {
+  const createAccount = useCallback(async (member: Member, password?: string) => {
+    // Provision Firebase Auth first when possible — so failures surface before
+    // the local state is mutated.
+    if (FIREBASE_CONFIGURED && password) {
+      try {
+        await firebaseCreateAccount(emailForMember(member), password, member);
+      } catch (e) {
+        console.warn('[AuthContext] Firebase signup failed — continuing local-only', e);
+      }
+    }
+
     await AsyncStorage.setItem(CUSTOM_MEMBER_KEY, JSON.stringify(member));
     await AsyncStorage.setItem(STORAGE_KEY, member.id);
     setUser(member);
-    // Sync to Sheets + Firestore (fire-and-forget)
+
+    // Sync to Sheets + Firestore members doc (fire-and-forget)
     pushMemberToSheets(member);
     pushMemberToFirestore(member);
-    // Register for push notifications + save token to Firestore
+
+    // Register for push notifications + save token
     registerForPushNotifications().then((token) => {
       if (token) {
         savePushTokenToFirestore(member.id, token);
-        // Update local member with the token
         const updatedMember = { ...member, pushToken: token };
-        AsyncStorage.setItem(CUSTOM_MEMBER_KEY, JSON.stringify(updatedMember));
+        AsyncStorage.setItem(CUSTOM_MEMBER_KEY, JSON.stringify(updatedMember)).catch(() => {});
       }
     });
   }, []);
 
   const signOut = useCallback(async () => {
+    // Local state first so UI updates immediately
     setUser(null);
+
+    // Clear the Firebase Auth session — critical for Apple review
+    await firebaseSignOut();
+
+    // Wipe local identity state
     await AsyncStorage.removeItem(STORAGE_KEY);
+    await AsyncStorage.removeItem(CUSTOM_MEMBER_KEY);
   }, []);
 
   return (

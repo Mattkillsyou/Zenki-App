@@ -24,6 +24,12 @@ import { senpaiJingle } from '../sounds/synth';
 import { randomDialogue } from '../data/senpaiDialogue';
 import { ADMIN_PASSWORD_OVERRIDE_KEY } from '../data/members';
 import { typography, spacing, borderRadius } from '../theme';
+import { AI_FUNCTION_BASE_URL } from '../config/api';
+import { FIREBASE_CONFIGURED } from '../config/firebase';
+import {
+  firebaseDeleteCurrentUser,
+  getCurrentIdToken,
+} from '../services/firebaseAuth';
 
 const UNITS_KEY = '@zenki_units_pref';
 const SOUND_ENABLED_KEY = '@zenki_sound_enabled';
@@ -46,8 +52,110 @@ function simpleHash(str: string): string {
 
 export function SettingsScreen({ navigation }: any) {
   const { colors, mode, setMode } = useTheme();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const isAdmin = user?.isAdmin === true;
+
+  // ── Real sign-out: clear local state + Firebase Auth session ──
+  const handleSignOut = () => {
+    Alert.alert('Sign Out?', 'You will need to sign back in next time.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut(); // clears Firebase session + local identity
+          } catch {
+            /* ignore */
+          }
+          navigation.replace('SignIn');
+        },
+      },
+    ]);
+  };
+
+  // ── Delete Account (Apple 5.1.1(v) requirement) ──
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account?',
+      'This permanently deletes your account, posts, messages, attendance history, and all training data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Forever',
+          style: 'destructive',
+          onPress: () => confirmDeleteAccount(),
+        },
+      ],
+    );
+  };
+
+  const confirmDeleteAccount = () => {
+    Alert.alert(
+      'Really?',
+      'Tap Delete again to confirm. Your data will be gone immediately and cannot be recovered.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Ask the server to cascade-delete Firestore docs + Storage
+              if (FIREBASE_CONFIGURED) {
+                const token = await getCurrentIdToken();
+                if (token) {
+                  try {
+                    await fetch(`${AI_FUNCTION_BASE_URL}/deleteAccount`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                      },
+                      body: JSON.stringify({}),
+                    });
+                  } catch {
+                    /* network failure — still proceed with local cleanup */
+                  }
+                }
+
+                // Client-side Firebase Auth user deletion
+                try {
+                  await firebaseDeleteCurrentUser();
+                } catch (e: any) {
+                  if (e?.code === 'auth/requires-recent-login') {
+                    Alert.alert(
+                      'Sign in again',
+                      'For security, please sign out and sign back in, then try deleting your account again.',
+                    );
+                    return;
+                  }
+                  // Other errors — continue with local cleanup anyway
+                }
+              }
+
+              // Local wipe — clear every stored @zenki_* key
+              try {
+                const keys = await AsyncStorage.getAllKeys();
+                const zenkiKeys = keys.filter((k) => k.startsWith('@zenki_'));
+                await AsyncStorage.multiRemove(zenkiKeys);
+              } catch {
+                try {
+                  await AsyncStorage.clear();
+                } catch { /* ignore */ }
+              }
+
+              await signOut();
+              navigation.replace('SignIn');
+            } catch {
+              Alert.alert('Could not delete account', 'Please try again or contact support.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   useScreenSoundTheme('settings');
   const { play } = useSound();
   const { state: senpaiState, setEnabled: setSenpaiEnabled, triggerReaction } = useSenpai();
@@ -496,10 +604,10 @@ export function SettingsScreen({ navigation }: any) {
         </View>
 
         {/* Danger Zone */}
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, marginTop: spacing.lg, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
-          {renderNavRow('log-out-outline', 'Sign Out', () => {
-            navigation.replace('SignIn');
-          }, true)}
+        {renderSectionHeader('DANGER ZONE')}
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, marginTop: spacing.sm, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+          {renderNavRow('log-out-outline', 'Sign Out', handleSignOut, true)}
+          {renderNavRow('person-remove-outline', 'Delete Account', handleDeleteAccount, true)}
         </View>
 
         {/* Credit */}
