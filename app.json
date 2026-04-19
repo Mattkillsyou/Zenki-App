@@ -13,7 +13,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Zenki Dojo uses your location to automatically log your visits when you arrive at the dojo."
+          "locationWhenInUsePermission": "Zenki Dojo uses your location to automatically log dojo visits and, when you start a GPS-tracked workout, to record your route, distance, and pace."
         }
       ],
       [
@@ -26,7 +26,28 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Zenki Dojo uses your camera only to scan food barcodes for macro logging. Images are not stored or uploaded."
+          "cameraPermission": "Zenki Dojo uses your camera to scan food barcodes for macro logging, take progress and food photos, and set your profile picture. Photos stay on your device unless you post them."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Zenki Dojo accesses photos you choose — for profile pictures, community posts, and uploading bloodwork or DEXA scans.",
+          "cameraPermission": "Zenki Dojo uses your camera to take progress photos, food photos, and profile pictures."
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Zenki Dojo adds your booked classes and training sessions to your calendar when you opt in."
+        }
+      ],
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "neverForLocation": true,
+          "bluetoothAlwaysPermission": "Zenki Dojo connects to Bluetooth heart-rate monitors so you can track BPM, zones, and calories during training sessions."
         }
       ]
     ],
@@ -34,8 +55,13 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.zenkidojo.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Zenki Dojo uses your location to automatically log your visits when you arrive at the dojo.",
-        "NSCameraUsageDescription": "Zenki Dojo uses your camera only to scan food barcodes for macro logging. Images are not stored or uploaded."
+        "NSLocationWhenInUseUsageDescription": "Zenki Dojo uses your location to automatically log dojo visits and, when you start a GPS-tracked workout, to record your route, distance, and pace.",
+        "NSCameraUsageDescription": "Zenki Dojo uses your camera to scan food barcodes for macro logging, take progress and food photos, and set your profile picture. Photos stay on your device unless you post them.",
+        "NSPhotoLibraryUsageDescription": "Zenki Dojo accesses photos you choose — for profile pictures, community posts, and uploading bloodwork or DEXA scans. Images are not shared unless you explicitly post them.",
+        "NSCalendarsFullAccessUsageDescription": "Zenki Dojo adds your booked classes and training sessions to your calendar when you opt in.",
+        "NSCalendarsUsageDescription": "Zenki Dojo adds your booked classes and training sessions to your calendar when you opt in.",
+        "NSBluetoothAlwaysUsageDescription": "Zenki Dojo connects to Bluetooth heart-rate monitors so you can track BPM, zones, and calories during training sessions.",
+        "NSBluetoothPeripheralUsageDescription": "Zenki Dojo uses Bluetooth to connect to heart-rate monitors during workouts."
       }
     },
     "android": {
