@@ -1,8 +1,5 @@
 import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getAuth, initializeAuth, Auth } from 'firebase/auth';
-// React Native persistence lives in a subpath in Firebase v12+
-// @ts-ignore — the type declarations sometimes lag behind the runtime export
-import { getReactNativePersistence } from 'firebase/auth/react-native';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { Platform } from 'react-native';
@@ -46,6 +43,13 @@ if (FIREBASE_CONFIGURED) {
     if (Platform.OS === 'web') {
       auth = getAuth(app);
     } else {
+      // `getReactNativePersistence` is only exported from the RN entry of
+      // `firebase/auth`; the web bundler doesn't see it, so we require() it
+      // dynamically to avoid unresolved-symbol errors in the web build.
+      // Metro's "react-native" package export resolves this to the RN-specific
+      // build of @firebase/auth at bundle time on iOS/Android.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { getReactNativePersistence } = require('firebase/auth');
       auth = initializeAuth(app, {
         persistence: getReactNativePersistence(AsyncStorage),
       });
