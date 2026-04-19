@@ -1,7 +1,7 @@
 # App Store Submission — Audit Plan
 
 **Audit date:** 2026-04-19
-**Current version:** v6.3
+**Current version:** v7.3
 **Target:** iPhone via EAS Build → TestFlight → App Store
 
 Sections 1–14 of the audit are complete. Findings and the executable fix plan below. See full audit discussion in chat transcript (Claude session).
@@ -10,10 +10,19 @@ Sections 1–14 of the audit are complete. Findings and the executable fix plan 
 
 ## Status at a glance
 
-- **Blockers:** 11 identified, 0 yet fixed
-- **Highs:** ~9 identified, 0 yet fixed
-- **Bundles A–F:** ~4–5 hours of coding (Claude-executable)
-- **Bundle G:** ~1 day external setup + device testing (human)
+- **Bundle A — Repo hygiene:** ✅ done (v6.4)
+- **Bundle B — Expo config + EAS scaffolding:** ✅ done (v6.5)
+- **Bundle C — Firebase security:** ✅ done (v6.6)
+- **Bundle D — Real auth + delete account:** ✅ done (v6.7)
+- **Bundle E — UI polish:** ✅ done (v6.8)
+- **Bundle F — Perf + bundle size:** ✅ done (v6.9)
+- **v7.0 — UGC moderation (Report + Block):** ✅ done (Apple rule 1.2)
+- **v7.1 — Admin reports triage queue:** ✅ done
+- **v7.2 — Auth smoke-test fixes + dead-code sweep:** ✅ done
+- **v7.3 — Moderation UI verification + Follow-button guard:** ✅ done
+- **Bundle G — External pre-flight:** pending (1 day of human work + Apple review)
+
+**Ready for Bundle G.** All Claude-executable blockers are fixed.
 
 Work through bundles in order. Each bundle is independent enough to commit and push as its own version (v6.4, v6.5, ...) and ship to TestFlight for validation.
 

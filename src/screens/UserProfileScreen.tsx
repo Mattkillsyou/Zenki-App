@@ -85,6 +85,10 @@ export function UserProfileScreen({ navigation, route }: any) {
   };
 
   const handleFollow = async () => {
+    // Safety guard — matches the inline !userBlocked guard on the Message
+    // button. Belt-and-suspenders on top of the disabled={userBlocked} prop.
+    if (userBlocked) return;
+
     if (following) {
       await unfollowUser(userId);
       setFollowing(false);
