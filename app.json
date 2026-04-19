@@ -5,8 +5,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "scheme": "zenkidojo",
     "userInterfaceStyle": "dark",
     "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
       "backgroundColor": "#1A1209"
     },
     "plugins": [
@@ -54,6 +57,10 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.zenkidojo.app",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Zenki Dojo uses your location to automatically log dojo visits and, when you start a GPS-tracked workout, to record your route, distance, and pace.",
         "NSCameraUsageDescription": "Zenki Dojo uses your camera to scan food barcodes for macro logging, take progress and food photos, and set your profile picture. Photos stay on your device unless you post them.",

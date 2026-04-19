@@ -1,18 +1,16 @@
 /**
- * External API configuration.
+ * External API configuration — non-secret URLs and sizing constants.
  *
- * Replace these placeholders with real keys when available.
- * For security, production keys should eventually move to a backend —
- * but USDA's free key is rate-limited per IP and safe to ship client-side
- * for this non-commercial fitness app.
+ * Secrets (USDA key, Google OAuth client id, Sheets webhook) live in
+ * `src/config/env.ts`, which reads from Expo Constants / EAS secrets.
+ * Set them via EAS:
+ *   eas secret:create EXPO_PUBLIC_USDA_API_KEY --value "..."
  */
 
 /**
- * USDA FoodData Central.
- * Free: https://fdc.nal.usda.gov/api-key-signup/
- * Rate limit: 1000 req/hour/IP. DEMO_KEY is much lower.
+ * USDA FoodData Central base URL.
+ * Docs: https://fdc.nal.usda.gov/api-guide/
  */
-export const USDA_API_KEY = 'DEMO_KEY'; // TODO(owner): replace with your own key
 export const USDA_BASE_URL = 'https://api.nal.usda.gov/fdc/v1';
 
 /**

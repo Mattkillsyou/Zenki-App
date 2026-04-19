@@ -113,7 +113,7 @@ export function BookScreen({ navigation }: any) {
     {
       clientId: GOOGLE_CLIENT_ID,
       scopes: CALENDAR_SCOPES,
-      redirectUri: AuthSession.makeRedirectUri({ scheme: 'com.zenki.dojo' }),
+      redirectUri: AuthSession.makeRedirectUri({ scheme: 'zenkidojo' }),
     },
     discovery,
   );

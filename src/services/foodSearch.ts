@@ -10,7 +10,8 @@
  */
 
 import { FoodSearchResult, FoodMacros } from '../types/food';
-import { USDA_API_KEY, USDA_BASE_URL, OFF_BASE_URL } from '../config/api';
+import { USDA_BASE_URL, OFF_BASE_URL } from '../config/api';
+import { USDA_API_KEY } from '../config/env';
 
 const TIMEOUT_MS = 5000;
 
