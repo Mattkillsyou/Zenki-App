@@ -1,10 +1,111 @@
 rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────
+// Zenki Dojo — Firestore Security Rules
+//
+// Principle: default deny. Only signed-in users can read most data,
+// and users can only write to their own documents.
+// Admin-only write paths are gated by `allow write: if false` here
+// and will be opened up via Cloud Functions when admin UI is wired.
+// ─────────────────────────────────────────────────────────────
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Test mode — open read/write for development.
-    // TODO: tighten before production launch.
+
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+
+    // Member profiles keyed by Firebase Auth uid.
+    // Anyone signed in can read profiles (for community features).
+    // Only the owner can create/update/delete their own profile.
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isOwner(uid);
+    }
+
+    // Legacy members collection — read-only from the app.
+    // Admin writes happen server-side (Cloud Functions) until admin UI
+    // is wired with custom claims.
+    match /members/{memberId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // Posts — any signed-in user can read.
+    // The poster owns the post and can edit/delete their own.
+    match /posts/{postId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+                            && resource.data.userId == request.auth.uid;
+    }
+
+    // Direct-message threads — only participants read/write.
+    match /threads/{threadId} {
+      allow read: if isSignedIn()
+                  && request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn()
+                    && request.auth.uid in request.resource.data.participants;
+      allow update: if isSignedIn()
+                    && request.auth.uid in resource.data.participants;
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn()
+                    && request.auth.uid in
+                       get(/databases/$(database)/documents/threads/$(threadId)).data.participants;
+        allow create: if isSignedIn()
+                      && request.auth.uid in
+                         get(/databases/$(database)/documents/threads/$(threadId)).data.participants
+                      && request.resource.data.senderId == request.auth.uid;
+      }
+    }
+
+    // Follow edges — public-ish graph.
+    match /follows/{followId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isSignedIn()
+                            && resource.data.followerId == request.auth.uid;
+    }
+
+    // Attendance — any member can see class attendance; can only check
+    // themselves in. No updates or deletes (audit trail).
+    match /attendance/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.memberId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Product catalog — read-only from client.
+    match /products/{productId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // Waivers — submit-only. No one reads from client (admin reads server-side).
+    match /waivers/{waiverId} {
+      allow read: if false;
+      allow create: if isSignedIn()
+                    && request.resource.data.memberId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Support messages — write-only from client.
+    match /supportMessages/{docId} {
+      allow read: if false;
+      allow create: if isSignedIn()
+                    && request.resource.data.senderId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // AI rate-limit state — Cloud Functions only (Admin SDK bypasses rules).
+    match /aiRateLimits/{uid}/endpoints/{endpoint} {
+      allow read, write: if false;
+    }
+
+    // Default deny — anything not listed above is locked.
     match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2026, 5, 16);
+      allow read, write: if false;
     }
   }
 }

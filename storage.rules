@@ -1,0 +1,25 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────
+// Zenki Dojo — Cloud Storage Security Rules
+//
+// Default deny. Users own their own folder under /users/{uid}/.
+// /public/ is read-only to signed-in users (admin uploads via Admin SDK).
+// ─────────────────────────────────────────────────────────────
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Per-user private folder — only the owner reads/writes.
+    match /users/{uid}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Public assets (branded media, class posters) — signed-in read only.
+    match /public/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Default deny.
+    match /{path=**} { allow read, write: if false; }
+  }
+}

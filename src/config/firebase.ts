@@ -1,7 +1,12 @@
 import { initializeApp, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
+import { getAuth, initializeAuth, Auth } from 'firebase/auth';
+// React Native persistence lives in a subpath in Firebase v12+
+// @ts-ignore — the type declarations sometimes lag behind the runtime export
+import { getReactNativePersistence } from 'firebase/auth/react-native';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─────────────────────────────────────────────────
 // Firebase Configuration
@@ -12,8 +17,8 @@ import { getStorage, FirebaseStorage } from 'firebase/storage';
 // 3. Add a Web app → copy the config
 // 4. Replace the values below
 // 5. Enable Authentication (Email/Password)
-// 6. Create Firestore Database (test mode)
-// 7. Enable Cloud Storage
+// 6. Create Firestore Database (production mode — rules in firestore.rules)
+// 7. Enable Cloud Storage (rules in storage.rules)
 // ─────────────────────────────────────────────────
 
 const firebaseConfig = {
@@ -35,7 +40,17 @@ let storage: FirebaseStorage | null = null;
 if (FIREBASE_CONFIGURED) {
   try {
     app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
+
+    // Use AsyncStorage persistence on native so users stay signed in across
+    // app launches. On web, use default (in-memory + IndexedDB).
+    if (Platform.OS === 'web') {
+      auth = getAuth(app);
+    } else {
+      auth = initializeAuth(app, {
+        persistence: getReactNativePersistence(AsyncStorage),
+      });
+    }
+
     db = getFirestore(app);
     storage = getStorage(app);
   } catch (e) {
