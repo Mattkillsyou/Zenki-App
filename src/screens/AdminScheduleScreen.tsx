@@ -8,6 +8,8 @@ import {
   TextInput,
   Alert,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -180,7 +182,12 @@ export function AdminScheduleScreen({ navigation }: any) {
       </View>
 
       {/* Classes List */}
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={64}
+      >
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
         {dayClasses.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="calendar-outline" size={48} color={colors.textMuted} />
@@ -219,7 +226,8 @@ export function AdminScheduleScreen({ navigation }: any) {
           ))
         )}
         <View style={{ height: spacing.xxl * 2 }} />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Add/Edit Modal */}
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">

@@ -18,6 +18,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { HealthDataConsentModal, HEALTH_CONSENT_KEY } from '../components/HealthDataConsentModal';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
@@ -47,6 +49,30 @@ export function DexaUploadScreen({ navigation }: any) {
 
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [editing, setEditing] = useState<Partial<DexaExtraction> & { notes?: string }>({});
+
+  // Health-data consent gate — show the modal exactly once per device
+  const [consentModalOpen, setConsentModalOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<null | 'image' | 'pdf'>(null);
+
+  async function ensureConsent(next: 'image' | 'pdf') {
+    const accepted = await AsyncStorage.getItem(HEALTH_CONSENT_KEY);
+    if (accepted === 'true') {
+      if (next === 'image') pickImage();
+      else pickPdf();
+      return;
+    }
+    setPendingAction(next);
+    setConsentModalOpen(true);
+  }
+
+  async function acceptConsent() {
+    await AsyncStorage.setItem(HEALTH_CONSENT_KEY, 'true');
+    setConsentModalOpen(false);
+    const next = pendingAction;
+    setPendingAction(null);
+    if (next === 'image') pickImage();
+    else if (next === 'pdf') pickPdf();
+  }
 
   async function pickImage() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -187,11 +213,11 @@ export function DexaUploadScreen({ navigation }: any) {
                 </Text>
               </View>
               <View style={styles.btnRow}>
-                <TouchableOpacity onPress={pickPdf} style={[styles.bigBtn, { backgroundColor: colors.gold }]}>
+                <TouchableOpacity onPress={() => ensureConsent('pdf')} style={[styles.bigBtn, { backgroundColor: colors.gold }]}>
                   <Ionicons name="document-attach" size={22} color="#000" />
                   <Text style={styles.bigBtnText}>Upload PDF</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={pickImage} style={[styles.bigBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
+                <TouchableOpacity onPress={() => ensureConsent('image')} style={[styles.bigBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
                   <Ionicons name="image" size={22} color={colors.textPrimary} />
                   <Text style={[styles.bigBtnText, { color: colors.textPrimary }]}>Pick photo</Text>
                 </TouchableOpacity>
@@ -283,6 +309,16 @@ export function DexaUploadScreen({ navigation }: any) {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <HealthDataConsentModal
+        visible={consentModalOpen}
+        onAccept={acceptConsent}
+        onDecline={() => {
+          setConsentModalOpen(false);
+          setPendingAction(null);
+        }}
+        feature="DEXA scan"
+      />
     </SafeAreaView>
   );
 }

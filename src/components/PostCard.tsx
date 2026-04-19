@@ -56,6 +56,11 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
   const timeAgo = getTimeAgo(post.createdAt);
   const initials = post.displayName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
 
+  // Track load errors so we gracefully fall back to initials / caption-only
+  // instead of showing a broken-image icon if the remote URL is 404 / expired.
+  const [avatarErrored, setAvatarErrored] = React.useState(false);
+  const [mediaErrored, setMediaErrored] = React.useState(false);
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -63,8 +68,12 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
         <TouchableOpacity style={styles.headerLeft} onPress={() => onUserPress(post.userId)} activeOpacity={0.7}>
           <View style={[styles.avatarRing, { borderColor: colors.gold }]}>
             <View style={[styles.avatar, { backgroundColor: colors.goldMuted }]}>
-              {post.avatar ? (
-                <Image source={{ uri: post.avatar }} style={styles.avatarImage} />
+              {post.avatar && !avatarErrored ? (
+                <Image
+                  source={{ uri: post.avatar }}
+                  style={styles.avatarImage}
+                  onError={() => setAvatarErrored(true)}
+                />
               ) : (
                 <Text style={[styles.avatarText, { color: colors.gold }]}>{initials}</Text>
               )}
@@ -83,9 +92,14 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
       </View>
 
       {/* Media (photo/video) OR text caption prominence */}
-      {post.mediaUrl ? (
+      {post.mediaUrl && !mediaErrored ? (
         <TouchableOpacity activeOpacity={0.98} onPress={handleMediaTap}>
-          <Image source={{ uri: post.mediaUrl }} style={styles.media} resizeMode="cover" />
+          <Image
+            source={{ uri: post.mediaUrl }}
+            style={styles.media}
+            resizeMode="cover"
+            onError={() => setMediaErrored(true)}
+          />
         </TouchableOpacity>
       ) : (
         <View style={styles.textPostWrap}>

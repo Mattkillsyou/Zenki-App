@@ -10,6 +10,8 @@ import {
   Alert,
   Image,
   Switch,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -183,7 +185,12 @@ export function AdminProductsScreen({ navigation }: any) {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={64}
+      >
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
           BUILT-IN · {builtInCount} products (read-only)
         </Text>
@@ -232,7 +239,8 @@ export function AdminProductsScreen({ navigation }: any) {
           ))
         )}
         <View style={{ height: 40 }} />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <Modal visible={modalOpen} animationType="slide" transparent onRequestClose={() => setModalOpen(false)}>
         <SafeAreaView style={styles.modalBackdrop}>

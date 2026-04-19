@@ -14,6 +14,8 @@ import {
   TextInput,
   Modal,
   Pressable,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -257,7 +259,12 @@ export function StoreScreen({ navigation }: any) {
 
       {showCart ? (
         /* Cart View */
-        <ScrollView contentContainerStyle={styles.productList} showsVerticalScrollIndicator={false}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={64}
+        >
+        <ScrollView contentContainerStyle={styles.productList} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {cart.length === 0 ? (
             <View style={styles.emptyCart}>
               <Ionicons name="bag-outline" size={48} color={colors.textMuted} />
@@ -379,6 +386,7 @@ export function StoreScreen({ navigation }: any) {
             </>
           )}
         </ScrollView>
+        </KeyboardAvoidingView>
       ) : (
         /* Products — paginated: 4 products per page, horizontal swipe */
         <View
