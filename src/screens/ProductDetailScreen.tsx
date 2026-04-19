@@ -77,12 +77,24 @@ export function ProductDetailScreen({ navigation, route }: any) {
       Alert.alert('Select Size', 'Please choose a size before purchasing.');
       return;
     }
-    navigation.navigate('BookingPayment', {
-      isProduct: true,
-      sessionType: product.name,
-      time: selectedSize ? `Size: ${selectedSize}` : 'One size',
-      price: product.memberPrice * quantity,
-    });
+    Alert.alert(
+      'Reserve Item',
+      `${product.name}${selectedSize ? ` (${selectedSize})` : ''} × ${quantity}\n` +
+      `Total: $${(product.memberPrice * quantity).toFixed(2)}\n\n` +
+      `Tap Reserve to let the dojo know you'd like to pick this up. Payment is handled in person.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reserve',
+          onPress: () => {
+            Alert.alert(
+              'Reserved',
+              `We'll set aside ${product.name}${selectedSize ? ` (${selectedSize})` : ''} for you. Come by the dojo to complete your purchase.`,
+            );
+          },
+        },
+      ],
+    );
   };
 
   return (

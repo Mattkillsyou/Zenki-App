@@ -5,8 +5,6 @@ export { ProfileScreen } from './ProfileScreen';
 export { StoreScreen } from './StoreScreen';
 export { SettingsScreen } from './SettingsScreen';
 export { AdminScreen } from './AdminScreen';
-export { BookingPaymentScreen } from './BookingPaymentScreen';
-export { PaymentMethodsScreen } from './PaymentMethodsScreen';
 export { ProductDetailScreen } from './ProductDetailScreen';
 export { DrinkScreen } from './DrinkScreen';
 export { CommunityScreen } from './CommunityScreen';

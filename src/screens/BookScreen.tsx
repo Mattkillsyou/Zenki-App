@@ -13,6 +13,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { Button } from '../components';
+import { useAuth } from '../context/AuthContext';
+import { useAppointments } from '../context/AppointmentContext';
+import { useGamification } from '../context/GamificationContext';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { fetchBusyIntervals, isSlotBusy, BusyInterval } from '../services/calendarAvailability';
@@ -75,12 +78,16 @@ function todayDateString(): string {
 
 export function BookScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const { user } = useAuth();
+  const { requestAppointment } = useAppointments();
+  const { recordBooking, recordPrivateSession } = useGamification();
   const [selectedInstructor, setSelectedInstructor] = useState(0);
   const [selectedType, setSelectedType] = useState(0);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [calendarLinked, setCalendarLinked] = useState(false);
   const [busyIntervals, setBusyIntervals] = useState<BusyInterval[]>([]);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const currentDateStr = todayDateString();
   const currentDate = useMemo(() => new Date(), []);
   const currentDuration = parseDurationMinutes(SESSION_TYPES[selectedType].duration);
@@ -148,8 +155,8 @@ export function BookScreen({ navigation }: any) {
     return calUrl;
   };
 
-  const handleBooking = () => {
-    if (!selectedTime) return;
+  const handleBooking = async () => {
+    if (!selectedTime || submitting) return;
 
     // Defensive — shouldn't be reachable since busy slots are disabled
     const slotDate = slotToDate(currentDate, selectedTime);
@@ -159,16 +166,40 @@ export function BookScreen({ navigation }: any) {
       return;
     }
 
+    if (!user) {
+      Alert.alert('Sign in required', 'Please sign in to request a booking.');
+      return;
+    }
+
     const instructor = INSTRUCTORS[selectedInstructor];
     const sessionType = SESSION_TYPES[selectedType];
 
-    navigation.navigate('BookingPayment', {
-      instructor: instructor.name,
-      sessionType: sessionType.label,
-      time: selectedTime,
-      price: sessionType.price,
-      calendarUrl: addToGoogleCalendar(instructor.name, sessionType.label, selectedTime),
-    });
+    setSubmitting(true);
+    try {
+      await requestAppointment({
+        memberId: user.id,
+        memberName: `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || 'Member',
+        instructor: instructor.name,
+        sessionType: sessionType.label,
+        startsAt: slotDate.toISOString(),
+        durationMinutes: parseDurationMinutes(sessionType.duration),
+        price: sessionType.price,
+      });
+      recordBooking();
+      const label = sessionType.label.toLowerCase();
+      if (label.includes('private') || label.includes('1:1')) recordPrivateSession();
+
+      Alert.alert(
+        'Inquiry Sent',
+        `Your request for ${sessionType.label} with ${instructor.name} at ${selectedTime} has been sent. ` +
+        `We'll confirm by text or email. Payment is handled in person at the dojo.`,
+        [{ text: 'OK', onPress: () => navigation.goBack() }],
+      );
+    } catch (e) {
+      Alert.alert('Error', 'Could not send your booking request. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

@@ -16,7 +16,6 @@
     "@react-navigation/native": "^7.0.0",
     "@react-navigation/native-stack": "^7.0.0",
     "@react-navigation/stack": "^7.8.9",
-    "@stripe/stripe-react-native": "^0.61.0",
     "expo": "~52.0.0",
     "expo-auth-session": "~6.0.3",
     "expo-av": "~15.0.1",

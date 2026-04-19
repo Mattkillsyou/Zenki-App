@@ -358,31 +358,21 @@ export function StoreScreen({ navigation }: any) {
                   if (usePoints && pointsDiscount > 0) {
                     redeemPoints(Math.floor(pointsDiscount * POINTS_PER_DOLLAR));
                   }
-                  if (finalTotal === 0) {
-                    // Fully covered by points — confirm directly
-                    for (let i = 0; i < cartCount; i++) recordGearPurchase();
-                    Alert.alert(
-                      'Order Placed',
-                      `Your order was paid in full with ${Math.floor(pointsDiscount * POINTS_PER_DOLLAR).toLocaleString()} Dojo Points.`,
-                    );
-                    setCart([]);
-                    setShowCart(false);
-                    setUsePoints(false);
-                    return;
-                  }
                   for (let i = 0; i < cartCount; i++) recordGearPurchase();
-                  navigation.navigate('BookingPayment', {
-                    isProduct: true,
-                    sessionType: `${cartCount} item${cartCount !== 1 ? 's' : ''}`,
-                    price: finalTotal,
-                  });
+                  const balanceMsg = finalTotal === 0
+                    ? `Your order was paid in full with ${Math.floor(pointsDiscount * POINTS_PER_DOLLAR).toLocaleString()} Dojo Points — no balance due.`
+                    : `Balance due at the dojo: $${finalTotal.toFixed(2)}. We'll set your items aside for pickup.`;
+                  Alert.alert('Order Reserved', balanceMsg);
+                  setCart([]);
+                  setShowCart(false);
+                  setUsePoints(false);
                 }}
               >
                 <Text style={styles.checkoutText}>
                   {(() => {
                     const pointsDiscount = usePoints ? Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal) : 0;
                     const finalTotal = Math.max(0, cartTotal - pointsDiscount);
-                    return finalTotal === 0 ? 'CONFIRM — FREE WITH POINTS' : `CHECKOUT — $${finalTotal.toFixed(2)}`;
+                    return finalTotal === 0 ? 'CONFIRM — FREE WITH POINTS' : `RESERVE — PAY $${finalTotal.toFixed(2)} AT DOJO`;
                   })()}
                 </Text>
               </TouchableOpacity>

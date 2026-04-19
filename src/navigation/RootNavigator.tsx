@@ -59,8 +59,6 @@ import { SessionHistoryScreen } from '../screens/SessionHistoryScreen';
 import { ActivityTrackerScreen } from '../screens/ActivityTrackerScreen';
 import { WeeklyReportScreen } from '../screens/WeeklyReportScreen';
 import { BodyLabScreen } from '../screens/BodyLabScreen';
-import { BookingPaymentScreen } from '../screens/BookingPaymentScreen';
-import { PaymentMethodsScreen } from '../screens/PaymentMethodsScreen';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
 import { CreatePostScreen } from '../screens/CreatePostScreen';
 import { UserProfileScreen } from '../screens/UserProfileScreen';
@@ -287,8 +285,6 @@ export function RootNavigator() {
       {/* Modals — slide up */}
       <Stack.Screen name="Settings" component={withErrorBoundary(SettingsScreen, 'Settings')} options={modalTransition} />
       <Stack.Screen name="Admin" component={withErrorBoundary(AdminScreen, 'Admin')} options={modalTransition} />
-      <Stack.Screen name="BookingPayment" component={withErrorBoundary(BookingPaymentScreen, 'Payment')} options={modalTransition} />
-      <Stack.Screen name="PaymentMethods" component={withErrorBoundary(PaymentMethodsScreen, 'Payment Methods')} options={modalTransition} />
 
       {/* Admin sub-screens — push */}
       <Stack.Screen name="AdminMembers" component={withErrorBoundary(AdminMembersScreen, 'Admin Members')} options={pushTransition} />

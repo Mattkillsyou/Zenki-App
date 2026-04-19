@@ -398,13 +398,12 @@ export function SettingsScreen({ navigation }: any) {
         )}
 
         {/* Account */}
-        {renderSectionHeader('ACCOUNT')}
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
-          {renderNavRow('card-outline', 'Payment Methods', () =>
-            navigation.navigate('PaymentMethods')
-          )}
-          {isAdmin && renderNavRow('key-outline', 'Change Password', () => setPwModalOpen(true))}
-        </View>
+        {isAdmin && renderSectionHeader('ACCOUNT')}
+        {isAdmin && (
+          <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+            {renderNavRow('key-outline', 'Change Password', () => setPwModalOpen(true))}
+          </View>
+        )}
 
         {/* Data */}
         {renderSectionHeader('DATA')}
