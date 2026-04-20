@@ -172,13 +172,20 @@ export function HomeScreen({ navigation }: any) {
 
   // First-ever Home visit (fresh signup completes Onboarding → lands here) →
   // show the tutorial once. Flag is stored in AsyncStorage so it never
-  // re-triggers unless the user resets from Settings → Secret Lab.
+  // re-triggers unless the user resets it from Settings → Secret Lab or
+  // from the Profile → Help → "Replay tutorial" action. We re-check on
+  // every focus so those replay paths work immediately.
   React.useEffect(() => {
     if (isEmployee) return; // employees skip the tutorial
-    shouldShowTutorial().then((show) => {
-      if (show) setTutorialOpen(true);
-    });
-  }, [isEmployee]);
+    const check = () => {
+      shouldShowTutorial().then((show) => {
+        if (show) setTutorialOpen(true);
+      });
+    };
+    check(); // initial mount
+    const unsub = navigation?.addListener?.('focus', check);
+    return () => { if (typeof unsub === 'function') unsub(); };
+  }, [isEmployee, navigation]);
 
   // Spin wheel is now opened manually via the icon in the header
   // (previously auto-opened on first visit of the day)

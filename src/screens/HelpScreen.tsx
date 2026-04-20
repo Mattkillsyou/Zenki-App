@@ -57,22 +57,17 @@ export function HelpScreen({ navigation }: any) {
   const { colors } = useTheme();
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
-  const handleReplayTutorial = () => {
-    Alert.alert(
-      'Replay tutorial?',
-      'The first-run walkthrough will start the next time you open the Home tab.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Replay',
-          onPress: async () => {
-            await resetTutorial();
-            // Navigate to Home so the TutorialModal fires on mount
-            navigation.navigate('Main');
-          },
-        },
-      ],
-    );
+  const handleReplayTutorial = async () => {
+    // Harmless action — no confirm needed. Reset the flag and hop to Home;
+    // HomeScreen's focus listener reopens the TutorialModal.
+    // (Using Alert.alert with buttons doesn't work on web react-native, so
+    //  we avoid it for this particular flow.)
+    try {
+      await resetTutorial();
+    } catch {
+      /* ignore */
+    }
+    navigation.navigate('Main', { screen: 'Home' });
   };
 
   const mailto = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Zenki Dojo Support')}`;
