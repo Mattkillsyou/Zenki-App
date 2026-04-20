@@ -55,12 +55,12 @@ export const TRAINING_MODULES: TrainingModule[] = [
     accentToken: 'red',
     sections: {
       whatItIs:
-        'Connect a Bluetooth HR monitor and train by zone (Z1–Z5) in real time. Zones personalize to your age and resting HR.',
+        'Connect a Bluetooth HR monitor and train by zone (Z1 to Z5) in real time. Zones personalize to your age and resting HR.',
       howToUse: [
         'Pair your HR monitor in iPhone Bluetooth settings',
         'Open HR Session → pick an Activity Type (Martial Arts, HIIT, Yoga, etc.)',
         'Wet the chest-strap electrodes, put it on, tap Start',
-        'Train. Tap Stop to save — session feeds your Weekly Report',
+        'Train. Tap Stop to save. The session feeds your Weekly Report',
       ],
     },
   },
@@ -72,7 +72,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
     accentToken: 'gold',
     sections: {
       whatItIs:
-        'Three tabs — Log (record sessions), PRs (new records auto-detected), Stats (trends over time).',
+        'Three tabs: Log (record sessions), PRs (new records auto-detected), Stats (trends over time).',
       howToUse: [
         'Open Workout → Log tab → Log a Workout',
         'Add exercises, sets, reps, weight → Save',
@@ -106,7 +106,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
     accentToken: 'info',
     sections: {
       whatItIs:
-        'Daily weigh-in log with 7D / 14D / 30D / All trend views. Raw daily weight is noise from water and sodium — the trend line is signal.',
+        'Daily weigh-in log with 7D / 14D / 30D / All trend views. Raw daily weight is noise from water and sodium. The trend line is signal.',
       howToUse: [
         'Tap Log Weight → enter weight → add an optional note → Save',
         'Switch between 7D / 14D / 30D / All to see trends',
@@ -122,12 +122,12 @@ export const TRAINING_MODULES: TrainingModule[] = [
     accentToken: 'warning',
     sections: {
       whatItIs:
-        'Four modes — Round (work/rest with round count), HIIT (short bursts), Watch (stopwatch), Meditate (silent countdown).',
+        'Four modes: Round (work/rest with round count), HIIT (short bursts), Watch (stopwatch), Meditate (silent countdown).',
       howToUse: [
         'Open Timer, pick a mode tab',
         'Round: set work, rest, rounds (defaults to 3:00 / 1:00 / 5 for boxing)',
         'HIIT: set burst/rest (e.g. 30s / 15s), total rounds',
-        'Tap Start — phone vibrates on transitions',
+        'Tap Start. Phone vibrates on transitions',
       ],
     },
   },
@@ -139,7 +139,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
     accentToken: 'red',
     sections: {
       whatItIs:
-        'Health dashboard with four tabs — Dash (Health Score + body comp), DEXA (upload scans), Blood (upload panels), Info (marker explainer).',
+        'Health dashboard with four tabs: Dash (Health Score + body comp), DEXA (upload scans), Blood (upload panels), Info (marker explainer).',
       howToUse: [
         'Open Body Lab → Dash for the overview',
         'DEXA tab → Upload → pick PDF or photo → AI extracts values → confirm',
@@ -151,12 +151,12 @@ export const TRAINING_MODULES: TrainingModule[] = [
   {
     id: 'gps',
     title: 'GPS',
-    subtitle: 'Run, walk, bike, hike — mapped + logged',
+    subtitle: 'Run, walk, bike, hike. Mapped and logged.',
     icon: 'navigate-outline',
     accentToken: 'info',
     sections: {
       whatItIs:
-        'Outdoor activity tracker with a live map. Four modes — Run, Walk, Bike, Hike. Four tabs per session — Stats, Map, Data, Radio.',
+        'Outdoor activity tracker with a live map. Four modes: Run, Walk, Bike, Hike. Four tabs per session: Stats, Map, Data, Radio.',
       howToUse: [
         'Open GPS → pick Run / Walk / Bike / Hike',
         'Wait for GPS lock (indicator turns green)',
@@ -178,7 +178,7 @@ export const TRAINING_MODULES: TrainingModule[] = [
         'Open Report → read top totals',
         'Check Day Streak + Diamonds + Badges',
         'Scroll the Daily Breakdown bar chart',
-        'Read Insights last — suggests a focus for next week',
+        'Read Insights last. It suggests a focus for next week',
       ],
     },
   },
