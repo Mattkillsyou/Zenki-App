@@ -379,7 +379,7 @@ export function HomeScreen({ navigation }: any) {
   }, []);
 
   // ── Module reorder (drag to rearrange) + show/hide ──
-  const DEFAULT_MODULE_ORDER = ['training', 'announcements', 'xpBar', 'achievements', 'quote', 'dashboard', 'quickStats', 'schedule'];
+  const DEFAULT_MODULE_ORDER = ['training', 'announcements', 'xpBar', 'quickFoodActions', 'achievements', 'quote', 'dashboard', 'quickStats', 'schedule'];
   const [moduleOrder, setModuleOrder] = useState<string[]>(DEFAULT_MODULE_ORDER);
   const [moduleVisibility, setModuleVisibility] = useState<Record<string, boolean>>({});
   const [editMode, setEditMode] = useState(false);
@@ -595,6 +595,36 @@ export function HomeScreen({ navigation }: any) {
                           </View>
                         </View>
                       </View>
+                    </View>
+                  </FadeInView>
+                ),
+                quickFoodActions: (
+                  <FadeInView delay={110} slideUp={16}>
+                    <View style={{ paddingHorizontal: 20, marginTop: 6, flexDirection: 'row', gap: 10 }}>
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => !editMode && navigation.navigate('MacroTracker', { openSearch: true })}
+                        style={[styles.quickFoodBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                      >
+                        <Ionicons name="search" size={22} color={colors.gold} />
+                        <Text style={[styles.quickFoodLabel, { color: colors.textPrimary }]}>Search</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => !editMode && navigation.navigate('BarcodeScanner')}
+                        style={[styles.quickFoodBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                      >
+                        <Ionicons name="barcode-outline" size={22} color={colors.gold} />
+                        <Text style={[styles.quickFoodLabel, { color: colors.textPrimary }]}>Scan</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => !editMode && navigation.navigate('PhotoFood')}
+                        style={[styles.quickFoodBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                      >
+                        <Ionicons name="sparkles-outline" size={22} color={colors.gold} />
+                        <Text style={[styles.quickFoodLabel, { color: colors.textPrimary }]}>Photo</Text>
+                      </TouchableOpacity>
                     </View>
                   </FadeInView>
                 ),
@@ -1495,6 +1525,22 @@ const styles = StyleSheet.create({
   },
   spotsLeft: {
     fontSize: 10,
+    fontWeight: '700',
+  },
+
+  // ── Home quick-food actions row (Search / Scan / Photo) ──
+  quickFoodBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  quickFoodLabel: {
+    fontSize: 15,
     fontWeight: '700',
   },
 

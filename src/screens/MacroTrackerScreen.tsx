@@ -67,9 +67,10 @@ function MacroBar({ label, value, goal, color, unit = 'g', bgColor, trackColor, 
   );
 }
 
-export function MacroTrackerScreen({ navigation }: any) {
+export function MacroTrackerScreen({ navigation, route }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const openSearchOnMount = !!route?.params?.openSearch;
   const {
     macrosForDate,
     totalsForDate,
@@ -93,6 +94,13 @@ export function MacroTrackerScreen({ navigation }: any) {
   const hasSetup = user ? hasCompletedSetup(user.id) : false;
   const recentFoods = user ? recentFoodsFor(user.id) : [];
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // If navigated with { openSearch: true } from the Home quick-actions row,
+  // pop the Food Search modal automatically so tapping "Search" on Home
+  // lands right on the search.
+  useEffect(() => {
+    if (openSearchOnMount) setSearchOpen(true);
+  }, [openSearchOnMount]);
 
   const today = todayISO();
   const [selectedDate, setSelectedDate] = useState(today);
@@ -238,7 +246,7 @@ export function MacroTrackerScreen({ navigation }: any) {
               onPress={() => setSearchOpen(true)}
               style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
-              <Ionicons name="search" size={20} color={colors.gold} />
+              <Ionicons name="search" size={22} color={colors.gold} />
               <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Search</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -246,7 +254,7 @@ export function MacroTrackerScreen({ navigation }: any) {
               onPress={() => navigation.navigate('BarcodeScanner')}
               style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
-              <Ionicons name="barcode-outline" size={20} color={colors.gold} />
+              <Ionicons name="barcode-outline" size={22} color={colors.gold} />
               <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Scan</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -254,7 +262,7 @@ export function MacroTrackerScreen({ navigation }: any) {
               onPress={() => navigation.navigate('PhotoFood')}
               style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
-              <Ionicons name="sparkles-outline" size={20} color={colors.gold} />
+              <Ionicons name="sparkles-outline" size={22} color={colors.gold} />
               <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Photo</Text>
             </TouchableOpacity>
           </View>
@@ -827,7 +835,7 @@ const styles = StyleSheet.create({
   // Action row (Search / Scan / Photo)
   actionRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
   },
@@ -836,12 +844,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 14,
+    borderWidth: 1.5,
   },
-  actionBtnLabel: { fontSize: 13, fontWeight: '700' },
+  actionBtnLabel: { fontSize: 15, fontWeight: '700' },
 
   // Food calendar
   calendarCard: {
