@@ -9,6 +9,7 @@ import {
   emailForMember,
 } from '../services/firebaseAuth';
 import { FIREBASE_CONFIGURED } from '../config/firebase';
+import { seedReviewerDataIfNeeded } from '../utils/seedReviewerData';
 
 const STORAGE_KEY = '@zenki_current_user';
 const CUSTOM_MEMBER_KEY = '@zenki_custom_member';
@@ -46,6 +47,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const member = MEMBERS.find((m) => m.id === id);
         if (member) {
           if (!cancelled) setUser(member);
+          // Run reviewer-seed on persisted-session startup too, so we cover
+          // the case where the reviewer signed in yesterday, closed the app,
+          // and reopens it today expecting sample data.
+          seedReviewerDataIfNeeded(member).catch(() => {});
           return;
         }
         const raw = await AsyncStorage.getItem(CUSTOM_MEMBER_KEY);
@@ -71,6 +76,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = useCallback(async (member: Member) => {
     setUser(member);
     await AsyncStorage.setItem(STORAGE_KEY, member.id);
+    // Seeds sample data on first sign-in for the App Review demo account.
+    // No-op for everyone else. See utils/seedReviewerData.ts.
+    seedReviewerDataIfNeeded(member).catch((e) =>
+      console.warn('[AuthContext] reviewer seed failed (non-fatal)', e),
+    );
   }, []);
 
   const createAccount = useCallback(async (member: Member, password?: string) => {

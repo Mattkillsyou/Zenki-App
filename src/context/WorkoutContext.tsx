@@ -4,6 +4,7 @@ import { WorkoutLog, PersonalRecord } from '../types/workout';
 import { EXERCISES_BY_KEY } from '../data/exercises';
 import { generateId } from '../utils/generateId';
 import { useGamification } from './GamificationContext';
+import { useAuth } from './AuthContext';
 
 const LOGS_KEY = '@zenki_workout_logs';
 const PRS_KEY = '@zenki_personal_records';
@@ -56,20 +57,25 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [prs, setPRs] = useState<PersonalRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const { awardPoints, recordSession } = useGamification();
+  const { user } = useAuth();
 
+  // Re-read on user change so sign-in / reviewer-seed writes are picked up.
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const [lRaw, pRaw] = await Promise.all([
           AsyncStorage.getItem(LOGS_KEY),
           AsyncStorage.getItem(PRS_KEY),
         ]);
-        if (lRaw) setLogs(JSON.parse(lRaw));
-        if (pRaw) setPRs(JSON.parse(pRaw));
+        if (cancelled) return;
+        setLogs(lRaw ? JSON.parse(lRaw) : []);
+        setPRs(pRaw ? JSON.parse(pRaw) : []);
       } catch { /* ignore */ }
-      setLoaded(true);
+      if (!cancelled) setLoaded(true);
     })();
-  }, []);
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   useEffect(() => {
     if (loaded) AsyncStorage.setItem(LOGS_KEY, JSON.stringify(logs));

@@ -20,6 +20,7 @@ import { FoodSearchResult } from '../types/food';
 import { generateId } from '../utils/generateId';
 import { DexaScan } from '../types/dexa';
 import { BloodworkReport } from '../types/bloodwork';
+import { useAuth } from './AuthContext';
 
 const WEIGHT_KEY = '@zenki_weight_entries';
 const MACRO_KEY = '@zenki_macro_entries';
@@ -149,9 +150,14 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   const [dexaScans, setDexaScans] = useState<DexaScan[]>([]);
   const [bloodwork, setBloodwork] = useState<BloodworkReport[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const { user } = useAuth();
 
-  // Load all seven slices
+  // Re-read all slices from storage whenever the signed-in user changes.
+  // This catches the case where another code path (e.g. seedReviewerData in
+  // AuthContext.signIn) writes to AsyncStorage outside of this context's
+  // persist effect — on user change we re-read from disk, picking up writes.
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const [wRaw, mRaw, gRaw, pRaw, rRaw, dRaw, bRaw] = await Promise.all([
@@ -163,20 +169,24 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(DEXA_KEY),
           AsyncStorage.getItem(BLOODWORK_KEY),
         ]);
-        if (wRaw) setWeights(JSON.parse(wRaw));
-        if (mRaw) setMacros(JSON.parse(mRaw));
-        if (gRaw) setGoalsByMember(JSON.parse(gRaw));
-        if (pRaw) setProfilesByMember(JSON.parse(pRaw));
-        if (rRaw) setRecentFoodsByMember(JSON.parse(rRaw));
-        if (dRaw) setDexaScans(JSON.parse(dRaw));
-        if (bRaw) setBloodwork(JSON.parse(bRaw));
+        if (cancelled) return;
+        setWeights(wRaw ? JSON.parse(wRaw) : []);
+        setMacros(mRaw ? JSON.parse(mRaw) : []);
+        setGoalsByMember(gRaw ? JSON.parse(gRaw) : {});
+        setProfilesByMember(pRaw ? JSON.parse(pRaw) : {});
+        setRecentFoodsByMember(rRaw ? JSON.parse(rRaw) : {});
+        setDexaScans(dRaw ? JSON.parse(dRaw) : []);
+        setBloodwork(bRaw ? JSON.parse(bRaw) : []);
       } catch (e) {
         // non-fatal — start empty
       } finally {
-        setLoaded(true);
+        if (!cancelled) setLoaded(true);
       }
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   // Persist on change
   useEffect(() => {
