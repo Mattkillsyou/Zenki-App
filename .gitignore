@@ -30,3 +30,6 @@ google-services.json
 # Cloud Functions build artifacts
 functions/node_modules/
 functions/lib/
+
+# Firebase CLI local caches
+.firebase/
