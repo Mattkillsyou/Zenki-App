@@ -519,6 +519,12 @@ export function SettingsScreen({ navigation }: any) {
           </>
         )}
 
+        {/* Learn */}
+        {renderSectionHeader('LEARN')}
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+          {renderNavRow('school-outline', 'Training', () => navigation.navigate('TrainingHome'))}
+        </View>
+
         {/* Privacy & Safety */}
         {renderSectionHeader('PRIVACY & SAFETY')}
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>

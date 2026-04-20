@@ -32,6 +32,8 @@ import { OnboardingScreen } from '../screens/auth/OnboardingScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { BlockedUsersScreen } from '../screens/BlockedUsersScreen';
 import { HelpScreen } from '../screens/HelpScreen';
+import { TrainingHomeScreen } from '../screens/TrainingHomeScreen';
+import { TrainingModuleScreen } from '../screens/TrainingModuleScreen';
 import { AdminScreen } from '../screens/AdminScreen';
 import { AdminMembersScreen } from '../screens/AdminMembersScreen';
 import { AdminProductsScreen } from '../screens/AdminProductsScreen';
@@ -289,6 +291,8 @@ export function RootNavigator() {
       <Stack.Screen name="Settings" component={withErrorBoundary(SettingsScreen, 'Settings')} options={modalTransition} />
       <Stack.Screen name="BlockedUsers" component={withErrorBoundary(BlockedUsersScreen, 'Blocked Users')} options={pushTransition} />
       <Stack.Screen name="Help" component={withErrorBoundary(HelpScreen, 'Help')} options={pushTransition} />
+      <Stack.Screen name="TrainingHome" component={withErrorBoundary(TrainingHomeScreen, 'Training')} options={pushTransition} />
+      <Stack.Screen name="TrainingModule" component={withErrorBoundary(TrainingModuleScreen, 'Training Module')} options={pushTransition} />
       <Stack.Screen name="Admin" component={withErrorBoundary(AdminScreen, 'Admin')} options={modalTransition} />
 
       {/* Admin sub-screens — push */}
