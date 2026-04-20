@@ -100,6 +100,21 @@ export const MEMBERS: Member[] = [
     totalSessions: 0,
     weekStreak: 0,
   },
+  {
+    // App Store review demo account — documented in APP_REVIEWER.md
+    id: '5',
+    username: 'reviewer',
+    firstName: 'App',
+    lastName: 'Reviewer',
+    email: 'reviewer@zenkidojo.com',
+    belt: 'white',
+    stripes: 0,
+    memberSince: '2026-04-19',
+    isAdmin: false,
+    totalSessions: 8,
+    weekStreak: 2,
+    funFact: 'Demo account for Apple App Review',
+  },
 ];
 
 // Seeded test credentials — username → { password, memberId }.
@@ -120,6 +135,8 @@ export const CREDENTIALS: Record<string, { password: string; memberId: string }>
   'mattbrowntheemail@gmail.com': { password: 'password', memberId: '2' },
   apple: { password: 'password', memberId: '3' },
   admin: { password: 'password', memberId: '4' },
+  reviewer: { password: 'ZenkiTest2026!', memberId: '5' },
+  'reviewer@zenkidojo.com': { password: 'ZenkiTest2026!', memberId: '5' },
 };
 
 export const BELT_ORDER: BeltLevel[] = ['none', 'white', 'blue', 'purple', 'brown', 'black'];
