@@ -359,6 +359,12 @@ export function ProfileScreen({ navigation }: any) {
             onPress={() => navigation.navigate('Settings')}
           />
           <MenuTile
+            icon="help-circle-outline"
+            label="Help"
+            sub="FAQ, tutorial, privacy"
+            onPress={() => navigation.navigate('Help')}
+          />
+          <MenuTile
             icon="chatbubbles-outline"
             label="Contact IT"
             sub="Report a bug or idea"
