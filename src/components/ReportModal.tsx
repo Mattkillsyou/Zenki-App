@@ -62,7 +62,7 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
     if (ok) {
       Alert.alert(
         'Report submitted',
-        'Thanks — our team will review this shortly. You can also block this user from their profile.',
+        'Thanks. Our team will review this shortly. You can also block this user from their profile.',
       );
       onReported?.();
       reset();

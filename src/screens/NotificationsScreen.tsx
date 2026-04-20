@@ -90,7 +90,7 @@ export function NotificationsScreen({ navigation }: any) {
         icon: 'flame',
         iconColor: colors.flames,
         tint: colors.flames + '20',
-        title: `${gamState.streak}-day streak — keep it alive!`,
+        title: `${gamState.streak}-day streak. Keep it alive!`,
         body: `Train today to push it to ${gamState.streak + 1}. One missed day resets.`,
         timestamp: new Date().toISOString(),
       });

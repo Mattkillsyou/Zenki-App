@@ -25,7 +25,7 @@ const FAQS: Faq[] = [
   },
   {
     q: "How do I book a class or private session?",
-    a: "Tap the calendar tab to see this week's schedule. Tap any class or tap Book to request a 1:1 with an instructor. Bookings are inquiries — the dojo confirms by text or email. Payment happens in person at the dojo.",
+    a: "Tap the calendar tab to see this week's schedule. Tap any class or tap Book to request a 1:1 with an instructor. Bookings are inquiries. The dojo confirms by text or email, and payment happens in person at the dojo.",
   },
   {
     q: "How do I log food and track macros?",
@@ -33,7 +33,7 @@ const FAQS: Faq[] = [
   },
   {
     q: "Can I connect a heart-rate monitor?",
-    a: "Yes — open HR Session from the Training grid on Home. Put on any Bluetooth chest strap that supports the standard HR service (Polar H10, Wahoo Tickr, Garmin HRM Pro, etc.), then tap Scan.",
+    a: "Yes. Open HR Session from the Training grid on Home. Put on any Bluetooth chest strap that supports the standard HR service (Polar H10, Wahoo Tickr, Garmin HRM Pro, etc.), then tap Scan.",
   },
   {
     q: "How do I block or report someone?",

@@ -181,7 +181,7 @@ export function AdminProductsScreen({ navigation }: any) {
         <Text style={[styles.syncText, { color: colors.textSecondary }]}>
           {cloudSyncEnabled
             ? (isSyncing ? 'Syncing…' : 'Synced to all phones via Firebase')
-            : 'Local-only — Firebase not configured'}
+            : 'Local-only · Firebase not configured'}
         </Text>
       </View>
 
@@ -197,7 +197,7 @@ export function AdminProductsScreen({ navigation }: any) {
         <View style={[styles.builtInCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="archive-outline" size={18} color={colors.gold} />
           <Text style={[styles.builtInText, { color: colors.textSecondary }]}>
-            The {builtInCount} original store products are bundled with the app and can't be edited from here — only newly added products appear below.
+            The {builtInCount} original store products are bundled with the app and can't be edited from here. Only newly added products appear below.
           </Text>
         </View>
 

@@ -180,7 +180,7 @@ export function DrinkScreen() {
             >
               <Ionicons name="checkmark-circle" size={20} color={pending.length > 0 ? '#000' : colors.textMuted} />
               <Text style={[styles.commitBtnText, { color: pending.length > 0 ? '#000' : colors.textMuted }]}>
-                {pending.length > 0 ? `Commit Order — $${pendingTotal.toFixed(2)}` : 'Commit Order'}
+                {pending.length > 0 ? `Commit Order · $${pendingTotal.toFixed(2)}` : 'Commit Order'}
               </Text>
             </TouchableOpacity>
           </View>

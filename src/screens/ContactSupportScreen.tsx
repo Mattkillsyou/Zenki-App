@@ -142,7 +142,7 @@ export function ContactSupportScreen({ navigation }: any) {
         >
           <Text style={[styles.intro, { color: colors.textSecondary }]}>
             Report a bug, share an idea, or ask us anything. Your message is sent
-            directly to the Zenki IT team — we get an instant alert.
+            directly to the Zenki IT team. We get an instant alert.
           </Text>
 
           {/* Category */}

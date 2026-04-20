@@ -22,7 +22,7 @@ interface AnnouncementContextValue {
 const DEFAULT_ANNOUNCEMENTS: Announcement[] = [
   {
     id: 'default-1',
-    title: 'Mat Cleaning — Saturday 8AM',
+    title: 'Mat Cleaning · Saturday 8AM',
     description: 'Weekly deep clean. Open mat from 10 AM.',
     pinned: true,
     createdAt: new Date().toISOString(),

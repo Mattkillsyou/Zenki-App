@@ -74,7 +74,7 @@ export function ClassCard({ name, instructor, time, duration, spotsLeft, type, o
     setAddingToCal(true);
     try {
       const result = await addEventToCalendar({
-        title: `${name} — Zenki Dojo`,
+        title: `${name} · Zenki Dojo`,
         startsAt,
         durationMinutes: parseDurationMinutes(duration),
         location: 'Zenki Dojo, Los Angeles',
@@ -85,7 +85,7 @@ export function ClassCard({ name, instructor, time, duration, spotsLeft, type, o
           'Added to calendar',
           result.method === 'native'
             ? 'Event saved to your Apple Calendar with a 1-hour reminder.'
-            : 'Opened Google Calendar — confirm to save the event.',
+            : 'Opened Google Calendar. Confirm to save the event.',
         );
       } else {
         Alert.alert('Couldn’t add', 'Calendar permission was denied or no calendar is available.');

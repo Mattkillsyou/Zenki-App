@@ -431,7 +431,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             <Ionicons name="globe-outline" size={64} color={colors.gold} />
           </Animated.View>
           <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Connect your socials</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>Optional — let members find you elsewhere</Text>
+          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>Optional. Let members find you elsewhere.</Text>
           <View style={styles.socialRow}>
             <Ionicons name="logo-instagram" size={22} color="#E1306C" />
             <TextInput
@@ -601,7 +601,7 @@ export function OnboardingScreen({ navigation, route }: any) {
           </Animated.View>
           <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>App Permissions</Text>
           <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-            These help the app work at its best. All are optional — you can change them later in Settings.
+            These help the app work at its best. All are optional. You can change them later in Settings.
           </Text>
 
           {/* Location */}

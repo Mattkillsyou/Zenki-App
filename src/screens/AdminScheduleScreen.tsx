@@ -237,7 +237,7 @@ export function AdminScheduleScreen({ navigation }: any) {
               <Text style={[styles.modalCancel, { color: colors.textMuted }]}>Cancel</Text>
             </TouchableOpacity>
             <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-              {editingClass ? 'Edit Class' : `Add Class — ${selectedDay}`}
+              {editingClass ? 'Edit Class' : `Add Class · ${selectedDay}`}
             </Text>
             <View style={{ width: 60 }} />
           </View>

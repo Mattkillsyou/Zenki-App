@@ -189,7 +189,7 @@ export function MacroSetupScreen({ navigation }: any) {
             {step === 'sex' && (
               <StepWrap
                 title="Biological sex"
-                subtitle="Used in the BMR equation. This isn't gender — it reflects metabolic baseline."
+                subtitle="Used in the BMR equation. This isn't gender. It reflects metabolic baseline."
                 colors={colors}
               >
                 <View style={styles.choiceRow}>
@@ -315,7 +315,7 @@ export function MacroSetupScreen({ navigation }: any) {
             )}
 
             {step === 'activity' && (
-              <StepWrap title="Activity level" subtitle="Not counting planned workouts — this is your baseline." colors={colors}>
+              <StepWrap title="Activity level" subtitle="Not counting planned workouts. This is your baseline." colors={colors}>
                 {(Object.keys(ACTIVITY_LABELS) as ActivityLevel[]).map((lvl) => {
                   const active = activity === lvl;
                   return (

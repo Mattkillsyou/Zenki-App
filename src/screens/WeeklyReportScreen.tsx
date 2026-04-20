@@ -29,7 +29,7 @@ function getWeekRange(): { start: Date; end: Date; label: string } {
   end.setDate(start.getDate() + 6);
   end.setHours(23, 59, 59, 999);
   const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  return { start, end, label: `${fmt(start)} — ${fmt(end)}` };
+  return { start, end, label: `${fmt(start)} · ${fmt(end)}` };
 }
 
 function getLastWeekRange(): { start: Date; end: Date } {
@@ -428,15 +428,15 @@ export function WeeklyReportScreen({ navigation }: any) {
               const recs: string[] = [];
               // Training frequency
               if (totalActivities < 5) {
-                recs.push(`You trained ${totalActivities} day${totalActivities !== 1 ? 's' : ''} this week — try ${totalActivities + 1} next week for a new streak.`);
+                recs.push(`You trained ${totalActivities} day${totalActivities !== 1 ? 's' : ''} this week. Try ${totalActivities + 1} next week for a new streak.`);
               }
               // Nutrition
               if (nutritionData.avgProtein > 0 && nutritionData.proteinGoal > 0 && nutritionData.avgProtein < nutritionData.proteinGoal * 0.9) {
-                recs.push(`You're averaging ${nutritionData.avgProtein}g protein vs ${nutritionData.proteinGoal}g goal — consider adding a shake post-workout.`);
+                recs.push(`You're averaging ${nutritionData.avgProtein}g protein vs ${nutritionData.proteinGoal}g goal. Consider adding a shake post-workout.`);
               }
               // Strain recovery
               if (avgStrain > 15 && hrSessions.length >= 3) {
-                recs.push('Your strain has been consistently high — rest day recommended to avoid overtraining.');
+                recs.push('Your strain has been consistently high. Rest day recommended to avoid overtraining.');
               }
               // GPS improvement
               if (gpsActivities.length > 0 && lastWeekGps.length > 0) {
@@ -444,12 +444,12 @@ export function WeeklyReportScreen({ navigation }: any) {
                 const lastAvgPace = lastWeekGps.reduce((s, a) => s + a.avgPaceSecsPerKm, 0) / lastWeekGps.length;
                 if (thisAvgPace < lastAvgPace) {
                   const improvement = Math.round(lastAvgPace - thisAvgPace);
-                  recs.push(`Your average pace improved by ${improvement} seconds — keep it up!`);
+                  recs.push(`Your average pace improved by ${improvement} seconds. Keep it up!`);
                 }
               }
               // Weight logging
               if (weightData.weighInsThisWeek === 0) {
-                recs.push('No weigh-ins this week — log daily for the most accurate trend data.');
+                recs.push('No weigh-ins this week. Log daily for the most accurate trend data.');
               }
 
               if (recs.length === 0) recs.push('Great week! Keep up the consistency and progressive overload.');

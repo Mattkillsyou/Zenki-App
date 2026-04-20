@@ -53,7 +53,7 @@ export function SetPasswordScreen({ navigation, route }: any) {
       }
       const member = MEMBERS.find((m) => m.id === cred.memberId);
       if (!member) {
-        Alert.alert('Setup error', 'Member record missing — contact support.');
+        Alert.alert('Setup error', 'Member record missing. Contact support.');
         setLoading(false);
         return;
       }
@@ -76,7 +76,7 @@ export function SetPasswordScreen({ navigation, route }: any) {
       const code = e?.code ?? '';
       const msg =
         code === 'auth/weak-password'
-          ? 'Password too weak — Firebase requires at least 6 characters.'
+          ? 'Password too weak. Firebase requires at least 6 characters.'
           : code === 'auth/network-request-failed'
             ? 'Network error. Check your connection and try again.'
             : 'Could not set password. Please try again.';

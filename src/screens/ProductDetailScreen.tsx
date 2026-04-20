@@ -315,7 +315,7 @@ export function ProductDetailScreen({ navigation, route }: any) {
           {/* Actions */}
           <View style={styles.actions}>
             <Button
-              title={`Buy Now — $${(product.memberPrice * quantity).toFixed(2)}`}
+              title={`Reserve · $${(product.memberPrice * quantity).toFixed(2)}`}
               onPress={handleBuyNow}
               fullWidth
               size="lg"

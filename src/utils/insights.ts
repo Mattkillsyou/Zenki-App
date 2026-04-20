@@ -74,15 +74,15 @@ export function generateInsights(input: InsightInput): Insight[] {
   // ─── TRAINING ───
   if (input.sessionsThisWeek > input.sessionsLastWeek && input.sessionsLastWeek > 0) {
     const pct = Math.round(((input.sessionsThisWeek - input.sessionsLastWeek) / input.sessionsLastWeek) * 100);
-    add({ module: 'training', type: 'positive', icon: 'trending-up', title: 'Training Up', message: `You trained ${pct}% more this week — ${input.sessionsThisWeek} sessions vs ${input.sessionsLastWeek} last week. Keep it up!`, priority: 2 });
+    add({ module: 'training', type: 'positive', icon: 'trending-up', title: 'Training Up', message: `You trained ${pct}% more this week. ${input.sessionsThisWeek} sessions vs ${input.sessionsLastWeek} last week. Keep it up!`, priority: 2 });
   } else if (input.sessionsThisWeek < input.sessionsLastWeek && input.sessionsLastWeek > 0) {
     const diff = input.sessionsLastWeek - input.sessionsThisWeek;
     add({ module: 'training', type: 'warning', icon: 'trending-down', title: 'Training Dip', message: `You've trained ${diff} fewer time${diff > 1 ? 's' : ''} this week than last. Get back on the mat!`, priority: 1 });
   }
   if (input.currentStreak >= 7) {
-    add({ module: 'training', type: 'milestone', icon: 'flame', title: `${input.currentStreak}-Day Streak!`, message: `You're on fire — don't break the chain. Longest ever: ${input.longestStreak} days.`, priority: 2 });
+    add({ module: 'training', type: 'milestone', icon: 'flame', title: `${input.currentStreak}-Day Streak!`, message: `You're on fire. Don't break the chain. Longest ever: ${input.longestStreak} days.`, priority: 2 });
   } else if (input.currentStreak === 0 && input.sessionsLastWeek > 0) {
-    add({ module: 'training', type: 'warning', icon: 'flame-outline', title: 'Streak Lost', message: 'Your training streak reset. One session today restarts it — show up!', priority: 1 });
+    add({ module: 'training', type: 'warning', icon: 'flame-outline', title: 'Streak Lost', message: 'Your training streak reset. One session today restarts it. Show up!', priority: 1 });
   }
 
   // ─── HR SESSIONS ───
@@ -107,12 +107,12 @@ export function generateInsights(input: InsightInput): Insight[] {
     add({ module: 'nutrition', type: 'warning', icon: 'restaurant-outline', title: 'No Food Logged', message: 'You logged meals last week but not this week. Track even one meal today to stay accountable.', priority: 1 });
   } else if (input.mealsLoggedThisWeek > 0 && input.avgCaloriesThisWeek > 0) {
     if (input.calorieGoal > 0 && input.avgCaloriesThisWeek > input.calorieGoal * 1.15) {
-      add({ module: 'nutrition', type: 'warning', icon: 'alert-circle-outline', title: 'Over Calorie Goal', message: `Averaging ${Math.round(input.avgCaloriesThisWeek)} kcal/day — ${Math.round(input.avgCaloriesThisWeek - input.calorieGoal)} over your ${input.calorieGoal} target.`, priority: 2 });
+      add({ module: 'nutrition', type: 'warning', icon: 'alert-circle-outline', title: 'Over Calorie Goal', message: `Averaging ${Math.round(input.avgCaloriesThisWeek)} kcal/day, ${Math.round(input.avgCaloriesThisWeek - input.calorieGoal)} over your ${input.calorieGoal} target.`, priority: 2 });
     } else if (input.calorieGoal > 0 && input.avgCaloriesThisWeek < input.calorieGoal * 0.8) {
-      add({ module: 'nutrition', type: 'warning', icon: 'alert-circle-outline', title: 'Under-Eating', message: `Averaging only ${Math.round(input.avgCaloriesThisWeek)} kcal/day — well below your ${input.calorieGoal} goal. Fuel your training!`, priority: 2 });
+      add({ module: 'nutrition', type: 'warning', icon: 'alert-circle-outline', title: 'Under-Eating', message: `Averaging only ${Math.round(input.avgCaloriesThisWeek)} kcal/day, well below your ${input.calorieGoal} goal. Fuel your training!`, priority: 2 });
     }
     if (input.proteinGoal > 0 && input.avgProteinThisWeek < input.proteinGoal * 0.8) {
-      add({ module: 'nutrition', type: 'warning', icon: 'fish-outline', title: 'Low Protein', message: `Averaging ${Math.round(input.avgProteinThisWeek)}g protein/day — aim for ${input.proteinGoal}g to support recovery.`, priority: 2 });
+      add({ module: 'nutrition', type: 'warning', icon: 'fish-outline', title: 'Low Protein', message: `Averaging ${Math.round(input.avgProteinThisWeek)}g protein/day. Aim for ${input.proteinGoal}g to support recovery.`, priority: 2 });
     }
   }
   if (input.mealsLoggedThisWeek > input.mealsLoggedLastWeek && input.mealsLoggedLastWeek > 0) {
@@ -147,7 +147,7 @@ export function generateInsights(input: InsightInput): Insight[] {
   if (input.daysActiveThisWeek >= 5) {
     add({ module: 'overall', type: 'positive', icon: 'checkmark-circle', title: 'Crushing It', message: `${input.daysActiveThisWeek} active days this week. You're in the top tier of Zenki members.`, priority: 1 });
   } else if (input.daysActiveThisWeek <= 1) {
-    add({ module: 'overall', type: 'warning', icon: 'alert-circle', title: 'Time to Move', message: 'Only 1 active day so far this week. Your body and mind need training — even 20 minutes counts.', priority: 1 });
+    add({ module: 'overall', type: 'warning', icon: 'alert-circle', title: 'Time to Move', message: 'Only 1 active day so far this week. Your body and mind need training. Even 20 minutes counts.', priority: 1 });
   }
 
   return insights.sort((a, b) => a.priority - b.priority);

@@ -670,7 +670,7 @@ export function SettingsScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
             <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>
-              Default admin password is "password" — change it here.
+              Default admin password is "password". Change it here.
             </Text>
             <TextInput
               style={[styles.modalInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}

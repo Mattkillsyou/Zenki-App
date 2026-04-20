@@ -747,7 +747,7 @@ export function HomeScreen({ navigation }: any) {
                     <View style={{ paddingHorizontal: 24, marginTop: 6 }}>
                       <View style={[styles.quoteCard, { backgroundColor: colors.surface }]}>
                         <Text style={[styles.quoteText, { color: colors.textPrimary }]}>{dailyQuote.text}</Text>
-                        <Text style={[styles.quoteAttr, { color: colors.gold }]}>— {dailyQuote.attribution}</Text>
+                        <Text style={[styles.quoteAttr, { color: colors.gold }]}>- {dailyQuote.attribution}</Text>
                       </View>
                     </View>
                   </FadeInView>

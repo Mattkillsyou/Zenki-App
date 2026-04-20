@@ -419,7 +419,7 @@ function PRsTab({
                       <Text style={[styles.prRowTitle, { color: colors.textPrimary }]}>{ex.name}</Text>
                       <Text style={[styles.prRowMeta, { color: colors.textMuted }]}>
                         {entries === 0
-                          ? 'No PR yet — tap to add'
+                          ? 'No PR yet. Tap to add'
                           : `${entries} entr${entries === 1 ? 'y' : 'ies'}`}
                       </Text>
                     </View>

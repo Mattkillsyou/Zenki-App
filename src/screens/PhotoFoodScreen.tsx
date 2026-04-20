@@ -171,7 +171,7 @@ export function PhotoFoodScreen({ navigation }: any) {
               <Ionicons name="sparkles" size={36} color={colors.gold} />
               <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>AI food recognition</Text>
               <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
-                Take or upload a photo of your meal. The AI identifies the foods and estimates macros — review before logging.
+                Take or upload a photo of your meal. The AI identifies the foods and estimates macros. Review before logging.
               </Text>
             </View>
 
@@ -236,7 +236,7 @@ export function PhotoFoodScreen({ navigation }: any) {
           <FadeInView>
             <Image source={{ uri: phase.uri }} style={styles.previewSmall} />
             <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
-              IDENTIFIED FOODS — tap to toggle
+              IDENTIFIED FOODS · tap to toggle
             </Text>
             {phase.foods.map((f, i) => {
               const selected = phase.selected.has(i);

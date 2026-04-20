@@ -9,7 +9,7 @@ export interface Quote {
 
 export const QUOTES: Quote[] = [
   // ─────── Stoicism & Ancient Philosophy ───────
-  { text: 'You have power over your mind — not outside events. Realize this, and you will find strength.', attribution: 'Marcus Aurelius' },
+  { text: 'You have power over your mind, not outside events. Realize this, and you will find strength.', attribution: 'Marcus Aurelius' },
   { text: 'The obstacle is the way.', attribution: 'Marcus Aurelius' },
   { text: 'Waste no more time arguing what a good man should be. Be one.', attribution: 'Marcus Aurelius' },
   { text: 'It is not death that a man should fear, but he should fear never beginning to live.', attribution: 'Marcus Aurelius' },
@@ -78,7 +78,7 @@ export const QUOTES: Quote[] = [
   { text: 'The way of the sword and the way of Zen are identical.', attribution: 'Yagyū Munenori' },
 
   // ─────── Bruce Lee ───────
-  { text: 'Empty your mind. Be formless, shapeless — like water.', attribution: 'Bruce Lee' },
+  { text: 'Empty your mind. Be formless, shapeless, like water.', attribution: 'Bruce Lee' },
   { text: 'I fear not the man who has practiced 10,000 kicks once, but I fear the man who has practiced one kick 10,000 times.', attribution: 'Bruce Lee' },
   { text: 'Do not pray for an easy life. Pray for the strength to endure a difficult one.', attribution: 'Bruce Lee' },
   { text: 'Don\'t think. Feel.', attribution: 'Bruce Lee' },
@@ -277,7 +277,7 @@ export const QUOTES: Quote[] = [
 
   // ─────── Boxing / MMA / Martial Arts Films ───────
   { text: 'The world ain\'t all sunshine and rainbows. It\'s a very mean and nasty place, and I don\'t care how tough you are, it will beat you to your knees.', attribution: 'Rocky Balboa' },
-  { text: 'Going in one more round when you don\'t think you can — that\'s what makes all the difference in your life.', attribution: 'Rocky Balboa' },
+  { text: 'Going in one more round when you don\'t think you can. That\'s what makes all the difference in your life.', attribution: 'Rocky Balboa' },
   { text: 'Wax on, wax off.', attribution: 'Mr. Miyagi, The Karate Kid' },
   { text: 'Man who catch fly with chopstick accomplish anything.', attribution: 'Mr. Miyagi, The Karate Kid' },
   { text: 'Best block, no be there.', attribution: 'Mr. Miyagi, The Karate Kid' },
@@ -343,7 +343,7 @@ export const QUOTES: Quote[] = [
   { text: 'You miss 100% of the shots you don\'t take.', attribution: 'Wayne Gretzky' },
   { text: 'It is better to have loved and lost than never to have loved at all.', attribution: 'Alfred Lord Tennyson' },
   { text: 'The best way out is always through.', attribution: 'Robert Frost' },
-  { text: 'Two roads diverged in a wood, and I — I took the one less traveled by.', attribution: 'Robert Frost' },
+  { text: 'Two roads diverged in a wood, and I took the one less traveled by.', attribution: 'Robert Frost' },
 
   // ─────── Spiritual / Religious ───────
   { text: 'This too shall pass.', attribution: 'Persian Sufi Proverb' },
@@ -359,7 +359,7 @@ export const QUOTES: Quote[] = [
   { text: 'What consumes your mind controls your life.', attribution: 'Debasish Mridha' },
   { text: 'Discipline is the bridge between goals and accomplishment.', attribution: 'Jim Rohn' },
   { text: 'Do something today that your future self will thank you for.', attribution: 'Sean Patrick Flanery' },
-  { text: 'Whether you think you can, or you think you can\'t — you\'re right.', attribution: 'Henry Ford' },
+  { text: 'Whether you think you can, or you think you can\'t, you\'re right.', attribution: 'Henry Ford' },
   { text: 'Fortune favors the bold.', attribution: 'Virgil' },
   { text: 'Veni, vidi, vici. I came, I saw, I conquered.', attribution: 'Julius Caesar' },
   { text: 'The die is cast.', attribution: 'Julius Caesar' },
@@ -394,7 +394,7 @@ export const QUOTES: Quote[] = [
   { text: 'Lingering mind. Stay aware even after the technique.', attribution: 'Zanshin' },
   { text: 'Continuous improvement. One percent better, every day.', attribution: 'Kaizen' },
   { text: 'Endure the seemingly unbearable with patience and dignity.', attribution: 'Gaman' },
-  { text: 'Softness controls hardness.', attribution: 'Jū yoku gō wo seisu — Jiu-Jitsu Principle' },
+  { text: 'Softness controls hardness.', attribution: 'Jū yoku gō wo seisu, Jiu-Jitsu Principle' },
   { text: 'Know yourself.', attribution: 'Onore wo shiru' },
   { text: 'Self-mastery is the first victory.', attribution: 'Kokki' },
   { text: 'Each day is a lifetime. Live it fully.', attribution: 'Ichi nichi issei' },
@@ -414,7 +414,7 @@ export const QUOTES: Quote[] = [
   { text: 'No plan survives contact with the enemy.', attribution: 'Helmuth von Moltke' },
   { text: 'The pen is mightier than the sword.', attribution: 'Edward Bulwer-Lytton' },
   { text: 'Give me liberty, or give me death!', attribution: 'Patrick Henry' },
-  { text: 'Ask not what your country can do for you — ask what you can do for your country.', attribution: 'John F. Kennedy' },
+  { text: 'Ask not what your country can do for you. Ask what you can do for your country.', attribution: 'John F. Kennedy' },
   { text: 'One small step for man, one giant leap for mankind.', attribution: 'Neil Armstrong' },
 
   // ─────── Additional Anime ───────
@@ -476,7 +476,7 @@ export const QUOTES: Quote[] = [
   { text: 'May your choices reflect your hopes, not your fears.', attribution: 'Nelson Mandela' },
   { text: 'After climbing a great hill, one only finds that there are many more hills to climb.', attribution: 'Nelson Mandela' },
   { text: 'Success is walking from failure to failure with no loss of enthusiasm.', attribution: 'Winston Churchill' },
-  { text: 'Keep your face always toward the sunshine — and shadows will fall behind you.', attribution: 'Walt Whitman' },
+  { text: 'Keep your face always toward the sunshine, and shadows will fall behind you.', attribution: 'Walt Whitman' },
   { text: 'Not all who hesitate are lost. The psyche has many secrets in reserve.', attribution: 'Marie-Louise von Franz' },
   { text: 'The cave you fear to enter holds the treasure you seek.', attribution: 'Joseph Campbell' },
   { text: 'Follow your bliss and the universe will open doors where there were only walls.', attribution: 'Joseph Campbell' },

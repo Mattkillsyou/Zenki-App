@@ -81,11 +81,11 @@ export function BodyLabScreen({ navigation }: any) {
     }
     if (dexaScans.length > 0) {
       const daysSince = Math.floor((Date.now() - new Date(dexaScans[0].scanDate).getTime()) / 86400000);
-      if (daysSince > 90) insights.push(`Last DEXA scan was ${daysSince} days ago — consider scheduling a follow-up.`);
+      if (daysSince > 90) insights.push(`Last DEXA scan was ${daysSince} days ago. Consider scheduling a follow-up.`);
     }
     if (bloodwork.length > 0) {
       const daysSince = Math.floor((Date.now() - new Date(bloodwork[0].testDate).getTime()) / 86400000);
-      if (daysSince > 180) insights.push(`Last blood panel was ${daysSince} days ago — recommended every 6 months.`);
+      if (daysSince > 180) insights.push(`Last blood panel was ${daysSince} days ago. Recommended every 6 months.`);
     }
     if (dexaScans.length === 0) insights.push('Upload your first DEXA scan to start tracking body composition.');
     if (bloodwork.length === 0) insights.push('Upload your first blood panel to track biomarkers over time.');
@@ -150,7 +150,7 @@ export function BodyLabScreen({ navigation }: any) {
                 </View>
                 <Text style={[styles.scoreDesc, { color: colors.textSecondary }]}>
                   {healthScore != null && healthScore >= 70 ? 'Looking great! Keep it up.'
-                    : healthScore != null && healthScore >= 40 ? 'Room for improvement — check insights below.'
+                    : healthScore != null && healthScore >= 40 ? 'Room for improvement. Check insights below.'
                     : 'Upload scans and blood panels to improve your score.'}
                 </Text>
               </View>

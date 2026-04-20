@@ -77,7 +77,7 @@ export function HealthDataConsentModal({ visible, onAccept, onDecline, feature }
               onPress={onAccept}
               style={[styles.btn, { backgroundColor: colors.gold }]}
             >
-              <Text style={[styles.btnText, { color: '#000' }]}>I understand — continue</Text>
+              <Text style={[styles.btnText, { color: '#000' }]}>I understand, continue</Text>
             </TouchableOpacity>
           </View>
         </Pressable>

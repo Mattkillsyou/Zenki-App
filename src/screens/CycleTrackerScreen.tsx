@@ -239,7 +239,7 @@ export function CycleTrackerScreen({ navigation }: any) {
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.historyDate, { color: colors.textPrimary }]}>
                         {new Date(entry.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        {entry.endDate ? ` — ${new Date(entry.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ' (ongoing)'}
+                        {entry.endDate ? ` · ${new Date(entry.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ' (ongoing)'}
                       </Text>
                       <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
                         {entry.flowIntensity} flow · {entry.symptoms.length} symptom{entry.symptoms.length !== 1 ? 's' : ''}

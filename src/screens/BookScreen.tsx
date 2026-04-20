@@ -132,7 +132,7 @@ export function BookScreen({ navigation }: any) {
 
   const addToGoogleCalendar = (instructor: string, sessionType: string, time: string) => {
     // Create a Google Calendar event URL as a fallback
-    const title = encodeURIComponent(`Zenki Dojo — ${sessionType} with ${instructor}`);
+    const title = encodeURIComponent(`Zenki Dojo · ${sessionType} with ${instructor}`);
     const location = encodeURIComponent('Zenki Dojo, 1714 Hillhurst Ave, LA 90027');
     const details = encodeURIComponent(`Private session at Zenki Dojo.\n\nInstructor: ${instructor}\nType: ${sessionType}\n\nPlease arrive 10 minutes early.`);
 
@@ -401,7 +401,7 @@ export function BookScreen({ navigation }: any) {
             </View>
           )}
           <Button
-            title={selectedTime ? `Pay & Book — ${SESSION_TYPES[selectedType].priceLabel}` : 'Select a Time'}
+            title={selectedTime ? `Request Booking · ${SESSION_TYPES[selectedType].priceLabel}` : 'Select a Time'}
             onPress={handleBooking}
             fullWidth
             size="lg"

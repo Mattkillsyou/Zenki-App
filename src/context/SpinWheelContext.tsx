@@ -26,7 +26,7 @@ export const WHEEL_SLICES: SpinPrize[] = [
   { type: 'item',    itemKey: 'free_drink', label: 'FREE DRINK',      icon: '🥤', confetti: true, rare: true }, // 3
   { type: 'points',  amount: 200,  label: '200 Diamonds',             icon: '💎' },                         // 4
   { type: 'flames',  amount: 10,   label: '10 Flames',                icon: '🔥' },                         // 5
-  { type: 'points',  amount: 1000, label: 'JACKPOT — 1,000 Diamonds', icon: '👑', confetti: true, rare: true }, // 6
+  { type: 'points',  amount: 1000, label: 'JACKPOT · 1,000 Diamonds', icon: '👑', confetti: true, rare: true }, // 6
   { type: 'item',    itemKey: 'free_shirt', label: 'FREE SHIRT',      icon: '👕', confetti: true, rare: true }, // 7
 ];
 

@@ -367,7 +367,7 @@ export function StoreScreen({ navigation }: any) {
                   }
                   for (let i = 0; i < cartCount; i++) recordGearPurchase();
                   const balanceMsg = finalTotal === 0
-                    ? `Your order was paid in full with ${Math.floor(pointsDiscount * POINTS_PER_DOLLAR).toLocaleString()} Dojo Points — no balance due.`
+                    ? `Your order was paid in full with ${Math.floor(pointsDiscount * POINTS_PER_DOLLAR).toLocaleString()} Dojo Points. No balance due.`
                     : `Balance due at the dojo: $${finalTotal.toFixed(2)}. We'll set your items aside for pickup.`;
                   Alert.alert('Order Reserved', balanceMsg);
                   setCart([]);
@@ -379,7 +379,7 @@ export function StoreScreen({ navigation }: any) {
                   {(() => {
                     const pointsDiscount = usePoints ? Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal) : 0;
                     const finalTotal = Math.max(0, cartTotal - pointsDiscount);
-                    return finalTotal === 0 ? 'CONFIRM — FREE WITH POINTS' : `RESERVE — PAY $${finalTotal.toFixed(2)} AT DOJO`;
+                    return finalTotal === 0 ? 'CONFIRM · FREE WITH POINTS' : `RESERVE · PAY $${finalTotal.toFixed(2)} AT DOJO`;
                   })()}
                 </Text>
               </TouchableOpacity>
