@@ -128,34 +128,74 @@ export function ScheduleScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Header — month + week nav */}
+      {/* Header — month + week nav (single compact row) */}
       <View style={styles.scheduleHeader}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Ionicons name="calendar" size={22} color={colors.gold} />
-          <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>
-            {getMonthYear(weekOffset)}
-          </Text>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <TouchableOpacity onPress={() => setWeekOffset((w) => w - 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="chevron-back" size={20} color={colors.textSecondary} />
+        <Text style={[styles.screenTitle, { color: colors.textPrimary }]}>
+          {getMonthYear(weekOffset)}
+        </Text>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            onPress={() => setWeekOffset((w) => w - 1)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={[styles.navArrow, { backgroundColor: colors.surface }]}
+          >
+            <Ionicons name="chevron-back" size={18} color={colors.textPrimary} />
           </TouchableOpacity>
           {weekOffset !== 0 && (
             <TouchableOpacity
               onPress={() => { setWeekOffset(0); setSelectedDay(getTodayIndex()); }}
-              style={[styles.todayBtn, { backgroundColor: colors.goldMuted }]}
+              style={[styles.todayBtn, { backgroundColor: colors.goldMuted, borderColor: colors.gold }]}
             >
-              <Text style={[styles.todayBtnText, { color: colors.gold }]}>Today</Text>
+              <Text style={[styles.todayBtnText, { color: colors.gold }]}>TODAY</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={() => setWeekOffset((w) => w + 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          <TouchableOpacity
+            onPress={() => setWeekOffset((w) => w + 1)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={[styles.navArrow, { backgroundColor: colors.surface }]}
+          >
+            <Ionicons name="chevron-forward" size={18} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
       </View>
 
+      {/* Week strip — tight under the header */}
+      <View style={styles.daySelector}>
+        {DAYS.map((day, index) => {
+          const isSelected = index === selectedDay;
+          const isToday = index === todayIdx;
+          return (
+            <TouchableOpacity
+              key={day}
+              style={[
+                styles.dayItem,
+                {
+                  backgroundColor: isSelected ? colors.gold : 'transparent',
+                  borderColor: isSelected ? colors.gold : (isToday ? colors.gold + '60' : 'transparent'),
+                  borderWidth: 1.5,
+                },
+              ]}
+              onPress={() => setSelectedDay(index)}
+            >
+              <Text style={[
+                styles.dayLabel,
+                { color: isSelected ? '#000' : colors.textMuted },
+              ]}>
+                {day}
+              </Text>
+              <Text style={[
+                styles.dayDate,
+                { color: isSelected ? '#000' : colors.textPrimary },
+              ]}>
+                {weekDates[index]}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
       {/* Filter chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+      <View style={styles.filterRowView}>
         {FILTER_OPTIONS.map((f) => {
           const active = filter === f.key;
           return (
@@ -173,74 +213,19 @@ export function ScheduleScreen({ navigation }: any) {
             </TouchableOpacity>
           );
         })}
-        <View style={[styles.countChip, { backgroundColor: colors.goldMuted, borderColor: colors.gold }]}>
-          <Text style={[styles.countChipText, { color: colors.gold }]}>
-            {filtered.length} {filtered.length === 1 ? 'class' : 'classes'}
-          </Text>
-        </View>
-      </ScrollView>
-
-      {/* Divider under header */}
-      <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
-
-      {/* Day Selector */}
-      <View style={styles.daySelector}>
-        {DAYS.map((day, index) => {
-          const isSelected = index === selectedDay;
-          const isToday = index === todayIdx;
-          return (
-            <TouchableOpacity
-              key={day}
-              style={[
-                styles.dayItem,
-                {
-                  backgroundColor: isSelected ? colors.gold : colors.surface,
-                  borderColor: isSelected ? colors.gold : colors.border,
-                  borderWidth: 1.5,
-                },
-              ]}
-              onPress={() => setSelectedDay(index)}
-            >
-              <Text style={[
-                styles.dayLabel,
-                { color: isSelected ? colors.textInverse : colors.textMuted },
-              ]}>
-                {day}
-              </Text>
-              <Text style={[
-                styles.dayDate,
-                { color: isSelected ? colors.textInverse : colors.textSecondary },
-              ]}>
-                {weekDates[index]}
-              </Text>
-              {/* Today dot indicator */}
-              {isToday && !isSelected && (
-                <View style={[styles.todayDot, { backgroundColor: colors.gold }]} />
-              )}
-              {isToday && isSelected && (
-                <View style={[styles.todayDot, { backgroundColor: colors.textInverse }]} />
-              )}
-            </TouchableOpacity>
-          );
-        })}
       </View>
 
-      {/* Selected-day detail strip */}
-      <View style={styles.selectedStrip}>
-        <View style={[styles.selectedAccent, { backgroundColor: colors.gold }]} />
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.selectedDayLabel, { color: colors.textPrimary }]}>
-            {selectedFullLabel}
-          </Text>
-          <Text style={[styles.selectedDaySub, { color: colors.textMuted }]}>
-            {selectedDay === todayIdx ? 'TODAY' : DAYS[selectedDay].toUpperCase() + ' · WEEK VIEW'}
-          </Text>
-        </View>
-        <Ionicons name="time-outline" size={20} color={colors.textTertiary} />
+      {/* Day header — date + class count on one line */}
+      <View style={styles.dayHeaderRow}>
+        <Text style={[styles.dayHeaderTitle, { color: colors.textPrimary }]}>
+          {selectedFullLabel}
+        </Text>
+        <Text style={[styles.dayHeaderMeta, { color: colors.textMuted }]}>
+          {selectedDay === todayIdx ? 'Today' : ''}
+          {selectedDay === todayIdx && filtered.length > 0 ? ' · ' : ''}
+          {filtered.length} {filtered.length === 1 ? 'class' : 'classes'}
+        </Text>
       </View>
-
-      {/* Divider before class list */}
-      <View style={[styles.sectionDivider, styles.subtleDivider, { backgroundColor: colors.borderSubtle }]} />
 
       {/* Class List */}
       <ScrollView
@@ -299,171 +284,81 @@ export function ScheduleScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  // ── Header (compact: title + nav arrows on one line) ──
   scheduleHeader: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 10,
   },
   screenTitle: {
-    fontSize: 26,
-    fontWeight: '900',
-    letterSpacing: -0.6,
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.4,
   },
-  countChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  navArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  todayBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 999,
     borderWidth: 1,
   },
-  countChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  sectionDivider: {
-    height: 1,
-    marginHorizontal: 24,
-  },
-  subtleDivider: {
-    marginTop: 4,
-    marginBottom: 8,
-  },
-  selectedStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginHorizontal: 24,
-    marginTop: 16,
-    marginBottom: 12,
-    paddingVertical: 4,
-  },
-  selectedAccent: {
-    width: 3,
-    height: 32,
-    borderRadius: 2,
-  },
-  selectedDayLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-    textAlign: 'left',
-  },
-  selectedDaySub: {
+  todayBtnText: {
     fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-    marginTop: 2,
-    textAlign: 'left',
-  },
-  todayDot: {
-    position: 'absolute',
-    bottom: 6,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-  },
-  dottedDividerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 4,
-  },
-  dottedDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-  },
-  screenSubtitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 16,
-  },
-  title: {
-    fontSize: 34,
     fontWeight: '800',
-    letterSpacing: -0.8,
+    letterSpacing: 1,
   },
-  month: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
+
+  // ── Week strip ──
   daySelector: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    marginTop: 14,
-    gap: 6,
+    paddingHorizontal: 12,
+    marginTop: 0,
+    marginBottom: 4,
+    gap: 4,
   },
   dayItem: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingBottom: 14,
-    borderRadius: 18,
-    minHeight: 62,
-    position: 'relative',
+    paddingVertical: 8,
+    paddingBottom: 10,
+    borderRadius: 14,
   },
   dayLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.3,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   dayDate: {
     fontSize: 18,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  filterRow: {
-    flexGrow: 0,
-    flexShrink: 0,
-    maxHeight: 56,
-    marginTop: 4,
-    marginBottom: 8,
-  },
-  filterContent: {
-    paddingHorizontal: 24,
-    gap: 8,
-    alignItems: 'center',
-  },
-  classList: { flex: 1 },
-  classListContent: { paddingHorizontal: 24, gap: 12 },
-  mySessionsBlock: { gap: 12 },
-  mySessionsLabel: {
-    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1.4,
-    textAlign: 'center',
-  },
-  blockSeparator: { height: 1, marginVertical: 4 },
-  emptyState: { paddingVertical: 48, alignItems: 'center', gap: 16 },
-  emptyIcon: { marginBottom: 8 },
-  emptyText: { fontSize: 15 },
-
-  // ── Week nav ──
-  todayBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  todayBtnText: {
-    fontSize: 11,
-    fontWeight: '800',
+    marginTop: 2,
   },
 
   // ── Filter chips ──
+  filterRowView: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 6,
+    gap: 6,
+  },
   filterChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -473,5 +368,57 @@ const styles = StyleSheet.create({
   filterChipText: {
     fontSize: 11,
     fontWeight: '700',
+  },
+
+  // ── Day header (date + count) ──
+  dayHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 8,
+  },
+  dayHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  dayHeaderMeta: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+
+  // ── Class list ──
+  classList: { flex: 1 },
+  classListContent: { paddingHorizontal: 20, paddingTop: 2, gap: 10 },
+  mySessionsBlock: { gap: 10 },
+  mySessionsLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    marginBottom: 2,
+  },
+  blockSeparator: { height: 1, marginVertical: 6 },
+
+  // ── Empty state ──
+  emptyState: { paddingVertical: 48, alignItems: 'center', gap: 10 },
+  emptyIcon: { marginBottom: 4 },
+  emptyText: { fontSize: 14 },
+
+  // ── Subtle dotted spacer between pairs of class cards ──
+  dottedDividerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 2,
+  },
+  dottedDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
   },
 });

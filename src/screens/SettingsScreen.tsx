@@ -27,6 +27,7 @@ import { randomDialogue } from '../data/senpaiDialogue';
 import { typography, spacing, borderRadius } from '../theme';
 import { AI_FUNCTION_BASE_URL } from '../config/api';
 import { FIREBASE_CONFIGURED, auth as firebaseAuth } from '../config/firebase';
+import { resetTutorial } from '../components/TutorialModal';
 import {
   firebaseDeleteCurrentUser,
   getCurrentIdToken,
@@ -601,6 +602,20 @@ export function SettingsScreen({ navigation }: any) {
               thumbColor={colors.background}
             />
           </View>
+          <TouchableOpacity
+            style={[styles.settingRow, { borderBottomWidth: 0 }]}
+            onPress={async () => {
+              await resetTutorial();
+              Alert.alert('Tutorial reset', 'It will show next time you open Home.');
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Replay tutorial</Text>
+              <Text style={[styles.settingDesc, { color: colors.textMuted }]}>Show the first-run walkthrough again</Text>
+            </View>
+            <Ionicons name="refresh" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
         </View>
 
         {/* About */}

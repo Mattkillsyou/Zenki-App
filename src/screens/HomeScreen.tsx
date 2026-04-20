@@ -20,6 +20,8 @@ import { ClassCard, AnimatedLogo, FadeInView, PressableScale, TimeClock, StreakB
 import { ReorderableSections, ReorderableItem } from '../components/ReorderableSections';
 import { Skeleton } from '../components/Skeleton';
 import { SpinWheelModal } from '../components/SpinWheelModal';
+import { SpinWheelIcon } from '../components/SpinWheelIcon';
+import { TutorialModal, shouldShowTutorial } from '../components/TutorialModal';
 import { NotificationsModal } from '../components/NotificationsModal';
 import { useSpinWheel } from '../context/SpinWheelContext';
 import { useGamification } from '../context/GamificationContext';
@@ -166,6 +168,17 @@ export function HomeScreen({ navigation }: any) {
   const { hasSpunToday } = useSpinWheel();
   const [spinOpen, setSpinOpen] = React.useState(false);
   const [notifOpen, setNotifOpen] = React.useState(false);
+  const [tutorialOpen, setTutorialOpen] = React.useState(false);
+
+  // First-ever Home visit (fresh signup completes Onboarding → lands here) →
+  // show the tutorial once. Flag is stored in AsyncStorage so it never
+  // re-triggers unless the user resets from Settings → Secret Lab.
+  React.useEffect(() => {
+    if (isEmployee) return; // employees skip the tutorial
+    shouldShowTutorial().then((show) => {
+      if (show) setTutorialOpen(true);
+    });
+  }, [isEmployee]);
 
   // Spin wheel is now opened manually via the icon in the header
   // (previously auto-opened on first visit of the day)
@@ -852,12 +865,13 @@ export function HomeScreen({ navigation }: any) {
             styles.spinFab,
             {
               backgroundColor: colors.gold,
-              bottom: 100 + insets.bottom,
+              bottom: 72 + insets.bottom,
               shadowColor: colors.gold,
             },
           ]}
+          accessibilityLabel="Daily spin"
         >
-          <Text style={styles.spinFabIcon}>🎡</Text>
+          <SpinWheelIcon size={26} color="#000000" background="rgba(0,0,0,0.15)" />
         </TouchableOpacity>
       )}
 
@@ -870,6 +884,9 @@ export function HomeScreen({ navigation }: any) {
         onClose={() => setNotifOpen(false)}
         navigation={navigation}
       />
+
+      {/* First-run tutorial (one time; can be replayed via Settings → Secret Lab) */}
+      <TutorialModal visible={tutorialOpen} onDone={() => setTutorialOpen(false)} />
     </SafeAreaView>
   );
 }
