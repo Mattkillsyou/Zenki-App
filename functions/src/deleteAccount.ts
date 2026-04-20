@@ -75,7 +75,7 @@ async function deleteDocDeep(docRef: FirebaseFirestore.DocumentReference): Promi
 }
 
 export const deleteAccount = onRequest(
-  { cors: true, memory: '512MiB', timeoutSeconds: 120 },
+  { cors: true, memory: '512MiB', timeoutSeconds: 120, invoker: 'public' },
   async (req, res) => {
     if (req.method !== 'POST') {
       res.status(405).send('Method not allowed');

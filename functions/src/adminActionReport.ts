@@ -70,7 +70,7 @@ async function verifyAdmin(req: any): Promise<string | { error: string; status: 
 }
 
 export const adminActionReport = onRequest(
-  { cors: true, memory: '256MiB', timeoutSeconds: 30 },
+  { cors: true, memory: '256MiB', timeoutSeconds: 30, invoker: 'public' },
   async (req, res) => {
     if (req.method !== 'POST') {
       res.status(405).send('Method not allowed');

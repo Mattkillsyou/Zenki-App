@@ -133,7 +133,7 @@ async function callClaude(
 // ─────────────────────────────────────────────
 
 export const recognizeFood = onRequest(
-  { secrets: [ANTHROPIC_API_KEY], cors: true, memory: '512MiB', timeoutSeconds: 60 },
+  { secrets: [ANTHROPIC_API_KEY], cors: true, memory: '512MiB', timeoutSeconds: 60, invoker: 'public' },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).send('Method not allowed'); return; }
 
@@ -186,7 +186,7 @@ export const recognizeFood = onRequest(
 // ─────────────────────────────────────────────
 
 export const extractDexa = onRequest(
-  { secrets: [ANTHROPIC_API_KEY], cors: true, memory: '512MiB', timeoutSeconds: 90 },
+  { secrets: [ANTHROPIC_API_KEY], cors: true, memory: '512MiB', timeoutSeconds: 90, invoker: 'public' },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).send('Method not allowed'); return; }
 
@@ -223,7 +223,7 @@ export const extractDexa = onRequest(
 // ─────────────────────────────────────────────
 
 export const parseBloodwork = onRequest(
-  { secrets: [ANTHROPIC_API_KEY], cors: true, memory: '512MiB', timeoutSeconds: 90 },
+  { secrets: [ANTHROPIC_API_KEY], cors: true, memory: '512MiB', timeoutSeconds: 90, invoker: 'public' },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).send('Method not allowed'); return; }
 
