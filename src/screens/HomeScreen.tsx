@@ -21,7 +21,7 @@ import { ReorderableSections, ReorderableItem } from '../components/ReorderableS
 import { Skeleton } from '../components/Skeleton';
 import { SpinWheelModal } from '../components/SpinWheelModal';
 import { SpinWheelIcon } from '../components/SpinWheelIcon';
-import { TutorialModal, shouldShowTutorial } from '../components/TutorialModal';
+import { CoachmarkTutorial, CoachmarkStep, shouldShowCoachmarks } from '../components/CoachmarkTutorial';
 import { NotificationsModal } from '../components/NotificationsModal';
 import { useSpinWheel } from '../context/SpinWheelContext';
 import { useGamification } from '../context/GamificationContext';
@@ -156,6 +156,34 @@ export function HomeScreen({ navigation }: any) {
     setTimeout(() => senpaiReact('encouraging', randomDialogue(key), 4000), 1500);
   }, [senpaiState.enabled]);
   const { announcements } = useAnnouncements();
+
+  // ── Per-user dismissed-announcements list ──
+  // Admins push announcements; users can individually close any card via
+  // the X in its corner. Dismiss flag is stored locally in AsyncStorage
+  // keyed by uid so multiple users on one device don't share state.
+  const dismissedKey = user?.id ? `@zenki_dismissed_announcements_${user.id}` : null;
+  const [dismissedIds, setDismissedIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (!dismissedKey) return;
+    AsyncStorage.getItem(dismissedKey)
+      .then((raw) => {
+        if (!raw) return;
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) setDismissedIds(parsed);
+        } catch { /* ignore */ }
+      })
+      .catch(() => { /* ignore */ });
+  }, [dismissedKey]);
+  const dismissAnnouncement = useCallback((id: string) => {
+    setDismissedIds((prev) => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      if (dismissedKey) AsyncStorage.setItem(dismissedKey, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, [dismissedKey]);
+  const visibleAnnouncements = announcements.filter((a) => !dismissedIds.includes(a.id));
   const { myAppointments } = useAppointments();
   const { myLogs, myPRs } = useWorkouts();
   const userLogsCount = user?.id ? myLogs(user.id).length : 0;
@@ -168,21 +196,40 @@ export function HomeScreen({ navigation }: any) {
   const { hasSpunToday } = useSpinWheel();
   const [spinOpen, setSpinOpen] = React.useState(false);
   const [notifOpen, setNotifOpen] = React.useState(false);
-  const [tutorialOpen, setTutorialOpen] = React.useState(false);
+
+  // ── Coachmark tutorial: refs + measurements ──
+  const editPillRef = useRef<View>(null);
+  const trainingRef = useRef<View>(null);
+  const foodActionsRef = useRef<View>(null);
+  const spinFabRef = useRef<View>(null);
+  const [coachRects, setCoachRects] = useState<Record<string, { x: number; y: number; width: number; height: number }>>({});
+  const [coachmarksOpen, setCoachmarksOpen] = useState(false);
+
+  const measureCoachTarget = useCallback((name: string, ref: React.RefObject<View>) => () => {
+    // Delay so layout has settled before we pull screen-space coords
+    setTimeout(() => {
+      ref.current?.measureInWindow?.((x: number, y: number, width: number, height: number) => {
+        // Ignore bogus (0,0,0,0) measurements that occur during unmount / off-screen
+        if (width > 0 && height > 0) {
+          setCoachRects((r) => ({ ...r, [name]: { x, y, width, height } }));
+        }
+      });
+    }, 60);
+  }, []);
 
   // First-ever Home visit (fresh signup completes Onboarding → lands here) →
-  // show the tutorial once. Flag is stored in AsyncStorage so it never
-  // re-triggers unless the user resets it from Settings → Secret Lab or
-  // from the Profile → Help → "Replay tutorial" action. We re-check on
-  // every focus so those replay paths work immediately.
+  // show the tutorial. Flag stored in AsyncStorage so it never re-triggers
+  // unless the user resets from Settings → Secret Lab or Profile → Help →
+  // Replay tutorial. Re-checks on focus so those replay paths work
+  // immediately.
   React.useEffect(() => {
-    if (isEmployee) return; // employees skip the tutorial
+    if (isEmployee) return;
     const check = () => {
-      shouldShowTutorial().then((show) => {
-        if (show) setTutorialOpen(true);
+      shouldShowCoachmarks().then((show) => {
+        if (show) setCoachmarksOpen(true);
       });
     };
-    check(); // initial mount
+    check();
     const unsub = navigation?.addListener?.('focus', check);
     return () => { if (typeof unsub === 'function') unsub(); };
   }, [isEmployee, navigation]);
@@ -386,7 +433,7 @@ export function HomeScreen({ navigation }: any) {
   }, []);
 
   // ── Module reorder (drag to rearrange) + show/hide ──
-  const DEFAULT_MODULE_ORDER = ['training', 'announcements', 'xpBar', 'quickFoodActions', 'achievements', 'quote', 'dashboard', 'quickStats', 'schedule'];
+  const DEFAULT_MODULE_ORDER = ['announcements', 'training', 'quickFoodActions', 'dashboard', 'quickStats', 'schedule', 'quote', 'xpBar', 'achievements'];
   const [moduleOrder, setModuleOrder] = useState<string[]>(DEFAULT_MODULE_ORDER);
   const [moduleVisibility, setModuleVisibility] = useState<Record<string, boolean>>({});
   const [editMode, setEditMode] = useState(false);
@@ -490,14 +537,16 @@ export function HomeScreen({ navigation }: any) {
               </Text>
             </Text>
             {!isEmployee && !editMode && (
-              <TouchableOpacity
-                onPress={() => setEditMode(true)}
-                activeOpacity={0.8}
-                style={[styles.editPill, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              >
-                <Ionicons name="create-outline" size={11} color={colors.textSecondary} />
-                <Text style={[styles.editPillText, { color: colors.textSecondary }]}>Edit</Text>
-              </TouchableOpacity>
+              <View ref={editPillRef} onLayout={measureCoachTarget('edit', editPillRef)}>
+                <TouchableOpacity
+                  onPress={() => setEditMode(true)}
+                  activeOpacity={0.8}
+                  style={[styles.editPill, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                >
+                  <Ionicons name="create-outline" size={11} color={colors.textSecondary} />
+                  <Text style={[styles.editPillText, { color: colors.textSecondary }]}>Edit</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </FadeInView>
@@ -557,23 +606,29 @@ export function HomeScreen({ navigation }: any) {
             {/* ── Reorderable sections ── */}
             {(() => {
               const sectionsById: Record<string, React.ReactElement | null> = {
-                announcements: announcements.length > 0 ? (
+                announcements: visibleAnnouncements.length > 0 ? (
                   <FadeInView delay={80} slideUp={12}>
                     <View style={[styles.announcementsWrap, { marginTop: 4 }]}>
-                      {announcements.slice(0, 3).map((a) => (
-                        <PressableScale key={a.id}>
-                          <View style={[styles.announcementCard, { backgroundColor: colors.goldMuted }]}>
-                            <View style={[styles.announcementIcon, { backgroundColor: colors.gold + '20' }]}>
-                              <Ionicons name="megaphone-outline" size={20} color={colors.gold} />
-                            </View>
-                            <View style={styles.announcementContent}>
-                              <Text style={[styles.announcementTitle, { color: colors.textPrimary }]} numberOfLines={2}>{a.title}</Text>
-                              {a.description ? (
-                                <Text style={[styles.announcementDesc, { color: colors.textSecondary }]} numberOfLines={2}>{a.description}</Text>
-                              ) : null}
-                            </View>
+                      {visibleAnnouncements.slice(0, 3).map((a) => (
+                        <View key={a.id} style={[styles.announcementCard, { backgroundColor: colors.goldMuted }]}>
+                          <View style={[styles.announcementIcon, { backgroundColor: colors.gold + '20' }]}>
+                            <Ionicons name="megaphone-outline" size={20} color={colors.gold} />
                           </View>
-                        </PressableScale>
+                          <View style={styles.announcementContent}>
+                            <Text style={[styles.announcementTitle, { color: colors.textPrimary }]} numberOfLines={2}>{a.title}</Text>
+                            {a.description ? (
+                              <Text style={[styles.announcementDesc, { color: colors.textSecondary }]} numberOfLines={2}>{a.description}</Text>
+                            ) : null}
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => !editMode && dismissAnnouncement(a.id)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            style={styles.announcementDismiss}
+                            accessibilityLabel="Dismiss announcement"
+                          >
+                            <Ionicons name="close" size={16} color={colors.textMuted} />
+                          </TouchableOpacity>
+                        </View>
                       ))}
                     </View>
                   </FadeInView>
@@ -607,7 +662,11 @@ export function HomeScreen({ navigation }: any) {
                 ),
                 quickFoodActions: (
                   <FadeInView delay={110} slideUp={16}>
-                    <View style={{ paddingHorizontal: 20, marginTop: 6, flexDirection: 'row', gap: 10 }}>
+                    <View
+                      ref={foodActionsRef}
+                      onLayout={measureCoachTarget('foodActions', foodActionsRef)}
+                      style={{ paddingHorizontal: 20, marginTop: 6, flexDirection: 'row', gap: 10 }}
+                    >
                       <TouchableOpacity
                         activeOpacity={0.85}
                         onPress={() => !editMode && navigation.navigate('MacroTracker', { openSearch: true })}
@@ -772,7 +831,11 @@ export function HomeScreen({ navigation }: any) {
                 ) : null,
                 training: (
                   <FadeInView delay={340} slideUp={16}>
-                    <View style={styles.section}>
+                    <View
+                      ref={trainingRef}
+                      onLayout={measureCoachTarget('training', trainingRef)}
+                      style={styles.section}
+                    >
                       <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 10 }]}>Training</Text>
                       <View style={styles.toolsGrid}>
                         <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('WorkoutSession')} style={[styles.homeTool, { backgroundColor: colors.redMuted, borderColor: colors.red }]}>
@@ -895,9 +958,9 @@ export function HomeScreen({ navigation }: any) {
           Only shown when the user hasn't spun yet today. Once spun,
           disappears entirely until tomorrow. */}
       {!isEmployee && !hasSpunToday && (
-        <TouchableOpacity
-          onPress={() => { play('navigate'); setSpinOpen(true); }}
-          activeOpacity={0.8}
+        <View
+          ref={spinFabRef}
+          onLayout={measureCoachTarget('spinFab', spinFabRef)}
           style={[
             styles.spinFab,
             {
@@ -906,10 +969,16 @@ export function HomeScreen({ navigation }: any) {
               shadowColor: colors.gold,
             },
           ]}
-          accessibilityLabel="Daily spin"
         >
-          <SpinWheelIcon size={26} color="#000000" background="rgba(0,0,0,0.15)" />
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => { play('navigate'); setSpinOpen(true); }}
+            activeOpacity={0.8}
+            style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
+            accessibilityLabel="Daily spin"
+          >
+            <SpinWheelIcon size={26} color="#000000" background="rgba(0,0,0,0.15)" />
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Daily Spin Wheel */}
@@ -922,8 +991,46 @@ export function HomeScreen({ navigation }: any) {
         navigation={navigation}
       />
 
-      {/* First-run tutorial (one time; can be replayed via Settings → Secret Lab) */}
-      <TutorialModal visible={tutorialOpen} onDone={() => setTutorialOpen(false)} />
+      {/* First-run coachmark tutorial (one time; can be replayed via Settings → Secret Lab or Profile → Help) */}
+      {(() => {
+        const steps: CoachmarkStep[] = [
+          {
+            target: coachRects.edit ?? null,
+            title: 'Customize your home',
+            body: 'Tap Edit to drag sections into the order you want, or hide anything you don\u2019t use. Your layout, your way.',
+          },
+          {
+            target: coachRects.training ?? null,
+            title: 'Your training toolkit',
+            body: 'Every training tool lives here \u2014 heart-rate sessions, workouts, weight, timers, body lab, GPS, weekly report.',
+          },
+          {
+            target: coachRects.foodActions ?? null,
+            title: 'Log food three ways',
+            body: 'Search for a food by name, Scan a barcode, or snap a Photo and let AI estimate the macros.',
+          },
+          ...(coachRects.spinFab ? [{
+            target: coachRects.spinFab,
+            title: 'Free daily spin',
+            body: 'Every day get a free spin for bonus points. Tap the wheel to see today\u2019s prizes.',
+          }] : []),
+          {
+            target: null,
+            title: 'You\u2019re all set',
+            body: 'Tap Profile \u2192 Help any time to replay this tutorial or browse the FAQ.',
+          },
+        ];
+        // Only open once we've measured at least the first couple of targets.
+        const measuredCount = ['edit', 'training', 'foodActions'].filter((k) => coachRects[k]).length;
+        const ready = measuredCount >= 2;
+        return (
+          <CoachmarkTutorial
+            visible={coachmarksOpen && ready}
+            steps={steps}
+            onDone={() => setCoachmarksOpen(false)}
+          />
+        );
+      })()}
     </SafeAreaView>
   );
 }
@@ -1179,6 +1286,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   announcementContent: { flex: 1 },
+  announcementDismiss: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
+  },
   announcementTitle: {
     fontSize: 16,
     fontWeight: '700',

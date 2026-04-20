@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
-import { resetTutorial } from '../components/TutorialModal';
+import { resetCoachmarks } from '../components/CoachmarkTutorial';
 
 const APP_VERSION = '1.0.0';
 const PRIVACY_URL = 'https://zenki-dojo.web.app/privacy';
@@ -63,7 +63,7 @@ export function HelpScreen({ navigation }: any) {
     // (Using Alert.alert with buttons doesn't work on web react-native, so
     //  we avoid it for this particular flow.)
     try {
-      await resetTutorial();
+      await resetCoachmarks();
     } catch {
       /* ignore */
     }

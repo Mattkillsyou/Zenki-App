@@ -27,7 +27,7 @@ import { randomDialogue } from '../data/senpaiDialogue';
 import { typography, spacing, borderRadius } from '../theme';
 import { AI_FUNCTION_BASE_URL } from '../config/api';
 import { FIREBASE_CONFIGURED, auth as firebaseAuth } from '../config/firebase';
-import { resetTutorial } from '../components/TutorialModal';
+import { resetCoachmarks } from '../components/CoachmarkTutorial';
 import {
   firebaseDeleteCurrentUser,
   getCurrentIdToken,
@@ -605,7 +605,7 @@ export function SettingsScreen({ navigation }: any) {
           <TouchableOpacity
             style={[styles.settingRow, { borderBottomWidth: 0 }]}
             onPress={async () => {
-              await resetTutorial();
+              await resetCoachmarks();
               Alert.alert('Tutorial reset', 'It will show next time you open Home.');
             }}
             activeOpacity={0.7}
