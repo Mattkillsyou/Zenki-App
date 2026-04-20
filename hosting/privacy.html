@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy · Zenki Dojo</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      max-width: 720px;
+      margin: 40px auto;
+      padding: 0 24px 80px;
+      line-height: 1.6;
+      color: #1A1209;
+      background: #FAFAFA;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: #1A1209; color: #F5F5F5; }
+      a { color: #E8B828; }
+      code { background: rgba(232,184,40,0.15); }
+    }
+    h1 { letter-spacing: -0.5px; font-size: 2rem; margin: 1.5em 0 0.4em; }
+    h2 { font-size: 1.3rem; margin: 2em 0 0.3em; }
+    h3 { font-size: 1.05rem; margin: 1.6em 0 0.25em; }
+    a { color: #B8860B; text-decoration: none; border-bottom: 1px solid currentColor; }
+    a:hover { opacity: 0.7; }
+    code { background: rgba(0,0,0,0.05); padding: 2px 5px; border-radius: 4px; font-size: 0.9em; }
+    hr { border: none; border-top: 1px solid currentColor; opacity: 0.15; margin: 2em 0; }
+    nav { font-size: 0.85rem; opacity: 0.65; margin-bottom: 2em; }
+    nav a { border: none; }
+    .tagline { font-size: 0.85rem; opacity: 0.55; letter-spacing: 1.5px; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/">Zenki Dojo</a>
+    &nbsp;·&nbsp;
+    <a href="/privacy">Privacy</a>
+    &nbsp;·&nbsp;
+    <a href="/support">Support</a>
+  </nav>
+  <h1>Privacy Policy</h1>
+<p><strong>Effective date:</strong> 2026-04-19
+<strong>Last updated:</strong> 2026-04-19</p>
+<p>Zenki Dojo ("the app," "we," "us") is operated by <strong>Matt Brown</strong> on behalf of Zenki Dojo training facility. This policy explains what data we collect, why, and how we protect it.</p>
+<p>If you have questions, email us at <strong>mattbrowntheemail@gmail.com</strong>.</p>
+<hr />
+<h2>Summary</h2>
+<ul>
+<li>We collect only the data needed to run the app's features.</li>
+<li>We <strong>do not</strong> sell, rent, or share your data with advertisers or data brokers.</li>
+<li>We <strong>do not</strong> track you across other apps or websites.</li>
+<li>You can permanently delete your account and all associated data from inside the app, at any time (Settings → Danger Zone → Delete Account).</li>
+</ul>
+<hr />
+<h2>1. What we collect</h2>
+<h3>Account information</h3>
+<ul>
+<li>Name (first, last)</li>
+<li>Email address (used as your sign-in identifier)</li>
+<li>Phone number <em>(optional — only if you provide it)</em></li>
+<li>Password <em>(hashed by Firebase Authentication; we never see it in plaintext)</em></li>
+<li>Profile photo <em>(optional)</em></li>
+</ul>
+<h3>Training and health data</h3>
+<ul>
+<li>Workouts, personal records, notes you log</li>
+<li>Heart-rate session data if you connect a Bluetooth monitor (BPM samples, zones, calories, duration)</li>
+<li>GPS activity tracks (route, distance, pace) when you start a GPS-tracked workout</li>
+<li>Weight entries, body composition measurements</li>
+<li>Menstrual cycle data (dates, notes, symptoms) if you use that feature</li>
+<li>Nutrition logs (foods, macros, calories)</li>
+<li>Uploaded DEXA scan files and bloodwork reports <em>(processed by an AI vendor — see Section 4)</em></li>
+</ul>
+<h3>Community content</h3>
+<ul>
+<li>Community posts you publish</li>
+<li>Direct messages with other members</li>
+<li>Support messages you send to admins</li>
+<li>Likes, follows, comments</li>
+</ul>
+<h3>Device and usage</h3>
+<ul>
+<li>Firebase user ID (unique per account)</li>
+<li>Expo push notification token (so we can deliver notifications)</li>
+<li>App-interaction counts used for streak + achievement features (no telemetry shared externally)</li>
+</ul>
+<h3>What we do NOT collect</h3>
+<ul>
+<li>Advertising identifier (IDFA)</li>
+<li>Contacts, calendar, or other device data beyond what you explicitly attach</li>
+<li>Precise location in the background (foreground-only, and only while GPS workouts are running or you arrive at the dojo for check-in)</li>
+<li>Crash or performance analytics</li>
+<li>Third-party behavioral tracking of any kind</li>
+</ul>
+<hr />
+<h2>2. Why we collect it</h2>
+<p>Every piece of data above is collected <strong>for App Functionality</strong> only, using Apple's App Privacy definitions. Specifically:</p>
+<table>
+<thead>
+<tr>
+<th>Purpose</th>
+<th>What supports it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Account creation and sign-in</td>
+<td>Name, email, password</td>
+</tr>
+<tr>
+<td>Deliver notifications</td>
+<td>Expo push token</td>
+</tr>
+<tr>
+<td>Provide health + fitness features</td>
+<td>Training, health, nutrition data</td>
+</tr>
+<tr>
+<td>Community and messaging features</td>
+<td>Posts, DMs, follows</td>
+</tr>
+<tr>
+<td>Dojo operations</td>
+<td>Attendance, waivers, support messages</td>
+</tr>
+<tr>
+<td>Auto-check-in and GPS routes</td>
+<td>Precise location (foreground, only while active)</td>
+</tr>
+<tr>
+<td>AI macro estimation and scan parsing</td>
+<td>Photos/PDFs you explicitly upload (see Section 4)</td>
+</tr>
+<tr>
+<td>Improve the app</td>
+<td>Anonymous error logs via Firebase <em>(no user identifiers)</em></td>
+</tr>
+</tbody>
+</table>
+<p>We do <strong>not</strong> use your data for advertising, profiling, or personalization beyond what's visible to you (achievements, streak counts).</p>
+<hr />
+<h2>3. Where your data lives</h2>
+<p>Zenki Dojo uses Google Firebase as its backend. Your data is stored in:
+- <strong>Firebase Authentication</strong> — account credentials
+- <strong>Cloud Firestore</strong> — profile, posts, workouts, messages, health entries
+- <strong>Firebase Cloud Storage</strong> — uploaded photos, DEXA / bloodwork files</p>
+<p>Firebase is operated by Google LLC. Data is stored in Google data centers, typically in the United States. Google processes this data on our behalf under its Data Processing Addendum.</p>
+<p>Reference: https://firebase.google.com/support/privacy</p>
+<hr />
+<h2>4. Third-party sub-processors</h2>
+<p>When you use a feature that needs help from another service, data flows to that service only as required:</p>
+<h3>Anthropic (Claude AI)</h3>
+<p>When you upload a food photo, DEXA scan, or bloodwork report, the image or PDF is sent to our backend and from there to Anthropic's Claude AI for structured-data extraction. Anthropic's API does not retain your image or use it for model training.</p>
+<p>Reference: https://www.anthropic.com/privacy</p>
+<h3>Expo (Push Notifications)</h3>
+<p>We use Expo's push-notification service to relay notifications to Apple's APNs. Your device push token is stored in our Firestore database and sent to Expo when we deliver a notification.</p>
+<p>Reference: https://expo.dev/privacy</p>
+<h3>Apple (App Store, APNs)</h3>
+<p>Apple delivers push notifications and distributes the app. Apple's privacy policy applies to those interactions.</p>
+<h3>Google (Calendar — optional)</h3>
+<p>If you choose to link Google Calendar in the Book screen, your Google account token is passed to Google's OAuth servers. We use it only to add booked sessions to your calendar on your behalf.</p>
+<p>Reference: https://policies.google.com/privacy</p>
+<h3>USDA FoodData Central / Open Food Facts (optional)</h3>
+<p>When you search for a food by name or barcode, we send the query string or barcode number (no personal data) to these public APIs.</p>
+<hr />
+<h2>5. Who can see your data</h2>
+<ul>
+<li><strong>You</strong> — always; everything you've added is visible in your profile and app screens</li>
+<li><strong>Other members</strong> — can see your community posts, public profile, and your direct messages to them. You control visibility of your profile in Settings.</li>
+<li><strong>Dojo administrators</strong> — can see your waivers, attendance, appointments you request, and support messages you send to them. Admins <strong>cannot</strong> see your private workout logs, nutrition, or messages with other members unless you're explicitly sharing (e.g., tagging them in a post).</li>
+<li><strong>Health data exception:</strong> If you upload bloodwork or DEXA scans, the data stays in your account. Dojo admins cannot view it unless you explicitly share a report with them (feature forthcoming — not enabled in v1.0).</li>
+</ul>
+<hr />
+<h2>6. Your rights</h2>
+<p>You can:
+- <strong>Access</strong> any data by opening the relevant screen in the app
+- <strong>Correct</strong> most data by editing it inline (profile, posts, entries)
+- <strong>Export</strong> all your data from Settings → Data → Export All Data (JSON download)
+- <strong>Delete</strong> your account and every associated record from Settings → Danger Zone → <strong>Delete Account</strong>. This action is permanent and cascades across Firebase Auth, Firestore, and Storage.</p>
+<p>Deletion requests via email are honored within 30 days — send to <code>mattbrowntheemail@gmail.com</code>.</p>
+<h3>California residents</h3>
+<p>You have additional rights under the CCPA (to know, delete, and opt-out). Since we don't sell personal information, the opt-out right doesn't apply. Exercise any other right by emailing the address above.</p>
+<h3>EU / UK residents</h3>
+<p>You have GDPR rights (access, rectification, erasure, portability, restriction, objection). Exercise these by emailing the address above. Our legal basis is: (a) contract performance — providing the app; (b) consent — where you opt into a specific feature like GPS tracking or Google Calendar; (c) legitimate interest — fraud prevention and app security.</p>
+<hr />
+<h2>7. Data retention</h2>
+<ul>
+<li><strong>Active account:</strong> we keep your data as long as your account exists.</li>
+<li><strong>After deletion:</strong> immediate removal from live Firestore + Storage. Backups may retain for up to 30 days before the purge is complete.</li>
+<li><strong>Logs:</strong> server logs retained for 30 days for debugging; they contain user IDs but no payload data.</li>
+</ul>
+<hr />
+<h2>8. Children</h2>
+<p>Zenki Dojo is intended for users <strong>13 years of age or older</strong>. We do not knowingly collect personal data from children under 13. If you believe we have collected such data, email us and we will delete it immediately.</p>
+<p>If the app is used by a member under 18, a parent or guardian should review this policy with them.</p>
+<hr />
+<h2>9. Security</h2>
+<ul>
+<li>Passwords are hashed and managed by Firebase Authentication.</li>
+<li>All data in transit uses HTTPS/TLS.</li>
+<li>Firestore rules enforce that you can only read/write your own data.</li>
+<li>Storage rules enforce that uploaded files are only accessible by you.</li>
+<li>We do not store credit-card, banking, or payment data inside the app — no in-app payments are processed as of v1.0.</li>
+</ul>
+<p>No system is 100% secure. If you suspect a breach or vulnerability, email <code>mattbrowntheemail@gmail.com</code>.</p>
+<hr />
+<h2>10. Health information disclaimer</h2>
+<p>Zenki Dojo is not a medical device and is not intended to diagnose, treat, or prevent any disease. Bloodwork and DEXA parsing is informational only. Consult a licensed healthcare professional for medical advice.</p>
+<hr />
+<h2>11. Changes to this policy</h2>
+<p>We'll update the "Last updated" date at the top when this policy changes. Material changes will be communicated in-app before taking effect.</p>
+<hr />
+<h2>12. Contact</h2>
+<p>For any privacy question, data-access request, or deletion request:</p>
+<p><strong>Matt Brown</strong>
+Email: <code>mattbrowntheemail@gmail.com</code></p>
+</body>
+</html>

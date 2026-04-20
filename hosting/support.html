@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Support · Zenki Dojo</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      max-width: 720px;
+      margin: 40px auto;
+      padding: 0 24px 80px;
+      line-height: 1.6;
+      color: #1A1209;
+      background: #FAFAFA;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: #1A1209; color: #F5F5F5; }
+      a { color: #E8B828; }
+      code { background: rgba(232,184,40,0.15); }
+    }
+    h1 { letter-spacing: -0.5px; font-size: 2rem; margin: 1.5em 0 0.4em; }
+    h2 { font-size: 1.3rem; margin: 2em 0 0.3em; }
+    h3 { font-size: 1.05rem; margin: 1.6em 0 0.25em; }
+    a { color: #B8860B; text-decoration: none; border-bottom: 1px solid currentColor; }
+    a:hover { opacity: 0.7; }
+    code { background: rgba(0,0,0,0.05); padding: 2px 5px; border-radius: 4px; font-size: 0.9em; }
+    hr { border: none; border-top: 1px solid currentColor; opacity: 0.15; margin: 2em 0; }
+    nav { font-size: 0.85rem; opacity: 0.65; margin-bottom: 2em; }
+    nav a { border: none; }
+    .tagline { font-size: 0.85rem; opacity: 0.55; letter-spacing: 1.5px; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/">Zenki Dojo</a>
+    &nbsp;·&nbsp;
+    <a href="/privacy">Privacy</a>
+    &nbsp;·&nbsp;
+    <a href="/support">Support</a>
+  </nav>
+  <h1>Zenki Dojo — Support</h1>
+<p>Need help with the app? You're in the right place.</p>
+<hr />
+<h2>Contact</h2>
+<p><strong>Matt Brown</strong>
+Email: <strong>mattbrowntheemail@gmail.com</strong></p>
+<p>We aim to respond within 2 business days.</p>
+<hr />
+<h2>Frequently asked questions</h2>
+<h3>I can't sign in</h3>
+<ul>
+<li>Make sure you're using your registered email and password</li>
+<li>Passwords are case-sensitive</li>
+<li>If you've forgotten your password, tap <strong>Forgot password?</strong> on the sign-in screen and we'll email a reset link</li>
+</ul>
+<h3>The app is asking for an invite code</h3>
+<p>Zenki Dojo is a private app for members of the dojo. Ask your sensei or an existing member for the current invite code. If you're a new member, email us at the address above and we'll send you one.</p>
+<h3>Pushing the "Book" button doesn't charge me</h3>
+<p>That's intentional. Zenki Dojo v1.0 doesn't process payments in-app — bookings are inquiries, and our team follows up by text or email to confirm. Payment is handled in person at the dojo.</p>
+<h3>I want to connect a heart-rate monitor</h3>
+<ul>
+<li>Heart-rate monitors must support the standard Bluetooth Heart Rate Service</li>
+<li>Go to the HR Session tile on the home screen, tap <strong>Scan</strong></li>
+<li>Works with Polar H10, Wahoo Tickr, Garmin HRM-Dual/Pro, and most recent chest straps</li>
+<li>Web preview doesn't support Bluetooth — use the iOS app on device</li>
+</ul>
+<h3>How do I turn on dark mode / change the theme?</h3>
+<p>Settings → Appearance. There are 8 themes: System, Clean Light, Clean Dark, Nostromo, Jurassic Park, Ghost in the Shell, Blade Runner, The Matrix, Sheikah Slate.</p>
+<h3>How do I change my home screen layout?</h3>
+<p>Tap <strong>Edit</strong> next to "Welcome back, <name>" on the home screen. Drag sections to rearrange. Tap the red <strong>−</strong> to hide a section; tap the green <strong>+</strong> to restore it. Tap <strong>DONE</strong> to save.</p>
+<h3>How do I export my data?</h3>
+<p>Settings → Data → Export All Data. Produces a JSON file with everything tied to your account.</p>
+<h3>How do I delete my account?</h3>
+<p>Settings → <strong>Danger Zone</strong> → <strong>Delete Account</strong>. Confirms once, then permanently removes:
+- Your profile and all workouts
+- Your posts, messages, and follows
+- Your photos, DEXA scans, and bloodwork uploads
+- Your Firebase account</p>
+<p>This cannot be undone.</p>
+<h3>I see something inappropriate on the feed</h3>
+<p>Tap the <strong>•••</strong> menu in the top-right of the post, choose <strong>Report post</strong>, and pick a reason. Our team reviews reports and takes action. You can also <strong>Block user</strong> from the same menu to immediately hide all their content from your feed and messages.</p>
+<h3>Someone is messaging me I don't want to hear from</h3>
+<p>Open the conversation, tap <strong>•••</strong> in the header → <strong>Block user</strong>. They'll vanish from your feed and messages. Alternatively, from their profile tap <strong>•••</strong> → <strong>Block user</strong>. To undo: Settings → Privacy &amp; Safety → Blocked Users → <strong>Unblock</strong>.</p>
+<h3>I uploaded a bloodwork or DEXA scan — who sees it?</h3>
+<p>Only you. Admins cannot view your health uploads without explicit consent. Images are processed by Anthropic Claude AI to extract biomarker values; the image itself is not retained by Anthropic.</p>
+<p>See <a href="./PRIVACY_POLICY.md">Privacy Policy</a> for full details on data handling.</p>
+<h3>The app keeps signing me out</h3>
+<p>That's a bug we've fixed in v1.0. Make sure you're on the latest version — App Store → Zenki Dojo → <strong>Update</strong>.</p>
+<h3>I'm an admin and I need to manage members / products / schedule</h3>
+<p>Admin features are in the Admin tab (visible only when <code>isAdmin: true</code>). Need admin access? Email us.</p>
+<hr />
+<h2>Known issues</h2>
+<ul>
+<li>Web preview does not support Bluetooth heart-rate monitors</li>
+<li>GPS route map displays only on web; on iOS you'll see distance and duration without a route visualization <em>(map view coming in v1.0.1)</em></li>
+<li>Google Calendar sync requires the "Link Calendar" button in the Book screen — may take a few seconds on first connect</li>
+</ul>
+<hr />
+<h2>Feature requests</h2>
+<p>Email <code>mattbrowntheemail@gmail.com</code> with <strong>[Feature Request]</strong> in the subject.</p>
+<p>We're currently planning for v1.0.1:
+- In-app admin moderation queue (triage reports + take action)
+- Push notification for pending booking confirmations
+- GPS route overlay on iOS
+- Group chats</p>
+<hr />
+<h2>Privacy and data</h2>
+<p>See <a href="./PRIVACY_POLICY.md">Privacy Policy</a> for a full statement of what we collect, why, and how you can control it.</p>
+<hr />
+<h2>Troubleshooting — collect info before emailing</h2>
+<p>When you email us, include:
+- iPhone model (Settings → General → About → Model Name)
+- iOS version (Settings → General → About → iOS Version)
+- Zenki Dojo version (Settings → scroll to bottom)
+- A description of what you were doing when the issue happened
+- Screenshots if applicable</p>
+<p>That cuts support turnaround in half.</p>
+<hr />
+<p><em>Last updated: 2026-04-19</em></p>
+</body>
+</html>
