@@ -3,52 +3,154 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Zenki Dojo · Zenki Dojo</title>
+  <title>Zenki Dojo — Zenki Dojo</title>
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cormorant+Garamond:ital,wght@1,500&display=swap" rel="stylesheet">
   <style>
-    :root { color-scheme: light dark; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-      max-width: 720px;
-      margin: 40px auto;
-      padding: 0 24px 80px;
-      line-height: 1.6;
-      color: #1A1209;
-      background: #FAFAFA;
+    :root {
+      --gold: #E8B828;
+      --gold-soft: #B8860B;
+      --bg: #0F0A07;
+      --bg-elevated: #1A1209;
+      --border: rgba(232, 184, 40, 0.15);
+      --text: #F5F0E6;
+      --text-muted: #928372;
+      --red: #C13D2E;
     }
-    @media (prefers-color-scheme: dark) {
-      body { background: #1A1209; color: #F5F5F5; }
-      a { color: #E8B828; }
-      code { background: rgba(232,184,40,0.15); }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.65;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
     }
-    h1 { letter-spacing: -0.5px; font-size: 2rem; margin: 1.5em 0 0.4em; }
-    h2 { font-size: 1.3rem; margin: 2em 0 0.3em; }
-    h3 { font-size: 1.05rem; margin: 1.6em 0 0.25em; }
-    a { color: #B8860B; text-decoration: none; border-bottom: 1px solid currentColor; }
-    a:hover { opacity: 0.7; }
-    code { background: rgba(0,0,0,0.05); padding: 2px 5px; border-radius: 4px; font-size: 0.9em; }
-    hr { border: none; border-top: 1px solid currentColor; opacity: 0.15; margin: 2em 0; }
-    nav { font-size: 0.85rem; opacity: 0.65; margin-bottom: 2em; }
-    nav a { border: none; }
-    .tagline { font-size: 0.85rem; opacity: 0.55; letter-spacing: 1.5px; text-transform: uppercase; }
+    a { color: var(--gold); text-decoration: none; border-bottom: 1px solid rgba(232,184,40,0.35); transition: border-color 120ms; }
+    a:hover { border-bottom-color: var(--gold); }
+    header {
+      background: linear-gradient(180deg, #1A1209 0%, rgba(26,18,9,0) 100%);
+      padding: 32px 24px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    header .wrap {
+      max-width: 720px; margin: 0 auto;
+      display: flex; align-items: center; gap: 16px;
+    }
+    header img { width: 44px; height: 44px; }
+    header .brand-text { display: flex; flex-direction: column; gap: 3px; }
+    header .brand-name { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; }
+    header .brand-tagline {
+      font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--gold-soft); font-weight: 700;
+    }
+    nav.top {
+      max-width: 720px; margin: 18px auto 0; padding: 0 24px;
+      display: flex; gap: 20px; font-size: 13px; font-weight: 600;
+    }
+    nav.top a { border-bottom: none; color: var(--text-muted); }
+    nav.top a:hover { color: var(--gold); }
+    nav.top a.active { color: var(--text); }
+    main {
+      max-width: 720px; margin: 40px auto 100px;
+      padding: 0 24px;
+    }
+    h1 {
+      font-size: 40px; letter-spacing: -1px; font-weight: 800;
+      margin: 32px 0 8px;
+    }
+    h2 {
+      font-size: 22px; letter-spacing: -0.3px; font-weight: 700;
+      margin: 48px 0 12px;
+      padding-top: 16px; border-top: 1px solid var(--border);
+    }
+    h3 { font-size: 16px; font-weight: 700; margin: 28px 0 6px; color: var(--gold); letter-spacing: 0.2px; }
+    h4 { font-size: 14px; font-weight: 700; margin: 20px 0 4px; }
+    p { margin: 10px 0; }
+    ul, ol { padding-left: 24px; }
+    li { margin: 4px 0; }
+    code {
+      background: rgba(232,184,40,0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.88em;
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      color: var(--gold);
+    }
+    strong { color: var(--text); font-weight: 700; }
+    em { color: var(--text); }
+    hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+    blockquote {
+      border-left: 3px solid var(--gold);
+      padding-left: 16px; margin: 16px 0;
+      color: var(--text-muted);
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic;
+      font-size: 18px;
+      line-height: 1.5;
+    }
+    table {
+      width: 100%; border-collapse: collapse; margin: 12px 0;
+      font-size: 14px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 8px 10px; text-align: left;
+    }
+    th { color: var(--gold-soft); font-weight: 700; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+
+    footer {
+      max-width: 720px; margin: 0 auto; padding: 32px 24px 48px;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted); font-size: 13px;
+      display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+    }
+    footer a { color: var(--text-muted); border-bottom-color: rgba(146,131,114,0.3); }
+    footer a:hover { color: var(--gold); }
+
+    @media (max-width: 520px) {
+      h1 { font-size: 32px; }
+      h2 { font-size: 19px; margin-top: 36px; }
+      header { padding: 24px 20px 20px; }
+      main { margin: 24px auto 60px; padding: 0 20px; }
+    }
   </style>
 </head>
 <body>
-  <nav>
-    <a href="/">Zenki Dojo</a>
-    &nbsp;·&nbsp;
-    <a href="/privacy">Privacy</a>
-    &nbsp;·&nbsp;
-    <a href="/support">Support</a>
-  </nav>
-  
-  <p class="tagline">PRIVATE TRAINING · EST. 1997</p>
+  <header>
+    <div class="wrap">
+      <img src="/zenki-logo.png" alt="Zenki Dojo logo">
+      <div class="brand-text">
+        <span class="brand-name">Zenki Dojo</span>
+        <span class="brand-tagline">Private Training · Est. 1997</span>
+      </div>
+    </div>
+    <nav class="top">
+      <a href="/" class="active">Home</a>
+      <a href="/privacy" class="">Privacy</a>
+      <a href="/support" class="">Support</a>
+    </nav>
+  </header>
+  <main>
+    
   <h1>Zenki Dojo</h1>
-  <p>Private martial arts + CrossFit studio in Los Angeles.</p>
-  <p>1714 Hillhurst Ave, Los Angeles, CA 90027</p>
+  <blockquote>Do, or do not. There is no try.</blockquote>
+  <p>A private martial arts + CrossFit dojo in Los Angeles.</p>
+  <p><strong>Location:</strong> 1714 Hillhurst Ave, Los Angeles, CA 90027</p>
   <hr>
-  <p>
-    <a href="/privacy">Privacy Policy</a> · <a href="/support">Support</a>
+  <h3>Legal</h3>
+  <p><a href="/privacy">Privacy Policy</a> · <a href="/support">Support</a></p>
+  <p style="color: var(--text-muted); font-size: 13px; margin-top: 40px;">
+    The Zenki Dojo mobile app is available on iOS. Membership is invite-only.
   </p>
 
+  </main>
+  <footer>
+    <div>© 2026 Zenki Dojo · 1714 Hillhurst Ave, Los Angeles, CA 90027</div>
+    <div><a href="mailto:mattbrowntheemail@gmail.com">Contact</a></div>
+  </footer>
 </body>
 </html>
