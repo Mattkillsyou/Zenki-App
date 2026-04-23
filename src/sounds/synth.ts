@@ -87,7 +87,7 @@ export type SoundTheme =
   | 'sheikah'
   | 'senpai';
 
-export type SoundEvent = 'tap' | 'success' | 'error' | 'navigate' | 'open' | 'close';
+export type SoundEvent = 'tap' | 'success' | 'error' | 'navigate' | 'open' | 'close' | 'transform';
 
 /**
  * Play a themed sound event. Safe to call from anywhere — becomes a no-op
@@ -319,34 +319,44 @@ function bladerunnerSound(ctx: any, e: SoundEvent) {
   }
 }
 
-// Senpai Mode: bright sparkly anime sounds — magical girl vibes
+// Senpai Mode: bright sparkly magical girl — wind chimes, music box, transformation shimmer
 function senpaiSound(ctx: any, e: SoundEvent) {
   switch (e) {
     case 'tap':      return chord(ctx, [
-      { freq: 1400, wave: 'sine', duration: 0.08, gain: 0.10 },
-      { freq: 1407, wave: 'sine', duration: 0.08, gain: 0.07, detune: 12 },
+      { freq: 1200, wave: 'triangle', duration: 0.06, attack: 0.003, release: 0.05, gain: 0.12 },
+      { freq: 2400, wave: 'sine',     duration: 0.04, attack: 0.002, release: 0.03, gain: 0.05, delay: 0.01 },
     ]);
     case 'success':  return chord(ctx, [
-      { freq: 523, wave: 'sine', duration: 0.12, gain: 0.11 },
-      { freq: 659, wave: 'sine', duration: 0.12, gain: 0.10, delay: 0.04 },
-      { freq: 784, wave: 'sine', duration: 0.12, gain: 0.09, delay: 0.08 },
-      { freq: 1047, wave: 'sine', duration: 0.12, gain: 0.08, delay: 0.12 },
-      { freq: 1319, wave: 'sine', duration: 0.12, gain: 0.07, delay: 0.16 },
+      { freq: 523,  wave: 'sine',     duration: 0.25, attack: 0.01, release: 0.15, gain: 0.12 },
+      { freq: 659,  wave: 'sine',     duration: 0.25, attack: 0.01, release: 0.15, gain: 0.12, delay: 0.05 },
+      { freq: 784,  wave: 'sine',     duration: 0.30, attack: 0.01, release: 0.20, gain: 0.12, delay: 0.10 },
+      { freq: 1568, wave: 'triangle', duration: 0.15, attack: 0.005, release: 0.12, gain: 0.04, delay: 0.12 },
     ]);
     case 'error':    return chord(ctx, [
-      { freq: 400, wave: 'triangle', duration: 0.10, gain: 0.10, sweep: 200 },
-      { freq: 200, wave: 'triangle', duration: 0.20, gain: 0.12, delay: 0.10, sweep: 100 },
+      { freq: 659, wave: 'square', duration: 0.08, attack: 0.005, release: 0.06, gain: 0.08, sweep: 523 },
+      { freq: 220, wave: 'sine',   duration: 0.10, attack: 0.01,  release: 0.08, gain: 0.06, delay: 0.08 },
     ]);
     case 'navigate': return chord(ctx, [
-      { freq: 880, wave: 'sine', duration: 0.06, gain: 0.08 },
-      { freq: 1100, wave: 'sine', duration: 0.08, gain: 0.07, delay: 0.04 },
+      { freq: 880,  wave: 'sine',     duration: 0.10, attack: 0.005, release: 0.08, gain: 0.10 },
+      { freq: 1760, wave: 'triangle', duration: 0.08, attack: 0.003, release: 0.06, gain: 0.04, delay: 0.02 },
     ]);
     case 'open':     return chord(ctx, [
-      { freq: 400, wave: 'sine', duration: 0.25, gain: 0.09, sweep: 1200 },
-      { freq: 403, wave: 'sine', duration: 0.25, gain: 0.06, sweep: 1206, detune: 5 },
+      { freq: 800,  wave: 'triangle', duration: 0.18, attack: 0.01,  release: 0.12, gain: 0.10, sweep: 1600 },
+      { freq: 1600, wave: 'sine',     duration: 0.12, attack: 0.005, release: 0.10, gain: 0.04, delay: 0.12 },
     ]);
-    case 'close':    return chord(ctx, [{ freq: 1000, wave: 'sine', duration: 0.15, gain: 0.07, sweep: 400 }]);
-    default:         return chord(ctx, [{ freq: 1200, wave: 'sine', duration: 0.05, gain: 0.06 }]);
+    case 'close':    return chord(ctx, [
+      { freq: 1600, wave: 'triangle', duration: 0.15, attack: 0.008, release: 0.10, gain: 0.10, sweep: 800 },
+    ]);
+    // C5→E5→G5→C6 ascending arpeggio, triangle, 100ms gaps + shimmer chord
+    case 'transform': return chord(ctx, [
+      { freq: 523,  wave: 'triangle', duration: 0.20, attack: 0.01,  release: 0.15, gain: 0.12 },
+      { freq: 659,  wave: 'triangle', duration: 0.20, attack: 0.01,  release: 0.15, gain: 0.12, delay: 0.10 },
+      { freq: 784,  wave: 'triangle', duration: 0.20, attack: 0.01,  release: 0.15, gain: 0.12, delay: 0.20 },
+      { freq: 1047, wave: 'triangle', duration: 0.35, attack: 0.01,  release: 0.25, gain: 0.14, delay: 0.30 },
+      { freq: 2094, wave: 'sine',     duration: 0.20, attack: 0.005, release: 0.18, gain: 0.04, delay: 0.35 },
+      { freq: 1568, wave: 'sine',     duration: 0.25, attack: 0.005, release: 0.20, gain: 0.03, delay: 0.35 },
+    ]);
+    default:         return chord(ctx, [{ freq: 1200, wave: 'triangle', duration: 0.05, gain: 0.06 }]);
   }
 }
 

@@ -16,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useSound } from '../context/SoundContext';
+import { useSenpai } from '../context/SenpaiContext';
+import { randomDialogue } from '../data/senpaiDialogue';
 import { spacing, borderRadius } from '../theme';
 import { TimerPreset, TimerSessionLog } from '../types/activity';
 
@@ -44,6 +46,7 @@ function formatMMSS(totalSec: number): string {
 export function TimerScreen({ navigation, route }: any) {
   const { colors } = useTheme();
   const { play } = useSound();
+  const { state: senpaiState, triggerReaction: senpaiTrigger, shouldReact: senpaiShouldReact } = useSenpai();
   const initialTab: TimerTab = (route?.params?.mode as TimerTab) ?? 'round';
   const [tab, setTab] = useState<TimerTab>(initialTab);
 
@@ -70,6 +73,9 @@ export function TimerScreen({ navigation, route }: any) {
     const next = [session, ...history].slice(0, 50);
     setHistory(next);
     AsyncStorage.setItem(TIMER_HISTORY_KEY, JSON.stringify(next));
+    if (senpaiState.enabled && senpaiShouldReact()) {
+      try { senpaiTrigger('encouraging', randomDialogue('meditation'), 3500); } catch { /* ignore */ }
+    }
   };
 
   // Weekly summary

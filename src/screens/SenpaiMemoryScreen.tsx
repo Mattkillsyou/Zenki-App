@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  SectionList,
   TouchableOpacity,
   Alert,
+  Animated,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,12 +17,12 @@ import { typography, spacing } from '../theme';
 
 const MOOD_EMOJI: Record<MascotMood, string> = {
   cheering: '\uD83C\uDF89',      // 🎉
-  impressed: '\u2B50',           // ⭐
+  impressed: '\u2726',           // ✦ sparkle glint
   encouraging: '\uD83D\uDCAA',   // 💪
-  celebrating: '\uD83C\uDFC6',   // 🏆
-  sleeping: '\uD83D\uDE34',      // 😴
+  celebrating: '\uD83C\uDF8A',   // 🎊
+  sleeping: '\u263D',            // ☽ crescent
   disappointed: '\uD83D\uDE22',  // 😢
-  idle: '\uD83D\uDE0A',          // 😊
+  idle: '\u2605',                // ★ star
 };
 
 function relativeTime(ts: number): string {
@@ -43,15 +45,52 @@ function relativeTime(ts: number): string {
   return `${mo} mo${mo === 1 ? '' : 's'} ago`;
 }
 
-export function SenpaiMemoryScreen({ navigation }: any) {
-  const { colors } = useTheme();
-  const { state, clearMemoryLog } = useSenpai();
+function formatDateShort(dayKey: string): string {
+  const d = new Date(dayKey);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
-  // Newest first
-  const memories = React.useMemo(
+interface DaySection {
+  title: string;
+  data: MemoryEntry[];
+}
+
+function StatBadge({ label, value, icon, color }: { label: string; value: number; icon: string; color: string }) {
+  return (
+    <View style={[statStyles.badge, { borderColor: color + '33' }]}>
+      <Text style={[statStyles.icon, { color }]}>{icon}</Text>
+      <Text style={[statStyles.value, { color }]}>{value}</Text>
+      <Text style={[statStyles.label, { color: color + 'AA' }]}>{label}</Text>
+    </View>
+  );
+}
+
+export function SenpaiMemoryScreen({ navigation }: any) {
+  const { colors, theme } = useTheme();
+  const { state, clearMemoryLog } = useSenpai();
+  const isSenpaiTheme = theme.id === 'senpai';
+
+  const memories = useMemo(
     () => [...state.memoryLog].reverse(),
     [state.memoryLog],
   );
+
+  const sections = useMemo<DaySection[]>(() => {
+    const groups: Record<string, MemoryEntry[]> = {};
+    for (const entry of memories) {
+      const dayKey = new Date(entry.timestamp).toDateString();
+      if (!groups[dayKey]) groups[dayKey] = [];
+      groups[dayKey].push(entry);
+    }
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    return Object.entries(groups).map(([dayKey, data]) => ({
+      title: dayKey === today ? 'Today' : dayKey === yesterday ? 'Yesterday' : formatDateShort(dayKey),
+      data,
+    }));
+  }, [memories]);
+
+  const countByMood = (m: MascotMood) => memories.filter((e) => e.mood === m).length;
 
   const handleClear = () => {
     Alert.alert(
@@ -59,32 +98,44 @@ export function SenpaiMemoryScreen({ navigation }: any) {
       "Senpai will forget everything. This cannot be undone.",
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: () => clearMemoryLog(),
-        },
+        { text: 'Clear', style: 'destructive', onPress: () => clearMemoryLog() },
       ],
     );
   };
 
-  const renderItem = ({ item }: { item: MemoryEntry }) => (
-    <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Text style={styles.moodEmoji}>{MOOD_EMOJI[item.mood] ?? '\u2728'}</Text>
-      <View style={styles.rowContent}>
-        <Text style={[styles.dialogue, { color: colors.textPrimary }]} numberOfLines={3}>
-          {item.dialogue}
-        </Text>
-        <Text style={[styles.timestamp, { color: colors.textMuted }]}>
-          {relativeTime(item.timestamp)}
-        </Text>
+  const cardBg = isSenpaiTheme ? 'rgba(40, 30, 120, 0.30)' : colors.surface;
+  const cardBorder = isSenpaiTheme ? 'rgba(255, 46, 81, 0.15)' : colors.border;
+  const emojiBg = isSenpaiTheme ? 'rgba(255, 46, 81, 0.08)' : 'transparent';
+
+  const renderItem = ({ item, index }: { item: MemoryEntry; index: number }) => (
+    <AnimatedRow index={index}>
+      <View style={[styles.row, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+        <View style={[styles.moodWrap, { backgroundColor: emojiBg }]}>
+          <Text style={styles.moodEmoji}>{MOOD_EMOJI[item.mood] ?? '\u2728'}</Text>
+        </View>
+        <View style={styles.rowContent}>
+          <Text
+            style={[
+              styles.dialogue,
+              { color: colors.textPrimary },
+              isSenpaiTheme && Platform.OS === 'web' && colors.textGlow
+                ? ({ /* @ts-ignore web-only */ textShadow: colors.textGlowSubtle } as any)
+                : null,
+            ]}
+            numberOfLines={3}
+          >
+            {item.dialogue}
+          </Text>
+          <Text style={[styles.timestamp, { color: colors.textMuted }]}>
+            {relativeTime(item.timestamp)}
+          </Text>
+        </View>
       </View>
-    </View>
+    </AnimatedRow>
   );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -92,28 +143,43 @@ export function SenpaiMemoryScreen({ navigation }: any) {
         >
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Senpai&apos;s Memory</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>
+          {isSenpaiTheme ? "Senpai's Diary \u263D" : "Senpai's Memory"}
+        </Text>
         <View style={styles.backBtn} />
       </View>
 
       {memories.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyEmoji}>{'\uD83D\uDCAD'}</Text>
+          <Text style={styles.emptyEmoji}>{'\u263D'}</Text>
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-            Senpai has no memories yet...
+            No memories yet...
           </Text>
           <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-            *existential crisis*
+            Train with Senpai to create memories!
           </Text>
         </View>
       ) : (
         <>
-          <FlatList
-            data={memories}
+          <View style={styles.statsRow}>
+            <StatBadge label="Total" value={memories.length} icon="\u2661" color="#FF2E51" />
+            <StatBadge label="Celebrating" value={countByMood('celebrating')} icon="\uD83C\uDF8A" color="#D260FF" />
+            <StatBadge label="Impressed" value={countByMood('impressed')} icon="\u2726" color="#5158FF" />
+          </View>
+          <SectionList
+            sections={sections}
             keyExtractor={(item, idx) => `${item.timestamp}-${idx}`}
             renderItem={renderItem}
+            renderSectionHeader={({ section }) => (
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.sectionHeaderText, { color: colors.textMuted }]}>
+                  {section.title}
+                </Text>
+              </View>
+            )}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
+            stickySectionHeadersEnabled={false}
           />
           <TouchableOpacity
             style={[styles.clearBtn, { backgroundColor: colors.surface, borderColor: colors.error }]}
@@ -128,6 +194,39 @@ export function SenpaiMemoryScreen({ navigation }: any) {
     </SafeAreaView>
   );
 }
+
+function AnimatedRow({ index, children }: { index: number; children: React.ReactNode }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(10)).current;
+
+  useEffect(() => {
+    const delay = index < 10 ? index * 30 : 0;
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 200, delay, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 200, delay, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+      {children}
+    </Animated.View>
+  );
+}
+
+const statStyles = StyleSheet.create({
+  badge: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  icon: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
+  value: { fontSize: 18, fontWeight: '800' },
+  label: { fontSize: 10, fontWeight: '600', marginTop: 2, letterSpacing: 0.3, textTransform: 'uppercase' },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -152,9 +251,25 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.3,
   },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: spacing.lg,
+    paddingTop: 4,
+    paddingBottom: spacing.sm,
+  },
+  sectionHeader: {
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  sectionHeaderText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
   list: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
     paddingBottom: spacing.xl * 2,
   },
   row: {
@@ -166,9 +281,16 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
   },
+  moodWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   moodEmoji: {
-    fontSize: 26,
-    lineHeight: 30,
+    fontSize: 22,
+    lineHeight: 26,
   },
   rowContent: {
     flex: 1,
@@ -192,6 +314,7 @@ const styles = StyleSheet.create({
   emptyEmoji: {
     fontSize: 52,
     marginBottom: spacing.md,
+    color: '#FFB3DF',
   },
   emptyTitle: {
     fontSize: 17,

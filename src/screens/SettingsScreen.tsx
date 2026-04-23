@@ -163,6 +163,8 @@ export function SettingsScreen({ navigation }: any) {
     triggerReaction,
     setVolume: setSenpaiVolume,
     setSparkleIntensity: setSenpaiSparkle,
+    setAmbientEffects: setSenpaiAmbientEffects,
+    clearMemoryLog: clearSenpaiMemory,
   } = useSenpai();
   const [pushEnabled, setPushEnabled] = useState(true);
   const [classReminders, setClassReminders] = useState(true);
@@ -359,13 +361,28 @@ export function SettingsScreen({ navigation }: any) {
 
         {/* Visual Theme Picker */}
         {renderSectionHeader('VISUAL THEME')}
-        <View style={styles.themeGrid}>
+        {senpaiState.enabled && (
+          <Text style={{
+            color: colors.textMuted,
+            fontSize: 12,
+            fontStyle: 'italic',
+            paddingHorizontal: 20,
+            paddingBottom: 8,
+          }}>
+            Senpai Mode controls the theme. Disable Senpai to change.
+          </Text>
+        )}
+        <View
+          style={[styles.themeGrid, senpaiState.enabled && { opacity: 0.45 }]}
+          pointerEvents={senpaiState.enabled ? 'none' : 'auto'}
+        >
           {ALL_THEMES.map((t: ThemeDefinition) => {
             const isActive = mode === t.id;
             const c = t.colors;
             return (
               <TouchableOpacity
                 key={t.id}
+                disabled={senpaiState.enabled}
                 style={[
                   styles.themeCard,
                   {
@@ -589,9 +606,18 @@ export function SettingsScreen({ navigation }: any) {
           }, true)}
         </View>
 
-        {/* Secret Lab */}
-        {renderSectionHeader('SECRET LAB \uD83E\uDDEA')}
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+        {/* Secret Lab / Senpai Headquarters */}
+        {renderSectionHeader(senpaiState.enabled ? 'SENPAI HEADQUARTERS \u263D' : 'SECRET LAB \uD83E\uDDEA')}
+        <View style={[
+          styles.sectionCard,
+          {
+            backgroundColor: senpaiState.enabled ? 'rgba(255, 46, 81, 0.04)' : colors.surface,
+            borderColor: senpaiState.enabled ? 'rgba(255, 46, 81, 0.20)' : colors.border,
+            borderRadius: 20,
+            borderWidth: 1.5,
+            padding: 0,
+          },
+        ]}>
           <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Senpai Mode</Text>
@@ -610,7 +636,7 @@ export function SettingsScreen({ navigation }: any) {
                   );
                 }
               }}
-              trackColor={{ false: colors.surfaceSecondary, true: '#FF69B4' }}
+              trackColor={{ false: colors.surfaceSecondary, true: '#FF2E51' }}
               thumbColor={colors.background}
             />
           </View>
@@ -638,8 +664,8 @@ export function SettingsScreen({ navigation }: any) {
                         style={[
                           styles.senpaiSegment,
                           {
-                            backgroundColor: active ? '#FF69B4' : colors.surfaceSecondary,
-                            borderColor: active ? '#FF69B4' : colors.border,
+                            backgroundColor: active ? '#FF2E51' : colors.surfaceSecondary,
+                            borderColor: active ? '#FF2E51' : colors.border,
                           },
                         ]}
                       >
@@ -672,8 +698,8 @@ export function SettingsScreen({ navigation }: any) {
                         style={[
                           styles.senpaiSegment,
                           {
-                            backgroundColor: active ? '#FF69B4' : colors.surfaceSecondary,
-                            borderColor: active ? '#FF69B4' : colors.border,
+                            backgroundColor: active ? '#FF2E51' : colors.surfaceSecondary,
+                            borderColor: active ? '#FF2E51' : colors.border,
                           },
                         ]}
                       >
@@ -683,6 +709,42 @@ export function SettingsScreen({ navigation }: any) {
                       </TouchableOpacity>
                     );
                   })}
+                </View>
+              </View>
+
+              {/* Ambient effects toggle */}
+              <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Background Effects</Text>
+                  <Text style={[styles.settingDesc, { color: colors.textMuted }]}>
+                    {senpaiState.ambientEffects ? 'Stars & moons drifting \u263D' : 'Ambient effects off'}
+                  </Text>
+                </View>
+                <Switch
+                  value={senpaiState.ambientEffects}
+                  onValueChange={(val) => setSenpaiAmbientEffects(val)}
+                  trackColor={{ false: colors.surfaceSecondary, true: '#FF2E51' }}
+                  thumbColor={colors.background}
+                />
+              </View>
+
+              {/* Outfit picker — placeholder */}
+              <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Senpai Outfit</Text>
+                  <Text style={[styles.settingDesc, { color: colors.textMuted }]}>
+                    {'Default uniform \u00B7 more coming soon'}
+                  </Text>
+                </View>
+                <View style={{
+                  backgroundColor: 'rgba(255, 46, 81, 0.12)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255, 46, 81, 0.25)',
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 10,
+                }}>
+                  <Text style={{ color: '#FF2E51', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 }}>1 / 1</Text>
                 </View>
               </View>
 
@@ -699,6 +761,30 @@ export function SettingsScreen({ navigation }: any) {
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+
+              {/* Clear memory */}
+              <TouchableOpacity
+                style={[styles.settingRow, { borderBottomColor: colors.border }]}
+                onPress={() => {
+                  Alert.alert(
+                    'Clear Senpai Memory?',
+                    'All reaction history will be erased. Senpai will forget everything.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Clear', style: 'destructive', onPress: () => clearSenpaiMemory() },
+                    ],
+                  );
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Clear Memory</Text>
+                  <Text style={[styles.settingDesc, { color: colors.textMuted }]}>
+                    Erase all {senpaiState.memoryLog.length} {senpaiState.memoryLog.length === 1 ? 'memory' : 'memories'}
+                  </Text>
+                </View>
+                <Ionicons name="trash-outline" size={18} color={colors.error} />
               </TouchableOpacity>
             </>
           )}

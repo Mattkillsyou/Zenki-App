@@ -25,6 +25,8 @@ import {
   caloriesPerMinute,
 } from '../utils/heartRate';
 import { spacing } from '../theme';
+import { useSenpai } from '../context/SenpaiContext';
+import { randomDialogue } from '../data/senpaiDialogue';
 
 const ACTIVITY_OPTIONS: ActivityType[] = [
   'martial_arts', 'strength', 'cardio', 'hiit', 'yoga', 'open_mat', 'other',
@@ -44,6 +46,7 @@ export function WorkoutSessionScreen({ navigation }: any) {
     stopSession,
   } = useHeartRate();
   const { profileFor, latestWeight } = useNutrition();
+  const { state: senpaiState, triggerReaction: senpaiTrigger, shouldReact: senpaiShouldReact } = useSenpai();
 
   // Pull real user profile data for accurate calculations
   const profile = user ? profileFor(user.id) : null;
@@ -121,6 +124,9 @@ export function WorkoutSessionScreen({ navigation }: any) {
     setLiveCalories(0);
     setLiveStrain(0);
     startSession(selectedActivity, user.id);
+    if (senpaiState.enabled && senpaiShouldReact()) {
+      try { senpaiTrigger('encouraging', randomDialogue('workoutStart'), 3000); } catch { /* ignore */ }
+    }
   };
 
   const handleStop = () => {

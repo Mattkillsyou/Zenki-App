@@ -68,6 +68,7 @@ export function TabNavigator() {
                 size={focused ? 28 : 24}
                 color={color}
                 focused={focused}
+                senpaiActive={senpaiState.enabled}
               />
               {showDot && (
                 <View style={[tabStyles.badge, { backgroundColor: colors.red, borderColor: colors.tabBar }]} />

@@ -6,6 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useGpsActivity } from '../context/GpsActivityContext';
+import { useSenpai } from '../context/SenpaiContext';
+import { randomDialogue } from '../data/senpaiDialogue';
 import {
   GpsActivityType,
   GPS_ACTIVITY_LABELS,
@@ -55,6 +57,7 @@ export function ActivityTrackerScreen({ navigation }: any) {
     liveDistance, liveDuration, livePace, liveElevGain, liveSpeed,
     currentPosition, startTracking, stopTracking, memberActivities,
   } = useGpsActivity();
+  const { state: senpaiState, triggerReaction: senpaiTrigger, shouldReact: senpaiShouldReact } = useSenpai();
 
   const [selectedType, setSelectedType] = useState<GpsActivityType>('run');
   const [routeCoords, setRouteCoords] = useState<{ lat: number; lng: number }[]>([]);
@@ -111,6 +114,9 @@ export function ActivityTrackerScreen({ navigation }: any) {
             if (activity) {
               Alert.alert('DATA LOGGED', `${formatDistance(activity.distanceMeters)} ${distanceUnit()} recorded.`);
               setRouteCoords([]);
+              if (senpaiState.enabled && senpaiShouldReact()) {
+                try { senpaiTrigger('impressed', randomDialogue('gpsActivity'), 4000); } catch { /* ignore */ }
+              }
             }
           },
         },

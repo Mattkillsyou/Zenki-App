@@ -45,6 +45,20 @@ export function SenpaiMascot() {
   const [basePos, setBasePos] = useState({ x: 0, y: 0 });
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
 
+  // Drag trail — 3 colored dots trailing behind the mascot during drag
+  const trailPositions = useRef([
+    new Animated.ValueXY({ x: 0, y: 0 }),
+    new Animated.ValueXY({ x: 0, y: 0 }),
+    new Animated.ValueXY({ x: 0, y: 0 }),
+  ]).current;
+  const trailOpacities = useRef([
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+  ]).current;
+  const trailBufRef = useRef<{ x: number; y: number; t: number }[]>([]);
+  const lastSnapRef = useRef(0);
+
   useEffect(() => {
     AsyncStorage.getItem(POS_KEY).then((raw) => {
       if (raw) {
@@ -69,8 +83,30 @@ export function SenpaiMascot() {
       onPanResponderGrant: () => {
         pan.setOffset({ x: (pan.x as any)._value, y: (pan.y as any)._value });
         pan.setValue({ x: 0, y: 0 });
+        // Reset trail to mascot origin and show dots
+        trailPositions.forEach((p) => p.setValue({ x: 0, y: 0 }));
+        trailOpacities[0].setValue(0.40);
+        trailOpacities[1].setValue(0.25);
+        trailOpacities[2].setValue(0.10);
+        trailBufRef.current = [];
+        lastSnapRef.current = 0;
       },
-      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
+      onPanResponderMove: (evt, gs) => {
+        pan.setValue({ x: gs.dx, y: gs.dy });
+        // Throttle trail snapshots to every ~60ms. Trail dots are children
+        // of the transformed container, so their translation must cancel
+        // the container's current pan to stay at the snapshot position.
+        const now = Date.now();
+        if (now - lastSnapRef.current > 60) {
+          lastSnapRef.current = now;
+          const buf = trailBufRef.current;
+          buf.unshift({ x: gs.dx, y: gs.dy, t: now });
+          if (buf.length > 5) buf.length = 5;
+          if (buf[2]) trailPositions[0].setValue({ x: buf[2].x - gs.dx, y: buf[2].y - gs.dy });
+          if (buf[3]) trailPositions[1].setValue({ x: buf[3].x - gs.dx, y: buf[3].y - gs.dy });
+          if (buf[4]) trailPositions[2].setValue({ x: buf[4].x - gs.dx, y: buf[4].y - gs.dy });
+        }
+      },
       onPanResponderRelease: () => {
         pan.flattenOffset();
         const x = (pan.x as any)._value;
@@ -78,6 +114,10 @@ export function SenpaiMascot() {
         setBasePos({ x, y });
         pan.setValue({ x: 0, y: 0 });
         AsyncStorage.setItem(POS_KEY, JSON.stringify({ x, y }));
+        // Fade trail out
+        Animated.parallel(
+          trailOpacities.map((o) => Animated.timing(o, { toValue: 0, duration: 200, useNativeDriver: true })),
+        ).start();
       },
     }),
   ).current;
@@ -157,6 +197,32 @@ export function SenpaiMascot() {
       ]}
       {...panResponder.panHandlers}
     >
+      {/* Drag trail dots (pink → blue → purple) */}
+      {[
+        { idx: 0, color: '#FF2E51' },
+        { idx: 1, color: '#5158FF' },
+        { idx: 2, color: '#D260FF' },
+      ].map(({ idx, color }) => (
+        <Animated.View
+          key={idx}
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: color,
+            left: MASCOT_SIZE / 2 - 4,
+            top: MASCOT_SIZE / 2 - 4,
+            opacity: trailOpacities[idx],
+            transform: [
+              { translateX: trailPositions[idx].x },
+              { translateY: trailPositions[idx].y },
+            ],
+          }}
+        />
+      ))}
+
       {/* Speech bubble */}
       {state.lastReaction && (
         <SpeechBubble text={state.lastReaction} colors={colors} />

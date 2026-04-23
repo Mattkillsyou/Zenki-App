@@ -327,6 +327,84 @@ export const sheikahTheme: ThemeDefinition = {
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
+ * SENPAI MODE — Moon Prism Power
+ * Magical girl transformation aesthetic. Deep cosmic blue canvas with hot pink
+ * and purple accents. Yume kawaii / mahou shoujo. Bright, soft, maximalist.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+const senpaiColors: ThemeColors = {
+  // Backgrounds — sparkling twilight blue (transformation canvas), bright enough to feel magical
+  background: '#1E2670',
+  backgroundElevated: '#2B3490',
+  backgroundSubtle: '#252D80',
+  surface: 'rgba(90, 80, 200, 0.45)',
+  surfaceHover: 'rgba(110, 100, 220, 0.55)',
+  surfaceSecondary: 'rgba(80, 70, 185, 0.40)',
+  surfaceTertiary: 'rgba(100, 90, 210, 0.50)',
+
+  // Brand — hot pink primary + purple secondary (Sailor Moon signature)
+  gold: '#FF2E51', goldLight: '#FF6B8A', goldDark: '#C41E3D', goldMuted: 'rgba(255,46,81,0.14)',
+  red: '#D260FF', redLight: '#E08FFF', redDark: '#9C3DC4', redMuted: 'rgba(210,96,255,0.12)',
+
+  // Text — bright white-blue / soft lavender (readable on lighter backgrounds)
+  textPrimary: '#F5F2FF',
+  textSecondary: '#C4BFE8',
+  textMuted: '#9893C5',
+  textTertiary: '#6E6A9A',
+  textInverse: '#1E2670',
+
+  // Semantic — magical girl palette
+  success: '#7FFFD4', successMuted: 'rgba(127,255,212,0.14)',
+  error: '#FF6B6B', errorMuted: 'rgba(255,107,107,0.12)',
+  warning: '#FFF666', warningMuted: 'rgba(255,246,102,0.14)',
+  info: '#5EE1FF', infoMuted: 'rgba(94,225,255,0.12)',
+
+  // Structure — pink-tinted borders
+  border: 'rgba(255,46,81,0.16)',
+  borderSubtle: 'rgba(255,46,81,0.08)',
+  divider: 'rgba(245,242,255,0.08)',
+  overlay: 'rgba(30,38,112,0.85)',
+  shadow: 'rgba(40,15,90,0.35)',
+
+  // Navigation
+  tabBar: 'rgba(30,38,112,0.92)',
+  tabBarBorder: 'rgba(255,46,81,0.14)',
+
+  // Interactive
+  accentTint: 'rgba(255,46,81,0.08)',
+
+  // Theme metadata
+  accent: '#FF2E51', accentDim: '#C41E3D', accentDark: '#6B1122',
+  mapTileFilter: 'grayscale(0.3) brightness(0.50) contrast(1.1) hue-rotate(260deg) saturate(1.8)',
+  mapRouteColor: '#FF2E51',
+  textGlow: '0 0 4px #FF2E51, 0 0 12px rgba(255,46,81,0.3), 0 0 24px rgba(81,88,255,0.15)',
+  textGlowSubtle: '0 0 3px rgba(255,46,81,0.3), 0 0 8px rgba(81,88,255,0.1)',
+  boxGlow: '0 0 12px rgba(255,46,81,0.18), 0 0 24px rgba(81,88,255,0.08), inset 0 0 8px rgba(210,96,255,0.04)',
+  frameGlow: '0 0 60px rgba(255,46,81,0.10), 0 0 120px rgba(81,88,255,0.06), 0 0 2px rgba(255,183,223,0.30)',
+  fontFamily: '"Quicksand", "Nunito", "Comic Neue", system-ui, sans-serif',
+  fontFamilyNative: 'System',
+  uppercaseHeaders: false,
+  spinner: '#FF2E51',
+  switchTrack: '#FF2E51',
+  macroProtein: '#FFB3DF',
+  macroCarbs: '#5158FF',
+  macroFat: '#FFF666',
+  flames: '#FF2E51',
+};
+export const senpaiTheme: ThemeDefinition = {
+  id: 'senpai', name: 'Senpai Mode', description: 'Moon Prism Power, Make Up!',
+  icon: 'heart-outline', isDark: true, soundTheme: 'senpai',
+  webFontUrl: 'https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap',
+  colors: senpaiColors,
+  overlay: {
+    scanlines: false, scanlineColor: '', scanlineOpacity: 0,
+    flicker: false, flickerIntensity: 1,
+    vignette: true, vignetteColor: 'rgba(20, 10, 70, 0.30)',
+    particles: 'moon-sparkle', particleColor: 'rgba(255,183,223,0.8)', particleOpacity: 0.3,
+    texture: 'none', textureOpacity: 0,
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
  * System — resolves at runtime to clean-light or clean-dark
  * ═══════════════════════════════════════════════════════════════════════════ */
 export const systemTheme: ThemeDefinition = {
@@ -340,7 +418,7 @@ export const systemTheme: ThemeDefinition = {
  * ═══════════════════════════════════════════════════════════════════════════ */
 export const ALL_THEMES: ThemeDefinition[] = [
   systemTheme, cleanLightTheme, cleanDarkTheme,
-  matrixTheme, alienTheme, jurassicTheme, ghostTheme, bladerunnerTheme, sheikahTheme,
+  matrixTheme, alienTheme, jurassicTheme, ghostTheme, bladerunnerTheme, sheikahTheme, senpaiTheme,
 ];
 
 export const THEMES_BY_ID: Record<string, ThemeDefinition> = {};

@@ -107,6 +107,14 @@ export const SENPAI_DIALOGUE = {
     "Every metric says Senpai = unstoppable force",
     "My calculations confirm it: Senpai broke the chart!",
   ],
+  transformation: [
+    "Moon Prism Power... MAKE UP! \u2727",
+    "In the name of the gains, I'll punish you!",
+    "Senpai Mode... ACTIVATED! \u2661",
+    "This isn't even my final form, Senpai~!",
+    "TRANSFORMATION COMPLETE! \u2606",
+    "The pretty guardian of gainz has arrived!",
+  ],
 };
 
 export function randomDialogue(key: keyof typeof SENPAI_DIALOGUE): string {

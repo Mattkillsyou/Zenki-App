@@ -24,6 +24,10 @@ import { SenpaiProvider } from './src/context/SenpaiContext';
 import { SenpaiMascot } from './src/components/SenpaiMascot';
 import { SenpaiOverlay } from './src/components/SenpaiOverlay';
 import { SenpaiReactionBridge } from './src/components/SenpaiReactionBridge';
+import { SenpaiThemeBridge } from './src/components/SenpaiThemeBridge';
+import { SenpaiTransformation } from './src/components/SenpaiTransformation';
+import { SenpaiScreenFlash } from './src/components/SenpaiScreenFlash';
+import { SenpaiImpactBridge } from './src/components/SenpaiImpactBridge';
 import { SoundProvider } from './src/context/SoundContext';
 import { BlocksProvider } from './src/context/BlocksContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
@@ -31,6 +35,22 @@ import { ThemeOverlay } from './src/components/ThemeOverlay';
 
 function AppContent() {
   const { colors, isDark } = useTheme();
+  const [navKey, setNavKey] = React.useState(0);
+
+  const getActiveRouteKey = (state: any): string | null => {
+    try {
+      let cur: any = state;
+      for (let i = 0; i < 6; i++) {
+        if (!cur || typeof cur.index !== 'number' || !Array.isArray(cur.routes)) break;
+        const next = cur.routes[cur.index];
+        if (!next) break;
+        if (!next.state) return typeof next.key === 'string' ? next.key : null;
+        cur = next.state;
+      }
+      return null;
+    } catch { return null; }
+  };
+  const lastRouteKeyRef = React.useRef<string | null>(null);
 
   const navTheme = {
     dark: isDark,
@@ -51,12 +71,25 @@ function AppContent() {
   };
 
   const content = (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer
+      theme={navTheme}
+      onStateChange={(state) => {
+        const key = getActiveRouteKey(state);
+        if (key && key !== lastRouteKeyRef.current) {
+          lastRouteKeyRef.current = key;
+          setNavKey((k) => k + 1);
+        }
+      }}
+    >
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <RootNavigator />
+      <SenpaiThemeBridge />
       <SenpaiReactionBridge />
       <SenpaiMascot />
       <SenpaiOverlay />
+      <SenpaiImpactBridge />
+      <SenpaiTransformation />
+      <SenpaiScreenFlash navKey={navKey} />
       <ThemeOverlay />
     </NavigationContainer>
   );

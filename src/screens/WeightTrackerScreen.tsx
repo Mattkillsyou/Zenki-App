@@ -19,6 +19,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
+import { useSenpai } from '../context/SenpaiContext';
+import { randomDialogue } from '../data/senpaiDialogue';
 import { spacing, borderRadius } from '../theme';
 import { FadeInView, LineChart } from '../components';
 import { WeightUnit } from '../types/nutrition';
@@ -44,6 +46,7 @@ export function WeightTrackerScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const { myWeights, addWeight, removeWeight, latestWeight } = useNutrition();
+  const { state: senpaiState, triggerReaction: senpaiTrigger, shouldReact: senpaiShouldReact } = useSenpai();
 
   const [weight, setWeight] = useState('');
   const [unit, setUnit] = useState<WeightUnit>('lb');
@@ -180,6 +183,9 @@ export function WeightTrackerScreen({ navigation }: any) {
     });
     setWeight('');
     setNote('');
+    if (senpaiState.enabled && senpaiShouldReact()) {
+      try { senpaiTrigger('cheering', randomDialogue('bodyLab'), 3000); } catch { /* ignore */ }
+    }
   }
 
   function handleSaveGoal() {

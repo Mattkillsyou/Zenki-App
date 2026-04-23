@@ -205,6 +205,8 @@ function Particles({ type, color, opacity }: { type: string; color: string; opac
       return <DataStreams color={color} opacity={opacity} />;
     case 'sheikah-runes':
       return <SheikahRunes color={color} opacity={opacity} />;
+    case 'moon-sparkle':
+      return <MoonSparkle color={color} opacity={opacity} />;
     default:
       return null;
   }
@@ -534,6 +536,74 @@ function SheikahRune({ rune, color }: { rune: any; color: string }) {
     >
       <View style={shapeStyle} />
     </Animated.View>
+  );
+}
+
+/* ─── Moon Sparkle (Senpai Mode) ─────────────────────────────────────────── */
+
+const MOON_SPARKLE_GLYPHS = ['\u263D', '\u2605', '\u2726', '\u2661']; // ☽ ★ ✦ ♡
+const MOON_SPARKLE_COLORS = ['#FFB3DF', '#5158FF', '#FFF666', '#D8B3FF'];
+
+function MoonSparkle({ color: _color, opacity }: { color: string; opacity: number }) {
+  const items = useMemo(() =>
+    Array.from({ length: 14 }).map((_, i) => ({
+      key: i,
+      glyph: MOON_SPARKLE_GLYPHS[i % MOON_SPARKLE_GLYPHS.length],
+      color: MOON_SPARKLE_COLORS[i % MOON_SPARKLE_COLORS.length],
+      x: Math.random() * 100,
+      startY: Math.random() * SCREEN_H,
+      size: 10 + Math.random() * 14,
+      speed: 18000 + Math.random() * 14000,
+      twinkleMs: 2200 + Math.random() * 2400,
+      delay: Math.random() * 4000,
+    })),
+  []);
+
+  return (
+    <View style={[styles.fullScreen, { opacity }]}>
+      {items.map((it) => (
+        <MoonSparkleItem key={it.key} item={it} />
+      ))}
+    </View>
+  );
+}
+
+function MoonSparkleItem({ item }: { item: any }) {
+  const translateY = useRef(new Animated.Value(item.startY)).current;
+  const twinkle = useRef(new Animated.Value(0.15)).current;
+
+  useEffect(() => {
+    const drift = () => {
+      translateY.setValue(item.startY);
+      Animated.timing(translateY, {
+        toValue: -40,
+        duration: item.speed,
+        useNativeDriver: true,
+      }).start(() => drift());
+    };
+    const shimmer = () => {
+      Animated.sequence([
+        Animated.timing(twinkle, { toValue: 0.85, duration: item.twinkleMs * 0.5, useNativeDriver: true }),
+        Animated.timing(twinkle, { toValue: 0.15, duration: item.twinkleMs * 0.5, useNativeDriver: true }),
+      ]).start(() => shimmer());
+    };
+    const t = setTimeout(() => { drift(); shimmer(); }, item.delay);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <Animated.Text
+      style={{
+        position: 'absolute',
+        left: `${item.x}%`,
+        fontSize: item.size,
+        color: item.color,
+        opacity: twinkle,
+        transform: [{ translateY }],
+      }}
+    >
+      {item.glyph}
+    </Animated.Text>
   );
 }
 
