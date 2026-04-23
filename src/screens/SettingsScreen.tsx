@@ -376,7 +376,7 @@ export function SettingsScreen({ navigation }: any) {
           style={[styles.themeGrid, senpaiState.enabled && { opacity: 0.45 }]}
           pointerEvents={senpaiState.enabled ? 'none' : 'auto'}
         >
-          {ALL_THEMES.map((t: ThemeDefinition) => {
+          {ALL_THEMES.filter((t) => !['system', 'clean-light', 'clean-dark', 'senpai'].includes(t.id)).map((t: ThemeDefinition) => {
             const isActive = mode === t.id;
             const c = t.colors;
             return (
