@@ -1,0 +1,72 @@
+{
+  "characterName": "Zenki Senpai",
+  "exportedAt": "2026-04-22T23:49:04.083Z",
+  "animations": [
+    {
+      "name": "Celebrating",
+      "url": "https://assets.ziggle.art/projects/jx74ae8858qyeyv9dr4t1ycswh85bgfp/characters/j978939kvzqx0k36wbw7xktkex85a2j1/animations/j572q0992q8v0psc0wf0c54aed85bckc/transparent/celebrating-js79s1mv-transparent.webm",
+      "speed": 1,
+      "loop": true
+    },
+    {
+      "name": "Encouraging",
+      "url": "https://assets.ziggle.art/projects/jx74ae8858qyeyv9dr4t1ycswh85bgfp/characters/j978939kvzqx0k36wbw7xktkex85a2j1/animations/j57acs2gcemsjk19kr4qscbypd85bzbx/transparent/encouraging-js78amgr-transparent.webm",
+      "speed": 1,
+      "loop": true
+    },
+    {
+      "name": "Impressed",
+      "url": "https://assets.ziggle.art/projects/jx74ae8858qyeyv9dr4t1ycswh85bgfp/characters/j978939kvzqx0k36wbw7xktkex85a2j1/animations/j574yv38cm68pb9g4sxj5r833h85bgw3/transparent/impressed-js719f89-transparent.webm",
+      "speed": 1,
+      "loop": true
+    },
+    {
+      "name": "Cheering",
+      "url": "https://assets.ziggle.art/projects/jx74ae8858qyeyv9dr4t1ycswh85bgfp/characters/j978939kvzqx0k36wbw7xktkex85a2j1/animations/j574y88pbvpzkaxsq57pqkya1h85bjqp/transparent/cheering-js7c4ggk-transparent.webm",
+      "speed": 1,
+      "loop": true
+    },
+    {
+      "name": "die",
+      "url": "https://assets.ziggle.art/projects/jx74ae8858qyeyv9dr4t1ycswh85bgfp/characters/j978939kvzqx0k36wbw7xktkex85a2j1/animations/j579nh9b85s7f2kf28128212ps85aj9f/transparent/die-js7f8hvh-transparent.webm",
+      "speed": 1,
+      "loop": false
+    },
+    {
+      "name": "cry",
+      "url": "https://assets.ziggle.art/projects/jx74ae8858qyeyv9dr4t1ycswh85bgfp/characters/j978939kvzqx0k36wbw7xktkex85a2j1/animations/j57e5zgj6wmhnk5707ch03ch8n85ac5a/transparent/cry-js7d655w-transparent.webm",
+      "speed": 1,
+      "loop": true
+    },
+    {
+      "name": "sleep",
+      "url": "https://assets.ziggle.art/projects/jx74ae8858qyeyv9dr4t1ycswh85bgfp/characters/j978939kvzqx0k36wbw7xktkex85a2j1/animations/j571sev05m1txfb64v1dnctg1585b2mx/transparent/sleep-js73j4sy-transparent.webm",
+      "speed": 1,
+      "loop": true
+    },
+    {
+      "name": "dance",
+      "url": "https://assets.ziggle.art/projects/jx74ae8858qyeyv9dr4t1ycswh85bgfp/characters/j978939kvzqx0k36wbw7xktkex85a2j1/animations/j5771b6dpm4fvdga2g3f6pvdgs85agge/transparent/dance-js77gwwn-transparent.webm",
+      "speed": 1,
+      "loop": true
+    },
+    {
+      "name": "think",
+      "url": "https://assets.ziggle.art/projects/jx74ae8858qyeyv9dr4t1ycswh85bgfp/characters/j978939kvzqx0k36wbw7xktkex85a2j1/animations/j57aw9zpta336e3x5vf776rpf185adx5/transparent/think-js77tg8c-transparent.webm",
+      "speed": 1,
+      "loop": true
+    },
+    {
+      "name": "wave",
+      "url": "https://assets.ziggle.art/projects/jx74ae8858qyeyv9dr4t1ycswh85bgfp/characters/j978939kvzqx0k36wbw7xktkex85a2j1/animations/j57e33y97ynp18rfkd7yme39ad85b09j/transparent/wave-js77wrnd-transparent.webm",
+      "speed": 1,
+      "loop": true
+    },
+    {
+      "name": "idle",
+      "url": "https://assets.ziggle.art/projects/jx74ae8858qyeyv9dr4t1ycswh85bgfp/characters/j978939kvzqx0k36wbw7xktkex85a2j1/animations/j5733j7987hb4xjs8bqrx5xn6n85ajkp/transparent/idle-js74x4a4-transparent.webm",
+      "speed": 1,
+      "loop": true
+    }
+  ]
+}
