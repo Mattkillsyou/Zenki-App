@@ -34,6 +34,8 @@ export interface NutritionProfile {
   adaptedTdee?: number;
   /** ISO timestamp of the most recent successful adaptive update. */
   lastAdaptedAt?: string;
+  /** Dietary preference — shifts the macro split without changing TDEE. */
+  dietType?: 'balanced' | 'high_protein' | 'low_carb' | 'keto';
 }
 
 export interface WeightEntry {

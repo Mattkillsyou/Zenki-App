@@ -41,6 +41,9 @@ export interface Member {
   isVisibleInFeed?: boolean;   // Whether this member shows up in the community feed (default true)
   messagingEnabled?: boolean;  // Whether other members can DM them (default true)
   biologicalSex?: 'male' | 'female' | 'other';  // Used for health feature personalization
+  trainingExperience?: 'beginner' | 'intermediate' | 'advanced'; // Captured at onboarding
+  trainingDaysPerWeek?: number; // 1-7, planned training frequency
+  injuries?: string[]; // body-part tags: 'shoulder', 'knee', 'back', etc.
 }
 
 export type BiologicalSex = 'male' | 'female' | 'other';
