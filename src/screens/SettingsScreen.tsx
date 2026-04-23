@@ -449,41 +449,6 @@ export function SettingsScreen({ navigation }: any) {
             soundEnabled,
             handleSoundToggle,
           )}
-
-          {/* Sound theme */}
-          <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-            <View style={styles.settingInfo}>
-              <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Sound Theme</Text>
-            </View>
-          </View>
-          <View style={styles.soundThemeRow}>
-            {([
-              { key: 'default' as SoundTheme, label: 'Default', icon: 'volume-high-outline' as const },
-              { key: 'retro' as SoundTheme, label: 'Retro', icon: 'game-controller-outline' as const },
-              { key: 'zen' as SoundTheme, label: 'Zen', icon: 'leaf-outline' as const },
-              { key: 'pipboy' as SoundTheme, label: 'Pip-Boy', icon: 'radio-outline' as const },
-            ]).map((opt) => {
-              const active = soundTheme === opt.key;
-              return (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[
-                    styles.soundThemeChip,
-                    {
-                      backgroundColor: active ? colors.gold : colors.surfaceSecondary,
-                      borderColor: active ? colors.gold : colors.border,
-                    },
-                  ]}
-                  onPress={() => handleSoundTheme(opt.key)}
-                >
-                  <Ionicons name={opt.icon} size={14} color={active ? '#000' : colors.textMuted} />
-                  <Text style={[styles.soundThemeLabel, { color: active ? '#000' : colors.textSecondary }]}>
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
         </View>
 
         {/* Notifications */}

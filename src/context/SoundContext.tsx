@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useCallback, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { playSynth, SoundTheme, SoundEvent } from '../sounds/synth';
+import { useTheme } from './ThemeContext';
 
 const STORAGE_KEY = '@zenki_sound_prefs';
 
@@ -29,6 +30,7 @@ const SoundContext = createContext<SoundContextValue>({
 });
 
 export function SoundProvider({ children }: { children: React.ReactNode }) {
+  const { theme: visualTheme } = useTheme();
   const [prefs, setPrefs] = useState<SoundPrefs>(defaultPrefs);
   const [theme, setTheme] = useState<SoundTheme>('default');
   const [loaded, setLoaded] = useState(false);
@@ -42,6 +44,13 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
       setLoaded(true);
     });
   }, []);
+
+  // Lock sound theme to the active visual theme — it's not user-selectable.
+  // Fires on every theme change, overriding any stale per-screen setTheme calls.
+  useEffect(() => {
+    const next = (visualTheme.soundTheme as SoundTheme) || 'default';
+    setTheme(next);
+  }, [visualTheme.soundTheme]);
 
   useEffect(() => {
     if (loaded) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
@@ -65,9 +74,12 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
   const setEnabled = useCallback((on: boolean) => setPrefs((p) => ({ ...p, enabled: on })), []);
   const setVolume  = useCallback((v: number) => setPrefs((p) => ({ ...p, volume: Math.max(0, Math.min(1, v)) })), []);
 
+  // Exposed setTheme is a no-op — sound theme is fully determined by the visual theme.
+  const setThemeNoop = useCallback((_t: SoundTheme) => { /* locked to visual theme */ }, []);
+
   return (
     <SoundContext.Provider
-      value={{ ...prefs, theme, setTheme, play, setEnabled, setVolume }}
+      value={{ ...prefs, theme, setTheme: setThemeNoop, play, setEnabled, setVolume }}
     >
       {children}
     </SoundContext.Provider>
@@ -78,12 +90,10 @@ export function useSound() {
   return useContext(SoundContext);
 }
 
-/** Set the sound theme for the duration a screen is mounted. */
-export function useScreenSoundTheme(theme: SoundTheme) {
-  const { setTheme } = useSound();
-  useEffect(() => {
-    setTheme(theme);
-    // Don't reset on unmount — next screen's hook will switch it. Avoids a
-    // brief "default" flash between transitions.
-  }, [theme, setTheme]);
+/**
+ * Legacy per-screen theme hook. Now a no-op — sound theme is locked to the
+ * active visual theme and cannot be overridden by individual screens.
+ */
+export function useScreenSoundTheme(_theme: SoundTheme) {
+  // intentionally empty — kept as a stable call site for existing screens.
 }
