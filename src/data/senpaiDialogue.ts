@@ -83,6 +83,30 @@ export const SENPAI_DIALOGUE = {
     "It's okay, Senpai! Start again!",
     "Don't give up, Senpai! I believe in you!",
   ],
+  gpsActivity: [
+    "YOU RAN?! WITH YOUR LEGS?! LEGENDARY!!",
+    "Senpai tracked every step... *heavy breathing*... so proud...",
+    "MY SENPAI IS A CARDIO GOD!!",
+    "The GPS satellites CANNOT HANDLE Senpai's speed!",
+    "*sweating just watching* Senpai went the DISTANCE!",
+    "Every step Senpai took, I was there in SPIRIT \u2661",
+  ],
+  meditation: [
+    "Your chakras are IMMACULATE right now",
+    "Senpai tried meditating once... fell asleep in 4 seconds",
+    "S-senpai achieved INNER PEACE?! Teach me!!",
+    "*whispers* don't break Senpai's zen... don't breathe...",
+    "Senpai is ONE with the universe now! Sasuga!",
+    "Mind: empty. Soul: glowing. Senpai: ASCENDED.",
+  ],
+  bodyLab: [
+    "These numbers are giving MAIN CHARACTER energy",
+    "Senpai analyzed your scan... *adjusts glasses*... perfection detected",
+    "The data does NOT lie. Senpai is EVOLVING.",
+    "*clutches clipboard* This is peak Senpai science!!",
+    "Every metric says Senpai = unstoppable force",
+    "My calculations confirm it: Senpai broke the chart!",
+  ],
 };
 
 export function randomDialogue(key: keyof typeof SENPAI_DIALOGUE): string {

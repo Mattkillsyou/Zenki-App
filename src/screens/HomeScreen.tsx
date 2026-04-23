@@ -147,13 +147,15 @@ export function HomeScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const isEmployee = user?.isEmployee === true;
   const { state: gamState, levelInfo, dismissCelebration, recordAppOpen } = useGamification();
-  const { state: senpaiState, triggerReaction: senpaiReact } = useSenpai();
+  const { state: senpaiState, triggerReaction: senpaiReact, shouldReact: senpaiShouldReact } = useSenpai();
   React.useEffect(() => { recordAppOpen(); }, [recordAppOpen]);
   React.useEffect(() => {
     if (!senpaiState.enabled) return;
+    if (!senpaiShouldReact()) return;
     const hour = new Date().getHours();
     const key = hour < 12 ? 'morning' : hour >= 18 ? 'evening' : 'appOpen';
-    setTimeout(() => senpaiReact('encouraging', randomDialogue(key), 4000), 1500);
+    const t = setTimeout(() => senpaiReact('encouraging', randomDialogue(key), 4000), 1500);
+    return () => clearTimeout(t);
   }, [senpaiState.enabled]);
   const { announcements } = useAnnouncements();
 

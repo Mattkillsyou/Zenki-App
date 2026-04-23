@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { View, StyleSheet, Animated, Dimensions } from 'react-native';
 import { useSenpai } from '../context/SenpaiContext';
 
 const { width: SW } = Dimensions.get('window');
@@ -8,33 +8,42 @@ const SH = Math.min(Dimensions.get('window').height, 932); // match phone frame
 /**
  * SenpaiOverlay — fullscreen particle effects when Senpai Mode is active.
  * Hearts, sparkles, kaomoji float upward during cheering/celebrating moods.
+ *
+ * sparkleIntensity 'normal' keeps counts modest; 'maximum' doubles everything
+ * and speeds the animation up.
  */
 export function SenpaiOverlay() {
   const { state } = useSenpai();
   if (!state.enabled || !state.sparkleActive) return null;
+  const max = state.sparkleIntensity === 'maximum';
 
   return (
     <View style={styles.container} pointerEvents="none">
-      <FloatingHearts />
-      <FloatingKaomoji />
-      <SparkleParticles />
+      <FloatingHearts max={max} />
+      <FloatingKaomoji max={max} />
+      <SparkleParticles max={max} />
     </View>
   );
 }
 
+// 'maximum' shaves 30% off every animation duration for a faster spawn/float rate.
+const speedMult = (max: boolean) => (max ? 0.7 : 1);
+
 /* ─── Floating Hearts ─────────────────────────────────────────────────────── */
 
-function FloatingHearts() {
+function FloatingHearts({ max }: { max: boolean }) {
+  const count = max ? 24 : 12;
+  const mult = speedMult(max);
   const hearts = useMemo(() =>
-    Array.from({ length: 12 }).map((_, i) => ({
+    Array.from({ length: count }).map((_, i) => ({
       key: i,
       x: 50 + Math.random() * (SW - 100),
       size: 12 + Math.random() * 10,
-      speed: 1500 + Math.random() * 1500,
+      speed: (1500 + Math.random() * 1500) * mult,
       delay: Math.random() * 1000,
       drift: (Math.random() - 0.5) * 40,
     })),
-  []);
+  [count, mult]);
 
   return (
     <>
@@ -60,7 +69,7 @@ function FloatingHeart({ config }: { config: any }) {
         Animated.timing(x, { toValue: config.x + config.drift, duration: config.speed, useNativeDriver: true }),
         Animated.sequence([
           Animated.timing(opacity, { toValue: 0.8, duration: 300, useNativeDriver: true }),
-          Animated.delay(config.speed - 700),
+          Animated.delay(Math.max(100, config.speed - 700)),
           Animated.timing(opacity, { toValue: 0, duration: 400, useNativeDriver: true }),
         ]),
       ]).start(() => animate());
@@ -86,17 +95,22 @@ function FloatingHeart({ config }: { config: any }) {
 
 /* ─── Floating Kaomoji ────────────────────────────────────────────────────── */
 
-function FloatingKaomoji() {
-  const emotes = ['\u2605', '\u2661', '\u2727', '!', '\u266A', '\u2606', '\u2764'];
+function FloatingKaomoji({ max }: { max: boolean }) {
+  // Extra symbols added in maximum mode
+  const emotes = max
+    ? ['\u2605', '\u2661', '\u2727', '!', '\u266A', '\u2606', '\u2764', '\u2728', '\u273F', '\u269B']
+    : ['\u2605', '\u2661', '\u2727', '!', '\u266A', '\u2606', '\u2764'];
+  const count = max ? 16 : 8;
+  const mult = speedMult(max);
   const items = useMemo(() =>
-    Array.from({ length: 8 }).map((_, i) => ({
+    Array.from({ length: count }).map((_, i) => ({
       key: i,
       text: emotes[i % emotes.length],
       x: 30 + Math.random() * (SW - 60),
-      speed: 1200 + Math.random() * 800,
+      speed: (1200 + Math.random() * 800) * mult,
       delay: Math.random() * 2000,
     })),
-  []);
+  [count, mult]);
 
   return (
     <>
@@ -119,7 +133,7 @@ function FloatingEmote({ config }: { config: any }) {
         Animated.timing(y, { toValue: SH - 400, duration: config.speed, useNativeDriver: true }),
         Animated.sequence([
           Animated.timing(opacity, { toValue: 0.7, duration: 200, useNativeDriver: true }),
-          Animated.delay(config.speed - 500),
+          Animated.delay(Math.max(100, config.speed - 500)),
           Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: true }),
         ]),
       ]).start(() => animate());
@@ -146,17 +160,19 @@ function FloatingEmote({ config }: { config: any }) {
 
 /* ─── Sparkle Particles ───────────────────────────────────────────────────── */
 
-function SparkleParticles() {
+function SparkleParticles({ max }: { max: boolean }) {
+  const count = max ? 20 : 10;
+  const mult = speedMult(max);
   const sparkles = useMemo(() =>
-    Array.from({ length: 10 }).map((_, i) => ({
+    Array.from({ length: count }).map((_, i) => ({
       key: i,
       x: 40 + Math.random() * (SW - 80),
       y: SH * 0.4 + Math.random() * (SH * 0.4),
       size: 6 + Math.random() * 6,
-      speed: 600 + Math.random() * 600,
+      speed: (600 + Math.random() * 600) * mult,
       delay: Math.random() * 1500,
     })),
-  []);
+  [count, mult]);
 
   return (
     <>

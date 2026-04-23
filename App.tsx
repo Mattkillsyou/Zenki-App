@@ -23,6 +23,7 @@ import { CycleTrackerProvider } from './src/context/CycleTrackerContext';
 import { SenpaiProvider } from './src/context/SenpaiContext';
 import { SenpaiMascot } from './src/components/SenpaiMascot';
 import { SenpaiOverlay } from './src/components/SenpaiOverlay';
+import { SenpaiReactionBridge } from './src/components/SenpaiReactionBridge';
 import { SoundProvider } from './src/context/SoundContext';
 import { BlocksProvider } from './src/context/BlocksContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
@@ -53,6 +54,7 @@ function AppContent() {
     <NavigationContainer theme={navTheme}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <RootNavigator />
+      <SenpaiReactionBridge />
       <SenpaiMascot />
       <SenpaiOverlay />
       <ThemeOverlay />

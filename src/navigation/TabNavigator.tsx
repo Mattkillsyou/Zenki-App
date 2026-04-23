@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useDrinkTracker } from '../context/DrinkTrackerContext';
+import { useSenpai } from '../context/SenpaiContext';
 import { AnimatedTabIcon } from '../components/AnimatedTabIcon';
 import {
   HomeScreen,
@@ -33,10 +34,12 @@ export function TabNavigator() {
   const { colors } = useTheme();
   const { user } = useAuth();
   const { unpaidTotal } = useDrinkTracker();
+  const { state: senpaiState } = useSenpai();
   const insets = useSafeAreaInsets();
   const isEmployee = user?.isEmployee === true;
   const tabBarHeight = 60 + insets.bottom;
   const hasUnpaidDrinks = unpaidTotal > 0;
+  const activeTint = senpaiState.enabled ? '#FF69B4' : colors.gold;
 
   return (
     <Tab.Navigator
@@ -51,7 +54,7 @@ export function TabNavigator() {
           paddingTop: 10,
           paddingBottom: insets.bottom,
         },
-        tabBarActiveTintColor: colors.gold,
+        tabBarActiveTintColor: activeTint,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarIcon: ({ focused, color }) => {
           const icons = TAB_ICONS[route.name];

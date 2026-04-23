@@ -157,7 +157,13 @@ export function SettingsScreen({ navigation }: any) {
 
   useScreenSoundTheme('settings');
   const { play } = useSound();
-  const { state: senpaiState, setEnabled: setSenpaiEnabled, triggerReaction } = useSenpai();
+  const {
+    state: senpaiState,
+    setEnabled: setSenpaiEnabled,
+    triggerReaction,
+    setVolume: setSenpaiVolume,
+    setSparkleIntensity: setSenpaiSparkle,
+  } = useSenpai();
   const [pushEnabled, setPushEnabled] = useState(true);
   const [classReminders, setClassReminders] = useState(true);
   const [emailUpdates, setEmailUpdates] = useState(false);
@@ -608,6 +614,95 @@ export function SettingsScreen({ navigation }: any) {
               thumbColor={colors.background}
             />
           </View>
+
+          {/* Senpai sub-settings — only visible when enabled */}
+          {senpaiState.enabled && (
+            <>
+              {/* Volume picker */}
+              <View style={[styles.settingRow, { borderBottomColor: colors.border, flexDirection: 'column', alignItems: 'stretch' }]}>
+                <View style={[styles.settingInfo, { marginRight: 0, marginBottom: 10 }]}>
+                  <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Senpai Reaction Frequency</Text>
+                  <Text style={[styles.settingDesc, { color: colors.textMuted }]}>
+                    {senpaiState.volume === 'low' ? 'Senpai is shy' : senpaiState.volume === 'med' ? 'Senpai notices things' : 'SENPAI NEVER MISSES'}
+                  </Text>
+                </View>
+                <View style={styles.senpaiSegmented}>
+                  {(['low', 'med', 'high'] as const).map((v) => {
+                    const active = senpaiState.volume === v;
+                    const label = v === 'low' ? 'Low' : v === 'med' ? 'Med' : 'High';
+                    return (
+                      <TouchableOpacity
+                        key={v}
+                        onPress={() => setSenpaiVolume(v)}
+                        activeOpacity={0.7}
+                        style={[
+                          styles.senpaiSegment,
+                          {
+                            backgroundColor: active ? '#FF69B4' : colors.surfaceSecondary,
+                            borderColor: active ? '#FF69B4' : colors.border,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.senpaiSegmentLabel, { color: active ? '#000' : colors.textSecondary }]}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Sparkle intensity */}
+              <View style={[styles.settingRow, { borderBottomColor: colors.border, flexDirection: 'column', alignItems: 'stretch' }]}>
+                <View style={[styles.settingInfo, { marginRight: 0, marginBottom: 10 }]}>
+                  <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Sparkle Intensity</Text>
+                  <Text style={[styles.settingDesc, { color: colors.textMuted }]}>
+                    {senpaiState.sparkleIntensity === 'maximum' ? 'MY EYES' : 'Tasteful sparkles'}
+                  </Text>
+                </View>
+                <View style={styles.senpaiSegmented}>
+                  {(['normal', 'maximum'] as const).map((v) => {
+                    const active = senpaiState.sparkleIntensity === v;
+                    const label = v === 'normal' ? 'Normal' : 'MAXIMUM';
+                    return (
+                      <TouchableOpacity
+                        key={v}
+                        onPress={() => setSenpaiSparkle(v)}
+                        activeOpacity={0.7}
+                        style={[
+                          styles.senpaiSegment,
+                          {
+                            backgroundColor: active ? '#FF69B4' : colors.surfaceSecondary,
+                            borderColor: active ? '#FF69B4' : colors.border,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.senpaiSegmentLabel, { color: active ? '#000' : colors.textSecondary }]}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Memory log entry */}
+              <TouchableOpacity
+                style={[styles.settingRow, { borderBottomColor: colors.border }]}
+                onPress={() => navigation.navigate('SenpaiMemory')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Senpai Memory Log</Text>
+                  <Text style={[styles.settingDesc, { color: colors.textMuted }]}>
+                    {senpaiState.memoryLog.length} {senpaiState.memoryLog.length === 1 ? 'memory' : 'memories'} recorded
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </>
+          )}
+
           <TouchableOpacity
             style={[styles.settingRow, { borderBottomWidth: 0 }]}
             onPress={async () => {
@@ -939,5 +1034,24 @@ const styles = StyleSheet.create({
   soundThemeLabel: {
     fontSize: 10,
     fontWeight: '700',
+  },
+
+  // ── Senpai segmented control ──
+  senpaiSegmented: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  senpaiSegment: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  senpaiSegmentLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });
