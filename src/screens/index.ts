@@ -31,6 +31,7 @@ export { DexaScanDetailScreen } from './DexaScanDetailScreen';
 export { BloodworkScreen } from './BloodworkScreen';
 export { BloodworkUploadScreen } from './BloodworkUploadScreen';
 export { BloodworkReportDetailScreen } from './BloodworkReportDetailScreen';
+export { MedicationTrackerScreen } from './MedicationTrackerScreen';
 
 // Auth
 export { SignInScreen } from './auth/SignInScreen';

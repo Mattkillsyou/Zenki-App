@@ -182,6 +182,21 @@ export function BodyLabScreen({ navigation }: any) {
               </View>
             </FadeInView>
 
+            {/* Medications & Peptides shortcut */}
+            <FadeInView delay={50}>
+              <TouchableOpacity
+                style={[styles.uploadCard, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 12 }]}
+                onPress={() => navigation.navigate('MedicationTracker')}
+              >
+                <Ionicons name="bandage-outline" size={24} color={colors.gold} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.uploadTitle, { color: colors.textPrimary }]}>Medications & Peptides</Text>
+                  <Text style={[styles.uploadSub, { color: colors.textMuted }]}>Track doses, set reminders, log adherence</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </FadeInView>
+
             {/* Flagged biomarkers summary */}
             {bloodwork.length > 0 && (() => {
               const latest = bloodwork[0];

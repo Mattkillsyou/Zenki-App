@@ -20,6 +20,7 @@ import { NutritionProvider } from './src/context/NutritionContext';
 import { ProductProvider } from './src/context/ProductContext';
 import { SpinWheelProvider } from './src/context/SpinWheelContext';
 import { CycleTrackerProvider } from './src/context/CycleTrackerContext';
+import { MedicationTrackerProvider } from './src/context/MedicationTrackerContext';
 import { SenpaiProvider } from './src/context/SenpaiContext';
 import { SenpaiMascot } from './src/components/SenpaiMascot';
 import { SenpaiOverlay } from './src/components/SenpaiOverlay';
@@ -153,11 +154,13 @@ export default function App() {
                         <ProductProvider>
                           <SpinWheelProvider>
                           <CycleTrackerProvider>
+                          <MedicationTrackerProvider>
                           <SenpaiProvider>
                             <TimeClockProvider>
                               <AppContent />
                             </TimeClockProvider>
                           </SenpaiProvider>
+                          </MedicationTrackerProvider>
                           </CycleTrackerProvider>
                           </SpinWheelProvider>
                         </ProductProvider>

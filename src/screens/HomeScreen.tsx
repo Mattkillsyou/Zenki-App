@@ -864,6 +864,10 @@ export function HomeScreen({ navigation }: any) {
                           <Ionicons name="medkit-outline" size={20} color={colors.gold} />
                           <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Body Lab</Text>
                         </TouchableOpacity>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('MedicationTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                          <Ionicons name="bandage-outline" size={20} color={colors.gold} />
+                          <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Meds</Text>
+                        </TouchableOpacity>
                         <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('ActivityTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                           <Ionicons name="navigate-outline" size={20} color={colors.gold} />
                           <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>GPS</Text>

@@ -75,6 +75,7 @@ import { MessagesListScreen } from '../screens/MessagesListScreen';
 import { MessagesChatScreen } from '../screens/MessagesChatScreen';
 import { UserSearchScreen } from '../screens/UserSearchScreen';
 import { CycleTrackerScreen } from '../screens/CycleTrackerScreen';
+import { MedicationTrackerScreen } from '../screens/MedicationTrackerScreen';
 import { SenpaiMemoryScreen } from '../screens/SenpaiMemoryScreen';
 
 const Stack = createStackNavigator();
@@ -341,6 +342,7 @@ export function RootNavigator() {
       <Stack.Screen name="MessagesChat" component={withErrorBoundary(MessagesChatScreen, 'Chat')} options={pushTransition} />
       <Stack.Screen name="UserSearch" component={withErrorBoundary(UserSearchScreen, 'Search')} options={pushTransition} />
       <Stack.Screen name="CycleTracker" component={withErrorBoundary(CycleTrackerScreen, 'Cycle Tracker')} options={pushTransition} />
+      <Stack.Screen name="MedicationTracker" component={withErrorBoundary(MedicationTrackerScreen, 'Medication Tracker')} options={pushTransition} />
       <Stack.Screen name="SenpaiMemory" component={withErrorBoundary(SenpaiMemoryScreen, 'Senpai Memory')} options={pushTransition} />
     </Stack.Navigator>
   );
