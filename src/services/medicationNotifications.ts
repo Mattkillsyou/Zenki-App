@@ -75,7 +75,7 @@ function buildContent(med: MedicationEntry, hhmm: string) {
       medicationId: med.id,
       scheduledTime: hhmm,
       // Used by the notification tap handler to deep-link
-      url: 'zenkidojo://MedicationTracker',
+      url: 'zenki://MedicationTracker',
     },
   };
 }

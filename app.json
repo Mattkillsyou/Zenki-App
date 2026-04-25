@@ -1,16 +1,16 @@
 {
   "expo": {
     "name": "Zenki",
-    "slug": "zenki-dojo",
+    "slug": "zenki",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "zenkidojo",
+    "scheme": "zenki",
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1A1209"
+      "backgroundColor": "#FFFFFF"
     },
     "plugins": [
       [
@@ -64,7 +64,7 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.zenkidojo.app",
+      "bundleIdentifier": "com.zenki.app",
       "buildNumber": "1",
       "config": {
         "usesNonExemptEncryption": false
@@ -79,6 +79,7 @@
         "NSBluetoothPeripheralUsageDescription": "Zenki uses Bluetooth to connect to heart-rate monitors during workouts.",
         "NSHealthShareUsageDescription": "Zenki reads steps, calories, active minutes, and heart rate from Apple Health to give you a unified training and recovery view.",
         "NSHealthUpdateUsageDescription": "Zenki writes your logged workouts, weight, nutrition, and heart-rate sessions to Apple Health so all your training data stays in one place.",
+        "NSMotionUsageDescription": "Zenki uses motion sensors to count steps and estimate active minutes during workouts.",
         "UIBackgroundModes": ["fetch"]
       },
       "entitlements": {
@@ -91,7 +92,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.zenkidojo.app",
+      "package": "com.zenki.app",
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",

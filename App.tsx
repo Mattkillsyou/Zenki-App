@@ -34,6 +34,7 @@ import { SoundProvider } from './src/context/SoundContext';
 import { BlocksProvider } from './src/context/BlocksContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ThemeOverlay } from './src/components/ThemeOverlay';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 
 function AppContent() {
   const { colors, isDark } = useTheme();
@@ -136,8 +137,9 @@ const webStyles = StyleSheet.create({
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
+    <ErrorBoundary screenName="App Root">
+      <SafeAreaProvider>
+        <AuthProvider>
         <BlocksProvider>
         <MotionProvider>
           <ThemeProvider>
@@ -181,7 +183,8 @@ export default function App() {
           </ThemeProvider>
         </MotionProvider>
         </BlocksProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
