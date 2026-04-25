@@ -135,10 +135,20 @@ const webStyles = StyleSheet.create({
   },
 });
 
+// On web, simulate an iPhone Dynamic Island top inset so the phone-frame
+// preview matches real iOS layout. Real iPhones override this with the OS
+// inset values automatically.
+const WEB_INITIAL_METRICS = Platform.OS === 'web'
+  ? {
+      insets: { top: 54, bottom: 34, left: 0, right: 0 },
+      frame: { x: 0, y: 0, width: 430, height: 932 },
+    }
+  : undefined;
+
 export default function App() {
   return (
     <ErrorBoundary screenName="App Root">
-      <SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={WEB_INITIAL_METRICS}>
         <AuthProvider>
         <BlocksProvider>
         <MotionProvider>
