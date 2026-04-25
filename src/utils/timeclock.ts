@@ -20,7 +20,7 @@ import { getHolidayInfo } from '../data/holidays';
 //   8–12 hrs        → 1.5x (overtime)
 //   12+ hrs         → 2.0x (double time)
 //
-// HOLIDAY PAY (Zenki Dojo policy, not CA-required):
+// HOLIDAY PAY (Zenki policy, not CA-required):
 //   Flat 2x base rate for every hour worked on a recognized holiday.
 //   OT and DT rules do NOT stack on holidays — every hour is 2x, period.
 // ──────────────────────────────────────────────────────────────────

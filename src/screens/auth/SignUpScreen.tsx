@@ -41,7 +41,7 @@ export function SignUpScreen({ navigation }: any) {
       setLoading(false);
       Alert.alert(
         'Request Submitted',
-        'Thank you for your interest in Zenki Dojo. Our team will review your application and contact you within 48 hours.',
+        'Thank you for your interest in Zenki. Our team will review your application and contact you within 48 hours.',
         [{ text: 'OK', onPress: () => navigation.goBack() }],
       );
     }, 2000);
@@ -94,7 +94,7 @@ export function SignUpScreen({ navigation }: any) {
         <View style={styles.content}>
           <Text style={[styles.heading, { color: colors.textPrimary }]}>Request Access</Text>
           <Text style={[styles.subheading, { color: colors.textSecondary }]}>
-            Zenki Dojo is a private, members-only facility. Submit your details and our team will review your application.
+            Zenki is a private, members-only facility. Submit your details and our team will review your application.
           </Text>
 
           {/* Private notice */}

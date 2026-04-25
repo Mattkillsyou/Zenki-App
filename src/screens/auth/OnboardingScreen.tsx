@@ -805,7 +805,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             <Ionicons name="walk-outline" size={56} color={colors.gold} />
           </Animated.View>
           <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>How active are you?</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>Outside of Zenki Dojo training</Text>
+          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>Outside of Zenki training</Text>
           <View style={{ width: '100%', gap: 10 }}>
             {([
               { key: 'sedentary', emoji: '\uD83E\uDE91', label: 'Mostly sitting', desc: 'Desk job, minimal movement' },
@@ -1446,7 +1446,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             Welcome, {data.firstName}!
           </Text>
           <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-            Your profile is ready. You're now part of the Zenki Dojo community.
+            Your profile is ready. You're now part of the Zenki community.
           </Text>
         </View>
       );

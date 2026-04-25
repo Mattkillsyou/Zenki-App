@@ -765,7 +765,7 @@ export function SettingsScreen({ navigation }: any) {
         {/* About */}
         {renderSectionHeader('ABOUT')}
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
-          {renderNavRow('information-circle-outline', 'About Zenki Dojo', () =>
+          {renderNavRow('information-circle-outline', 'About Zenki', () =>
             Linking.openURL('http://www.zenkidojo.com')
           )}
           {renderNavRow('document-text-outline', 'Terms of Service', () =>
@@ -777,7 +777,7 @@ export function SettingsScreen({ navigation }: any) {
         </View>
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, marginTop: spacing.sm, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
           <Text style={[styles.versionText, { color: colors.textMuted }]}>
-            Zenki Dojo v1.0.0
+            Zenki v1.0.0
           </Text>
         </View>
 

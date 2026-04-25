@@ -21,7 +21,7 @@ const INVITE_CODE = 'dragon';
 const INVITE_VERIFIED_KEY = '@zenki_invite_verified';
 
 export function SignInScreen({ navigation }: any) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const auth = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -164,7 +164,7 @@ export function SignInScreen({ navigation }: any) {
 
           {/* Logo */}
           <View style={styles.logoSection}>
-            <Image source={require('../../../assets/brand/zenki-3d-logo-3.png')} style={styles.logo} resizeMode="contain" />
+            <Image source={isDark ? require('../../../assets/icon-dark.png') : require('../../../assets/icon-light.png')} style={styles.logo} resizeMode="contain" />
             <Text style={[styles.tagline, { color: colors.textTertiary }]}>PRIVATE TRAINING · EST. 1997</Text>
           </View>
 

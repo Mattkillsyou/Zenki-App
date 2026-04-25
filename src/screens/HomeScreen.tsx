@@ -519,18 +519,6 @@ export function HomeScreen({ navigation }: any) {
     if (!user?.id) return [];
     const stats: { label: string; value: string; sub: string; icon: string }[] = [];
 
-    // 2. Latest PR
-    const prs = user.id ? myPRs(user.id) : [];
-    if (prs.length > 0) {
-      const latest = prs[prs.length - 1] as any;
-      stats.push({
-        label: 'Latest PR',
-        value: `${latest.value || '--'}`,
-        sub: latest.exerciseName || 'Exercise',
-        icon: 'trophy-outline',
-      });
-    }
-
     // 4. Last GPS activity
     const gpsActs = memberActivities(user.id);
     if (gpsActs.length > 0) {
@@ -581,7 +569,7 @@ export function HomeScreen({ navigation }: any) {
   }, []);
 
   // ── Module reorder (drag to rearrange) + show/hide ──
-  const DEFAULT_MODULE_ORDER = ['quote', 'announcements', 'xpBar', 'achievements', 'training', 'quickFoodActions', 'dashboard', 'quickStats', 'schedule'];
+  const DEFAULT_MODULE_ORDER = ['quote', 'announcements', 'xpBar', 'achievements', 'training', 'quickFoodActions', 'dashboard', 'quickStats'];
   const [moduleOrder, setModuleOrder] = useState<string[]>(DEFAULT_MODULE_ORDER);
   const [moduleVisibility, setModuleVisibility] = useState<Record<string, boolean>>({});
   const [editMode, setEditMode] = useState(false);
@@ -671,7 +659,7 @@ export function HomeScreen({ navigation }: any) {
           <View style={styles.header}>
             <View style={styles.headerRight}>
               <AnimatedLogo size={28} />
-              {!isEmployee && (
+              {!isEmployee && !hasSpunToday && (
                 <TouchableOpacity
                   ref={spinFabRef}
                   onLayout={measureCoachTarget('spinFab', spinFabRef)}
@@ -681,10 +669,7 @@ export function HomeScreen({ navigation }: any) {
                       backgroundColor: colors.surface,
                       shadowColor: '#D4A017',
                       // @ts-ignore — boxShadow is web-only
-                      boxShadow: hasSpunToday
-                        ? 'none'
-                        : '0 0 10px rgba(212,160,23,0.65), 0 0 18px rgba(212,160,23,0.3)',
-                      opacity: hasSpunToday ? 0.45 : 1,
+                      boxShadow: '0 0 10px rgba(212,160,23,0.65), 0 0 18px rgba(212,160,23,0.3)',
                     },
                   ]}
                   onPress={() => { play('navigate'); setSpinOpen(true); }}
@@ -698,7 +683,6 @@ export function HomeScreen({ navigation }: any) {
                 <PointsBadge
                   points={gamState.dojoPoints || 0}
                   compact
-                  onPress={() => navigation.navigate('Store')}
                 />
               )}
               {!isEmployee && (
@@ -873,10 +857,10 @@ export function HomeScreen({ navigation }: any) {
                       ref={foodActionsRef}
                       onLayout={measureCoachTarget('foodActions', foodActionsRef)}
                     >
-                      <Text style={[styles.sectionTitle, { color: colors.textPrimary, paddingHorizontal: 20, marginTop: 6, marginBottom: 8 }]}>
+                      <Text style={[styles.sectionTitle, { color: colors.textPrimary, paddingHorizontal: 24, marginTop: 6, marginBottom: 8 }]}>
                         Tracking
                       </Text>
-                      <View style={{ paddingHorizontal: 20, flexDirection: 'row', gap: 10 }}>
+                      <View style={{ paddingHorizontal: 24, flexDirection: 'row', gap: 10 }}>
                       <TouchableOpacity
                         activeOpacity={0.85}
                         onPress={() => !editMode && navigation.navigate('MacroTracker', { openSearch: true })}

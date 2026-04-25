@@ -56,7 +56,7 @@ export const PRODUCTS: Product[] = [
       wx('3c36b1_4e2dfda04eb4403facd803d2cc2d4b3f~mv2.jpg'),
     ],
     badge: 'Best Seller',
-    description: 'Premium competition-grade Gi with the Zenki Dojo RESPECT edition branding. Pearl weave construction, reinforced stitching throughout. IBJJF approved.',
+    description: 'Premium competition-grade Gi with the Zenki RESPECT edition branding. Pearl weave construction, reinforced stitching throughout. IBJJF approved.',
     sizes: ['A1', 'A2', 'A3', 'A4'],
     inStock: true,
   },
@@ -150,7 +150,7 @@ export const PRODUCTS: Product[] = [
       wx('3c36b1_2887ed89d3c24da39d2624f9af6f3048f002.jpg'),
     ],
     badge: null,
-    description: 'Zenki Dojo signature accessories. Limited edition collectible.',
+    description: 'Zenki signature accessories. Limited edition collectible.',
     inStock: true,
   },
   {

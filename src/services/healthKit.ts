@@ -205,7 +205,7 @@ export async function pushWeight(weight: number, unit: 'kg' | 'lb', whenIso?: st
   const opts = {
     value: kg,
     unit: HK.Constants?.Units?.gram ? 'gram' : 'pound',
-    metadata: { source: 'Zenki Dojo' },
+    metadata: { source: 'Zenki' },
     date: whenIso ?? new Date().toISOString(),
   };
   // react-native-health expects pounds when unit='pound', kilograms otherwise.
@@ -239,7 +239,7 @@ export async function pushWorkout(params: {
     endDate: params.endIso,
     energyBurned: params.energyBurnedKcal,
     distance: params.distanceMeters,
-    metadata: { source: 'Zenki Dojo', ...(params.metadata ?? {}) },
+    metadata: { source: 'Zenki', ...(params.metadata ?? {}) },
   };
   const ok = await nodeBackCallback<any>((cb) => HK.saveWorkout(opts, cb));
   return ok != null;
@@ -252,7 +252,7 @@ export async function pushHeartRate(bpm: number, whenIso?: string): Promise<bool
   const opts: any = {
     value: bpm,
     startDate: whenIso ?? new Date().toISOString(),
-    metadata: { source: 'Zenki Dojo' },
+    metadata: { source: 'Zenki' },
   };
   const ok = await nodeBackCallback<any>((cb) => HK.saveHeartRateSample(opts, cb));
   return ok != null;
@@ -278,7 +278,7 @@ export async function pushFood(food: HKFoodSample): Promise<boolean> {
     protein: food.proteinG,
     carbohydrates: food.carbsG,
     fatTotal: food.fatG,
-    metadata: { source: 'Zenki Dojo' },
+    metadata: { source: 'Zenki' },
   };
   const ok = await nodeBackCallback<any>((cb) => HK.saveFood(opts, cb));
   return ok != null;
@@ -291,16 +291,16 @@ async function pushFoodSplit(food: HKFoodSample): Promise<boolean> {
   const date = food.date;
   const tasks: Promise<any>[] = [];
   if (food.calories != null && HK.saveEnergyConsumed) {
-    tasks.push(nodeBackCallback((cb) => HK.saveEnergyConsumed({ value: food.calories, date, metadata: { source: 'Zenki Dojo' } }, cb)));
+    tasks.push(nodeBackCallback((cb) => HK.saveEnergyConsumed({ value: food.calories, date, metadata: { source: 'Zenki' } }, cb)));
   }
   if (food.proteinG != null && HK.saveProtein) {
-    tasks.push(nodeBackCallback((cb) => HK.saveProtein({ value: food.proteinG, date, metadata: { source: 'Zenki Dojo' } }, cb)));
+    tasks.push(nodeBackCallback((cb) => HK.saveProtein({ value: food.proteinG, date, metadata: { source: 'Zenki' } }, cb)));
   }
   if (food.carbsG != null && HK.saveCarbohydrates) {
-    tasks.push(nodeBackCallback((cb) => HK.saveCarbohydrates({ value: food.carbsG, date, metadata: { source: 'Zenki Dojo' } }, cb)));
+    tasks.push(nodeBackCallback((cb) => HK.saveCarbohydrates({ value: food.carbsG, date, metadata: { source: 'Zenki' } }, cb)));
   }
   if (food.fatG != null && HK.saveFatTotal) {
-    tasks.push(nodeBackCallback((cb) => HK.saveFatTotal({ value: food.fatG, date, metadata: { source: 'Zenki Dojo' } }, cb)));
+    tasks.push(nodeBackCallback((cb) => HK.saveFatTotal({ value: food.fatG, date, metadata: { source: 'Zenki' } }, cb)));
   }
   const results = await Promise.all(tasks);
   return results.some((r) => r != null);

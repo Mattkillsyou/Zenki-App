@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────────────────────────
 // FEDERAL HOLIDAYS — used for overtime/holiday pay calculation
 //
-// California doesn't LEGALLY require holiday pay, but Zenki Dojo has
+// California doesn't LEGALLY require holiday pay, but Zenki has
 // chosen to pay 1.5x on these days as a benefit for employees.
 // ──────────────────────────────────────────────────────────────────
 

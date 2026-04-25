@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Zenki Dojo",
+    "name": "Zenki",
     "slug": "zenki-dojo",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,7 +16,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Zenki Dojo uses your location to automatically log dojo visits and, when you start a GPS-tracked workout, to record your route, distance, and pace."
+          "locationWhenInUsePermission": "Zenki uses your location to automatically log dojo visits and, when you start a GPS-tracked workout, to record your route, distance, and pace."
         }
       ],
       [
@@ -29,20 +29,20 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Zenki Dojo uses your camera to scan food barcodes for macro logging, take progress and food photos, and set your profile picture. Photos stay on your device unless you post them."
+          "cameraPermission": "Zenki uses your camera to scan food barcodes for macro logging, take progress and food photos, and set your profile picture. Photos stay on your device unless you post them."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Zenki Dojo accesses photos you choose — for profile pictures, community posts, and uploading bloodwork or DEXA scans.",
-          "cameraPermission": "Zenki Dojo uses your camera to take progress photos, food photos, and profile pictures."
+          "photosPermission": "Zenki accesses photos you choose — for profile pictures, community posts, and uploading bloodwork or DEXA scans.",
+          "cameraPermission": "Zenki uses your camera to take progress photos, food photos, and profile pictures."
         }
       ],
       [
         "expo-calendar",
         {
-          "calendarPermission": "Zenki Dojo adds your booked classes and training sessions to your calendar when you opt in."
+          "calendarPermission": "Zenki adds your booked classes and training sessions to your calendar when you opt in."
         }
       ],
       [
@@ -50,15 +50,15 @@
         {
           "isBackgroundEnabled": false,
           "neverForLocation": true,
-          "bluetoothAlwaysPermission": "Zenki Dojo connects to Bluetooth heart-rate monitors so you can track BPM, zones, and calories during training sessions."
+          "bluetoothAlwaysPermission": "Zenki connects to Bluetooth heart-rate monitors so you can track BPM, zones, and calories during training sessions."
         }
       ],
       [
         "react-native-health",
         {
           "isClinicalDataEnabled": false,
-          "healthSharePermission": "Zenki Dojo reads steps, calories, active minutes, and heart rate from Apple Health to give you a unified training and recovery view.",
-          "healthUpdatePermission": "Zenki Dojo writes your logged workouts, weight, nutrition, and heart-rate sessions to Apple Health so all your training data stays in one place."
+          "healthSharePermission": "Zenki reads steps, calories, active minutes, and heart rate from Apple Health to give you a unified training and recovery view.",
+          "healthUpdatePermission": "Zenki writes your logged workouts, weight, nutrition, and heart-rate sessions to Apple Health so all your training data stays in one place."
         }
       ]
     ],
@@ -70,15 +70,15 @@
         "usesNonExemptEncryption": false
       },
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Zenki Dojo uses your location to automatically log dojo visits and, when you start a GPS-tracked workout, to record your route, distance, and pace.",
-        "NSCameraUsageDescription": "Zenki Dojo uses your camera to scan food barcodes for macro logging, take progress and food photos, and set your profile picture. Photos stay on your device unless you post them.",
-        "NSPhotoLibraryUsageDescription": "Zenki Dojo accesses photos you choose — for profile pictures, community posts, and uploading bloodwork or DEXA scans. Images are not shared unless you explicitly post them.",
-        "NSCalendarsFullAccessUsageDescription": "Zenki Dojo adds your booked classes and training sessions to your calendar when you opt in.",
-        "NSCalendarsUsageDescription": "Zenki Dojo adds your booked classes and training sessions to your calendar when you opt in.",
-        "NSBluetoothAlwaysUsageDescription": "Zenki Dojo connects to Bluetooth heart-rate monitors so you can track BPM, zones, and calories during training sessions.",
-        "NSBluetoothPeripheralUsageDescription": "Zenki Dojo uses Bluetooth to connect to heart-rate monitors during workouts.",
-        "NSHealthShareUsageDescription": "Zenki Dojo reads steps, calories, active minutes, and heart rate from Apple Health to give you a unified training and recovery view.",
-        "NSHealthUpdateUsageDescription": "Zenki Dojo writes your logged workouts, weight, nutrition, and heart-rate sessions to Apple Health so all your training data stays in one place.",
+        "NSLocationWhenInUseUsageDescription": "Zenki uses your location to automatically log dojo visits and, when you start a GPS-tracked workout, to record your route, distance, and pace.",
+        "NSCameraUsageDescription": "Zenki uses your camera to scan food barcodes for macro logging, take progress and food photos, and set your profile picture. Photos stay on your device unless you post them.",
+        "NSPhotoLibraryUsageDescription": "Zenki accesses photos you choose — for profile pictures, community posts, and uploading bloodwork or DEXA scans. Images are not shared unless you explicitly post them.",
+        "NSCalendarsFullAccessUsageDescription": "Zenki adds your booked classes and training sessions to your calendar when you opt in.",
+        "NSCalendarsUsageDescription": "Zenki adds your booked classes and training sessions to your calendar when you opt in.",
+        "NSBluetoothAlwaysUsageDescription": "Zenki connects to Bluetooth heart-rate monitors so you can track BPM, zones, and calories during training sessions.",
+        "NSBluetoothPeripheralUsageDescription": "Zenki uses Bluetooth to connect to heart-rate monitors during workouts.",
+        "NSHealthShareUsageDescription": "Zenki reads steps, calories, active minutes, and heart rate from Apple Health to give you a unified training and recovery view.",
+        "NSHealthUpdateUsageDescription": "Zenki writes your logged workouts, weight, nutrition, and heart-rate sessions to Apple Health so all your training data stays in one place.",
         "UIBackgroundModes": ["fetch"]
       },
       "entitlements": {
@@ -88,7 +88,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#1A1209"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
       },
       "package": "com.zenkidojo.app",
       "permissions": [
@@ -102,6 +103,9 @@
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_CONNECT"
       ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "extra": {
       "eas": {

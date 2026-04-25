@@ -404,11 +404,16 @@ export function StoreScreen({ navigation }: any) {
             }}
           >
             {pages.map((pageProducts, pIdx) => (
-              <View key={pIdx} style={{ width: pageWidth || undefined, paddingHorizontal: 20, paddingTop: spacing.md }}>
+              <ScrollView
+                key={pIdx}
+                style={{ width: pageWidth || undefined }}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingTop: spacing.md, paddingBottom: 160 }}
+                showsVerticalScrollIndicator={false}
+              >
                 <View style={styles.pageGrid}>
                   {pageProducts.map((item) => renderProduct({ item }))}
                 </View>
-              </View>
+              </ScrollView>
             ))}
           </ScrollView>
 

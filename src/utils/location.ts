@@ -1,4 +1,4 @@
-// Zenki Dojo — 1714 Hillhurst Ave, Los Angeles, CA 90027
+// Zenki — 1714 Hillhurst Ave, Los Angeles, CA 90027
 export const DOJO_COORDS = {
   latitude: 34.1050,
   longitude: -118.2920,
