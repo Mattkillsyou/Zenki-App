@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, KeyboardAvoidingView, Platform, Image, Alert, Modal, ScrollView} from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Google from 'expo-auth-session/providers/google';
+import * as Crypto from 'expo-crypto';
+import * as WebBrowser from 'expo-web-browser';
 import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,11 +15,16 @@ import { Button } from '../../components';
 import { MEMBERS, CREDENTIALS } from '../../data/members';
 import { spacing, borderRadius } from '../../theme';
 import { FIREBASE_CONFIGURED } from '../../config/firebase';
+import { GOOGLE_CLIENT_ID } from '../../config/env';
 import {
   firebaseSignInWithPassword,
   firebaseSignInOrSeedAccount,
+  firebaseSignInWithApple,
+  firebaseSignInWithGoogle,
   emailForMember,
 } from '../../services/firebaseAuth';
+
+WebBrowser.maybeCompleteAuthSession();
 
 const INVITE_CODE = 'dragon';
 const INVITE_VERIFIED_KEY = '@zenki_invite_verified';
@@ -39,6 +48,101 @@ export function SignInScreen({ navigation }: any) {
       setCheckingInvite(false);
     });
   }, []);
+
+  // ── Apple Sign In availability (iOS 13+ only) ──
+  const [appleAvailable, setAppleAvailable] = useState(false);
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    AppleAuthentication.isAvailableAsync().then(setAppleAvailable).catch(() => setAppleAvailable(false));
+  }, []);
+
+  // ── Google Sign In auth request ──
+  // Uses an ID-token flow which we exchange for a Firebase session.
+  const [, googleResponse, promptGoogle] = Google.useIdTokenAuthRequest({
+    clientId: GOOGLE_CLIENT_ID,
+    iosClientId: GOOGLE_CLIENT_ID,
+    androidClientId: GOOGLE_CLIENT_ID,
+    webClientId: GOOGLE_CLIENT_ID,
+  });
+
+  // When Google returns a token, exchange it with Firebase + sign in locally
+  useEffect(() => {
+    if (googleResponse?.type !== 'success') return;
+    const idToken = (googleResponse.params as any)?.id_token;
+    if (!idToken) return;
+    (async () => {
+      try {
+        setLoading(true);
+        const { member } = await firebaseSignInWithGoogle({ idToken });
+        await auth.signIn(member);
+        navigation.replace('Main');
+      } catch (err: any) {
+        Alert.alert('Google sign-in failed', err?.message || 'Please try again or use email + password.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [googleResponse]);
+
+  const handleAppleSignIn = async () => {
+    if (!FIREBASE_CONFIGURED) {
+      Alert.alert('Sign in unavailable', 'Apple Sign-In requires Firebase to be configured.');
+      return;
+    }
+    setLoading(true);
+    try {
+      // Apple requires a SHA256-hashed nonce; we send the raw nonce to Firebase
+      // and the hashed version to Apple.
+      const rawNonce = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        Math.random().toString(36).slice(2) + Date.now().toString(),
+      );
+      const hashedNonce = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        rawNonce,
+      );
+      const appleCred = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+        nonce: hashedNonce,
+      });
+      if (!appleCred.identityToken) {
+        throw new Error('Apple did not return an identity token.');
+      }
+      const { member } = await firebaseSignInWithApple({
+        identityToken: appleCred.identityToken,
+        fullName: appleCred.fullName,
+        email: appleCred.email,
+        nonce: rawNonce,
+      });
+      await auth.signIn(member);
+      navigation.replace('Main');
+    } catch (err: any) {
+      // User canceling the prompt is not a real error — silence it.
+      if (err?.code === 'ERR_REQUEST_CANCELED') return;
+      Alert.alert('Apple sign-in failed', err?.message || 'Please try again or use email + password.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (!GOOGLE_CLIENT_ID) {
+      Alert.alert('Sign in unavailable', 'Google Sign-In is not configured. Please use email + password.');
+      return;
+    }
+    if (!FIREBASE_CONFIGURED) {
+      Alert.alert('Sign in unavailable', 'Google Sign-In requires Firebase to be configured.');
+      return;
+    }
+    try {
+      await promptGoogle();
+    } catch (err: any) {
+      Alert.alert('Google sign-in failed', err?.message || 'Please try again.');
+    }
+  };
 
   // Navigate to onboarding after the gate modal fully dismisses
   useEffect(() => {
@@ -174,13 +278,23 @@ export function SignInScreen({ navigation }: any) {
             <Text style={[styles.subheading, { color: colors.textSecondary }]}>Sign in to your member account</Text>
 
             {/* Social Login */}
-            <SoundPressable style={[styles.socialBtn, { backgroundColor: '#FAFAFA' }]} activeOpacity={0.8}>
+            <SoundPressable
+              style={[styles.socialBtn, { backgroundColor: '#FAFAFA' }]}
+              activeOpacity={0.8}
+              onPress={handleGoogleSignIn}
+              disabled={loading || !GOOGLE_CLIENT_ID}
+            >
               <Ionicons name="logo-google" size={22} color="#4285F4" />
               <Text style={styles.socialBtnText}>Continue with Google</Text>
             </SoundPressable>
 
-            {(Platform.OS === 'ios' || Platform.OS === 'web') && (
-              <SoundPressable style={[styles.socialBtn, { backgroundColor: '#000000' }]} activeOpacity={0.8}>
+            {Platform.OS === 'ios' && appleAvailable && (
+              <SoundPressable
+                style={[styles.socialBtn, { backgroundColor: '#000000' }]}
+                activeOpacity={0.8}
+                onPress={handleAppleSignIn}
+                disabled={loading}
+              >
                 <Ionicons name="logo-apple" size={24} color="#FFFFFF" />
                 <Text style={[styles.socialBtnText, { color: '#FFFFFF' }]}>Continue with Apple</Text>
               </SoundPressable>

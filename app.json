@@ -60,7 +60,8 @@
           "healthSharePermission": "Zenki Dojo reads steps, calories, active minutes, and heart rate from Apple Health to give you a unified training and recovery view.",
           "healthUpdatePermission": "Zenki Dojo writes your logged workouts, weight, nutrition, and heart-rate sessions to Apple Health so all your training data stays in one place."
         }
-      ]
+      ],
+      "expo-apple-authentication"
     ],
     "ios": {
       "supportsTablet": false,

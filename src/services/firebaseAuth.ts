@@ -2,12 +2,16 @@ import { auth, db, FIREBASE_CONFIGURED } from '../config/firebase';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithCredential,
+  OAuthProvider,
+  GoogleAuthProvider,
   signOut as fbSignOut,
   sendPasswordResetEmail,
   getIdToken,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { Member } from '../data/members';
+import { generateId } from '../utils/generateId';
 
 /** Stable email for a member — uses their real email or a fallback. */
 export function emailForMember(member: Pick<Member, 'email' | 'username'>): string {
@@ -145,6 +149,151 @@ export async function firebaseDeleteCurrentUser(): Promise<void> {
   const user = auth?.currentUser;
   if (!user) return;
   await user.delete();
+}
+
+// ─────────────────────────────────────────────────
+// OAuth sign-in (Apple, Google)
+// ─────────────────────────────────────────────────
+
+export interface OAuthSignInResult {
+  /** Firebase UID. */
+  uid: string;
+  /** Member record — either rehydrated from Firestore or freshly created. */
+  member: Member;
+  /** True when this OAuth login created a brand-new account (first time). */
+  isNewAccount: boolean;
+}
+
+/** Email helper — builds a deterministic local-id email when OAuth provider hides the address. */
+function emailForOAuthMember(realEmail: string | null | undefined, uid: string): string {
+  if (realEmail && realEmail.includes('@')) return realEmail;
+  return `${uid}@oauth.zenkidojo.app`;
+}
+
+/**
+ * Build a fresh local Member record from OAuth profile data.
+ * Used when an OAuth user signs in for the first time — they get a minimal
+ * member record they can flesh out via Edit Profile / onboarding later.
+ */
+function buildMemberFromOAuth(params: {
+  uid: string;
+  email: string;
+  fullName?: { givenName?: string | null; familyName?: string | null } | null;
+  displayName?: string | null;
+}): Member {
+  const fn = params.fullName?.givenName ??
+    (params.displayName?.split(' ')[0] ?? '') ?? '';
+  const ln = params.fullName?.familyName ??
+    (params.displayName?.split(' ').slice(1).join(' ') ?? '') ?? '';
+  // Generate a stable username from email local-part
+  const username = params.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_.-]/g, '');
+  return {
+    id: generateId('mem'),
+    username,
+    firstName: (fn || 'Member').trim(),
+    lastName: (ln || '').trim(),
+    email: params.email,
+    belt: 'none',
+    stripes: 0,
+    memberSince: new Date().toISOString().split('T')[0],
+    isAdmin: false,
+    totalSessions: 0,
+    weekStreak: 0,
+  };
+}
+
+/**
+ * Look up or create a Member record tied to a Firebase UID.
+ * Stored under `users/{uid}` with the full Member payload so OAuth users can
+ * sign back in across devices.
+ */
+async function rehydrateOrCreateOAuthMember(
+  uid: string,
+  fallback: Member,
+): Promise<{ member: Member; isNewAccount: boolean }> {
+  if (!db) return { member: fallback, isNewAccount: true };
+  const userDoc = doc(db, 'users', uid);
+  const snap = await getDoc(userDoc);
+  if (snap.exists()) {
+    const data = snap.data();
+    // If we previously stored the full member, rehydrate it; otherwise the
+    // doc has just displayName/avatar (legacy email-password format) — keep
+    // the fallback but reuse the existing memberId so analytics line up.
+    const existingMember = (data as any).member as Member | undefined;
+    if (existingMember && existingMember.id) {
+      return { member: existingMember, isNewAccount: false };
+    }
+  }
+  // First-time OAuth — write the full member payload so future sessions can rehydrate
+  await setDoc(userDoc, {
+    displayName: `${fallback.firstName} ${fallback.lastName}`.trim(),
+    avatar: null,
+    bio: '',
+    isPrivate: false,
+    memberId: fallback.id,
+    member: fallback,
+    createdAt: new Date().toISOString(),
+    authProvider: 'oauth',
+  }, { merge: true });
+  return { member: fallback, isNewAccount: true };
+}
+
+/**
+ * Sign in to Firebase with an Apple identityToken obtained from
+ * `expo-apple-authentication`. The caller passes the optional fullName the
+ * first time so we can seed firstName/lastName.
+ */
+export async function firebaseSignInWithApple(params: {
+  identityToken: string;
+  /** Provided by Apple ONLY on the first sign-in. Subsequent logins return null. */
+  fullName?: { givenName?: string | null; familyName?: string | null } | null;
+  email?: string | null;
+  /** A nonce used during the AppleAuthentication request — required by Apple+Firebase. */
+  nonce?: string;
+}): Promise<OAuthSignInResult> {
+  if (!FIREBASE_CONFIGURED || !auth) {
+    throw new Error('firebase-unavailable');
+  }
+  const provider = new OAuthProvider('apple.com');
+  const credential = provider.credential({
+    idToken: params.identityToken,
+    rawNonce: params.nonce,
+  });
+  const userCred = await signInWithCredential(auth, credential);
+  const uid = userCred.user.uid;
+  const email = emailForOAuthMember(params.email ?? userCred.user.email, uid);
+  const fallback = buildMemberFromOAuth({
+    uid,
+    email,
+    fullName: params.fullName,
+    displayName: userCred.user.displayName,
+  });
+  const { member, isNewAccount } = await rehydrateOrCreateOAuthMember(uid, fallback);
+  return { uid, member, isNewAccount };
+}
+
+/**
+ * Sign in to Firebase with a Google id_token obtained from
+ * `expo-auth-session/providers/google`.
+ */
+export async function firebaseSignInWithGoogle(params: {
+  idToken: string;
+  accessToken?: string;
+}): Promise<OAuthSignInResult> {
+  if (!FIREBASE_CONFIGURED || !auth) {
+    throw new Error('firebase-unavailable');
+  }
+  const credential = GoogleAuthProvider.credential(params.idToken, params.accessToken);
+  const userCred = await signInWithCredential(auth, credential);
+  const uid = userCred.user.uid;
+  const email = emailForOAuthMember(userCred.user.email, uid);
+  const fallback = buildMemberFromOAuth({
+    uid,
+    email,
+    displayName: userCred.user.displayName,
+  });
+  const { member, isNewAccount } = await rehydrateOrCreateOAuthMember(uid, fallback);
+  return { uid, member, isNewAccount };
 }
 
 // Backwards compat — older call sites use this name.
