@@ -70,7 +70,7 @@ export function HelpScreen({ navigation }: any) {
     navigation.navigate('Main', { screen: 'Home' });
   };
 
-  const mailto = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Zenki Support')}`;
+  const mailto = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Zenki Dojo Support')}`;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>

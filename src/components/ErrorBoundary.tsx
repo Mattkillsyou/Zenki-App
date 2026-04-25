@@ -297,7 +297,7 @@ function formatStack(stack: string): string {
 
 // Using hardcoded dark palette values here because ErrorBoundary cannot use
 // useTheme() hook (it's a class component). This matches the dark theme which
-// is the primary theme for Zenki.
+// is the primary theme for Zenki Dojo.
 
 const styles = StyleSheet.create({
   /* ── Full-screen variant ───────────────────────────────────────────── */

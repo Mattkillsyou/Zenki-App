@@ -115,7 +115,7 @@ export function SetPasswordScreen({ navigation, route }: any) {
 
           <Text style={[styles.heading, { color: colors.textPrimary }]}>Create Your Password</Text>
           <Text style={[styles.subheading, { color: colors.textSecondary }]}>
-            Welcome to Zenki, {username}. Set a secure password to complete your account setup.
+            Welcome to Zenki Dojo, {username}. Set a secure password to complete your account setup.
           </Text>
 
           <View style={styles.fieldGroup}>

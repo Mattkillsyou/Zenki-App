@@ -75,10 +75,10 @@ export function ClassCard({ name, instructor, time, duration, spotsLeft, type, o
     setAddingToCal(true);
     try {
       const result = await addEventToCalendar({
-        title: `${name} · Zenki`,
+        title: `${name} · Zenki Dojo`,
         startsAt,
         durationMinutes: parseDurationMinutes(duration),
-        location: 'Zenki, Los Angeles',
+        location: 'Zenki Dojo, Los Angeles',
         notes: `Instructor: ${instructor}`,
       });
       if (result.ok) {

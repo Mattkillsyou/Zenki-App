@@ -51,7 +51,7 @@ async function scheduleNotification(appointment: Appointment): Promise<string | 
     const timeoutId = setTimeout(() => {
       // Browser notification API (best-effort)
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        new Notification(`Zenki · ${appointment.sessionType}`, {
+        new Notification(`Zenki Dojo · ${appointment.sessionType}`, {
           body: `Your session with ${appointment.instructor} is in 1 hour.`,
         });
       }

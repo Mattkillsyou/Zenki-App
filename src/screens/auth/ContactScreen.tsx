@@ -58,7 +58,7 @@ export function ContactScreen({ navigation }: any) {
             </View>
             <Text style={[styles.heading, { color: colors.textPrimary }]}>Message Sent</Text>
             <Text style={[styles.subheading, { color: colors.textSecondary }]}>
-              Thank you for your interest in Zenki. Our team will reach out to you shortly.
+              Thank you for your interest in Zenki Dojo. Our team will reach out to you shortly.
             </Text>
             <Button
               title="Back to Sign In"
@@ -72,7 +72,7 @@ export function ContactScreen({ navigation }: any) {
           <View style={styles.content}>
             <Text style={[styles.heading, { color: colors.textPrimary }]}>Contact Us</Text>
             <Text style={[styles.subheading, { color: colors.textSecondary }]}>
-              Zenki is a private, members-only facility. Interested in training with us? Get in touch.
+              Zenki Dojo is a private, members-only facility. Interested in training with us? Get in touch.
             </Text>
 
             {/* Private notice */}

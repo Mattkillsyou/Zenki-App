@@ -131,9 +131,9 @@ export function BookScreen({ navigation }: any) {
 
   const addToGoogleCalendar = (instructor: string, sessionType: string, time: string) => {
     // Create a Google Calendar event URL as a fallback
-    const title = encodeURIComponent(`Zenki · ${sessionType} with ${instructor}`);
-    const location = encodeURIComponent('Zenki, 1714 Hillhurst Ave, LA 90027');
-    const details = encodeURIComponent(`Private session at Zenki.\n\nInstructor: ${instructor}\nType: ${sessionType}\n\nPlease arrive 10 minutes early.`);
+    const title = encodeURIComponent(`Zenki Dojo · ${sessionType} with ${instructor}`);
+    const location = encodeURIComponent('Zenki Dojo, 1714 Hillhurst Ave, LA 90027');
+    const details = encodeURIComponent(`Private session at Zenki Dojo.\n\nInstructor: ${instructor}\nType: ${sessionType}\n\nPlease arrive 10 minutes early.`);
 
     // Build date string from current date
     const now = new Date();

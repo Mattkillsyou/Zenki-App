@@ -56,7 +56,7 @@ export function HealthDataConsentModal({ visible, onAccept, onDecline, feature }
             <Bullet
               icon="medkit-outline"
               title="Not medical advice"
-              text="Zenki is a training app. Results displayed here are for your own tracking. Always consult a clinician for medical decisions."
+              text="Zenki Dojo is a training app. Results displayed here are for your own tracking. Always consult a clinician for medical decisions."
               colors={colors}
             />
             <Bullet
