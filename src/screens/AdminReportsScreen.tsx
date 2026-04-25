@@ -21,11 +21,10 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Alert,
   ActivityIndicator,
-  RefreshControl,
-} from 'react-native';
+  RefreshControl} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -144,12 +143,12 @@ export function AdminReportsScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.goBack()}
           style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <View style={{ alignItems: 'center' }}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Reports</Text>
           <Text style={[styles.sub, { color: colors.textMuted }]}>
@@ -220,7 +219,7 @@ export function AdminReportsScreen({ navigation }: any) {
                   </View>
 
                   <View style={styles.actionRow}>
-                    <TouchableOpacity
+                    <SoundPressable
                       disabled={actingOn === r.id}
                       onPress={() => handleDismiss(r)}
                       style={[
@@ -233,8 +232,8 @@ export function AdminReportsScreen({ navigation }: any) {
                       <Text style={[styles.actionText, { color: colors.textSecondary }]}>
                         Dismiss
                       </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                    </SoundPressable>
+                    <SoundPressable
                       disabled={actingOn === r.id}
                       onPress={() => handleRemoveAndBlock(r)}
                       style={[
@@ -253,7 +252,7 @@ export function AdminReportsScreen({ navigation }: any) {
                           </Text>
                         </>
                       )}
-                    </TouchableOpacity>
+                    </SoundPressable>
                   </View>
                 </View>
               </FadeInView>

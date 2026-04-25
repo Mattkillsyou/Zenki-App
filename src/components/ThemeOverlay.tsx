@@ -197,12 +197,8 @@ function Particles({ type, color, opacity }: { type: string; color: string; opac
   switch (type) {
     case 'matrix-rain':
       return <MatrixRain color={color} opacity={opacity} />;
-    case 'rain-drops':
-      return <RainDrops color={color} opacity={opacity} />;
     case 'static-noise':
       return <StaticNoise color={color} opacity={opacity} />;
-    case 'data-streams':
-      return <DataStreams color={color} opacity={opacity} />;
     case 'sheikah-runes':
       return <SheikahRunes color={color} opacity={opacity} />;
     case 'moon-sparkle':
@@ -277,58 +273,6 @@ function MatrixRain({ color, opacity }: { color: string; opacity: number }) {
   return null; // Rendered via DOM canvas
 }
 
-/* ─── Rain Drops ─────────────────────────────────────────────────────────── */
-
-function RainDrops({ color, opacity }: { color: string; opacity: number }) {
-  const drops = useMemo(() => {
-    return Array.from({ length: 50 }).map((_, i) => ({
-      key: i,
-      x: Math.random() * 100,
-      length: 20 + Math.random() * 40,
-      speed: 800 + Math.random() * 1200,
-      delay: Math.random() * 2000,
-    }));
-  }, []);
-
-  return (
-    <View style={[styles.fullScreen, { opacity }]}>
-      {drops.map((drop) => (
-        <RainDrop key={drop.key} drop={drop} color={color} />
-      ))}
-    </View>
-  );
-}
-
-function RainDrop({ drop, color }: { drop: any; color: string }) {
-  const translateY = useRef(new Animated.Value(-drop.length)).current;
-
-  useEffect(() => {
-    const animate = () => {
-      translateY.setValue(-drop.length);
-      Animated.timing(translateY, {
-        toValue: SCREEN_H + drop.length,
-        duration: drop.speed,
-        useNativeDriver: true,
-      }).start(() => animate());
-    };
-    const timer = setTimeout(animate, drop.delay);
-    return () => clearTimeout(timer);
-  }, []);
-
-  return (
-    <Animated.View
-      style={{
-        position: 'absolute',
-        left: `${drop.x}%`,
-        width: 1,
-        height: drop.length,
-        backgroundColor: color,
-        transform: [{ translateY }, { rotate: '3deg' }],
-      }}
-    />
-  );
-}
-
 /* ─── Static Noise ───────────────────────────────────────────────────────── */
 
 function StaticNoise({ color, opacity }: { color: string; opacity: number }) {
@@ -346,76 +290,6 @@ function StaticNoise({ color, opacity }: { color: string; opacity: number }) {
         },
       ]}
     />
-  );
-}
-
-/* ─── Data Streams (Ghost in the Shell) ──────────────────────────────────── */
-
-function DataStreams({ color, opacity }: { color: string; opacity: number }) {
-  const streams = useMemo(() => {
-    const items = [
-      '0x4F2A', '攻殻', '01101', 'FFAE', '機動隊', '0xB7C3', '10010',
-      '0x9D1E', 'メモリ', '11010', '0xA4F2', 'ゴースト', '01011',
-      '0x3B8C', 'サイバー', '10101', '0xE6D4', 'ネット', '00110',
-    ];
-    return Array.from({ length: 15 }).map((_, i) => ({
-      key: i,
-      text: items[i % items.length],
-      x: 5 + Math.random() * 90,
-      speed: 8000 + Math.random() * 12000,
-      delay: Math.random() * 5000,
-      size: 10 + Math.random() * 6,
-    }));
-  }, []);
-
-  return (
-    <View style={[styles.fullScreen, { opacity }]}>
-      {streams.map((s) => (
-        <DataStreamItem key={s.key} stream={s} color={color} />
-      ))}
-    </View>
-  );
-}
-
-function DataStreamItem({ stream, color }: { stream: any; color: string }) {
-  const translateY = useRef(new Animated.Value(SCREEN_H + 20)).current;
-  const fade = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const animate = () => {
-      translateY.setValue(SCREEN_H + 20);
-      fade.setValue(0);
-      Animated.parallel([
-        Animated.timing(translateY, {
-          toValue: -40,
-          duration: stream.speed,
-          useNativeDriver: true,
-        }),
-        Animated.sequence([
-          Animated.timing(fade, { toValue: 1, duration: stream.speed * 0.2, useNativeDriver: true }),
-          Animated.timing(fade, { toValue: 1, duration: stream.speed * 0.6, useNativeDriver: true }),
-          Animated.timing(fade, { toValue: 0, duration: stream.speed * 0.2, useNativeDriver: true }),
-        ]),
-      ]).start(() => animate());
-    };
-    const timer = setTimeout(animate, stream.delay);
-    return () => clearTimeout(timer);
-  }, []);
-
-  return (
-    <Animated.Text
-      style={{
-        position: 'absolute',
-        left: `${stream.x}%`,
-        fontSize: stream.size,
-        color,
-        opacity: fade,
-        transform: [{ translateY }],
-        fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
-      }}
-    >
-      {stream.text}
-    </Animated.Text>
   );
 }
 

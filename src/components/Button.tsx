@@ -1,12 +1,11 @@
 import React from 'react';
 import {
-  TouchableOpacity,
   Text,
   StyleSheet,
   ViewStyle,
   ActivityIndicator,
-  View,
-} from 'react-native';
+  View} from 'react-native';
+import { SoundPressable } from './SoundPressable';
 import { useTheme } from '../context/ThemeContext';
 import { typography, borderRadius, spacing, shadows } from '../theme';
 
@@ -48,7 +47,7 @@ export function Button({
       : '#FFFFFF';
 
   return (
-    <TouchableOpacity
+    <SoundPressable
       onPress={onPress}
       disabled={disabled || loading}
       activeOpacity={0.7}
@@ -66,7 +65,7 @@ export function Button({
       ) : (
         <Text style={[styles.text, styles[`${size}Text` as keyof typeof styles] as any, { color: textColor }]}>{title}</Text>
       )}
-    </TouchableOpacity>
+    </SoundPressable>
   );
 }
 

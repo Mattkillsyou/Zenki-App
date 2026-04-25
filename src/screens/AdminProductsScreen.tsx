@@ -4,15 +4,14 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Modal,
   Alert,
   Image,
   Switch,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -67,9 +66,9 @@ export function AdminProductsScreen({ navigation }: any) {
           <Text style={{ color: colors.textPrimary, marginTop: spacing.md, fontSize: 16, fontWeight: '600' }}>
             Admins only
           </Text>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }}>
+          <SoundPressable onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }}>
             <Text style={{ color: colors.gold, fontWeight: '600' }}>Go Back</Text>
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
       </SafeAreaView>
     );
@@ -162,12 +161,12 @@ export function AdminProductsScreen({ navigation }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.goBack()}
           style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Manage Products</Text>
         <View style={{ width: 36 }} />
       </View>
@@ -205,10 +204,10 @@ export function AdminProductsScreen({ navigation }: any) {
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
             YOUR PRODUCTS · {customProducts.length}
           </Text>
-          <TouchableOpacity onPress={openAddModal} style={[styles.addBtn, { backgroundColor: colors.gold }]}>
+          <SoundPressable onPress={openAddModal} style={[styles.addBtn, { backgroundColor: colors.gold }]}>
             <Ionicons name="add" size={16} color="#000" />
             <Text style={styles.addBtnText}>Add Product</Text>
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
 
         {customProducts.length === 0 ? (
@@ -229,12 +228,12 @@ export function AdminProductsScreen({ navigation }: any) {
                   {p.category} · ${p.memberPrice.toFixed(2)} · {p.inStock ? 'In stock' : 'Out of stock'}
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => openEditModal(p.id)} style={[styles.iconBtn, { backgroundColor: colors.backgroundElevated }]}>
+              <SoundPressable onPress={() => openEditModal(p.id)} style={[styles.iconBtn, { backgroundColor: colors.backgroundElevated }]}>
                 <Ionicons name="create-outline" size={18} color={colors.gold} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleDelete(p.id, p.name)} style={[styles.iconBtn, { backgroundColor: colors.backgroundElevated }]}>
+              </SoundPressable>
+              <SoundPressable onPress={() => handleDelete(p.id, p.name)} style={[styles.iconBtn, { backgroundColor: colors.backgroundElevated }]}>
                 <Ionicons name="trash-outline" size={18} color={colors.error} />
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           ))
         )}
@@ -249,9 +248,9 @@ export function AdminProductsScreen({ navigation }: any) {
               <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
                 {editingId ? 'Edit Product' : 'Add Product'}
               </Text>
-              <TouchableOpacity onPress={() => setModalOpen(false)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <SoundPressable onPress={() => setModalOpen(false)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                 <Ionicons name="close" size={24} color={colors.textMuted} />
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ flexGrow: 0 }}>
@@ -262,7 +261,7 @@ export function AdminProductsScreen({ navigation }: any) {
                 {CATEGORY_OPTIONS.map((c) => {
                   const active = form.category === c;
                   return (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={c}
                       onPress={() => setForm({ ...form, category: c })}
                       style={[
@@ -276,7 +275,7 @@ export function AdminProductsScreen({ navigation }: any) {
                       <Text style={{ color: active ? '#000' : colors.textSecondary, fontSize: 12, fontWeight: '700' }}>
                         {c}
                       </Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   );
                 })}
               </View>
@@ -339,7 +338,7 @@ export function AdminProductsScreen({ navigation }: any) {
               </View>
             </ScrollView>
 
-            <TouchableOpacity
+            <SoundPressable
               style={[styles.saveBtn, { backgroundColor: colors.gold, opacity: saving ? 0.6 : 1 }]}
               onPress={handleSave}
               disabled={saving}
@@ -347,7 +346,7 @@ export function AdminProductsScreen({ navigation }: any) {
               <Text style={styles.saveBtnText}>
                 {saving ? 'Saving…' : (editingId ? 'Update Product' : 'Add Product')}
               </Text>
-            </TouchableOpacity>
+            </SoundPressable>
           </View>
         </SafeAreaView>
       </Modal>

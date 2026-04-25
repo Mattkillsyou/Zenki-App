@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Alert, Platform,
-} from 'react-native';
+  View, Text, StyleSheet, ScrollView, Linking, Alert, Platform} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -33,7 +33,7 @@ const FAQS: Faq[] = [
   },
   {
     q: "Can I connect a heart-rate monitor?",
-    a: "Yes. Open HR Session from the Training grid on Home. Put on any Bluetooth chest strap that supports the standard HR service (Polar H10, Wahoo Tickr, Garmin HRM Pro, etc.), then tap Scan.",
+    a: "Yes. Open Start Workout from the Training grid on Home. Put on any Bluetooth chest strap that supports the standard HR service (Polar H10, Wahoo Tickr, Garmin HRM Pro, etc.), then tap Scan.",
   },
   {
     q: "How do I block or report someone?",
@@ -49,7 +49,7 @@ const FAQS: Faq[] = [
   },
   {
     q: "My heart-rate monitor won't pair.",
-    a: "Make sure the strap is wet (chest straps need skin contact), Bluetooth is on, and no other app is currently connected to the strap. If the HR Session screen says 'unavailable', restart the app. Web preview doesn't support Bluetooth.",
+    a: "Make sure the strap is wet (chest straps need skin contact), Bluetooth is on, and no other app is currently connected to the strap. If the Start Workout screen says 'unavailable', restart the app. Web preview doesn't support Bluetooth.",
   },
 ];
 
@@ -76,9 +76,9 @@ export function HelpScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <SoundPressable onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Help</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -88,7 +88,7 @@ export function HelpScreen({ navigation }: any) {
         {/* Quick actions */}
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>QUICK ACTIONS</Text>
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <TouchableOpacity style={styles.row} onPress={handleReplayTutorial} activeOpacity={0.7}>
+          <SoundPressable style={styles.row} onPress={handleReplayTutorial} activeOpacity={0.7}>
             <View style={[styles.rowIcon, { backgroundColor: colors.goldMuted }]}>
               <Ionicons name="play-circle-outline" size={20} color={colors.gold} />
             </View>
@@ -97,9 +97,9 @@ export function HelpScreen({ navigation }: any) {
               <Text style={[styles.rowSub, { color: colors.textMuted }]}>Show the first-run walkthrough again</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+          </SoundPressable>
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          <TouchableOpacity
+          <SoundPressable
             style={styles.row}
             onPress={() => navigation.navigate('ContactSupport')}
             activeOpacity={0.7}
@@ -112,9 +112,9 @@ export function HelpScreen({ navigation }: any) {
               <Text style={[styles.rowSub, { color: colors.textMuted }]}>In-app message to admin</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+          </SoundPressable>
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          <TouchableOpacity
+          <SoundPressable
             style={styles.row}
             onPress={() => Linking.openURL(mailto).catch(() => Alert.alert('Error', 'Could not open mail app.'))}
             activeOpacity={0.7}
@@ -127,7 +127,7 @@ export function HelpScreen({ navigation }: any) {
               <Text style={[styles.rowSub, { color: colors.textMuted }]}>{CONTACT_EMAIL}</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
 
         {/* FAQ */}
@@ -137,7 +137,7 @@ export function HelpScreen({ navigation }: any) {
             const expanded = expandedIdx === i;
             return (
               <View key={i}>
-                <TouchableOpacity
+                <SoundPressable
                   style={styles.faqRow}
                   onPress={() => setExpandedIdx(expanded ? null : i)}
                   activeOpacity={0.7}
@@ -151,7 +151,7 @@ export function HelpScreen({ navigation }: any) {
                     color={colors.textMuted}
                     style={{ marginLeft: 8 }}
                   />
-                </TouchableOpacity>
+                </SoundPressable>
                 {expanded && (
                   <Text style={[styles.faqA, { color: colors.textSecondary }]}>{f.a}</Text>
                 )}
@@ -164,7 +164,7 @@ export function HelpScreen({ navigation }: any) {
         {/* Legal / info */}
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>ABOUT</Text>
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <TouchableOpacity
+          <SoundPressable
             style={styles.row}
             onPress={() => Linking.openURL(PRIVACY_URL).catch(() => Alert.alert('Error', 'Could not open privacy policy.'))}
             activeOpacity={0.7}
@@ -174,9 +174,9 @@ export function HelpScreen({ navigation }: any) {
             </View>
             <Text style={[styles.rowTitle, { color: colors.textPrimary, flex: 1 }]}>Privacy Policy</Text>
             <Ionicons name="open-outline" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+          </SoundPressable>
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          <TouchableOpacity
+          <SoundPressable
             style={styles.row}
             onPress={() => Linking.openURL(SUPPORT_URL).catch(() => Alert.alert('Error', 'Could not open support page.'))}
             activeOpacity={0.7}
@@ -186,7 +186,7 @@ export function HelpScreen({ navigation }: any) {
             </View>
             <Text style={[styles.rowTitle, { color: colors.textPrimary, flex: 1 }]}>Full support page</Text>
             <Ionicons name="open-outline" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+          </SoundPressable>
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <View style={styles.row}>
             <View style={[styles.rowIcon, { backgroundColor: colors.goldMuted }]}>

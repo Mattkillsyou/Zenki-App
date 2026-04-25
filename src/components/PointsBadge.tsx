@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
+import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useMotion } from '../context/MotionContext';
@@ -70,9 +71,9 @@ export function PointsBadge({ points, compact, onPress }: PointsBadgeProps) {
 
   if (onPress) {
     return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={containerStyle}>
+      <SoundPressable onPress={onPress} activeOpacity={0.7} style={containerStyle}>
         {content}
-      </TouchableOpacity>
+      </SoundPressable>
     );
   }
   return <View style={containerStyle}>{content}</View>;

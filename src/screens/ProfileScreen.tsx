@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Image,
   Alert,
   ScrollView,
@@ -11,8 +10,8 @@ import {
   Pressable,
   TextInput,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -128,7 +127,17 @@ export function ProfileScreen({ navigation }: any) {
       >
         {/* ── Profile header (avatar + name + badge) ── */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => setShowPhotoMenu(!showPhotoMenu)} activeOpacity={0.7}>
+          {/* Edit Profile — pinned to the top-right corner */}
+          <SoundPressable
+            style={[styles.editProfileCornerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={() => setEditOpen(true)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="create-outline" size={14} color={colors.textSecondary} />
+            <Text style={[styles.editProfileText, { color: colors.textSecondary }]}>Edit</Text>
+          </SoundPressable>
+
+          <SoundPressable onPress={() => setShowPhotoMenu(!showPhotoMenu)} activeOpacity={0.7}>
             <View style={styles.avatarWrapper}>
               <View
                 style={[
@@ -148,23 +157,23 @@ export function ProfileScreen({ navigation }: any) {
                 <Ionicons name="camera" size={10} color="#000" />
               </View>
             </View>
-          </TouchableOpacity>
+          </SoundPressable>
 
           {showPhotoMenu && (
             <View style={[styles.photoMenu, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-              <TouchableOpacity style={styles.photoMenuItem} onPress={() => { setShowPhotoMenu(false); handleTakePhoto(); }}>
+              <SoundPressable style={styles.photoMenuItem} onPress={() => { setShowPhotoMenu(false); handleTakePhoto(); }}>
                 <Ionicons name="camera-outline" size={18} color={colors.textPrimary} />
                 <Text style={[styles.photoMenuText, { color: colors.textPrimary }]}>Take Photo</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.photoMenuItem} onPress={() => { setShowPhotoMenu(false); handlePickPhoto(); }}>
+              </SoundPressable>
+              <SoundPressable style={styles.photoMenuItem} onPress={() => { setShowPhotoMenu(false); handlePickPhoto(); }}>
                 <Ionicons name="images-outline" size={18} color={colors.textPrimary} />
                 <Text style={[styles.photoMenuText, { color: colors.textPrimary }]}>Choose from Library</Text>
-              </TouchableOpacity>
+              </SoundPressable>
               {profilePhoto && (
-                <TouchableOpacity style={styles.photoMenuItem} onPress={() => { setShowPhotoMenu(false); setProfilePhoto(null); }}>
+                <SoundPressable style={styles.photoMenuItem} onPress={() => { setShowPhotoMenu(false); setProfilePhoto(null); }}>
                   <Ionicons name="trash-outline" size={18} color={colors.error} />
                   <Text style={[styles.photoMenuText, { color: colors.error }]}>Remove Photo</Text>
-                </TouchableOpacity>
+                </SoundPressable>
               )}
             </View>
           )}
@@ -175,17 +184,15 @@ export function ProfileScreen({ navigation }: any) {
           {user?.nickname ? (
             <Text style={[styles.nickname, { color: colors.gold }]}>"{user.nickname}"</Text>
           ) : null}
+          {user?.funFact ? (
+            <Text style={[styles.bioText, { color: colors.textSecondary }]} numberOfLines={3}>
+              {user.funFact}
+            </Text>
+          ) : null}
           <View style={[styles.memberBadge, { backgroundColor: colors.redMuted }]}>
             <Ionicons name="diamond-outline" size={11} color={colors.red} />
             <Text style={[styles.memberType, { color: colors.red }]}>FOUNDING MEMBER</Text>
           </View>
-          <TouchableOpacity
-            style={[styles.editProfileBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={() => setEditOpen(true)}
-          >
-            <Ionicons name="create-outline" size={14} color={colors.textSecondary} />
-            <Text style={[styles.editProfileText, { color: colors.textSecondary }]}>Edit Profile</Text>
-          </TouchableOpacity>
         </View>
 
         {/* ── Zenki Card — creative space-filler showing level, XP, progress ── */}
@@ -283,7 +290,7 @@ export function ProfileScreen({ navigation }: any) {
             <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>VOUCHERS</Text>
             <View style={styles.voucherRow}>
               {freeDrinkCredits > 0 && (
-                <TouchableOpacity
+                <SoundPressable
                   activeOpacity={0.8}
                   onPress={() => setActiveVoucher('drink')}
                   style={[styles.voucherCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}
@@ -300,10 +307,10 @@ export function ProfileScreen({ navigation }: any) {
                       <Text style={styles.voucherCountText}>×{freeDrinkCredits}</Text>
                     </View>
                   )}
-                </TouchableOpacity>
+                </SoundPressable>
               )}
               {freeShirtCredits > 0 && (
-                <TouchableOpacity
+                <SoundPressable
                   activeOpacity={0.8}
                   onPress={() => setActiveVoucher('shirt')}
                   style={[styles.voucherCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}
@@ -320,7 +327,7 @@ export function ProfileScreen({ navigation }: any) {
                       <Text style={styles.voucherCountText}>×{freeShirtCredits}</Text>
                     </View>
                   )}
-                </TouchableOpacity>
+                </SoundPressable>
               )}
             </View>
           </>
@@ -332,7 +339,7 @@ export function ProfileScreen({ navigation }: any) {
           {THEME_OPTIONS.map((opt) => {
             const isActive = mode === opt.value;
             return (
-              <TouchableOpacity
+              <SoundPressable
                 key={opt.value}
                 style={[
                   styles.themeOption,
@@ -344,7 +351,7 @@ export function ProfileScreen({ navigation }: any) {
                 <Text style={[styles.themeOptionLabel, { color: isActive ? colors.gold : colors.textMuted }]}>
                   {opt.label}
                 </Text>
-              </TouchableOpacity>
+              </SoundPressable>
             );
           })}
         </View>
@@ -400,9 +407,9 @@ export function ProfileScreen({ navigation }: any) {
           <View style={[styles.editModal, { backgroundColor: colors.backgroundElevated, borderColor: colors.border }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Text style={[styles.editModalTitle, { color: colors.textPrimary }]}>Edit Profile</Text>
-              <TouchableOpacity onPress={() => setEditOpen(false)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <SoundPressable onPress={() => setEditOpen(false)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
                 <Ionicons name="close" size={24} color={colors.textMuted} />
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
 
             <Text style={[styles.editLabel, { color: colors.textMuted }]}>BIO</Text>
@@ -428,7 +435,7 @@ export function ProfileScreen({ navigation }: any) {
               maxLength={200}
             />
 
-            <TouchableOpacity
+            <SoundPressable
               style={[styles.editSaveBtn, { backgroundColor: colors.gold }]}
               onPress={() => {
                 // Save to AsyncStorage (lightweight persistence)
@@ -439,7 +446,7 @@ export function ProfileScreen({ navigation }: any) {
               }}
             >
               <Text style={styles.editSaveBtnText}>Save Changes</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           </View>
         </View>
       </Modal>
@@ -510,7 +517,7 @@ interface MenuTileProps {
 function MenuTile({ icon, label, sub, onPress, accent }: MenuTileProps) {
   const { colors } = useTheme();
   return (
-    <TouchableOpacity
+    <SoundPressable
       style={[
         styles.menuTile,
         {
@@ -526,7 +533,7 @@ function MenuTile({ icon, label, sub, onPress, accent }: MenuTileProps) {
       </View>
       <Text style={[styles.menuTileLabel, { color: colors.textPrimary }]} numberOfLines={1}>{label}</Text>
       <Text style={[styles.menuTileSub, { color: colors.textMuted }]} numberOfLines={1}>{sub}</Text>
-    </TouchableOpacity>
+    </SoundPressable>
   );
 }
 
@@ -890,6 +897,28 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     marginTop: 8,
+  },
+  bioText: {
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 18,
+    textAlign: 'center',
+    paddingHorizontal: 24,
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  editProfileCornerBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    zIndex: 10,
   },
   editProfileText: { fontSize: 12, fontWeight: '600' },
   editModal: {

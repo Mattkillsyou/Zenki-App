@@ -4,11 +4,10 @@ import {
   Text,
   StyleSheet,
   SectionList,
-  TouchableOpacity,
   Alert,
   Animated,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -137,12 +136,12 @@ export function SenpaiMemoryScreen({ navigation }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.goBack()}
           style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>
           {isSenpaiTheme ? "Senpai's Diary \u263D" : "Senpai's Memory"}
         </Text>
@@ -181,14 +180,14 @@ export function SenpaiMemoryScreen({ navigation }: any) {
             showsVerticalScrollIndicator={false}
             stickySectionHeadersEnabled={false}
           />
-          <TouchableOpacity
+          <SoundPressable
             style={[styles.clearBtn, { backgroundColor: colors.surface, borderColor: colors.error }]}
             onPress={handleClear}
             activeOpacity={0.7}
           >
             <Ionicons name="trash-outline" size={16} color={colors.error} />
             <Text style={[styles.clearBtnText, { color: colors.error }]}>Clear All Memories</Text>
-          </TouchableOpacity>
+          </SoundPressable>
         </>
       )}
     </SafeAreaView>

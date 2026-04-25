@@ -4,13 +4,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
   Modal,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -132,13 +131,13 @@ export function AdminMembersScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <SoundPressable onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Members</Text>
-        <TouchableOpacity onPress={openAddModal} style={styles.backButton}>
+        <SoundPressable onPress={openAddModal} style={styles.backButton}>
           <Ionicons name="add-circle-outline" size={26} color={colors.gold} />
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
 
       <KeyboardAvoidingView
@@ -149,7 +148,7 @@ export function AdminMembersScreen({ navigation }: any) {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
         {members.map((member) => (
           <View key={member.id} style={[styles.memberCard, { backgroundColor: colors.surface }]}>
-            <TouchableOpacity style={styles.memberMain} onPress={() => openEditModal(member)}>
+            <SoundPressable style={styles.memberMain} onPress={() => openEditModal(member)}>
               <View style={[styles.avatar, { backgroundColor: BELT_DISPLAY_COLORS[member.belt] }]}>
                 <Text style={[styles.avatarText, { color: member.belt === 'white' ? '#333' : '#FFF' }]}>
                   {member.firstName[0]}{member.lastName[0]}
@@ -175,21 +174,21 @@ export function AdminMembersScreen({ navigation }: any) {
                 </View>
               </View>
               <Ionicons name="create-outline" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
+            </SoundPressable>
 
             <View style={[styles.actionRow, { borderTopColor: colors.divider }]}>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => addStripe(member.id)}>
+              <SoundPressable style={styles.actionBtn} onPress={() => addStripe(member.id)}>
                 <Ionicons name="add-circle-outline" size={16} color={colors.gold} />
                 <Text style={[styles.actionLabel, { color: colors.gold }]}>+ Stripe</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => promoteBelt(member.id)}>
+              </SoundPressable>
+              <SoundPressable style={styles.actionBtn} onPress={() => promoteBelt(member.id)}>
                 <Ionicons name="arrow-up-circle-outline" size={16} color={colors.success} />
                 <Text style={[styles.actionLabel, { color: colors.success }]}>Promote</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => handleDelete(member)}>
+              </SoundPressable>
+              <SoundPressable style={styles.actionBtn} onPress={() => handleDelete(member)}>
                 <Ionicons name="trash-outline" size={16} color={colors.error} />
                 <Text style={[styles.actionLabel, { color: colors.error }]}>Remove</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           </View>
         ))}
@@ -201,9 +200,9 @@ export function AdminMembersScreen({ navigation }: any) {
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setModalVisible(false)}>
+            <SoundPressable onPress={() => setModalVisible(false)}>
               <Text style={[styles.modalCancel, { color: colors.textMuted }]}>Cancel</Text>
-            </TouchableOpacity>
+            </SoundPressable>
             <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
               {editingMember ? 'Edit Member' : 'Add Member'}
             </Text>
@@ -223,7 +222,7 @@ export function AdminMembersScreen({ navigation }: any) {
                 {BELT_ORDER.map((belt) => {
                   const isActive = form.belt === belt;
                   return (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={belt}
                       style={[
                         styles.beltChip,
@@ -235,7 +234,7 @@ export function AdminMembersScreen({ navigation }: any) {
                       <Text style={[styles.beltChipText, { color: isActive ? (belt === 'white' ? '#333' : '#FFF') : colors.textMuted }]}>
                         {BELT_LABELS[belt]}
                       </Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   );
                 })}
               </View>
@@ -248,7 +247,7 @@ export function AdminMembersScreen({ navigation }: any) {
                 {[0, 1, 2, 3, 4].map((s) => {
                   const isActive = form.stripes === s;
                   return (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={s}
                       style={[
                         styles.stripeChip,
@@ -259,14 +258,14 @@ export function AdminMembersScreen({ navigation }: any) {
                       <Text style={[styles.stripeChipText, { color: isActive ? colors.textInverse : colors.textMuted }]}>
                         {s}
                       </Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   );
                 })}
               </View>
             </View>
 
             {/* Admin Toggle */}
-            <TouchableOpacity
+            <SoundPressable
               style={[styles.toggleRow, { backgroundColor: colors.surfaceSecondary, borderColor: form.isAdmin ? colors.gold : 'transparent' }]}
               onPress={() => setForm((prev) => ({ ...prev, isAdmin: !prev.isAdmin }))}
             >
@@ -277,7 +276,7 @@ export function AdminMembersScreen({ navigation }: any) {
                 size={22}
                 color={form.isAdmin ? colors.gold : colors.textMuted}
               />
-            </TouchableOpacity>
+            </SoundPressable>
 
             <Button title={editingMember ? 'Save Changes' : 'Add Member'} onPress={handleSave} fullWidth size="lg" style={{ marginTop: spacing.lg }} />
             <View style={{ height: spacing.xxl * 2 }} />

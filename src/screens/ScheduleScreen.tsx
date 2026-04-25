@@ -4,9 +4,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  FlatList,
-} from 'react-native';
+  FlatList} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -134,28 +133,28 @@ export function ScheduleScreen({ navigation }: any) {
           {getMonthYear(weekOffset)}
         </Text>
         <View style={styles.headerRight}>
-          <TouchableOpacity
+          <SoundPressable
             onPress={() => setWeekOffset((w) => w - 1)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={[styles.navArrow, { backgroundColor: colors.surface }]}
           >
             <Ionicons name="chevron-back" size={18} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
           {weekOffset !== 0 && (
-            <TouchableOpacity
+            <SoundPressable
               onPress={() => { setWeekOffset(0); setSelectedDay(getTodayIndex()); }}
               style={[styles.todayBtn, { backgroundColor: colors.goldMuted, borderColor: colors.gold }]}
             >
               <Text style={[styles.todayBtnText, { color: colors.gold }]}>TODAY</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           )}
-          <TouchableOpacity
+          <SoundPressable
             onPress={() => setWeekOffset((w) => w + 1)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={[styles.navArrow, { backgroundColor: colors.surface }]}
           >
             <Ionicons name="chevron-forward" size={18} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
       </View>
 
@@ -165,7 +164,7 @@ export function ScheduleScreen({ navigation }: any) {
           const isSelected = index === selectedDay;
           const isToday = index === todayIdx;
           return (
-            <TouchableOpacity
+            <SoundPressable
               key={day}
               style={[
                 styles.dayItem,
@@ -189,7 +188,7 @@ export function ScheduleScreen({ navigation }: any) {
               ]}>
                 {weekDates[index]}
               </Text>
-            </TouchableOpacity>
+            </SoundPressable>
           );
         })}
       </View>
@@ -199,7 +198,7 @@ export function ScheduleScreen({ navigation }: any) {
         {FILTER_OPTIONS.map((f) => {
           const active = filter === f.key;
           return (
-            <TouchableOpacity
+            <SoundPressable
               key={f.key}
               style={[styles.filterChip, {
                 backgroundColor: active ? colors.gold : colors.surface,
@@ -210,7 +209,7 @@ export function ScheduleScreen({ navigation }: any) {
               <Text style={[styles.filterChipText, { color: active ? '#000' : colors.textSecondary }]}>
                 {f.label}
               </Text>
-            </TouchableOpacity>
+            </SoundPressable>
           );
         })}
       </View>

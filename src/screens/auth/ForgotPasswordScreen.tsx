@@ -4,9 +4,8 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
+  Alert} from 'react-native';
+import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -56,9 +55,9 @@ export function ForgotPasswordScreen({ navigation }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <SoundPressable onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
 
       <View style={styles.content}>

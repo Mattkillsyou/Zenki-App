@@ -4,13 +4,12 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   TextInput,
   Image,
   KeyboardAvoidingView,
   Platform,
-  Alert,
-} from 'react-native';
+  Alert} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -143,10 +142,10 @@ export function MessagesChatScreen({ navigation, route }: any) {
         style={{ flex: 1 }}
       >
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <SoundPressable onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <TouchableOpacity
+          </SoundPressable>
+          <SoundPressable
             style={styles.headerUser}
             onPress={() => otherUserId && navigation.navigate('UserProfile', { userId: otherUserId })}
             activeOpacity={0.7}
@@ -161,14 +160,14 @@ export function MessagesChatScreen({ navigation, route }: any) {
             <Text style={[styles.headerName, { color: colors.textPrimary }]} numberOfLines={1}>
               {otherUserName}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </SoundPressable>
+          <SoundPressable
             onPress={openChatMenu}
             style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             accessibilityLabel="More options"
           >
             <Ionicons name="ellipsis-horizontal" size={20} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
 
         <ReportModal
@@ -214,7 +213,7 @@ export function MessagesChatScreen({ navigation, route }: any) {
             multiline
             maxLength={2000}
           />
-          <TouchableOpacity
+          <SoundPressable
             onPress={handleSend}
             disabled={!draft.trim() || sending}
             style={[
@@ -223,7 +222,7 @@ export function MessagesChatScreen({ navigation, route }: any) {
             ]}
           >
             <Ionicons name="arrow-up" size={20} color={draft.trim() ? '#000' : colors.textMuted} />
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
         )}
       </KeyboardAvoidingView>

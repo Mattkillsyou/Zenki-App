@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-} from 'react-native';
+  View, Text, StyleSheet, ScrollView} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -62,12 +62,12 @@ export function AttendanceHistoryScreen({ navigation }: any) {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
+          <SoundPressable
             onPress={() => navigation.goBack()}
             style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5 }]}
           >
             <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Attendance</Text>
           <View style={styles.backButton} />
         </View>

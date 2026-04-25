@@ -4,12 +4,11 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
   ScrollView,
-  Image,
-} from 'react-native';
+  Image} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -98,7 +97,7 @@ export function CommunityScreen({ navigation }: any) {
             contentContainerStyle={styles.storiesRow}
           >
             {stories.map((s) => (
-              <TouchableOpacity
+              <SoundPressable
                 key={s.userId}
                 style={styles.storyItem}
                 onPress={() => handleUserPress(s.userId)}
@@ -121,7 +120,7 @@ export function CommunityScreen({ navigation }: any) {
                 >
                   {s.displayName.split(' ')[0]}
                 </Text>
-              </TouchableOpacity>
+              </SoundPressable>
             ))}
           </ScrollView>
         </View>
@@ -136,18 +135,18 @@ export function CommunityScreen({ navigation }: any) {
           <AnimatedLogo size={40} />
         </View>
         <View style={styles.topBarRight}>
-          <TouchableOpacity
+          <SoundPressable
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             onPress={() => navigation.navigate('UserSearch')}
           >
             <Ionicons name="search-outline" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <TouchableOpacity
+          </SoundPressable>
+          <SoundPressable
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             onPress={() => navigation.navigate('MessagesList')}
           >
             <Ionicons name="paper-plane-outline" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
       </View>
 
@@ -186,12 +185,12 @@ export function CommunityScreen({ navigation }: any) {
       )}
 
       {/* Floating Create Button */}
-      <TouchableOpacity
+      <SoundPressable
         style={[styles.fab, { backgroundColor: colors.gold }]}
         onPress={() => navigation.navigate('CreatePost')}
       >
         <Ionicons name="add" size={28} color="#000" />
-      </TouchableOpacity>
+      </SoundPressable>
     </SafeAreaView>
   );
 }

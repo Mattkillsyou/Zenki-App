@@ -3,6 +3,7 @@ import { Dimensions, View, ActivityIndicator } from 'react-native';
 import {
   createStackNavigator,
   StackCardInterpolationProps,
+  CardStyleInterpolators,
 } from '@react-navigation/stack';
 import { TabNavigator } from './TabNavigator';
 import { useAuth } from '../context/AuthContext';
@@ -62,7 +63,6 @@ import { BloodworkReportDetailScreen } from '../screens/BloodworkReportDetailScr
 import { WorkoutSessionScreen } from '../screens/WorkoutSessionScreen';
 import { SessionHistoryScreen } from '../screens/SessionHistoryScreen';
 import { ActivityTrackerScreen } from '../screens/ActivityTrackerScreen';
-import { WeeklyReportScreen } from '../screens/WeeklyReportScreen';
 import { BodyLabScreen } from '../screens/BodyLabScreen';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
 import { CreatePostScreen } from '../screens/CreatePostScreen';
@@ -115,79 +115,19 @@ const crossfadeTransition = {
 // The entering screen slides in from right with slight scale-up
 // The leaving screen fades/scales down slightly behind it
 // ─────────────────────────────────────────────────
-const pushInterpolator = ({
-  current,
-  next,
-  layouts,
-}: StackCardInterpolationProps) => {
-  const progress = current.progress;
-  const nextProgress = next?.progress;
-
-  // Entering card: slide from right + fade in + scale up from 94%
-  const translateX = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [layouts.screen.width * 0.4, 0],
-  });
-  const cardOpacity = progress.interpolate({
-    inputRange: [0, 0.4, 1],
-    outputRange: [0, 0.6, 1],
-  });
-  const cardScale = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [scale.pageEnter, 1],
-  });
-
-  // Behind card dims and scales down slightly when something pushes on top
-  const behindScale = nextProgress
-    ? nextProgress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [1, scale.pageExit],
-      })
-    : 1;
-  const behindOpacity = nextProgress
-    ? nextProgress.interpolate({
-        inputRange: [0, 1],
-        outputRange: [1, opacity.behindScreen],
-      })
-    : 1;
-
-  return {
-    cardStyle: {
-      opacity: cardOpacity,
-      transform: [
-        { translateX },
-        {
-          scale: nextProgress
-            ? // If this card is going behind, use behindScale
-              progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: [scale.pageEnter, 1],
-              })
-            : cardScale,
-        },
-      ],
-    },
-    overlayStyle: {
-      opacity: nextProgress
-        ? nextProgress.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0, 0.06],
-          })
-        : 0,
-    },
-  };
-};
-
+// Use React Navigation's built-in iOS horizontal interpolator. It's
+// battle-tested, GPU-accelerated where possible, and handles edge cases
+// like the back-gesture cancel correctly.
 const pushTransition = {
-  cardStyleInterpolator: pushInterpolator,
+  cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
   transitionSpec: {
     open: {
       animation: 'timing' as const,
-      config: { duration: duration.standard, easing: easing.decelerate },
+      config: { duration: 300, easing: easing.standard },
     },
     close: {
       animation: 'timing' as const,
-      config: { duration: duration.standard - 40, easing: easing.accelerate },
+      config: { duration: 300, easing: easing.standard },
     },
   },
   gestureDirection: 'horizontal' as const,
@@ -322,10 +262,9 @@ export function RootNavigator() {
       <Stack.Screen name="Bloodwork" component={withErrorBoundary(BloodworkScreen, 'Bloodwork')} options={pushTransition} />
       <Stack.Screen name="BloodworkUpload" component={withErrorBoundary(BloodworkUploadScreen, 'Bloodwork Upload')} options={modalTransition} />
       <Stack.Screen name="BloodworkReportDetail" component={withErrorBoundary(BloodworkReportDetailScreen, 'Bloodwork Detail')} options={pushTransition} />
-      <Stack.Screen name="WorkoutSession" component={withErrorBoundary(WorkoutSessionScreen, 'HR Session')} options={modalTransition} />
+      <Stack.Screen name="WorkoutSession" component={withErrorBoundary(WorkoutSessionScreen, 'Start Workout')} options={modalTransition} />
       <Stack.Screen name="SessionHistory" component={withErrorBoundary(SessionHistoryScreen, 'Session History')} options={pushTransition} />
       <Stack.Screen name="ActivityTracker" component={withErrorBoundary(ActivityTrackerScreen, 'GPS Tracker')} options={modalTransition} />
-      <Stack.Screen name="WeeklyReport" component={withErrorBoundary(WeeklyReportScreen, 'Weekly Report')} options={pushTransition} />
       <Stack.Screen name="BodyLab" component={withErrorBoundary(BodyLabScreen, 'Body Lab')} options={pushTransition} />
 
       {/* Community */}

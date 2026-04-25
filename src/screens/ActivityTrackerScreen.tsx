@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Alert, Platform, Linking,
-} from 'react-native';
+  View, Text, StyleSheet, Alert, Platform, Linking} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -24,6 +24,7 @@ import { pipboy } from '../theme/colors';
 import { pipboyFont } from '../theme/typography';
 import * as Location from 'expo-location';
 import { PipBoyMap } from '../components/PipBoyMap';
+import { useTheme } from '../context/ThemeContext';
 // Metro resolves this to PipBoyMap.web.tsx on web, PipBoyMap.native.tsx on
 // native — so the Leaflet dependency stays out of the native bundle.
 
@@ -52,6 +53,11 @@ function StatRow({ label, value, unit }: { label: string; value: string; unit?: 
 
 export function ActivityTrackerScreen({ navigation }: any) {
   const { user } = useAuth();
+  // Read current theme to gate the retro Pip-Boy effects.
+  // Only the Matrix theme should get the green CRT/scanline overlay; other
+  // themes show a clean map with no retro filter.
+  const { mode: themeMode } = useTheme();
+  const isMatrix = themeMode === 'matrix';
   const {
     isTracking, currentActivityType,
     liveDistance, liveDuration, livePace, liveElevGain, liveSpeed,
@@ -137,8 +143,9 @@ export function ActivityTrackerScreen({ navigation }: any) {
         </View>
       )}
 
-      {/* CRT scanline overlay (z-index 50 — above map, below UI) */}
-      {Platform.OS === 'web' && (
+      {/* CRT scanline overlay (z-index 50) — Matrix theme only.
+          Other themes get a clean map with no retro effects. */}
+      {Platform.OS === 'web' && isMatrix && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 }} pointerEvents="none">
           <div className="pipboy-scanlines" />
         </View>
@@ -146,15 +153,15 @@ export function ActivityTrackerScreen({ navigation }: any) {
 
       {/* ═══ Top: Pip-Boy tab bar ═══ */}
       <SafeAreaView style={pb.topBar} edges={['top']}>
-        <TouchableOpacity onPress={() => { if (!isTracking) navigation.goBack(); }} style={pb.backBtn}>
+        <SoundPressable onPress={() => { if (!isTracking) navigation.goBack(); }} style={pb.backBtn}>
           <Text style={pb.backText}>{'< BACK'}</Text>
-        </TouchableOpacity>
+        </SoundPressable>
 
         <View style={pb.tabBar}>
           {PIP_TABS.map((t) => (
-            <TouchableOpacity key={t} style={[pb.tab, t === activeTab && pb.tabActive]} onPress={() => setActiveTab(t)} activeOpacity={0.7}>
+            <SoundPressable key={t} style={[pb.tab, t === activeTab && pb.tabActive]} onPress={() => setActiveTab(t)} activeOpacity={0.7}>
               <Text style={[pb.tabText, t === activeTab && pb.tabTextActive]}>{t}</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           ))}
         </View>
       </SafeAreaView>
@@ -188,9 +195,9 @@ export function ActivityTrackerScreen({ navigation }: any) {
                 <StatRow label="SPEED" value={`${(liveSpeed * 2.237).toFixed(1)}`} unit="MPH" />
                 <StatRow label="COORDS" value={`${userLat.toFixed(4)},${userLng.toFixed(4)}`} />
               </View>
-              <TouchableOpacity style={pb.stopBtn} onPress={handleStop} activeOpacity={0.8}>
+              <SoundPressable style={pb.stopBtn} onPress={handleStop} activeOpacity={0.8}>
                 <Text style={pb.stopBtnText}>[ TERMINATE TRACKING ]</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </>
           ) : (
             <>
@@ -198,15 +205,15 @@ export function ActivityTrackerScreen({ navigation }: any) {
                 {ACTIVITY_TYPES.map((type) => {
                   const active = type === selectedType;
                   return (
-                    <TouchableOpacity key={type} style={[pb.typeChip, active && pb.typeChipActive]} onPress={() => setSelectedType(type)}>
+                    <SoundPressable key={type} style={[pb.typeChip, active && pb.typeChipActive]} onPress={() => setSelectedType(type)}>
                       <Text style={[pb.typeText, active && pb.typeTextActive]}>{GPS_ACTIVITY_LABELS[type].toUpperCase()}</Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   );
                 })}
               </View>
-              <TouchableOpacity style={pb.startBtn} onPress={handleStart} activeOpacity={0.8}>
+              <SoundPressable style={pb.startBtn} onPress={handleStart} activeOpacity={0.8}>
                 <Text style={pb.startBtnText}>[ INITIATE {GPS_ACTIVITY_LABELS[selectedType].toUpperCase()} ]</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </>
           )
         )}
@@ -252,37 +259,37 @@ export function ActivityTrackerScreen({ navigation }: any) {
             <Text style={pb.logEntry}>{'> ZENKI RADIO · SELECT SOURCE'}</Text>
             <Text style={pb.logEntry}>{' '}</Text>
 
-            <TouchableOpacity
+            <SoundPressable
               style={pb.radioBtn}
               onPress={() => Linking.openURL('https://open.spotify.com').catch(() => {})}
               activeOpacity={0.7}
             >
               <Text style={pb.radioBtnText}>{'  ♫  SPOTIFY          [ LAUNCH ]'}</Text>
-            </TouchableOpacity>
+            </SoundPressable>
 
-            <TouchableOpacity
+            <SoundPressable
               style={pb.radioBtn}
               onPress={() => Linking.openURL('https://music.apple.com').catch(() => {})}
               activeOpacity={0.7}
             >
               <Text style={pb.radioBtnText}>{'  ♫  APPLE MUSIC      [ LAUNCH ]'}</Text>
-            </TouchableOpacity>
+            </SoundPressable>
 
-            <TouchableOpacity
+            <SoundPressable
               style={pb.radioBtn}
               onPress={() => Linking.openURL('https://youtube.com/music').catch(() => {})}
               activeOpacity={0.7}
             >
               <Text style={pb.radioBtnText}>{'  ♫  YOUTUBE MUSIC    [ LAUNCH ]'}</Text>
-            </TouchableOpacity>
+            </SoundPressable>
 
-            <TouchableOpacity
+            <SoundPressable
               style={pb.radioBtn}
               onPress={() => Linking.openURL('https://soundcloud.com').catch(() => {})}
               activeOpacity={0.7}
             >
               <Text style={pb.radioBtnText}>{'  ♫  SOUNDCLOUD       [ LAUNCH ]'}</Text>
-            </TouchableOpacity>
+            </SoundPressable>
 
             <Text style={pb.logEntry}>{' '}</Text>
             <Text style={pb.logEntry}>{'> SIGNAL: STRONG'}</Text>

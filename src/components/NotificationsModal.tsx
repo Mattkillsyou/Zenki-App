@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Modal, Pressable } from 'react-native';
+import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAnnouncements } from '../context/AnnouncementContext';
@@ -149,12 +150,12 @@ export function NotificationsModal({
               <Text style={[styles.title, { color: colors.textPrimary }]}>
                 Notifications
               </Text>
-              <TouchableOpacity
+              <SoundPressable
                 onPress={onClose}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Ionicons name="close" size={18} color={colors.textMuted} />
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
 
             {items.length === 0 ? (
@@ -177,7 +178,7 @@ export function NotificationsModal({
                 style={{ maxHeight: 360 }}
               >
                 {items.map((item) => (
-                  <TouchableOpacity
+                  <SoundPressable
                     key={item.id}
                     style={[
                       styles.card,
@@ -211,7 +212,7 @@ export function NotificationsModal({
                         {item.body}
                       </Text>
                     </View>
-                  </TouchableOpacity>
+                  </SoundPressable>
                 ))}
               </ScrollView>
             )}

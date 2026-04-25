@@ -4,11 +4,10 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -104,9 +103,9 @@ export function SetPasswordScreen({ navigation, route }: any) {
         style={styles.inner}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <SoundPressable onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
 
         <View style={styles.content}>
@@ -130,14 +129,14 @@ export function SetPasswordScreen({ navigation, route }: any) {
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
               />
-              <TouchableOpacity
+              <SoundPressable
                 style={[styles.eyeButton, { backgroundColor: colors.surface }]}
                 onPress={() => setShowPassword(!showPassword)}
               >
                 <Text style={{ color: colors.textMuted, fontSize: 12 }}>
                   {showPassword ? 'HIDE' : 'SHOW'}
                 </Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           </View>
 

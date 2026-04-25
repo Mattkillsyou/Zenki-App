@@ -3,10 +3,9 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from './SoundPressable';
 import { palette } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { spacing, borderRadius } from '../theme/spacing';
@@ -121,13 +120,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           </View>
 
           {/* Retry button */}
-          <TouchableOpacity
+          <SoundPressable
             style={styles.compactRetryBtn}
             onPress={this.handleRetry}
             activeOpacity={0.7}
           >
             <Text style={styles.compactRetryText}>RETRY</Text>
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
 
         {retryCount >= 2 && (
@@ -177,7 +176,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           )}
 
           {/* Primary action: Retry */}
-          <TouchableOpacity
+          <SoundPressable
             style={[
               styles.retryButton,
               retryCount >= 3 && styles.retryButtonDisabled,
@@ -189,7 +188,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <Text style={styles.retryButtonText}>
               {retryCount >= 3 ? 'MAX RETRIES REACHED' : 'TRY AGAIN'}
             </Text>
-          </TouchableOpacity>
+          </SoundPressable>
 
           {/* Max retries hint */}
           {retryCount >= 3 && (
@@ -199,7 +198,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           )}
 
           {/* Toggle error details */}
-          <TouchableOpacity
+          <SoundPressable
             style={styles.detailsToggle}
             onPress={this.toggleDetails}
             activeOpacity={0.7}
@@ -207,7 +206,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <Text style={styles.detailsToggleText}>
               {showDetails ? 'HIDE DETAILS ▲' : 'SHOW DETAILS ▼'}
             </Text>
-          </TouchableOpacity>
+          </SoundPressable>
 
           {/* Error details panel */}
           {showDetails && (

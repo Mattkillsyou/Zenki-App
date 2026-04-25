@@ -4,13 +4,12 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  TouchableOpacity,
   ScrollView,
   Alert,
   Linking,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -41,9 +40,9 @@ export function ContactScreen({ navigation }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <SoundPressable onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
 
       <KeyboardAvoidingView
@@ -86,7 +85,7 @@ export function ContactScreen({ navigation }: any) {
 
             {/* Info cards */}
             <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
-              <TouchableOpacity
+              <SoundPressable
                 style={styles.infoRow}
                 onPress={() => Linking.openURL('tel:3235551997')}
               >
@@ -95,9 +94,9 @@ export function ContactScreen({ navigation }: any) {
                   <Text style={[styles.infoLabel, { color: colors.textMuted }]}>PHONE</Text>
                   <Text style={[styles.infoValue, { color: colors.textPrimary }]}>(323) 555-1997</Text>
                 </View>
-              </TouchableOpacity>
+              </SoundPressable>
               <View style={[styles.infoDivider, { backgroundColor: colors.divider }]} />
-              <TouchableOpacity
+              <SoundPressable
                 style={styles.infoRow}
                 onPress={() => Linking.openURL('mailto:info@zenkidojo.com')}
               >
@@ -106,7 +105,7 @@ export function ContactScreen({ navigation }: any) {
                   <Text style={[styles.infoLabel, { color: colors.textMuted }]}>EMAIL</Text>
                   <Text style={[styles.infoValue, { color: colors.textPrimary }]}>info@zenkidojo.com</Text>
                 </View>
-              </TouchableOpacity>
+              </SoundPressable>
               <View style={[styles.infoDivider, { backgroundColor: colors.divider }]} />
               <View style={styles.infoRow}>
                 <Ionicons name="location-outline" size={20} color={colors.gold} />

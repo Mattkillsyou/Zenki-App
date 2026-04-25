@@ -4,12 +4,11 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -68,12 +67,12 @@ export function EmployeeChecklistScreen({ navigation }: any) {
         <ScrollView contentContainerStyle={{ paddingBottom: 120 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
+            <SoundPressable
               onPress={() => navigation.goBack()}
               style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
               <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-            </TouchableOpacity>
+            </SoundPressable>
             <Text style={[styles.title, { color: colors.textPrimary }]}>Checklist</Text>
             <View style={styles.backBtn} />
           </View>
@@ -170,13 +169,13 @@ export function EmployeeChecklistScreen({ navigation }: any) {
               ))}
 
               {!showAddForm ? (
-                <TouchableOpacity
+                <SoundPressable
                   style={[styles.addBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
                   onPress={() => setShowAddForm(true)}
                 >
                   <Ionicons name="add-circle-outline" size={18} color={colors.info} />
                   <Text style={[styles.addBtnText, { color: colors.info }]}>Add a task</Text>
-                </TouchableOpacity>
+                </SoundPressable>
               ) : (
                 <View style={[styles.addForm, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <TextInput
@@ -202,7 +201,7 @@ export function EmployeeChecklistScreen({ navigation }: any) {
                     maxLength={200}
                   />
                   <View style={styles.formActions}>
-                    <TouchableOpacity
+                    <SoundPressable
                       style={[styles.cancelBtn, { borderColor: colors.border }]}
                       onPress={() => {
                         setShowAddForm(false);
@@ -211,13 +210,13 @@ export function EmployeeChecklistScreen({ navigation }: any) {
                       }}
                     >
                       <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                    </SoundPressable>
+                    <SoundPressable
                       style={[styles.saveBtn, { backgroundColor: colors.gold }]}
                       onPress={handleAdd}
                     >
                       <Text style={styles.saveBtnText}>Add</Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   </View>
                 </View>
               )}
@@ -246,11 +245,13 @@ function TaskRow({
 }) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.taskRow, { backgroundColor: colors.surface, borderColor: completed ? accentColor : colors.border }]}>
-      <TouchableOpacity
-        onPress={onToggle}
-        activeOpacity={0.7}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    <SoundPressable
+      onPress={onToggle}
+      activeOpacity={0.85}
+      style={[styles.taskRow, { backgroundColor: colors.surface, borderColor: completed ? accentColor : colors.border }]}
+    >
+      <View
+        pointerEvents="none"
         style={[
           styles.checkbox,
           {
@@ -260,8 +261,8 @@ function TaskRow({
         ]}
       >
         {completed && <Ionicons name="checkmark" size={16} color="#000" />}
-      </TouchableOpacity>
-      <TouchableOpacity onPress={onToggle} activeOpacity={0.7} style={{ flex: 1 }}>
+      </View>
+      <View style={{ flex: 1 }} pointerEvents="none">
         <Text
           style={[
             styles.taskTitle,
@@ -279,13 +280,13 @@ function TaskRow({
             {description}
           </Text>
         ) : null}
-      </TouchableOpacity>
+      </View>
       {onRemove && (
-        <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <SoundPressable onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
+        </SoundPressable>
       )}
-    </View>
+    </SoundPressable>
   );
 }
 

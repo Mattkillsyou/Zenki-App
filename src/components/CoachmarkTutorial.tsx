@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Modal, View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions,
-} from 'react-native';
+  Modal, View, Text, StyleSheet, Animated, Dimensions} from 'react-native';
+import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
@@ -115,7 +115,7 @@ export function CoachmarkTutorial({ visible, steps, onDone }: Props) {
         )}
 
         {/* ── Tap-to-advance layer BELOW the bubble, ABOVE the dim ── */}
-        <TouchableOpacity
+        <SoundPressable
           style={StyleSheet.absoluteFill}
           onPress={next}
           activeOpacity={1}
@@ -160,9 +160,9 @@ export function CoachmarkTutorial({ visible, steps, onDone }: Props) {
             <Text style={[styles.stepCounter, { color: colors.textMuted }]}>
               {stepIdx + 1} of {steps.length}
             </Text>
-            <TouchableOpacity onPress={finish} hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}>
+            <SoundPressable onPress={finish} hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}>
               <Text style={[styles.skipText, { color: colors.textMuted }]}>Skip</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           </View>
 
           <Text style={[styles.title, { color: colors.textPrimary }]}>{step.title}</Text>
@@ -170,20 +170,20 @@ export function CoachmarkTutorial({ visible, steps, onDone }: Props) {
 
           <View style={styles.navRow}>
             {stepIdx > 0 ? (
-              <TouchableOpacity onPress={back} style={styles.backBtn} activeOpacity={0.7}>
+              <SoundPressable onPress={back} style={styles.backBtn} activeOpacity={0.7}>
                 <Ionicons name="chevron-back" size={18} color={colors.textSecondary} />
                 <Text style={[styles.backText, { color: colors.textSecondary }]}>Back</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             ) : <View style={{ width: 64 }} />}
 
-            <TouchableOpacity
+            <SoundPressable
               onPress={next}
               activeOpacity={0.85}
               style={[styles.nextBtn, { backgroundColor: colors.gold || '#D4A017' }]}
             >
               <Text style={styles.nextText}>{isLast ? "Got it" : 'Next'}</Text>
               {!isLast && <Ionicons name="chevron-forward" size={16} color="#000" />}
-            </TouchableOpacity>
+            </SoundPressable>
           </View>
         </Animated.View>
       </View>

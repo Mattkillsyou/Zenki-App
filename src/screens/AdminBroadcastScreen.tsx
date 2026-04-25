@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  Alert, KeyboardAvoidingView, Platform, ActivityIndicator,
-} from 'react-native';
+  View, Text, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, ActivityIndicator} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -97,12 +96,12 @@ export function AdminBroadcastScreen({ navigation }: any) {
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
+            <SoundPressable
               onPress={() => navigation.goBack()}
               style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5 }]}
             >
               <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-            </TouchableOpacity>
+            </SoundPressable>
             <Text style={[styles.title, { color: colors.textPrimary }]}>Broadcast</Text>
             <View style={styles.backButton} />
           </View>
@@ -135,7 +134,7 @@ export function AdminBroadcastScreen({ navigation }: any) {
                 />
                 <Text style={[styles.charCount, { color: colors.textMuted }]}>{body.length}/200</Text>
 
-                <TouchableOpacity
+                <SoundPressable
                   style={[
                     styles.sendButton,
                     { backgroundColor: title && body && !sending ? colors.red : colors.surfaceSecondary },
@@ -153,7 +152,7 @@ export function AdminBroadcastScreen({ navigation }: any) {
                       </Text>
                     </>
                   )}
-                </TouchableOpacity>
+                </SoundPressable>
               </View>
             </View>
           </FadeInView>

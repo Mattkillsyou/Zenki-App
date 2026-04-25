@@ -171,7 +171,6 @@ export function SettingsScreen({ navigation }: any) {
   const [emailUpdates, setEmailUpdates] = useState(false);
   const [streakAlerts, setStreakAlerts] = useState(true);
   const [achievementAlerts, setAchievementAlerts] = useState(true);
-  const [weeklyReportNotif, setWeeklyReportNotif] = useState(true);
   const [calendarSync, setCalendarSync] = useState(false);
 
   // Load notification prefs
@@ -185,7 +184,6 @@ export function SettingsScreen({ navigation }: any) {
         if (p.emailUpdates !== undefined) setEmailUpdates(p.emailUpdates);
         if (p.streakAlerts !== undefined) setStreakAlerts(p.streakAlerts);
         if (p.achievementAlerts !== undefined) setAchievementAlerts(p.achievementAlerts);
-        if (p.weeklyReportNotif !== undefined) setWeeklyReportNotif(p.weeklyReportNotif);
         if (p.calendarSync !== undefined) setCalendarSync(p.calendarSync);
       } catch {}
     });
@@ -195,9 +193,9 @@ export function SettingsScreen({ navigation }: any) {
   useEffect(() => {
     AsyncStorage.setItem('@zenki_notif_prefs', JSON.stringify({
       pushEnabled, classReminders, emailUpdates, streakAlerts,
-      achievementAlerts, weeklyReportNotif, calendarSync,
+      achievementAlerts, calendarSync,
     }));
-  }, [pushEnabled, classReminders, emailUpdates, streakAlerts, achievementAlerts, weeklyReportNotif, calendarSync]);
+  }, [pushEnabled, classReminders, emailUpdates, streakAlerts, achievementAlerts, calendarSync]);
 
   // Preferences
   const [unitPref, setUnitPref] = useState<UnitPref>('imperial');
@@ -477,12 +475,6 @@ export function SettingsScreen({ navigation }: any) {
             'When you earn a new badge',
             achievementAlerts,
             setAchievementAlerts,
-          )}
-          {renderToggleRow(
-            'Weekly Report',
-            'Summary delivered every Monday',
-            weeklyReportNotif,
-            setWeeklyReportNotif,
           )}
           {renderToggleRow(
             'Email Updates',

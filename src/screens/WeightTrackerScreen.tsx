@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
   KeyboardAvoidingView,
@@ -13,6 +12,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,7 +27,7 @@ import { WeightUnit } from '../types/nutrition';
 import { computeTrendWeight, trendChange, kgToLbs } from '../utils/nutrition';
 import { WeightGoal } from '../types/activity';
 
-type ChartRange = '7D' | '30D' | '90D' | '1Y' | 'ALL';
+type ChartRange = '7D' | '14D' | '30D' | 'TOTAL';
 const WEIGHT_GOAL_KEY = '@zenki_weight_goal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -52,7 +52,7 @@ export function WeightTrackerScreen({ navigation }: any) {
   const [unit, setUnit] = useState<WeightUnit>('lb');
   const [note, setNote] = useState('');
 
-  const [chartRange, setChartRange] = useState<ChartRange>('ALL');
+  const [chartRange, setChartRange] = useState<ChartRange>('TOTAL');
   const [goalOpen, setGoalOpen] = useState(false);
   const [goalTarget, setGoalTarget] = useState('');
   const [goalDate, setGoalDate] = useState('');
@@ -100,21 +100,39 @@ export function WeightTrackerScreen({ navigation }: any) {
     return toDisplay(latestTrendKg - startTrendKg);
   }, [latestTrendKg, startTrendKg, trend, displayUnit]);
 
-  // Chart data — trend line filtered by range
+  // Helper — number of days in the active range (TOTAL = all)
+  const rangeDays: Record<ChartRange, number> = { '7D': 7, '14D': 14, '30D': 30, 'TOTAL': 99999 };
+
+  // Chart RAW data — actual weigh-ins as plotted points (one per log)
   const chartData = useMemo(() => {
-    if (trend.length < 2) return [];
-    let filtered = trend;
+    if (mine.length < 1) return [];
     const now = Date.now();
     const dayMs = 86400000;
-    const rangeDays: Record<ChartRange, number> = { '7D': 7, '30D': 30, '90D': 90, '1Y': 365, ALL: 99999 };
     const maxAge = rangeDays[chartRange] * dayMs;
-    filtered = trend.filter((t) => now - new Date(t.date).getTime() <= maxAge);
-    if (filtered.length < 2) filtered = trend.slice(-2);
-    return filtered.map((t, i) => ({
+    // mine is sorted newest-first; reverse to chronological for charting
+    const chronological = [...mine].reverse();
+    const filtered = chronological.filter((w) => now - new Date(w.date).getTime() <= maxAge);
+    const series = filtered.length >= 1 ? filtered : chronological.slice(-2);
+    return series.map((w, i) => ({
       x: i,
-      y: toDisplay(t.trendKg),
-      label: i === filtered.length - 1 ? formatDateShort(t.date) : undefined,
+      y: toDisplay(w.unit === 'kg' ? w.weight : w.weight / 2.20462),
+      label: i === 0 ? formatDateShort(w.date)
+        : i === series.length - 1 ? formatDateShort(w.date)
+        : undefined,
     }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mine, displayUnit, chartRange]);
+
+  // Chart TREND OVERLAY — smoothed rolling average for the same range
+  const chartTrendOverlay = useMemo(() => {
+    if (trend.length < 2) return [];
+    const now = Date.now();
+    const dayMs = 86400000;
+    const maxAge = rangeDays[chartRange] * dayMs;
+    const filtered = trend.filter((t) => now - new Date(t.date).getTime() <= maxAge);
+    const series = filtered.length >= 2 ? filtered : trend.slice(-2);
+    return series.map((t, i) => ({ x: i, y: toDisplay(t.trendKg) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trend, displayUnit, chartRange]);
 
   // Weight stats
@@ -220,12 +238,12 @@ export function WeightTrackerScreen({ navigation }: any) {
         <ScrollView contentContainerStyle={{ paddingBottom: 120 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
+            <SoundPressable
               onPress={() => navigation.goBack()}
               style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
               <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-            </TouchableOpacity>
+            </SoundPressable>
             <Text style={[styles.title, { color: colors.textPrimary }]}>Weight</Text>
             <View style={styles.backBtn} />
           </View>
@@ -309,10 +327,19 @@ export function WeightTrackerScreen({ navigation }: any) {
             <FadeInView delay={60}>
               <View style={[styles.chartWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <Text style={[styles.sectionLabel, { color: colors.textMuted, marginBottom: 0 }]}>TREND (smoothed)</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ width: 10, height: 2, backgroundColor: colors.gold, borderRadius: 1 }} />
+                      <Text style={[styles.sectionLabel, { color: colors.textMuted, marginBottom: 0, fontSize: 9 }]}>WEIGH-INS</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ width: 10, height: 2, backgroundColor: colors.textMuted, borderRadius: 1, opacity: 0.85 }} />
+                      <Text style={[styles.sectionLabel, { color: colors.textMuted, marginBottom: 0, fontSize: 9 }]}>TREND</Text>
+                    </View>
+                  </View>
                   <View style={styles.rangeRow}>
-                    {(['7D', '30D', '90D', '1Y', 'ALL'] as ChartRange[]).map((r) => (
-                      <TouchableOpacity
+                    {(['7D', '14D', '30D', 'TOTAL'] as ChartRange[]).map((r) => (
+                      <SoundPressable
                         key={r}
                         onPress={() => setChartRange(r)}
                         style={[
@@ -323,12 +350,14 @@ export function WeightTrackerScreen({ navigation }: any) {
                         <Text style={[styles.rangeBtnText, { color: chartRange === r ? '#000' : colors.textMuted }]}>
                           {r}
                         </Text>
-                      </TouchableOpacity>
+                      </SoundPressable>
                     ))}
                   </View>
                 </View>
                 <LineChart
                   data={chartData}
+                  trendOverlay={chartTrendOverlay}
+                  trendOverlayColor={colors.textMuted}
                   width={SCREEN_WIDTH - spacing.lg * 2 - spacing.md * 2}
                   height={160}
                   color={colors.gold}
@@ -336,6 +365,15 @@ export function WeightTrackerScreen({ navigation }: any) {
                   formatY={(v) => v.toFixed(0)}
                 />
               </View>
+            </FadeInView>
+          )}
+
+          {/* Monthly logged-day calendar */}
+          {mine.length > 0 && (
+            <FadeInView delay={75}>
+              <WeightLogCalendar
+                loggedDates={new Set(mine.map((w) => w.date))}
+              />
             </FadeInView>
           )}
 
@@ -415,14 +453,14 @@ export function WeightTrackerScreen({ navigation }: any) {
           {/* Set Goal button */}
           {!savedGoal && (
             <FadeInView delay={95}>
-              <TouchableOpacity
+              <SoundPressable
                 style={[styles.setGoalBtn, { backgroundColor: colors.goldMuted, borderColor: colors.gold + '30' }]}
                 onPress={() => setGoalOpen(true)}
                 activeOpacity={0.7}
               >
                 <Ionicons name="flag-outline" size={18} color={colors.gold} />
                 <Text style={[styles.setGoalText, { color: colors.gold }]}>Set Weight Goal</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </FadeInView>
           )}
 
@@ -442,7 +480,7 @@ export function WeightTrackerScreen({ navigation }: any) {
                 />
                 <View style={[styles.unitToggle, { backgroundColor: colors.background, borderColor: colors.border }]}>
                   {(['lb', 'kg'] as WeightUnit[]).map((u) => (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={u}
                       onPress={() => setUnit(u)}
                       style={[
@@ -455,7 +493,7 @@ export function WeightTrackerScreen({ navigation }: any) {
                         fontWeight: '800',
                         fontSize: 14,
                       }}>{u}</Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   ))}
                 </View>
               </View>
@@ -468,14 +506,14 @@ export function WeightTrackerScreen({ navigation }: any) {
                 onChangeText={setNote}
               />
 
-              <TouchableOpacity
+              <SoundPressable
                 onPress={handleSave}
                 activeOpacity={0.85}
                 style={[styles.saveBtn, { backgroundColor: colors.gold }]}
               >
                 <Ionicons name="add-circle" size={18} color="#000" />
                 <Text style={styles.saveBtnText}>Save weigh-in</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           </FadeInView>
 
@@ -498,9 +536,9 @@ export function WeightTrackerScreen({ navigation }: any) {
                     </Text>
                     {!!w.note && <Text style={[styles.historyNote, { color: colors.textSecondary }]}>{w.note}</Text>}
                   </View>
-                  <TouchableOpacity onPress={() => handleDelete(w.id)} hitSlop={10} style={styles.deleteBtn}>
+                  <SoundPressable onPress={() => handleDelete(w.id)} hitSlop={10} style={styles.deleteBtn}>
                     <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-                  </TouchableOpacity>
+                  </SoundPressable>
                 </View>
               ))
             )}
@@ -538,18 +576,18 @@ export function WeightTrackerScreen({ navigation }: any) {
             </Text>
 
             <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-              <TouchableOpacity
+              <SoundPressable
                 onPress={() => setGoalOpen(false)}
                 style={[styles.modalBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
               >
                 <Text style={[styles.modalBtnText, { color: colors.textPrimary }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </SoundPressable>
+              <SoundPressable
                 onPress={handleSaveGoal}
                 style={[styles.modalBtn, { backgroundColor: colors.gold, borderColor: colors.gold }]}
               >
                 <Text style={[styles.modalBtnText, { color: '#000' }]}>Save</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           </Pressable>
         </Pressable>
@@ -840,4 +878,107 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalBtnText: { fontSize: 14, fontWeight: '800' },
+  // ── Calendar ──
+  calCard: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+  calNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  calNavBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  calMonthLabel: { fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
+  calWeekRow: { flexDirection: 'row', marginBottom: 4 },
+  calWeekDay: { flex: 1, textAlign: 'center', fontSize: 9, fontWeight: '700', letterSpacing: 0.6 },
+  calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calCell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
+  calCellInner: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  calDayText: { fontSize: 11, fontWeight: '600' },
+  calDot: { position: 'absolute', bottom: 2, width: 4, height: 4, borderRadius: 2 },
 });
+
+// ─────────────────────────────────────────────────
+// Monthly weight-log calendar — gold dot on days with a log
+// ─────────────────────────────────────────────────
+function WeightLogCalendar({ loggedDates }: { loggedDates: Set<string> }) {
+  const { colors } = useTheme();
+  const [cursor, setCursor] = React.useState(() => {
+    const d = new Date();
+    return { year: d.getFullYear(), month: d.getMonth() };
+  });
+
+  const monthStart = new Date(cursor.year, cursor.month, 1);
+  const monthLabel = monthStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const daysInMonth = new Date(cursor.year, cursor.month + 1, 0).getDate();
+  const startWeekday = monthStart.getDay(); // 0 = Sun
+
+  // Build cells: leading blanks + day numbers
+  const cells: Array<number | null> = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  // Pad to multiple of 7
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const todayIso = new Date().toISOString().split('T')[0];
+
+  const goPrev = () => {
+    setCursor((c) => c.month === 0
+      ? { year: c.year - 1, month: 11 }
+      : { year: c.year, month: c.month - 1 });
+  };
+  const goNext = () => {
+    setCursor((c) => c.month === 11
+      ? { year: c.year + 1, month: 0 }
+      : { year: c.year, month: c.month + 1 });
+  };
+
+  return (
+    <View style={[styles.calCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.calNav}>
+        <SoundPressable onPress={goPrev} style={[styles.calNavBtn, { backgroundColor: colors.surfaceSecondary }]}>
+          <Ionicons name="chevron-back" size={16} color={colors.textPrimary} />
+        </SoundPressable>
+        <Text style={[styles.calMonthLabel, { color: colors.textPrimary }]}>{monthLabel}</Text>
+        <SoundPressable onPress={goNext} style={[styles.calNavBtn, { backgroundColor: colors.surfaceSecondary }]}>
+          <Ionicons name="chevron-forward" size={16} color={colors.textPrimary} />
+        </SoundPressable>
+      </View>
+      <View style={styles.calWeekRow}>
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((w, i) => (
+          <Text key={i} style={[styles.calWeekDay, { color: colors.textMuted }]}>{w}</Text>
+        ))}
+      </View>
+      <View style={styles.calGrid}>
+        {cells.map((day, i) => {
+          if (day == null) {
+            return <View key={i} style={styles.calCell} />;
+          }
+          const mm = String(cursor.month + 1).padStart(2, '0');
+          const dd = String(day).padStart(2, '0');
+          const iso = `${cursor.year}-${mm}-${dd}`;
+          const isLogged = loggedDates.has(iso);
+          const isToday = iso === todayIso;
+          return (
+            <View key={i} style={styles.calCell}>
+              <View style={[
+                styles.calCellInner,
+                isToday && { borderWidth: 1, borderColor: colors.gold },
+                isLogged && { backgroundColor: colors.gold + '22' },
+              ]}>
+                <Text style={[
+                  styles.calDayText,
+                  { color: isLogged ? colors.gold : colors.textPrimary },
+                ]}>
+                  {day}
+                </Text>
+              </View>
+              {isLogged && (
+                <View style={[styles.calDot, { backgroundColor: colors.gold }]} />
+              )}
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity, Image,
-  Alert, ActivityIndicator,
-} from 'react-native';
+  View, Text, StyleSheet, FlatList, Image,
+  Alert, ActivityIndicator} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -76,12 +76,12 @@ export function BlockedUsersScreen({ navigation }: any) {
         <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
           {item.displayName}
         </Text>
-        <TouchableOpacity
+        <SoundPressable
           style={[styles.unblockBtn, { borderColor: colors.border, backgroundColor: colors.backgroundElevated }]}
           onPress={() => handleUnblock(item)}
         >
           <Text style={[styles.unblockText, { color: colors.textPrimary }]}>Unblock</Text>
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
     );
   };
@@ -89,9 +89,9 @@ export function BlockedUsersScreen({ navigation }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <SoundPressable onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Blocked Users</Text>
         <View style={{ width: 40 }} />
       </View>

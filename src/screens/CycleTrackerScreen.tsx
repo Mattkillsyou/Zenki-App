@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
-  Alert, Switch, RefreshControl, KeyboardAvoidingView, Platform,
-} from 'react-native';
+  View, Text, StyleSheet, ScrollView, TextInput,
+  Alert, Switch, RefreshControl, KeyboardAvoidingView, Platform} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -70,12 +70,12 @@ export function CycleTrackerScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.goBack()}
           style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Cycle Tracker</Text>
         <View style={{ width: 36 }} />
       </View>
@@ -89,14 +89,14 @@ export function CycleTrackerScreen({ navigation }: any) {
         ]).map((t) => {
           const active = tab === t.key;
           return (
-            <TouchableOpacity
+            <SoundPressable
               key={t.key}
               style={[styles.tab, active && { backgroundColor: colors.gold }]}
               onPress={() => setTab(t.key)}
             >
               <Ionicons name={t.icon} size={16} color={active ? '#000' : colors.textMuted} />
               <Text style={[styles.tabLabel, { color: active ? '#000' : colors.textMuted }]}>{t.label}</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           );
         })}
       </View>
@@ -135,13 +135,13 @@ export function CycleTrackerScreen({ navigation }: any) {
             {/* End current period button */}
             {currentPeriod && (
               <FadeInView delay={40}>
-                <TouchableOpacity
+                <SoundPressable
                   style={[styles.endPeriodBtn, { backgroundColor: PHASE_COLORS.menstrual + '20', borderColor: PHASE_COLORS.menstrual }]}
                   onPress={handleEndPeriod}
                 >
                   <Ionicons name="checkmark-circle" size={20} color={PHASE_COLORS.menstrual} />
                   <Text style={[styles.endPeriodText, { color: PHASE_COLORS.menstrual }]}>End Current Period</Text>
-                </TouchableOpacity>
+                </SoundPressable>
               </FadeInView>
             )}
 
@@ -165,7 +165,7 @@ export function CycleTrackerScreen({ navigation }: any) {
                     const active = flow === f;
                     const flowColors = { light: '#FFB6C1', medium: '#E63946', heavy: '#9B1520' };
                     return (
-                      <TouchableOpacity
+                      <SoundPressable
                         key={f}
                         style={[styles.flowChip, {
                           backgroundColor: active ? flowColors[f] : colors.surfaceSecondary,
@@ -176,7 +176,7 @@ export function CycleTrackerScreen({ navigation }: any) {
                         <Text style={[styles.flowChipText, { color: active ? '#FFF' : colors.textSecondary }]}>
                           {f.charAt(0).toUpperCase() + f.slice(1)}
                         </Text>
-                      </TouchableOpacity>
+                      </SoundPressable>
                     );
                   })}
                 </View>
@@ -186,7 +186,7 @@ export function CycleTrackerScreen({ navigation }: any) {
                   {(Object.keys(SYMPTOM_LABELS) as CycleSymptom[]).map((s) => {
                     const active = symptoms.includes(s);
                     return (
-                      <TouchableOpacity
+                      <SoundPressable
                         key={s}
                         style={[styles.symptomChip, {
                           backgroundColor: active ? colors.gold : colors.surfaceSecondary,
@@ -198,7 +198,7 @@ export function CycleTrackerScreen({ navigation }: any) {
                         <Text style={[styles.symptomText, { color: active ? '#000' : colors.textSecondary }]}>
                           {SYMPTOM_LABELS[s]}
                         </Text>
-                      </TouchableOpacity>
+                      </SoundPressable>
                     );
                   })}
                 </View>
@@ -214,13 +214,13 @@ export function CycleTrackerScreen({ navigation }: any) {
                   maxLength={200}
                 />
 
-                <TouchableOpacity
+                <SoundPressable
                   style={[styles.logBtn, { backgroundColor: PHASE_COLORS.menstrual }]}
                   onPress={handleLogPeriod}
                 >
                   <Ionicons name="add-circle" size={18} color="#FFF" />
                   <Text style={styles.logBtnText}>Log Period</Text>
-                </TouchableOpacity>
+                </SoundPressable>
               </View>
             </FadeInView>
 
@@ -245,7 +245,7 @@ export function CycleTrackerScreen({ navigation }: any) {
                         {entry.flowIntensity} flow · {entry.symptoms.length} symptom{entry.symptoms.length !== 1 ? 's' : ''}
                       </Text>
                     </View>
-                    <TouchableOpacity
+                    <SoundPressable
                       onPress={() => Alert.alert('Delete?', 'Remove this entry?', [
                         { text: 'Cancel', style: 'cancel' },
                         { text: 'Delete', style: 'destructive', onPress: () => removeEntry(entry.id) },
@@ -253,7 +253,7 @@ export function CycleTrackerScreen({ navigation }: any) {
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
                       <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
-                    </TouchableOpacity>
+                    </SoundPressable>
                   </View>
                 ))
               )}
@@ -402,19 +402,19 @@ function CycleCalendar({ entries, cycleInfo }: { entries: PeriodEntry[]; cycleIn
   return (
     <View style={[styles.calCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.calNav}>
-        <TouchableOpacity onPress={() => setMonth((p) => {
+        <SoundPressable onPress={() => setMonth((p) => {
           const d = new Date(p.year, p.month - 1, 1);
           return { year: d.getFullYear(), month: d.getMonth() };
         })}>
           <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.calTitle, { color: colors.textPrimary }]}>{calendarData.monthLabel}</Text>
-        <TouchableOpacity onPress={() => setMonth((p) => {
+        <SoundPressable onPress={() => setMonth((p) => {
           const d = new Date(p.year, p.month + 1, 1);
           return { year: d.getFullYear(), month: d.getMonth() };
         })}>
           <Ionicons name="chevron-forward" size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
 
       <View style={styles.calWeekRow}>

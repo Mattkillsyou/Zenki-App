@@ -3,13 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Image,
   ActivityIndicator,
   ScrollView,
   Alert,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -153,12 +152,12 @@ export function PhotoFoodScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.goBack()}
           style={[styles.headerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Ionicons name="close" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Photo logging</Text>
         <View style={styles.headerBtn} />
       </View>
@@ -176,22 +175,22 @@ export function PhotoFoodScreen({ navigation }: any) {
             </View>
 
             <View style={{ flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, marginTop: spacing.md }}>
-              <TouchableOpacity
+              <SoundPressable
                 activeOpacity={0.85}
                 onPress={takePhoto}
                 style={[styles.bigBtn, { backgroundColor: colors.gold }]}
               >
                 <Ionicons name="camera" size={26} color="#000" />
                 <Text style={styles.bigBtnText}>Take photo</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </SoundPressable>
+              <SoundPressable
                 activeOpacity={0.85}
                 onPress={pickFromLibrary}
                 style={[styles.bigBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}
               >
                 <Ionicons name="images" size={26} color={colors.textPrimary} />
                 <Text style={[styles.bigBtnText, { color: colors.textPrimary }]}>Pick photo</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           </FadeInView>
         )}
@@ -200,20 +199,20 @@ export function PhotoFoodScreen({ navigation }: any) {
         {phase.kind === 'captured' && (
           <FadeInView>
             <Image source={{ uri: phase.uri }} style={styles.preview} />
-            <TouchableOpacity
+            <SoundPressable
               activeOpacity={0.85}
               onPress={analyze}
               style={[styles.cta, { backgroundColor: colors.gold }]}
             >
               <Ionicons name="sparkles" size={20} color="#000" />
               <Text style={styles.ctaText}>Analyze with AI</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            </SoundPressable>
+            <SoundPressable
               onPress={() => setPhase({ kind: 'idle' })}
               style={{ alignSelf: 'center', marginTop: spacing.md }}
             >
               <Text style={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>Retake</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           </FadeInView>
         )}
 
@@ -241,7 +240,7 @@ export function PhotoFoodScreen({ navigation }: any) {
             {phase.foods.map((f, i) => {
               const selected = phase.selected.has(i);
               return (
-                <TouchableOpacity
+                <SoundPressable
                   key={i}
                   activeOpacity={0.85}
                   onPress={() => toggleSelection(i)}
@@ -271,17 +270,17 @@ export function PhotoFoodScreen({ navigation }: any) {
                       {f.macros.calories} cal · {f.macros.protein}p · {f.macros.carbs}c · {f.macros.fat}f
                     </Text>
                   </View>
-                </TouchableOpacity>
+                </SoundPressable>
               );
             })}
-            <TouchableOpacity
+            <SoundPressable
               activeOpacity={0.85}
               onPress={logSelected}
               style={[styles.cta, { backgroundColor: colors.gold }]}
             >
               <Ionicons name="add-circle" size={20} color="#000" />
               <Text style={styles.ctaText}>Log {phase.selected.size} item{phase.selected.size === 1 ? '' : 's'}</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           </FadeInView>
         )}
 
@@ -293,13 +292,13 @@ export function PhotoFoodScreen({ navigation }: any) {
               <Ionicons name="alert-circle-outline" size={32} color={colors.gold} />
               <Text style={[styles.errorText, { color: colors.textPrimary }]}>{phase.message}</Text>
             </View>
-            <TouchableOpacity
+            <SoundPressable
               activeOpacity={0.85}
               onPress={() => setPhase({ kind: 'idle' })}
               style={[styles.cta, { backgroundColor: colors.gold }]}
             >
               <Text style={styles.ctaText}>Try again</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           </FadeInView>
         )}
       </ScrollView>

@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
@@ -22,7 +23,7 @@ export function AchievementBadge({ achievement, size = 56, onPress }: Achievemen
   const diff = difficultyColor(achievement.difficulty);
 
   return (
-    <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={{ alignItems: 'center' }}>
+    <SoundPressable activeOpacity={0.7} onPress={onPress} style={{ alignItems: 'center' }}>
       <View
         style={[
           styles.circle,
@@ -48,7 +49,7 @@ export function AchievementBadge({ achievement, size = 56, onPress }: Achievemen
           </View>
         )}
       </View>
-    </TouchableOpacity>
+    </SoundPressable>
   );
 }
 

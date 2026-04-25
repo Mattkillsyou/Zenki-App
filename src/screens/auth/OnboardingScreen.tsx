@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
-  Image, Animated, Dimensions, KeyboardAvoidingView, Platform,
-} from 'react-native';
+  View, Text, StyleSheet, TextInput, ScrollView,
+  Image, Animated, Dimensions, KeyboardAvoidingView, Platform} from 'react-native';
+import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -12,6 +12,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useMotion } from '../../context/MotionContext';
 import { useAuth } from '../../context/AuthContext';
 import { useNutrition } from '../../context/NutritionContext';
+import { useHealthKit } from '../../context/HealthKitContext';
 import { typography, spacing, borderRadius } from '../../theme';
 import { BELT_ORDER, BELT_DISPLAY_COLORS, BELT_LABELS, BeltLevel, Member } from '../../data/members';
 import { suggestNickname } from '../../utils/nickname';
@@ -140,9 +141,14 @@ export function OnboardingScreen({ navigation, route }: any) {
   const { reduceMotion } = useMotion();
   const { createAccount } = useAuth();
   const { saveProfile, addWeight, updateGoals } = useNutrition();
+  const healthKit = useHealthKit();
   const [step, setStep] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
   const [locationGranted, setLocationGranted] = useState(false);
+  const [healthGranted, setHealthGranted] = useState(false);
+  const [notificationsGranted, setNotificationsGranted] = useState(false);
+  const [cameraGranted, setCameraGranted] = useState(false);
+  const [photoLibraryGranted, setPhotoLibraryGranted] = useState(false);
   const [data, setData] = useState<OnboardingData>({
     email: '', password: '', confirmPassword: '',
     firstName: '', lastName: '', phone: '', photo: null, bio: '', funFact: '', nickname: '',
@@ -350,6 +356,55 @@ export function OnboardingScreen({ navigation, route }: any) {
     setLocationGranted(status === 'granted');
   };
 
+  const requestHealthPermission = async () => {
+    if (Platform.OS !== 'ios') {
+      // Android / web: HealthKit is iOS-only. Mark as "skipped" silently.
+      return;
+    }
+    if (!healthKit.available) {
+      // Native module not linked (Expo Go) — show a checkmark anyway so the
+      // user can move on; real grant happens after the dev build.
+      setHealthGranted(true);
+      return;
+    }
+    healthKit.setEnabled(true);
+    const ok = await healthKit.authorize();
+    setHealthGranted(ok);
+  };
+
+  const requestNotificationsPermission = async () => {
+    if (Platform.OS === 'web') {
+      setNotificationsGranted(true);
+      return;
+    }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const Notifications = require('expo-notifications');
+      const { status } = await Notifications.requestPermissionsAsync();
+      setNotificationsGranted(status === 'granted');
+    } catch {
+      setNotificationsGranted(false);
+    }
+  };
+
+  const requestCameraPermission = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      setCameraGranted(status === 'granted');
+    } catch {
+      setCameraGranted(false);
+    }
+  };
+
+  const requestPhotoLibraryPermission = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      setPhotoLibraryGranted(status === 'granted');
+    } catch {
+      setPhotoLibraryGranted(false);
+    }
+  };
+
   const stepIcons: (keyof typeof Ionicons.glyphMap)[] = [
     // 0-3 account/name/phone/sex
     'lock-closed-outline', 'person-outline', 'call-outline', 'body-outline',
@@ -422,9 +477,9 @@ export function OnboardingScreen({ navigation, route }: any) {
                 onChangeText={(v) => setData({ ...data, password: v })}
                 secureTextEntry={!showPassword}
               />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <SoundPressable onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textTertiary} />
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           </View>
           <TextInput
@@ -512,7 +567,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             ]).map((opt) => {
               const isSelected = data.biologicalSex === opt.value;
               return (
-                <TouchableOpacity
+                <SoundPressable
                   key={opt.value}
                   style={[
                     styles.sexOption,
@@ -540,7 +595,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                       <Ionicons name="checkmark" size={16} color="#000" />
                     </View>
                   )}
-                </TouchableOpacity>
+                </SoundPressable>
               );
             })}
           </View>
@@ -572,7 +627,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                 {(['male', 'female'] as const).map((ms) => {
                   const active = data.metabolicSex === ms;
                   return (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={ms}
                       onPress={() => setData({ ...data, metabolicSex: ms })}
                       style={[styles.segmentedPillItem, {
@@ -583,7 +638,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                       <Text style={[styles.segmentedPillLabel, { color: active ? '#000' : colors.textPrimary }]}>
                         {ms === 'male' ? 'Male' : 'Female'}
                       </Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   );
                 })}
               </View>
@@ -598,7 +653,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                 {(['imperial', 'metric'] as const).map((u) => {
                   const active = data.heightUnit === u;
                   return (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={u}
                       onPress={() => setData({ ...data, heightUnit: u })}
                       style={[styles.segmentedPillItemSmall, {
@@ -608,7 +663,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                       <Text style={[styles.segmentedPillLabelSmall, { color: active ? '#000' : colors.textSecondary }]}>
                         {u === 'imperial' ? 'ft/in' : 'cm'}
                       </Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   );
                 })}
               </View>
@@ -664,7 +719,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                 {(['lb', 'kg'] as const).map((u) => {
                   const active = data.weightUnit === u;
                   return (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={u}
                       onPress={() => setData({ ...data, weightUnit: u })}
                       style={[styles.segmentedPillItemSmall, {
@@ -674,7 +729,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                       <Text style={[styles.segmentedPillLabelSmall, { color: active ? '#000' : colors.textSecondary }]}>
                         {u}
                       </Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   );
                 })}
               </View>
@@ -866,7 +921,7 @@ export function OnboardingScreen({ navigation, route }: any) {
               {[1, 2, 3, 4, 5, 6, 7].map((n) => {
                 const active = data.trainingDaysPerWeek === n;
                 return (
-                  <TouchableOpacity
+                  <SoundPressable
                     key={n}
                     onPress={() => setData({ ...data, trainingDaysPerWeek: n })}
                     style={[styles.freqPill, {
@@ -875,7 +930,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                     }]}
                   >
                     <Text style={[styles.freqPillLabel, { color: active ? '#000' : colors.textSecondary }]}>{n}</Text>
-                  </TouchableOpacity>
+                  </SoundPressable>
                 );
               })}
             </View>
@@ -891,7 +946,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                 const isNone = tag === 'None';
                 const active = isNone ? data.injuries.length === 0 : data.injuries.includes(tag);
                 return (
-                  <TouchableOpacity
+                  <SoundPressable
                     key={tag}
                     onPress={() => {
                       if (isNone) {
@@ -919,7 +974,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                     }]}>
                       {tag}
                     </Text>
-                  </TouchableOpacity>
+                  </SoundPressable>
                 );
               })}
             </View>
@@ -956,7 +1011,7 @@ export function OnboardingScreen({ navigation, route }: any) {
               );
             })}
           </View>
-          <TouchableOpacity
+          <SoundPressable
             onPress={() => { setData({ ...data, dietType: 'balanced' }); goNext(); }}
             style={{ paddingVertical: spacing.sm }}
           >
@@ -968,7 +1023,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             }}>
               Skip (use balanced)
             </Text>
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
       );
 
@@ -1067,14 +1122,14 @@ export function OnboardingScreen({ navigation, route }: any) {
           <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Add a profile photo</Text>
           <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>Let other members recognize you</Text>
           <View style={styles.photoButtons}>
-            <TouchableOpacity style={[styles.photoOption, { backgroundColor: colors.surface, borderWidth: 1, borderColor: 'transparent' }]} onPress={takePhoto}>
+            <SoundPressable style={[styles.photoOption, { backgroundColor: colors.surface, borderWidth: 1, borderColor: 'transparent' }]} onPress={takePhoto}>
               <Ionicons name="camera-outline" size={24} color={colors.gold} />
               <Text style={[styles.photoOptionText, { color: colors.textPrimary }]}>Camera</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.photoOption, { backgroundColor: colors.surface, borderWidth: 1, borderColor: 'transparent' }]} onPress={pickPhoto}>
+            </SoundPressable>
+            <SoundPressable style={[styles.photoOption, { backgroundColor: colors.surface, borderWidth: 1, borderColor: 'transparent' }]} onPress={pickPhoto}>
               <Ionicons name="images-outline" size={24} color={colors.gold} />
               <Text style={[styles.photoOptionText, { color: colors.textPrimary }]}>Library</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           </View>
         </View>
       );
@@ -1187,7 +1242,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             {BELT_ORDER.map((belt) => {
               const isSelected = data.belt === belt;
               return (
-                <TouchableOpacity
+                <SoundPressable
                   key={belt}
                   style={[
                     styles.beltOption,
@@ -1204,7 +1259,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                   ]}>
                     {BELT_LABELS[belt]}
                   </Text>
-                </TouchableOpacity>
+                </SoundPressable>
               );
             })}
           </View>
@@ -1219,7 +1274,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                 {[0, 1, 2, 3, 4].map((n) => {
                   const active = data.stripes === n;
                   return (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={n}
                       style={[
                         styles.stripeChip,
@@ -1238,7 +1293,7 @@ export function OnboardingScreen({ navigation, route }: any) {
                       >
                         {n}
                       </Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   );
                 })}
               </View>
@@ -1274,7 +1329,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             onChangeText={(v) => setData({ ...data, signedName: v })}
             autoCapitalize="words"
           />
-          <TouchableOpacity
+          <SoundPressable
             style={styles.emailCopyRow}
             onPress={() => setData({ ...data, emailWaiverCopy: !data.emailWaiverCopy })}
             activeOpacity={0.7}
@@ -1287,7 +1342,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             <Text style={[styles.emailCopyLabel, { color: colors.textSecondary }]}>
               Email me a copy of this waiver
             </Text>
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
       );
 
@@ -1303,7 +1358,7 @@ export function OnboardingScreen({ navigation, route }: any) {
           </Text>
 
           {/* Location */}
-          <TouchableOpacity
+          <SoundPressable
             style={[styles.permRow, { backgroundColor: colors.surface, borderColor: locationGranted ? colors.success + '40' : colors.border }]}
             onPress={requestLocationPermission}
           >
@@ -1315,14 +1370,29 @@ export function OnboardingScreen({ navigation, route }: any) {
               <Text style={[styles.permDesc, { color: colors.textMuted }]}>Auto check-in when you arrive at the dojo + GPS workout tracking</Text>
             </View>
             <Ionicons name={locationGranted ? 'checkmark-circle' : 'chevron-forward'} size={20} color={locationGranted ? colors.success : colors.textMuted} />
-          </TouchableOpacity>
+          </SoundPressable>
+
+          {/* Apple Health (iOS only) */}
+          {Platform.OS === 'ios' && (
+            <SoundPressable
+              style={[styles.permRow, { backgroundColor: colors.surface, borderColor: healthGranted ? colors.success + '40' : colors.border }]}
+              onPress={requestHealthPermission}
+            >
+              <View style={[styles.permIcon, { backgroundColor: '#FF294920' }]}>
+                <Ionicons name="heart-outline" size={20} color="#FF2949" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Apple Health</Text>
+                <Text style={[styles.permDesc, { color: colors.textMuted }]}>Sync workouts, weight, nutrition, and heart rate both ways with Apple Health</Text>
+              </View>
+              <Ionicons name={healthGranted ? 'checkmark-circle' : 'chevron-forward'} size={20} color={healthGranted ? colors.success : colors.textMuted} />
+            </SoundPressable>
+          )}
 
           {/* Camera */}
-          <TouchableOpacity
-            style={[styles.permRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={async () => {
-              try { await ImagePicker.requestCameraPermissionsAsync(); } catch {}
-            }}
+          <SoundPressable
+            style={[styles.permRow, { backgroundColor: colors.surface, borderColor: cameraGranted ? colors.success + '40' : colors.border }]}
+            onPress={requestCameraPermission}
           >
             <View style={[styles.permIcon, { backgroundColor: '#F9731620' }]}>
               <Ionicons name="camera-outline" size={20} color="#F97316" />
@@ -1331,18 +1401,13 @@ export function OnboardingScreen({ navigation, route }: any) {
               <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Camera</Text>
               <Text style={[styles.permDesc, { color: colors.textMuted }]}>Scan barcodes for food logging + take progress photos + profile pic</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
+            <Ionicons name={cameraGranted ? 'checkmark-circle' : 'chevron-forward'} size={20} color={cameraGranted ? colors.success : colors.textMuted} />
+          </SoundPressable>
 
           {/* Notifications */}
-          <TouchableOpacity
-            style={[styles.permRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={async () => {
-              try {
-                const Notifications = require('expo-notifications');
-                await Notifications.requestPermissionsAsync();
-              } catch {}
-            }}
+          <SoundPressable
+            style={[styles.permRow, { backgroundColor: colors.surface, borderColor: notificationsGranted ? colors.success + '40' : colors.border }]}
+            onPress={requestNotificationsPermission}
           >
             <View style={[styles.permIcon, { backgroundColor: '#EF444420' }]}>
               <Ionicons name="notifications-outline" size={20} color="#EF4444" />
@@ -1351,15 +1416,13 @@ export function OnboardingScreen({ navigation, route }: any) {
               <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Notifications</Text>
               <Text style={[styles.permDesc, { color: colors.textMuted }]}>Class reminders 1hr before, achievement unlocks, and dojo announcements</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
+            <Ionicons name={notificationsGranted ? 'checkmark-circle' : 'chevron-forward'} size={20} color={notificationsGranted ? colors.success : colors.textMuted} />
+          </SoundPressable>
 
           {/* Photo Library */}
-          <TouchableOpacity
-            style={[styles.permRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={async () => {
-              try { await ImagePicker.requestMediaLibraryPermissionsAsync(); } catch {}
-            }}
+          <SoundPressable
+            style={[styles.permRow, { backgroundColor: colors.surface, borderColor: photoLibraryGranted ? colors.success + '40' : colors.border }]}
+            onPress={requestPhotoLibraryPermission}
           >
             <View style={[styles.permIcon, { backgroundColor: '#22C55E20' }]}>
               <Ionicons name="images-outline" size={20} color="#22C55E" />
@@ -1368,8 +1431,8 @@ export function OnboardingScreen({ navigation, route }: any) {
               <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Photo Library</Text>
               <Text style={[styles.permDesc, { color: colors.textMuted }]}>Upload food photos for AI macro tracking + share to the community feed</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
+            <Ionicons name={photoLibraryGranted ? 'checkmark-circle' : 'chevron-forward'} size={20} color={photoLibraryGranted ? colors.success : colors.textMuted} />
+          </SoundPressable>
         </View>
       );
 
@@ -1506,15 +1569,15 @@ export function OnboardingScreen({ navigation, route }: any) {
         {/* Navigation Buttons */}
         <View style={styles.navRow}>
           {step > 0 ? (
-            <TouchableOpacity style={[styles.navButton, { backgroundColor: colors.surface, borderWidth: 1, borderColor: 'transparent' }]} onPress={goBack}>
+            <SoundPressable style={[styles.navButton, { backgroundColor: colors.surface, borderWidth: 1, borderColor: 'transparent' }]} onPress={goBack}>
               <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
-            </TouchableOpacity>
+            </SoundPressable>
           ) : (
             <View style={styles.navButton} />
           )}
 
           {step < TOTAL_STEPS - 1 ? (
-            <TouchableOpacity
+            <SoundPressable
               style={[styles.navButtonPrimary, { backgroundColor: canContinue() ? colors.red : colors.surfaceSecondary }]}
               onPress={goNext}
               disabled={!canContinue()}
@@ -1523,15 +1586,15 @@ export function OnboardingScreen({ navigation, route }: any) {
                 {step === 0 ? 'Get Started' : 'Continue'}
               </Text>
               <Ionicons name="arrow-forward" size={20} color={canContinue() ? '#FFF' : colors.textMuted} />
-            </TouchableOpacity>
+            </SoundPressable>
           ) : (
-            <TouchableOpacity
+            <SoundPressable
               style={[styles.navButtonPrimary, { backgroundColor: colors.gold }]}
               onPress={handleFinish}
             >
               <Text style={[styles.navButtonText, { color: '#000' }]}>Enter the Dojo</Text>
               <Ionicons name="arrow-forward" size={20} color="#000" />
-            </TouchableOpacity>
+            </SoundPressable>
           )}
         </View>
 
@@ -1541,21 +1604,21 @@ export function OnboardingScreen({ navigation, route }: any) {
             - Never on waiver (15), phone (2), summary (10), or welcome (17).
         */}
         {step >= BODY_SECTION_START && step <= 9 && (
-          <TouchableOpacity style={styles.skipButton} onPress={skipBodyStats}>
+          <SoundPressable style={styles.skipButton} onPress={skipBodyStats}>
             <Text style={[styles.skipText, { color: colors.textMuted, textDecorationLine: 'underline' }]}>
               Skip body stats for now
             </Text>
-          </TouchableOpacity>
+          </SoundPressable>
         )}
         {(step === 12 || step === 13 || step === 16) && (
-          <TouchableOpacity style={styles.skipButton} onPress={goNext}>
+          <SoundPressable style={styles.skipButton} onPress={goNext}>
             <Text style={[styles.skipText, { color: colors.textMuted }]}>Skip for now</Text>
-          </TouchableOpacity>
+          </SoundPressable>
         )}
 
         {/* Subtle login link — for members who reinstalled the app */}
         {step === 0 && (
-          <TouchableOpacity
+          <SoundPressable
             style={styles.subtleLoginRow}
             onPress={() => navigation.replace('SignIn')}
             activeOpacity={0.6}
@@ -1563,7 +1626,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             <Text style={[styles.subtleLoginText, { color: colors.textMuted }]}>
               Have an account? <Text style={{ color: colors.textSecondary, textDecorationLine: 'underline' }}>Sign in</Text>
             </Text>
-          </TouchableOpacity>
+          </SoundPressable>
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -1587,7 +1650,7 @@ function OptionCard({
   emoji: string; label: string; desc: string; active: boolean; colors: any; onPress: () => void;
 }) {
   return (
-    <TouchableOpacity
+    <SoundPressable
       onPress={onPress}
       activeOpacity={0.7}
       style={[optionCardStyles.card, {
@@ -1605,7 +1668,7 @@ function OptionCard({
           <Ionicons name="checkmark" size={14} color="#000" />
         </View>
       )}
-    </TouchableOpacity>
+    </SoundPressable>
   );
 }
 

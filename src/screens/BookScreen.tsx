@@ -4,10 +4,9 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Alert,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -213,7 +212,7 @@ export function BookScreen({ navigation }: any) {
               By appointment only
             </Text>
           </View>
-          <TouchableOpacity
+          <SoundPressable
             style={[
               styles.calendarButton,
               { backgroundColor: calendarLinked ? colors.goldMuted : colors.surface, borderColor: calendarLinked ? colors.gold : colors.border, borderWidth: 1.5 },
@@ -228,7 +227,7 @@ export function BookScreen({ navigation }: any) {
             <Text style={[styles.calendarButtonText, { color: calendarLinked ? colors.gold : colors.textSecondary }]}>
               {calendarLinked ? 'Synced' : 'Sync'}
             </Text>
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
 
         {/* Select Instructor — horizontal chip row */}
@@ -243,7 +242,7 @@ export function BookScreen({ navigation }: any) {
             {INSTRUCTORS.map((inst, index) => {
               const isSelected = index === selectedInstructor;
               return (
-                <TouchableOpacity
+                <SoundPressable
                   key={inst.name}
                   style={{
                     flexDirection: 'row',
@@ -269,7 +268,7 @@ export function BookScreen({ navigation }: any) {
                     <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{inst.name}</Text>
                     <Text style={{ fontSize: 10, color: colors.textSecondary }}>{inst.specialty}</Text>
                   </View>
-                </TouchableOpacity>
+                </SoundPressable>
               );
             })}
           </ScrollView>
@@ -282,7 +281,7 @@ export function BookScreen({ navigation }: any) {
             {SESSION_TYPES.map((type, index) => {
               const isSelected = index === selectedType;
               return (
-                <TouchableOpacity
+                <SoundPressable
                   key={type.label}
                   style={[
                     {
@@ -312,7 +311,7 @@ export function BookScreen({ navigation }: any) {
                   ]}>
                     {type.priceLabel}
                   </Text>
-                </TouchableOpacity>
+                </SoundPressable>
               );
             })}
           </View>
@@ -339,7 +338,7 @@ export function BookScreen({ navigation }: any) {
               const conflict = isSlotBusy(slotDate, currentDuration, busyIntervals);
               const isBusy = conflict !== null;
               return (
-                <TouchableOpacity
+                <SoundPressable
                   key={time}
                   disabled={isBusy}
                   style={[
@@ -382,7 +381,7 @@ export function BookScreen({ navigation }: any) {
                       UNAVAILABLE
                     </Text>
                   )}
-                </TouchableOpacity>
+                </SoundPressable>
               );
             })}
           </View>

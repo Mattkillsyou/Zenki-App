@@ -2,11 +2,10 @@ import React, { useRef, useEffect, useMemo, useState } from 'react';
 import {
   Animated,
   PanResponder,
-  TouchableOpacity,
   View,
   LayoutChangeEvent,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 
 export interface ReorderableItem {
@@ -173,7 +172,7 @@ export function ReorderableSections({ items, editMode, onReorder, onToggleVisibi
           >
             {item.node}
             {editMode && onToggleVisibility && (
-              <TouchableOpacity
+              <SoundPressable
                 onPress={() => onToggleVisibility(id)}
                 activeOpacity={0.7}
                 style={{
@@ -191,7 +190,7 @@ export function ReorderableSections({ items, editMode, onReorder, onToggleVisibi
                 hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
               >
                 <Ionicons name={isHidden ? 'add' : 'remove'} size={18} color="#fff" />
-              </TouchableOpacity>
+              </SoundPressable>
             )}
           </Animated.View>
         );

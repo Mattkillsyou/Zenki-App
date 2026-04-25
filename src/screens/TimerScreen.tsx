@@ -768,7 +768,7 @@ function playSingingBowl(isEnd: boolean = false) {
 const MEDITATION_PRESETS = [
   { minutes: 21, label: 'Focus' },
   { minutes: 30, label: 'Deep' },
-  { minutes: 60, label: 'Extended' },
+  { minutes: 60, label: 'OHM' },
 ];
 
 function MeditationTimer({ onComplete }: { onComplete?: (log: TimerSessionLog) => void } = {}) {

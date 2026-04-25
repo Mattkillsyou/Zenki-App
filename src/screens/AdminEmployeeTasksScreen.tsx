@@ -4,12 +4,11 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -98,12 +97,12 @@ export function AdminEmployeeTasksScreen({ navigation }: any) {
         <ScrollView contentContainerStyle={{ paddingBottom: 80 }} keyboardShouldPersistTaps="handled">
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
+            <SoundPressable
               onPress={() => navigation.goBack()}
               style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
               <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-            </TouchableOpacity>
+            </SoundPressable>
             <Text style={[styles.title, { color: colors.textPrimary }]}>Employee Tasks</Text>
             <View style={styles.backBtn} />
           </View>
@@ -124,7 +123,7 @@ export function AdminEmployeeTasksScreen({ navigation }: any) {
               ).map((m) => {
                 const active = mode === m.key;
                 return (
-                  <TouchableOpacity
+                  <SoundPressable
                     key={m.key}
                     style={[styles.tab, active && { backgroundColor: colors.gold }]}
                     onPress={() => setMode(m.key)}
@@ -133,7 +132,7 @@ export function AdminEmployeeTasksScreen({ navigation }: any) {
                     <Text style={[styles.tabLabel, { color: active ? '#000' : colors.textSecondary }]}>
                       {m.label}
                     </Text>
-                  </TouchableOpacity>
+                  </SoundPressable>
                 );
               })}
             </View>
@@ -172,7 +171,7 @@ export function AdminEmployeeTasksScreen({ navigation }: any) {
 
                 <Text style={[styles.label, { color: colors.textSecondary, marginTop: 12 }]}>ASSIGN TO</Text>
                 <View style={styles.chipRow}>
-                  <TouchableOpacity
+                  <SoundPressable
                     style={[
                       styles.chip,
                       {
@@ -185,11 +184,11 @@ export function AdminEmployeeTasksScreen({ navigation }: any) {
                     <Text style={[styles.chipText, { color: assignedTo === null ? '#000' : colors.textSecondary }]}>
                       All employees
                     </Text>
-                  </TouchableOpacity>
+                  </SoundPressable>
                   {employees.map((e) => {
                     const active = assignedTo === e.id;
                     return (
-                      <TouchableOpacity
+                      <SoundPressable
                         key={e.id}
                         style={[
                           styles.chip,
@@ -203,7 +202,7 @@ export function AdminEmployeeTasksScreen({ navigation }: any) {
                         <Text style={[styles.chipText, { color: active ? '#000' : colors.textSecondary }]}>
                           {e.firstName}
                         </Text>
-                      </TouchableOpacity>
+                      </SoundPressable>
                     );
                   })}
                 </View>
@@ -211,13 +210,13 @@ export function AdminEmployeeTasksScreen({ navigation }: any) {
             )}
 
             <View style={styles.formActions}>
-              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.gold }]} onPress={save}>
+              <SoundPressable style={[styles.saveBtn, { backgroundColor: colors.gold }]} onPress={save}>
                 <Text style={styles.saveBtnText}>{editingId ? 'Update' : 'Create'}</Text>
-              </TouchableOpacity>
+              </SoundPressable>
               {editingId && (
-                <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border }]} onPress={resetForm}>
+                <SoundPressable style={[styles.cancelBtn, { borderColor: colors.border }]} onPress={resetForm}>
                   <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>Cancel</Text>
-                </TouchableOpacity>
+                </SoundPressable>
               )}
             </View>
           </View>
@@ -297,12 +296,12 @@ function TaskCard({
           {subtitle}
         </Text>
       </View>
-      <TouchableOpacity onPress={onEdit} style={[styles.rowBtn, { borderColor: colors.border }]}>
+      <SoundPressable onPress={onEdit} style={[styles.rowBtn, { borderColor: colors.border }]}>
         <Ionicons name="pencil" size={14} color={colors.textSecondary} />
-      </TouchableOpacity>
-      <TouchableOpacity onPress={onDelete} style={[styles.rowBtn, { borderColor: colors.error }]}>
+      </SoundPressable>
+      <SoundPressable onPress={onDelete} style={[styles.rowBtn, { borderColor: colors.error }]}>
         <Ionicons name="trash-outline" size={14} color={colors.error} />
-      </TouchableOpacity>
+      </SoundPressable>
     </View>
   );
 }

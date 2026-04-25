@@ -4,9 +4,8 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
-  Image,
-} from 'react-native';
+  Image} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -50,7 +49,7 @@ export function MessagesListScreen({ navigation }: any) {
     const initials = (item.otherUserName || 'M').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
     const time = item.lastMessageAt ? formatTimeAgo(item.lastMessageAt) : '';
     return (
-      <TouchableOpacity
+      <SoundPressable
         style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
         onPress={() =>
           navigation.navigate('MessagesChat', {
@@ -91,23 +90,23 @@ export function MessagesListScreen({ navigation }: any) {
             <Text style={styles.unreadText}>{unread}</Text>
           </View>
         )}
-      </TouchableOpacity>
+      </SoundPressable>
     );
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <SoundPressable onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Messages</Text>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.navigate('UserSearch', { action: 'message' })}
           style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Ionicons name="create-outline" size={20} color={colors.gold} />
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
 
       {loading ? (

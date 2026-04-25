@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -58,13 +59,13 @@ export function AdminAnnouncementsScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.iconBtn, { backgroundColor: colors.surface }]}>
+        <SoundPressable onPress={() => navigation.goBack()} style={[styles.iconBtn, { backgroundColor: colors.surface }]}>
           <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Announcements</Text>
-        <TouchableOpacity onPress={startNew} style={[styles.iconBtn, { backgroundColor: colors.gold }]}>
+        <SoundPressable onPress={startNew} style={[styles.iconBtn, { backgroundColor: colors.gold }]}>
           <Ionicons name="add" size={22} color="#000" />
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
 
       <KeyboardAvoidingView
@@ -96,14 +97,14 @@ export function AdminAnnouncementsScreen({ navigation }: any) {
               multiline
               maxLength={140}
             />
-            <TouchableOpacity
+            <SoundPressable
               style={styles.pinRow}
               onPress={() => setDraftPinned(!draftPinned)}
               activeOpacity={0.7}
             >
               <Ionicons name={draftPinned ? 'pin' : 'pin-outline'} size={18} color={draftPinned ? colors.gold : colors.textMuted} />
               <Text style={[styles.pinLabel, { color: colors.textSecondary }]}>Pin to top</Text>
-            </TouchableOpacity>
+            </SoundPressable>
             <View style={styles.editorActions}>
               <Button title="Cancel" onPress={cancelEdit} variant="secondary" />
               <Button title={editingId === 'NEW' ? 'Post' : 'Save'} onPress={save} />
@@ -128,10 +129,10 @@ export function AdminAnnouncementsScreen({ navigation }: any) {
                 <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={2}>{a.title}</Text>
               </View>
               <View style={styles.cardActions}>
-                <TouchableOpacity onPress={() => startEdit(a)} style={styles.actionBtn}>
+                <SoundPressable onPress={() => startEdit(a)} style={styles.actionBtn}>
                   <Ionicons name="create-outline" size={18} color={colors.gold} />
-                </TouchableOpacity>
-                <TouchableOpacity
+                </SoundPressable>
+                <SoundPressable
                   onPress={() => {
                     Alert.alert('Delete announcement', 'Are you sure?', [
                       { text: 'Cancel', style: 'cancel' },
@@ -141,7 +142,7 @@ export function AdminAnnouncementsScreen({ navigation }: any) {
                   style={styles.actionBtn}
                 >
                   <Ionicons name="trash-outline" size={18} color={colors.error} />
-                </TouchableOpacity>
+                </SoundPressable>
               </View>
             </View>
             {a.description ? (

@@ -4,9 +4,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  Dimensions,
-} from 'react-native';
+  Dimensions} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -61,19 +60,19 @@ export function BloodworkScreen({ navigation }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.goBack()}
           style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Blood work</Text>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.navigate('BloodworkUpload')}
           style={[styles.backBtn, { backgroundColor: colors.gold }]}
         >
           <Ionicons name="add" size={22} color="#000" />
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
@@ -85,14 +84,14 @@ export function BloodworkScreen({ navigation }: any) {
               <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
                 Upload a lab report (PDF or photo) and the AI will categorize each biomarker with reference ranges and status.
               </Text>
-              <TouchableOpacity
+              <SoundPressable
                 activeOpacity={0.85}
                 onPress={() => navigation.navigate('BloodworkUpload')}
                 style={[styles.emptyCta, { backgroundColor: colors.gold }]}
               >
                 <Ionicons name="cloud-upload" size={18} color="#000" />
                 <Text style={styles.emptyCtaText}>Upload first report</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           </FadeInView>
         ) : (
@@ -190,7 +189,7 @@ export function BloodworkScreen({ navigation }: any) {
             {reports.map((r) => {
               const flagged = r.biomarkers.filter((b) => b.status === 'out_of_range').length;
               return (
-                <TouchableOpacity
+                <SoundPressable
                   key={r.id}
                   activeOpacity={0.85}
                   onPress={() => navigation.navigate('BloodworkReportDetail', { id: r.id })}
@@ -204,7 +203,7 @@ export function BloodworkScreen({ navigation }: any) {
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-                </TouchableOpacity>
+                </SoundPressable>
               );
             })}
           </>

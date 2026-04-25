@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { SoundPressable } from './SoundPressable';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing } from '../theme';
 
@@ -16,9 +17,9 @@ export function SectionHeader({ title, actionLabel, onAction }: SectionHeaderPro
     <View style={styles.container}>
       <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
       {actionLabel && onAction && (
-        <TouchableOpacity onPress={onAction}>
+        <SoundPressable onPress={onAction}>
           <Text style={[styles.action, { color: colors.gold }]}>{actionLabel}</Text>
-        </TouchableOpacity>
+        </SoundPressable>
       )}
     </View>
   );
@@ -33,7 +34,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   title: {
-    ...typography.sectionTitle,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
   },
   action: {
     ...typography.label,

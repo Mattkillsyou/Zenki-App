@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, Image, Alert, Modal, ScrollView,
-} from 'react-native';
+  View, Text, StyleSheet, TextInput, KeyboardAvoidingView, Platform, Image, Alert, Modal, ScrollView} from 'react-native';
+import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -175,16 +174,16 @@ export function SignInScreen({ navigation }: any) {
             <Text style={[styles.subheading, { color: colors.textSecondary }]}>Sign in to your member account</Text>
 
             {/* Social Login */}
-            <TouchableOpacity style={[styles.socialBtn, { backgroundColor: '#FAFAFA' }]} activeOpacity={0.8}>
+            <SoundPressable style={[styles.socialBtn, { backgroundColor: '#FAFAFA' }]} activeOpacity={0.8}>
               <Ionicons name="logo-google" size={22} color="#4285F4" />
               <Text style={styles.socialBtnText}>Continue with Google</Text>
-            </TouchableOpacity>
+            </SoundPressable>
 
             {(Platform.OS === 'ios' || Platform.OS === 'web') && (
-              <TouchableOpacity style={[styles.socialBtn, { backgroundColor: '#000000' }]} activeOpacity={0.8}>
+              <SoundPressable style={[styles.socialBtn, { backgroundColor: '#000000' }]} activeOpacity={0.8}>
                 <Ionicons name="logo-apple" size={24} color="#FFFFFF" />
                 <Text style={[styles.socialBtnText, { color: '#FFFFFF' }]}>Continue with Apple</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             )}
 
             {/* Divider */}
@@ -240,15 +239,15 @@ export function SignInScreen({ navigation }: any) {
                   onBlur={() => setFocusedField(null)}
                   secureTextEntry={!showPassword}
                 />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <SoundPressable onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                   <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textTertiary} />
-                </TouchableOpacity>
+                </SoundPressable>
               </View>
             </View>
 
-            <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={styles.forgotRow}>
+            <SoundPressable onPress={() => navigation.navigate('ForgotPassword')} style={styles.forgotRow}>
               <Text style={[styles.forgotText, { color: colors.gold }]}>Forgot password?</Text>
-            </TouchableOpacity>
+            </SoundPressable>
 
             <Button title="Sign In" onPress={handleSignIn} loading={loading} fullWidth size="lg" style={{ marginTop: 12 }} />
           </View>
@@ -256,9 +255,9 @@ export function SignInScreen({ navigation }: any) {
           {/* Footer */}
           <View style={[styles.footer, { marginTop: 40 }]}>
             <Text style={[styles.footerText, { color: colors.textTertiary }]}>Not a member? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Contact')}>
+            <SoundPressable onPress={() => navigation.navigate('Contact')}>
               <Text style={[styles.footerLink, { color: colors.gold }]}>Inquire</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

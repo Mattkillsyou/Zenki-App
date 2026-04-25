@@ -3,10 +3,9 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
-  Alert,
-} from 'react-native';
+  Alert} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -161,7 +160,7 @@ export function WorkoutSessionScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => {
             if (isRecording) {
               Alert.alert('Session Running', 'Stop the session before leaving.');
@@ -172,7 +171,7 @@ export function WorkoutSessionScreen({ navigation }: any) {
           style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>
           {isRecording ? 'Session Active' : 'Start Session'}
         </Text>
@@ -181,7 +180,7 @@ export function WorkoutSessionScreen({ navigation }: any) {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* BLE status chip */}
-        <TouchableOpacity
+        <SoundPressable
           style={[styles.bleChip, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={handleBLEToggle}
           disabled={bleStatus === 'unavailable' || bleStatus === 'scanning' || bleStatus === 'connecting'}
@@ -202,7 +201,7 @@ export function WorkoutSessionScreen({ navigation }: any) {
              bleStatus === 'unavailable' ? 'Demo Mode (no BLE on web)' :
              'Tap to pair HR strap'}
           </Text>
-        </TouchableOpacity>
+        </SoundPressable>
 
         {/* ── HERO: Live HR display ── */}
         <View style={[styles.hrHero, { backgroundColor: isRecording ? currentZoneColor + '15' : colors.surface, borderColor: isRecording ? currentZoneColor : colors.border }]}>
@@ -267,7 +266,7 @@ export function WorkoutSessionScreen({ navigation }: any) {
               {ACTIVITY_OPTIONS.map((act) => {
                 const active = act === selectedActivity;
                 return (
-                  <TouchableOpacity
+                  <SoundPressable
                     key={act}
                     style={[
                       styles.activityChip,
@@ -281,7 +280,7 @@ export function WorkoutSessionScreen({ navigation }: any) {
                     <Text style={[styles.activityText, { color: active ? '#000' : colors.textSecondary }]}>
                       {ACTIVITY_LABELS[act]}
                     </Text>
-                  </TouchableOpacity>
+                  </SoundPressable>
                 );
               })}
             </View>
@@ -306,15 +305,15 @@ export function WorkoutSessionScreen({ navigation }: any) {
       {/* ── Start / Stop button ── */}
       <View style={[styles.bottomBar, { backgroundColor: colors.background }]}>
         {isRecording ? (
-          <TouchableOpacity
+          <SoundPressable
             style={[styles.stopBtn, { backgroundColor: colors.red }]}
             onPress={handleStop}
           >
             <Ionicons name="stop" size={22} color="#FFF" />
             <Text style={styles.btnText}>END SESSION</Text>
-          </TouchableOpacity>
+          </SoundPressable>
         ) : (
-          <TouchableOpacity
+          <SoundPressable
             style={[styles.startBtn, { backgroundColor: colors.gold }]}
             onPress={handleStart}
           >
@@ -322,7 +321,7 @@ export function WorkoutSessionScreen({ navigation }: any) {
             <Text style={[styles.btnText, { color: '#000' }]}>
               START {ACTIVITY_LABELS[selectedActivity].toUpperCase()}
             </Text>
-          </TouchableOpacity>
+          </SoundPressable>
         )}
       </View>
     </SafeAreaView>

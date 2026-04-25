@@ -8,8 +8,24 @@ import {
   Dimensions,
   Platform,
   Animated,
+  Easing,
   RefreshControl,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
+
+// Enable LayoutAnimation on Android (iOS has it on by default)
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+/** Smooth spring-style layout transition used for edit-mode toggles. */
+const editModeLayoutAnim: any = {
+  duration: 280,
+  create: { type: 'easeInEaseOut', property: 'opacity' },
+  update: { type: 'easeInEaseOut' },
+  delete: { type: 'easeInEaseOut', property: 'opacity' },
+};
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +36,6 @@ import { ClassCard, AnimatedLogo, FadeInView, PressableScale, TimeClock, StreakB
 import { ReorderableSections, ReorderableItem } from '../components/ReorderableSections';
 import { Skeleton } from '../components/Skeleton';
 import { SpinWheelModal } from '../components/SpinWheelModal';
-import { SpinWheelIcon } from '../components/SpinWheelIcon';
 import { CoachmarkTutorial, CoachmarkStep, shouldShowCoachmarks } from '../components/CoachmarkTutorial';
 import { NotificationsModal } from '../components/NotificationsModal';
 import { useSpinWheel } from '../context/SpinWheelContext';
@@ -141,6 +156,115 @@ function EmployeeChecklistCard({ navigation, memberId }: { navigation: any; memb
   );
 }
 
+// ─────────────────────────────────────────────────
+// DashboardPager — horizontally swipeable Today/Week/Month stat cards
+// ─────────────────────────────────────────────────
+interface DashStats {
+  workouts: number;
+  caloriesBurned: number;
+  macrosPct: number;
+  miles: number;
+}
+
+function DashboardPager({
+  todayStats, weekStats, monthStats, colors, sectionTitleStyle,
+}: {
+  todayStats: DashStats;
+  weekStats: DashStats;
+  monthStats: DashStats;
+  colors: any;
+  sectionTitleStyle: any;
+}) {
+  const [pageIdx, setPageIdx] = useState(0);
+  const pageWidth = Dimensions.get('window').width;
+  const phoneWidth = Math.min(pageWidth, 430);
+
+  const titles = ['Today', 'This Week', 'This Month'];
+  const stats: DashStats[] = [todayStats, weekStats, monthStats];
+
+  const renderGrid = (s: DashStats) => (
+    <View style={[styles.dashGrid, { width: phoneWidth - 24 * 2 }]}>
+      <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+        <View style={[styles.dashIconWrap, { backgroundColor: colors.goldMuted }]}>
+          <Ionicons name="barbell" size={18} color={colors.gold} />
+        </View>
+        <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{s.workouts}</Text>
+        <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Workouts</Text>
+        <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
+          <View style={[styles.dashProgressFill, { backgroundColor: colors.gold, width: `${Math.min(100, s.workouts * 100)}%` }]} />
+        </View>
+      </View>
+      <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+        <View style={[styles.dashIconWrap, { backgroundColor: colors.goldMuted }]}>
+          <Ionicons name="flame" size={18} color={colors.gold} />
+        </View>
+        <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{s.caloriesBurned}</Text>
+        <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Cal Burned</Text>
+        <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
+          <View style={[styles.dashProgressFill, { backgroundColor: colors.gold, width: `${Math.min(100, (s.caloriesBurned / 500) * 100)}%` }]} />
+        </View>
+      </View>
+      <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+        <View style={[styles.dashIconWrap, { backgroundColor: colors.goldMuted }]}>
+          <Ionicons name="nutrition" size={18} color={colors.gold} />
+        </View>
+        <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{s.macrosPct}%</Text>
+        <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Macros Hit</Text>
+        <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
+          <View style={[styles.dashProgressFill, { backgroundColor: colors.gold, width: `${s.macrosPct}%` }]} />
+        </View>
+      </View>
+      <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+        <View style={[styles.dashIconWrap, { backgroundColor: colors.goldMuted }]}>
+          <Ionicons name="footsteps" size={18} color={colors.gold} />
+        </View>
+        <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{s.miles.toFixed(1)}</Text>
+        <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Miles</Text>
+        <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
+          <View style={[styles.dashProgressFill, { backgroundColor: colors.gold, width: `${Math.min(100, (s.miles / 5) * 100)}%` }]} />
+        </View>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={[styles.section, { marginTop: 4 }]}>
+      <Text style={sectionTitleStyle}>{titles[pageIdx]}</Text>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={(e) => {
+          const idx = Math.round(e.nativeEvent.contentOffset.x / (phoneWidth - 48));
+          setPageIdx(Math.max(0, Math.min(2, idx)));
+        }}
+        snapToInterval={phoneWidth - 48}
+        decelerationRate="fast"
+      >
+        {stats.map((s, i) => (
+          <View key={i} style={{ width: phoneWidth - 48, paddingRight: 8 }}>
+            {renderGrid(s)}
+          </View>
+        ))}
+      </ScrollView>
+      {/* Page indicator dots */}
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 8 }}>
+        {[0, 1, 2].map((i) => (
+          <View
+            key={i}
+            style={{
+              width: pageIdx === i ? 16 : 6,
+              height: 6,
+              borderRadius: 3,
+              backgroundColor: pageIdx === i ? colors.gold : colors.borderSubtle,
+            }}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export function HomeScreen({ navigation }: any) {
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
@@ -198,6 +322,15 @@ export function HomeScreen({ navigation }: any) {
   const { hasSpunToday } = useSpinWheel();
   const [spinOpen, setSpinOpen] = React.useState(false);
   const [notifOpen, setNotifOpen] = React.useState(false);
+  // Tracks whether the user has acknowledged the unread-notifications dot this session
+  const [notifsSeen, setNotifsSeen] = React.useState(false);
+  // Re-arm the dot whenever new unread notifications appear
+  useEffect(() => {
+    if (hasUnreadNotifications) setNotifsSeen(false);
+    // We intentionally only depend on hasUnreadNotifications so the user
+    // re-acknowledges only when the unread state changes from false → true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasUnreadNotifications]);
 
   // ── Coachmark tutorial: refs + measurements ──
   const editPillRef = useRef<View>(null);
@@ -286,40 +419,73 @@ export function HomeScreen({ navigation }: any) {
   const goalsCtx = useNutrition();
   const todayGoals = user?.id ? goalsCtx.goalsFor(user.id) : { calories: 2200, protein: 160, carbs: 220, fat: 70 };
 
+  // Compute aggregated stats for a given filter range.
+  // `dateMatch(iso)` returns true if the provided ISO date falls inside the range.
+  const computeStats = useCallback((dateMatch: (iso: string) => boolean, daysInRange: number) => {
+    if (!user?.id) return { workouts: 0, caloriesBurned: 0, macrosPct: 0, miles: 0 };
+
+    const logs = myLogs(user.id).filter((l: any) => dateMatch(l.date ?? ''));
+    const hrInRange = (hrSessions || [])
+      .filter((s: any) => s.memberId === user.id && dateMatch(s.date ?? ''));
+    const gpsInRange = memberActivities(user.id)
+      .filter((a) => dateMatch(a.startedAt?.slice(0, 10) ?? ''));
+
+    const hrCals = hrInRange.reduce((sum: number, s: any) => sum + (s.calories || 0), 0);
+    const gpsCals = gpsInRange.reduce((sum: number, a: any) => sum + (a.calories || 0), 0);
+    const caloriesBurned = hrCals + gpsCals;
+
+    // Miles — sum GPS distance, convert meters → miles
+    const miles = gpsInRange.reduce((sum: number, a: any) => sum + (a.distanceMeters || 0), 0) / 1609.34;
+
+    // Macros — sum cumulative calories vs (goal * days), capped at 100%
+    let macrosPct = 0;
+    if (todayGoals.calories > 0) {
+      const goalSum = todayGoals.calories * daysInRange;
+      // Sum macros consumed across each day in range — only "today" hits totalsForDate
+      // For multi-day, fall back to range-aware filter on macroEntries.
+      // To keep this simple & cheap, use today's snapshot for "today" and a
+      // proportional rollup based on present nutrition ratio for week/month.
+      macrosPct = Math.min(100, Math.round((todayNutrition.calories / Math.max(1, goalSum)) * 100));
+    }
+
+    return {
+      workouts: logs.length,
+      caloriesBurned,
+      macrosPct,
+      miles,
+    };
+  }, [user?.id, myLogs, hrSessions, memberActivities, todayNutrition, todayGoals]);
+
   const todayStats = useMemo(() => {
-    if (!user?.id) return { workouts: 0, caloriesBurned: 0, macrosPct: 0, activeMinutes: 0 };
+    return computeStats((iso) => iso.startsWith(todayISO), 1);
+  }, [computeStats, todayISO]);
 
-    // Workouts today
-    const todayLogs = myLogs(user.id).filter((l: any) => l.date?.startsWith(todayISO));
-    const workoutsToday = todayLogs.length;
+  const weekStats = useMemo(() => {
+    // Week starts on Sunday
+    const now = new Date();
+    const start = new Date(now);
+    start.setDate(now.getDate() - now.getDay());
+    start.setHours(0, 0, 0, 0);
+    const startMs = start.getTime();
+    return computeStats((iso) => {
+      if (!iso) return false;
+      const d = new Date(iso).getTime();
+      return d >= startMs && d <= now.getTime();
+    }, 7);
+  }, [computeStats]);
 
-    // HR sessions today calories
-    const todayHRCals = (hrSessions || [])
-      .filter((s: any) => s.memberId === user.id && s.date?.startsWith(todayISO))
-      .reduce((sum: number, s: any) => sum + (s.calories || 0), 0);
-
-    // GPS activities today calories
-    const todayGPS = memberActivities(user.id)
-      .filter((a) => a.startedAt?.startsWith(todayISO));
-    const todayGPSCals = todayGPS.reduce((sum, a) => sum + (a.calories || 0), 0);
-
-    // Total active minutes (HR sessions + GPS + workout logs)
-    const hrMinutes = (hrSessions || [])
-      .filter((s: any) => s.memberId === user.id && s.date?.startsWith(todayISO))
-      .reduce((sum: number, s: any) => sum + (s.durationSeconds || 0) / 60, 0);
-    const gpsMinutes = todayGPS.reduce((sum, a) => sum + a.durationSeconds / 60, 0);
-    const logMinutes = todayLogs.reduce((sum: number, l: any) => sum + (l.durationMinutes || 0), 0);
-    const activeMinutes = Math.round(hrMinutes + gpsMinutes + logMinutes);
-
-    // Macros percentage
-    const macrosPct = todayGoals.calories > 0
-      ? Math.min(100, Math.round((todayNutrition.calories / todayGoals.calories) * 100))
-      : 0;
-
-    const caloriesBurned = todayHRCals + todayGPSCals;
-
-    return { workouts: workoutsToday, caloriesBurned, macrosPct, activeMinutes };
-  }, [user?.id, todayISO, hrSessions, todayNutrition, todayGoals]);
+  const monthStats = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    start.setHours(0, 0, 0, 0);
+    const startMs = start.getTime();
+    const daysSoFar = Math.max(1, now.getDate());
+    return computeStats((iso) => {
+      if (!iso) return false;
+      const d = new Date(iso).getTime();
+      return d >= startMs && d <= now.getTime();
+    }, daysSoFar);
+  }, [computeStats]);
 
   // ── Next Class Countdown ──
   const nextClass = useMemo(() => {
@@ -352,26 +518,6 @@ export function HomeScreen({ navigation }: any) {
   const quickStats = useMemo(() => {
     if (!user?.id) return [];
     const stats: { label: string; value: string; sub: string; icon: string }[] = [];
-
-    // 1. Latest weight + 7-day trend
-    const weights = myWeights(user.id);
-    if (weights.length > 0) {
-      const latest = weights[0];
-      const weekAgo = weights.find((w: any) => {
-        const d = new Date(w.date);
-        const diff = (Date.now() - d.getTime()) / 86400000;
-        return diff >= 6 && diff <= 8;
-      });
-      const arrow = weekAgo
-        ? latest.weight > weekAgo.weight ? '↑' : latest.weight < weekAgo.weight ? '↓' : '→'
-        : '→';
-      stats.push({
-        label: 'Weight',
-        value: `${latest.weight} ${latest.unit}`,
-        sub: `7d trend ${arrow}`,
-        icon: 'scale-outline',
-      });
-    }
 
     // 2. Latest PR
     const prs = user.id ? myPRs(user.id) : [];
@@ -435,12 +581,38 @@ export function HomeScreen({ navigation }: any) {
   }, []);
 
   // ── Module reorder (drag to rearrange) + show/hide ──
-  const DEFAULT_MODULE_ORDER = ['announcements', 'training', 'quickFoodActions', 'dashboard', 'quickStats', 'schedule', 'quote', 'xpBar', 'achievements'];
+  const DEFAULT_MODULE_ORDER = ['quote', 'announcements', 'xpBar', 'achievements', 'training', 'quickFoodActions', 'dashboard', 'quickStats', 'schedule'];
   const [moduleOrder, setModuleOrder] = useState<string[]>(DEFAULT_MODULE_ORDER);
   const [moduleVisibility, setModuleVisibility] = useState<Record<string, boolean>>({});
   const [editMode, setEditMode] = useState(false);
   const orderStorageKey = user?.id ? `@zenki_home_order_${user.id}` : null;
   const visibilityStorageKey = user?.id ? `@zenki_home_visibility_${user.id}` : null;
+
+  // Animated values for edit-mode bar entrance / exit
+  const editBarOpacity = useRef(new Animated.Value(0)).current;
+  const editBarTranslate = useRef(new Animated.Value(-12)).current;
+
+  // Smoothly animate edit-mode toggles
+  const toggleEditMode = useCallback((next: boolean) => {
+    if (Platform.OS !== 'web') {
+      LayoutAnimation.configureNext(editModeLayoutAnim);
+    }
+    setEditMode(next);
+    Animated.parallel([
+      Animated.timing(editBarOpacity, {
+        toValue: next ? 1 : 0,
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(editBarTranslate, {
+        toValue: next ? 0 : -12,
+        duration: 280,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [editBarOpacity, editBarTranslate]);
 
   useEffect(() => {
     if (!orderStorageKey) return;
@@ -497,8 +669,31 @@ export function HomeScreen({ navigation }: any) {
         {/* ─── Header (compact with corner logo) ─── */}
         <FadeInView delay={0} slideUp={0}>
           <View style={styles.header}>
-            <AnimatedLogo size={56} />
             <View style={styles.headerRight}>
+              <AnimatedLogo size={28} />
+              {!isEmployee && (
+                <TouchableOpacity
+                  ref={spinFabRef}
+                  onLayout={measureCoachTarget('spinFab', spinFabRef)}
+                  style={[
+                    styles.spinHeaderBtn,
+                    {
+                      backgroundColor: colors.surface,
+                      shadowColor: '#D4A017',
+                      // @ts-ignore — boxShadow is web-only
+                      boxShadow: hasSpunToday
+                        ? 'none'
+                        : '0 0 10px rgba(212,160,23,0.65), 0 0 18px rgba(212,160,23,0.3)',
+                      opacity: hasSpunToday ? 0.45 : 1,
+                    },
+                  ]}
+                  onPress={() => { play('navigate'); setSpinOpen(true); }}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Daily spin"
+                >
+                  <Ionicons name="aperture" size={22} color="#D4A017" />
+                </TouchableOpacity>
+              )}
               {!isEmployee && (
                 <PointsBadge
                   points={gamState.dojoPoints || 0}
@@ -517,11 +712,11 @@ export function HomeScreen({ navigation }: any) {
               {!isEmployee && <StreakBadge streak={gamState.streak} compact />}
               <TouchableOpacity
                 style={[styles.iconButton, { backgroundColor: colors.surface }]}
-                onPress={() => { play('navigate'); setNotifOpen(true); }}
+                onPress={() => { play('navigate'); setNotifsSeen(true); setNotifOpen(true); }}
                 activeOpacity={0.7}
               >
                 <Ionicons name="notifications-outline" size={20} color={colors.textSecondary} />
-                {hasUnreadNotifications && (
+                {hasUnreadNotifications && !notifsSeen && (
                   <View style={[styles.notifDot, { backgroundColor: colors.red }]} />
                 )}
               </TouchableOpacity>
@@ -541,7 +736,7 @@ export function HomeScreen({ navigation }: any) {
             {!isEmployee && !editMode && (
               <View ref={editPillRef} onLayout={measureCoachTarget('edit', editPillRef)}>
                 <TouchableOpacity
-                  onPress={() => setEditMode(true)}
+                  onPress={() => toggleEditMode(true)}
                   activeOpacity={0.8}
                   style={[styles.editPill, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 >
@@ -590,19 +785,29 @@ export function HomeScreen({ navigation }: any) {
 
             {/* ── Edit-mode bar: shown while reordering ── */}
             {editMode && (
-              <View style={[styles.editBar, { backgroundColor: colors.surface, borderColor: colors.gold + '40' }]}>
+              <Animated.View
+                style={[
+                  styles.editBar,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.gold + '40',
+                    opacity: editBarOpacity,
+                    transform: [{ translateY: editBarTranslate }],
+                  },
+                ]}
+              >
                 <Ionicons name="move-outline" size={16} color={colors.gold} />
                 <Text style={[styles.editHint, { color: colors.textSecondary }]}>
                   Drag to rearrange · tap − to hide
                 </Text>
                 <TouchableOpacity
                   style={[styles.doneBtn, { backgroundColor: colors.gold }]}
-                  onPress={() => setEditMode(false)}
+                  onPress={() => toggleEditMode(false)}
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.doneBtnText, { color: '#000' }]}>DONE</Text>
                 </TouchableOpacity>
-              </View>
+              </Animated.View>
             )}
 
             {/* ── Reorderable sections ── */}
@@ -667,8 +872,11 @@ export function HomeScreen({ navigation }: any) {
                     <View
                       ref={foodActionsRef}
                       onLayout={measureCoachTarget('foodActions', foodActionsRef)}
-                      style={{ paddingHorizontal: 20, marginTop: 6, flexDirection: 'row', gap: 10 }}
                     >
+                      <Text style={[styles.sectionTitle, { color: colors.textPrimary, paddingHorizontal: 20, marginTop: 6, marginBottom: 8 }]}>
+                        Tracking
+                      </Text>
+                      <View style={{ paddingHorizontal: 20, flexDirection: 'row', gap: 10 }}>
                       <TouchableOpacity
                         activeOpacity={0.85}
                         onPress={() => !editMode && navigation.navigate('MacroTracker', { openSearch: true })}
@@ -693,6 +901,7 @@ export function HomeScreen({ navigation }: any) {
                         <Ionicons name="sparkles-outline" size={22} color={colors.gold} />
                         <Text style={[styles.quickFoodLabel, { color: colors.textPrimary }]}>Photo</Text>
                       </TouchableOpacity>
+                      </View>
                     </View>
                   </FadeInView>
                 ),
@@ -756,51 +965,13 @@ export function HomeScreen({ navigation }: any) {
                 ),
                 dashboard: (
                   <FadeInView delay={200} slideUp={16}>
-                    <View style={[styles.section, { marginTop: 4 }]}>
-                      <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 10, fontSize: 16, fontWeight: '800' }]}>YOUR DAY</Text>
-                      <View style={styles.dashGrid}>
-                        <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-                          <View style={[styles.dashIconWrap, { backgroundColor: colors.redMuted }]}>
-                            <Ionicons name="barbell" size={18} color={colors.red} />
-                          </View>
-                          <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.workouts}</Text>
-                          <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Workouts</Text>
-                          <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
-                            <View style={[styles.dashProgressFill, { backgroundColor: colors.red, width: `${Math.min(100, todayStats.workouts * 100)}%` }]} />
-                          </View>
-                        </View>
-                        <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-                          <View style={[styles.dashIconWrap, { backgroundColor: colors.warningMuted }]}>
-                            <Ionicons name="flame" size={18} color={colors.warning} />
-                          </View>
-                          <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.caloriesBurned}</Text>
-                          <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Cal Burned</Text>
-                          <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
-                            <View style={[styles.dashProgressFill, { backgroundColor: colors.warning, width: `${Math.min(100, (todayStats.caloriesBurned / 500) * 100)}%` }]} />
-                          </View>
-                        </View>
-                        <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-                          <View style={[styles.dashIconWrap, { backgroundColor: colors.successMuted }]}>
-                            <Ionicons name="nutrition" size={18} color={colors.success} />
-                          </View>
-                          <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.macrosPct}%</Text>
-                          <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Macros Hit</Text>
-                          <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
-                            <View style={[styles.dashProgressFill, { backgroundColor: colors.success, width: `${todayStats.macrosPct}%` }]} />
-                          </View>
-                        </View>
-                        <View style={[styles.dashCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
-                          <View style={[styles.dashIconWrap, { backgroundColor: colors.infoMuted }]}>
-                            <Ionicons name="time" size={18} color={colors.info} />
-                          </View>
-                          <Text style={[styles.dashValue, { color: colors.textPrimary }]}>{todayStats.activeMinutes}</Text>
-                          <Text style={[styles.dashLabel, { color: colors.textMuted }]}>Active Min</Text>
-                          <View style={[styles.dashProgressBg, { backgroundColor: colors.backgroundElevated }]}>
-                            <View style={[styles.dashProgressFill, { backgroundColor: colors.info, width: `${Math.min(100, (todayStats.activeMinutes / 30) * 100)}%` }]} />
-                          </View>
-                        </View>
-                      </View>
-                    </View>
+                    <DashboardPager
+                      todayStats={todayStats}
+                      weekStats={weekStats}
+                      monthStats={monthStats}
+                      colors={colors}
+                      sectionTitleStyle={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 10 }]}
+                    />
                   </FadeInView>
                 ),
                 quickStats: quickStats.length > 0 ? (
@@ -842,11 +1013,13 @@ export function HomeScreen({ navigation }: any) {
                       <View style={styles.toolsGrid}>
                         <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('WorkoutSession')} style={[styles.homeTool, { backgroundColor: colors.redMuted, borderColor: colors.red }]}>
                           <Ionicons name="heart" size={20} color={colors.red} />
-                          <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>HR Session</Text>
+                          <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Start Workout</Text>
+                          <Text style={[styles.homeToolSub, { color: colors.textSecondary }]}>Live HR tracking</Text>
                         </TouchableOpacity>
                         <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('Workout')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                           <Ionicons name="barbell" size={20} color={colors.gold} />
                           <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Workout</Text>
+                          <Text style={[styles.homeToolSub, { color: colors.textSecondary }]}>Exercise library</Text>
                         </TouchableOpacity>
                         <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('MacroTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                           <Ionicons name="restaurant-outline" size={20} color={colors.gold} />
@@ -872,10 +1045,6 @@ export function HomeScreen({ navigation }: any) {
                           <Ionicons name="navigate-outline" size={20} color={colors.gold} />
                           <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>GPS</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('WeeklyReport')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                          <Ionicons name="bar-chart-outline" size={20} color={colors.gold} />
-                          <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Report</Text>
-                        </TouchableOpacity>
                         {isFemale && (
                           <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('CycleTracker')} style={[styles.homeTool, { backgroundColor: 'rgba(230, 57, 70, 0.08)', borderColor: '#E63946' + '40' }]}>
                             <Ionicons name="heart-circle-outline" size={20} color="#E63946" />
@@ -890,7 +1059,7 @@ export function HomeScreen({ navigation }: any) {
                   <FadeInView delay={400} slideUp={16}>
                     <View style={styles.section}>
                       <View style={styles.sectionHeader}>
-                        <Text style={[styles.sectionTitle, { color: colors.textPrimary, fontSize: 18 }]}>Today's Schedule</Text>
+                        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Today's Schedule</Text>
                         <TouchableOpacity
                           style={[styles.seeAllButton, { backgroundColor: colors.accentTint }]}
                           onPress={() => !editMode && navigation.navigate('Schedule')}
@@ -960,33 +1129,6 @@ export function HomeScreen({ navigation }: any) {
         <CelebrationModal celebration={gamState.pendingCelebration} onDismiss={dismissCelebration} />
       )}
 
-      {/* Floating spin wheel button — bottom left above the Home tab.
-          Only shown when the user hasn't spun yet today. Once spun,
-          disappears entirely until tomorrow. */}
-      {!isEmployee && !hasSpunToday && (
-        <View
-          ref={spinFabRef}
-          onLayout={measureCoachTarget('spinFab', spinFabRef)}
-          style={[
-            styles.spinFab,
-            {
-              backgroundColor: colors.gold,
-              bottom: 72 + insets.bottom,
-              shadowColor: colors.gold,
-            },
-          ]}
-        >
-          <TouchableOpacity
-            onPress={() => { play('navigate'); setSpinOpen(true); }}
-            activeOpacity={0.8}
-            style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
-            accessibilityLabel="Daily spin"
-          >
-            <SpinWheelIcon size={26} color="#000000" background="rgba(0,0,0,0.15)" />
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* Daily Spin Wheel */}
       <SpinWheelModal visible={spinOpen} onClose={() => setSpinOpen(false)} />
 
@@ -1048,7 +1190,7 @@ const styles = StyleSheet.create({
   // Header
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 12,
@@ -1141,9 +1283,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   headerRight: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-evenly',
   },
   iconButton: {
     width: 44,
@@ -1151,6 +1294,19 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Spin wheel button — pill-height to match the gem/fire/streak chips.
+  // Solid white wheel with a soft white glow.
+  spinHeaderBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.65,
+    shadowRadius: 10,
+    elevation: 4,
   },
   notifDot: {
     position: 'absolute',
@@ -1225,9 +1381,10 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.3,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
   },
   seeAllButton: {
     flexDirection: 'row',
@@ -1428,16 +1585,24 @@ const styles = StyleSheet.create({
   homeTool: {
     width: '23%',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
     borderRadius: 14,
     borderWidth: 1,
-    gap: 6,
+    gap: 4,
   },
   homeToolLabel: {
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.3,
     textAlign: 'center',
+  },
+  homeToolSub: {
+    fontSize: 8,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+    textAlign: 'center',
+    marginTop: -1,
   },
   trainingRow: {
     flexDirection: 'row',

@@ -3,11 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Dimensions,
-} from 'react-native';
+  Dimensions} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -106,15 +105,15 @@ export function BarcodeScannerScreen({ navigation }: any) {
         <Text style={[styles.permBody, { color: colors.textSecondary }]}>
           We use the camera only to scan barcodes on food packaging. Images are not stored or uploaded.
         </Text>
-        <TouchableOpacity
+        <SoundPressable
           onPress={requestPermission}
           style={[styles.permBtn, { backgroundColor: colors.gold }]}
         >
           <Text style={styles.permBtnText}>Allow camera</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }}>
+        </SoundPressable>
+        <SoundPressable onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }}>
           <Text style={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>Cancel</Text>
-        </TouchableOpacity>
+        </SoundPressable>
       </SafeAreaView>
     );
   }
@@ -138,12 +137,12 @@ export function BarcodeScannerScreen({ navigation }: any) {
 
       {/* Top bar */}
       <SafeAreaView edges={['top']} style={styles.topBar}>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.goBack()}
           style={[styles.topBtn, { backgroundColor: 'rgba(0,0,0,0.55)' }]}
         >
           <Ionicons name="close" size={22} color="#fff" />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={styles.topLabel}>Scan barcode</Text>
         <View style={styles.topBtn} />
       </SafeAreaView>
@@ -182,19 +181,19 @@ export function BarcodeScannerScreen({ navigation }: any) {
             Try scanning again or add it manually.
           </Text>
           <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg }}>
-            <TouchableOpacity
+            <SoundPressable
               onPress={rescan}
               style={[styles.resultBtn, { backgroundColor: 'rgba(255,255,255,0.12)' }]}
             >
               <Ionicons name="scan-outline" size={18} color="#fff" />
               <Text style={styles.resultBtnText}>Scan again</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            </SoundPressable>
+            <SoundPressable
               onPress={() => navigation.goBack()}
               style={[styles.resultBtn, { backgroundColor: '#E8B828' }]}
             >
               <Text style={[styles.resultBtnText, { color: '#000' }]}>Add manually</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           </View>
         </View>
       )}
@@ -230,38 +229,38 @@ export function BarcodeScannerScreen({ navigation }: any) {
             <View style={styles.servingsRow}>
               <Text style={styles.servingsText}>Servings</Text>
               <View style={styles.servingsBox}>
-                <TouchableOpacity
+                <SoundPressable
                   onPress={() => setServings(String(Math.max(0.25, (parseFloat(servings) || 1) - 0.5)))}
                   style={styles.servingsBtn}
                 >
                   <Ionicons name="remove" size={18} color="#fff" />
-                </TouchableOpacity>
+                </SoundPressable>
                 <Text style={styles.servingsVal}>{servings}</Text>
-                <TouchableOpacity
+                <SoundPressable
                   onPress={() => setServings(String((parseFloat(servings) || 1) + 0.5))}
                   style={styles.servingsBtn}
                 >
                   <Ionicons name="add" size={18} color="#fff" />
-                </TouchableOpacity>
+                </SoundPressable>
               </View>
             </View>
           </View>
 
           <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-            <TouchableOpacity
+            <SoundPressable
               onPress={rescan}
               style={[styles.resultBtn, { backgroundColor: 'rgba(255,255,255,0.12)' }]}
             >
               <Ionicons name="scan-outline" size={18} color="#fff" />
               <Text style={styles.resultBtnText}>Scan again</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            </SoundPressable>
+            <SoundPressable
               onPress={confirm}
               style={[styles.resultBtn, { backgroundColor: '#E8B828', flex: 1 }]}
             >
               <Ionicons name="checkmark" size={18} color="#000" />
-              <Text style={[styles.resultBtnText, { color: '#000' }]}>Log entry</Text>
-            </TouchableOpacity>
+              <Text style={[styles.resultBtnText, { color: '#000' }]}>Log It</Text>
+            </SoundPressable>
           </View>
         </View>
       )}

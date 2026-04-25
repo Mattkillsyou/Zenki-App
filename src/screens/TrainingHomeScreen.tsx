@@ -1,7 +1,7 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions,
-} from 'react-native';
+  View, Text, StyleSheet, ScrollView, Dimensions} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -38,14 +38,14 @@ export function TrainingHomeScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.goBack()}
           style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text
           style={[styles.title, { color: colors.textPrimary }]}
           maxFontSizeMultiplier={1.3}
@@ -67,7 +67,7 @@ export function TrainingHomeScreen({ navigation }: any) {
           {TRAINING_MODULES.map((mod) => {
             const accent = resolveAccent(mod.accentToken);
             return (
-              <TouchableOpacity
+              <SoundPressable
                 key={mod.id}
                 style={[
                   styles.tile,
@@ -99,7 +99,7 @@ export function TrainingHomeScreen({ navigation }: any) {
                 >
                   {mod.subtitle}
                 </Text>
-              </TouchableOpacity>
+              </SoundPressable>
             );
           })}
         </View>

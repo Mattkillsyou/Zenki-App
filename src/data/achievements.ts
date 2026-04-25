@@ -35,12 +35,12 @@ export const ACHIEVEMENT_DEFINITIONS: AchDef[] = [
   { id: 'black_belt', title: 'Black Belt', description: 'Earn your black belt', icon: 'medal',          xpReward: 2500, flameReward: 150,difficulty: 'mythic', requirement: { type: 'belt_promotion', value: 5 } },
 
   // ═══════════════════════════════════════════════════
-  // MODULE: HR SESSIONS (heart rate, strain, calories)
+  // MODULE: WORKOUTS (heart rate, strain, calories)
   // ═══════════════════════════════════════════════════
-  { id: 'first_hr',     title: 'Heart Monitor',     description: 'Complete your first HR session',    icon: 'heart-outline',  xpReward: 50,  flameReward: 1,  difficulty: 'easy',   requirement: { type: 'hr_sessions', value: 1 } },
-  { id: 'hr_10',        title: 'Cardio Warrior',    description: 'Complete 10 HR sessions',           icon: 'heart',          xpReward: 200, flameReward: 5,  difficulty: 'medium', requirement: { type: 'hr_sessions', value: 10 } },
-  { id: 'hr_50',        title: 'Heart of Gold',     description: 'Complete 50 HR sessions',           icon: 'heart-circle',   xpReward: 500, flameReward: 12, difficulty: 'hard',   requirement: { type: 'hr_sessions', value: 50 } },
-  { id: 'hr_100',       title: 'Cardiac Engine',    description: 'Complete 100 HR sessions',          icon: 'pulse',          xpReward: 1000,flameReward: 30, difficulty: 'elite',  requirement: { type: 'hr_sessions', value: 100 } },
+  { id: 'first_hr',     title: 'Heart Monitor',     description: 'Complete your first workout',       icon: 'heart-outline',  xpReward: 50,  flameReward: 1,  difficulty: 'easy',   requirement: { type: 'hr_sessions', value: 1 } },
+  { id: 'hr_10',        title: 'Cardio Warrior',    description: 'Complete 10 workouts',              icon: 'heart',          xpReward: 200, flameReward: 5,  difficulty: 'medium', requirement: { type: 'hr_sessions', value: 10 } },
+  { id: 'hr_50',        title: 'Heart of Gold',     description: 'Complete 50 workouts',              icon: 'heart-circle',   xpReward: 500, flameReward: 12, difficulty: 'hard',   requirement: { type: 'hr_sessions', value: 50 } },
+  { id: 'hr_100',       title: 'Cardiac Engine',    description: 'Complete 100 workouts',             icon: 'pulse',          xpReward: 1000,flameReward: 30, difficulty: 'elite',  requirement: { type: 'hr_sessions', value: 100 } },
 
   // ═══════════════════════════════════════════════════
   // MODULE: GPS TRACKING (runs, walks, bikes, hikes)

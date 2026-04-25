@@ -4,11 +4,10 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   TextInput,
   Image,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -54,7 +53,7 @@ export function UserSearchScreen({ navigation, route }: any) {
   const renderItem = ({ item }: { item: MemberProfile }) => {
     const initials = item.displayName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
     return (
-      <TouchableOpacity
+      <SoundPressable
         style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
         onPress={() => handlePress(item)}
         activeOpacity={0.8}
@@ -81,16 +80,16 @@ export function UserSearchScreen({ navigation, route }: any) {
           size={18}
           color={colors.textMuted}
         />
-      </TouchableOpacity>
+      </SoundPressable>
     );
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <SoundPressable onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>
           {action === 'message' ? 'New Message' : 'Members'}
         </Text>
@@ -109,9 +108,9 @@ export function UserSearchScreen({ navigation, route }: any) {
           autoCorrect={false}
         />
         {queryText ? (
-          <TouchableOpacity onPress={() => setQueryText('')}>
+          <SoundPressable onPress={() => setQueryText('')}>
             <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+          </SoundPressable>
         ) : null}
       </View>
 

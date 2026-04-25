@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, Animated, PanResponder, TouchableOpacity,
-  Dimensions, Pressable,
-} from 'react-native';
+  View, Text, StyleSheet, Animated, PanResponder, Dimensions, Pressable} from 'react-native';
+import { SoundPressable } from './SoundPressable';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSenpai, MascotMood } from '../context/SenpaiContext';
@@ -241,9 +240,9 @@ export function SenpaiMascot() {
 
       {/* Close button (on long press) */}
       {showClose && (
-        <TouchableOpacity style={styles.closeBtn} onPress={() => setHidden(true)}>
+        <SoundPressable style={styles.closeBtn} onPress={() => setHidden(true)}>
           <Text style={styles.closeBtnText}>x</Text>
-        </TouchableOpacity>
+        </SoundPressable>
       )}
     </Animated.View>
   );

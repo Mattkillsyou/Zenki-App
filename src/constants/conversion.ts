@@ -22,7 +22,7 @@ export const MAX_WEIGHT_LBS = 1500;
 /** Timer vibration pattern */
 export const TIMER_VIBRATION_PATTERN = [0, 200, 100, 200];
 
-/** Max HR sessions to store */
+/** Max workout sessions to store */
 export const MAX_HR_SESSIONS = 200;
 
 /** Message query page size */

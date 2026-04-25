@@ -4,12 +4,11 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  TouchableOpacity,
   ScrollView,
   Alert,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -87,9 +86,9 @@ export function SignUpScreen({ navigation }: any) {
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <SoundPressable onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
 
         <View style={styles.content}>
@@ -122,7 +121,7 @@ export function SignUpScreen({ navigation }: any) {
           {renderInput('REFERRAL CODE', referralCode, setReferralCode, 'Optional', { required: false })}
 
           {/* Terms */}
-          <TouchableOpacity
+          <SoundPressable
             style={styles.termsRow}
             onPress={() => setAgreedToTerms(!agreedToTerms)}
           >
@@ -141,7 +140,7 @@ export function SignUpScreen({ navigation }: any) {
               {' '}and{' '}
               <Text style={{ color: colors.gold }}>Privacy Policy</Text>
             </Text>
-          </TouchableOpacity>
+          </SoundPressable>
 
           <Button
             title="Submit Application"

@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -18,12 +19,12 @@ export function SessionHistoryScreen({ navigation }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.goBack()}
           style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Session History</Text>
         <View style={{ width: 36 }} />
       </View>
@@ -37,13 +38,13 @@ export function SessionHistoryScreen({ navigation }: any) {
           <Text style={[styles.emptyBody, { color: colors.textMuted }]}>
             Start a workout session to see your heart rate data, strain, and calories here.
           </Text>
-          <TouchableOpacity
+          <SoundPressable
             style={[styles.startBtn, { backgroundColor: colors.gold }]}
             onPress={() => navigation.navigate('WorkoutSession')}
           >
             <Ionicons name="play" size={18} color="#000" />
             <Text style={styles.startBtnText}>Start Session</Text>
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>

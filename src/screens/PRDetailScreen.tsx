@@ -4,13 +4,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
-} from 'react-native';
+  Dimensions} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -65,9 +64,9 @@ export function PRDetailScreen({ navigation, route }: any) {
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.centered}>
           <Text style={{ color: colors.textMuted }}>Exercise not found.</Text>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <SoundPressable onPress={() => navigation.goBack()}>
             <Text style={{ color: colors.gold, marginTop: 12 }}>Go back</Text>
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
       </SafeAreaView>
     );
@@ -137,12 +136,12 @@ export function PRDetailScreen({ navigation, route }: any) {
         <ScrollView contentContainerStyle={{ paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
+            <SoundPressable
               onPress={() => navigation.goBack()}
               style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
               <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-            </TouchableOpacity>
+            </SoundPressable>
             <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
               {exercise.name}
             </Text>
@@ -188,7 +187,7 @@ export function PRDetailScreen({ navigation, route }: any) {
 
           {/* Add PR button */}
           <FadeInView delay={140} slideUp={8}>
-            <TouchableOpacity
+            <SoundPressable
               style={[
                 styles.primaryBtn,
                 { backgroundColor: showForm ? colors.surfaceSecondary : colors.red },
@@ -209,7 +208,7 @@ export function PRDetailScreen({ navigation, route }: any) {
               >
                 {showForm ? 'Cancel' : 'Add a PR'}
               </Text>
-            </TouchableOpacity>
+            </SoundPressable>
           </FadeInView>
 
           {showForm && (
@@ -269,12 +268,12 @@ export function PRDetailScreen({ navigation, route }: any) {
                   maxLength={200}
                 />
 
-                <TouchableOpacity
+                <SoundPressable
                   style={[styles.saveBtn, { backgroundColor: colors.gold }]}
                   onPress={handleSave}
                 >
                   <Text style={styles.saveBtnText}>Save PR</Text>
-                </TouchableOpacity>
+                </SoundPressable>
               </View>
             </FadeInView>
           )}
@@ -312,12 +311,12 @@ export function PRDetailScreen({ navigation, route }: any) {
                       </Text>
                     ) : null}
                   </View>
-                  <TouchableOpacity
+                  <SoundPressable
                     onPress={() => confirmDelete(pr.id)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-                  </TouchableOpacity>
+                  </SoundPressable>
                 </View>
               ))
             )}

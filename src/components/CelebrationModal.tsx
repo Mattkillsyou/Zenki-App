@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Modal, Animated, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Modal, Animated } from 'react-native';
+import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { Celebration } from '../types/gamification';
@@ -99,9 +100,9 @@ export function CelebrationModal({ celebration, onDismiss }: CelebrationModalPro
               <Text style={[styles.xpText, { color: colors.gold }]}>+{celebration.xpGained} XP</Text>
             </View>
           )}
-          <TouchableOpacity style={[styles.button, { backgroundColor: colors.gold }]} onPress={onDismiss}>
+          <SoundPressable style={[styles.button, { backgroundColor: colors.gold }]} onPress={onDismiss}>
             <Text style={styles.buttonText}>AWESOME!</Text>
-          </TouchableOpacity>
+          </SoundPressable>
         </Animated.View>
       </View>
     </Modal>

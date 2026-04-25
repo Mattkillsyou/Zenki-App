@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TextInput, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, Image, TextInput, ActivityIndicator, Alert, Platform } from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -94,11 +95,11 @@ export function CreatePostScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <SoundPressable onPress={() => navigation.goBack()}>
           <Ionicons name="close" size={28} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>New Post</Text>
-        <TouchableOpacity
+        <SoundPressable
           onPress={handlePost}
           disabled={!canPost || uploading}
           style={[styles.postButton, { backgroundColor: canPost ? colors.red : colors.surfaceSecondary }]}
@@ -108,25 +109,25 @@ export function CreatePostScreen({ navigation }: any) {
           ) : (
             <Text style={[styles.postButtonText, { color: canPost ? '#FFF' : colors.textMuted }]}>Post</Text>
           )}
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
 
       {/* Mode toggle — Photo vs Text */}
       <View style={[styles.modeToggle, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <TouchableOpacity
+        <SoundPressable
           style={[styles.modeOption, mode === 'photo' && { backgroundColor: colors.gold }]}
           onPress={() => setMode('photo')}
         >
           <Ionicons name="image-outline" size={16} color={mode === 'photo' ? '#000' : colors.textMuted} />
           <Text style={[styles.modeLabel, { color: mode === 'photo' ? '#000' : colors.textMuted }]}>Photo</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
+        </SoundPressable>
+        <SoundPressable
           style={[styles.modeOption, mode === 'text' && { backgroundColor: colors.gold }]}
           onPress={() => setMode('text')}
         >
           <Ionicons name="chatbox-outline" size={16} color={mode === 'text' ? '#000' : colors.textMuted} />
           <Text style={[styles.modeLabel, { color: mode === 'text' ? '#000' : colors.textMuted }]}>Text</Text>
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
 
       {/* TEXT MODE */}
@@ -174,40 +175,40 @@ export function CreatePostScreen({ navigation }: any) {
             </Text>
           </View>
 
-          <TouchableOpacity
+          <SoundPressable
             style={[styles.changeButton, { backgroundColor: colors.surface }]}
             onPress={() => setMediaUri(null)}
           >
             <Ionicons name="refresh-outline" size={18} color={colors.textPrimary} />
             <Text style={[styles.changeText, { color: colors.textPrimary }]}>Change</Text>
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
       ) : (
         <View style={styles.pickerContainer}>
-          <TouchableOpacity
+          <SoundPressable
             style={[styles.pickerButton, { backgroundColor: colors.surface }]}
             onPress={() => pickMedia('library')}
           >
             <Ionicons name="images-outline" size={36} color={colors.gold} />
             <Text style={[styles.pickerLabel, { color: colors.textPrimary }]}>Photo / Video</Text>
             <Text style={[styles.pickerSub, { color: colors.textTertiary }]}>From library</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </SoundPressable>
+          <SoundPressable
             style={[styles.pickerButton, { backgroundColor: colors.surface }]}
             onPress={() => pickMedia('camera')}
           >
             <Ionicons name="camera-outline" size={36} color={colors.gold} />
             <Text style={[styles.pickerLabel, { color: colors.textPrimary }]}>Camera</Text>
             <Text style={[styles.pickerSub, { color: colors.textTertiary }]}>Take a photo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </SoundPressable>
+          <SoundPressable
             style={[styles.pickerButton, { backgroundColor: colors.surface }]}
             onPress={() => pickMedia('camera', true)}
           >
             <Ionicons name="videocam-outline" size={36} color={colors.gold} />
             <Text style={[styles.pickerLabel, { color: colors.textPrimary }]}>Video</Text>
             <Text style={[styles.pickerSub, { color: colors.textTertiary }]}>Record · 60s max</Text>
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
       ))}
 

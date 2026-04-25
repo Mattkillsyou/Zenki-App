@@ -26,7 +26,7 @@ interface InsightInput {
   currentStreak: number;
   longestStreak: number;
 
-  // HR Sessions
+  // Workouts
   hrSessionsThisWeek: number;
   hrSessionsLastWeek: number;
   avgStrainThisWeek: number;
@@ -85,12 +85,12 @@ export function generateInsights(input: InsightInput): Insight[] {
     add({ module: 'training', type: 'warning', icon: 'flame-outline', title: 'Streak Lost', message: 'Your training streak reset. One session today restarts it. Show up!', priority: 1 });
   }
 
-  // ─── HR SESSIONS ───
+  // ─── WORKOUTS ───
   if (input.hrSessionsThisWeek > 0 && input.avgStrainThisWeek > input.avgStrainLastWeek && input.avgStrainLastWeek > 0) {
     add({ module: 'hr', type: 'positive', icon: 'heart', title: 'Pushing Harder', message: `Average strain up to ${input.avgStrainThisWeek.toFixed(1)} from ${input.avgStrainLastWeek.toFixed(1)} last week.`, priority: 3 });
   }
   if (input.hrSessionsThisWeek === 0 && input.hrSessionsLastWeek > 0) {
-    add({ module: 'hr', type: 'warning', icon: 'heart-outline', title: 'No HR Sessions', message: `You tracked ${input.hrSessionsLastWeek} HR session${input.hrSessionsLastWeek > 1 ? 's' : ''} last week but none this week. Strap up!`, priority: 2 });
+    add({ module: 'hr', type: 'warning', icon: 'heart-outline', title: 'No Workouts', message: `You tracked ${input.hrSessionsLastWeek} workout${input.hrSessionsLastWeek > 1 ? 's' : ''} last week but none this week. Strap up!`, priority: 2 });
   }
 
   // ─── GPS ───

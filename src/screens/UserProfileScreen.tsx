@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, TextInput, Linking, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, Dimensions, Alert, TextInput, Linking, KeyboardAvoidingView, Platform } from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -124,9 +125,9 @@ export function UserProfileScreen({ navigation, route }: any) {
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <SoundPressable onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
             {profile?.displayName || 'Profile'}
           </Text>
@@ -158,19 +159,19 @@ export function UserProfileScreen({ navigation, route }: any) {
           {(profile as any)?.socialLinks && (
             <View style={styles.socialLinksRow}>
               {(profile as any).socialLinks.instagram && (
-                <TouchableOpacity onPress={() => Linking.openURL(`https://instagram.com/${(profile as any).socialLinks.instagram}`)}>
+                <SoundPressable onPress={() => Linking.openURL(`https://instagram.com/${(profile as any).socialLinks.instagram}`)}>
                   <Ionicons name="logo-instagram" size={22} color={colors.textSecondary} />
-                </TouchableOpacity>
+                </SoundPressable>
               )}
               {(profile as any).socialLinks.twitter && (
-                <TouchableOpacity onPress={() => Linking.openURL(`https://x.com/${(profile as any).socialLinks.twitter}`)}>
+                <SoundPressable onPress={() => Linking.openURL(`https://x.com/${(profile as any).socialLinks.twitter}`)}>
                   <Ionicons name="logo-twitter" size={22} color={colors.textSecondary} />
-                </TouchableOpacity>
+                </SoundPressable>
               )}
               {(profile as any).socialLinks.website && (
-                <TouchableOpacity onPress={() => Linking.openURL((profile as any).socialLinks.website)}>
+                <SoundPressable onPress={() => Linking.openURL((profile as any).socialLinks.website)}>
                   <Ionicons name="globe-outline" size={22} color={colors.textSecondary} />
-                </TouchableOpacity>
+                </SoundPressable>
               )}
             </View>
           )}
@@ -194,7 +195,7 @@ export function UserProfileScreen({ navigation, route }: any) {
           {/* Follow / Edit Profile Buttons */}
           {isOwnProfile ? (
             <View style={styles.ownButtonsRow}>
-              <TouchableOpacity
+              <SoundPressable
                 style={[styles.actionButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, flex: 1 }]}
                 onPress={() => {
                   setEditBio(profile?.bio || '');
@@ -206,17 +207,17 @@ export function UserProfileScreen({ navigation, route }: any) {
               >
                 <Ionicons name="create-outline" size={16} color={colors.textPrimary} />
                 <Text style={[styles.actionButtonText, { color: colors.textPrimary }]}>Edit Profile</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </SoundPressable>
+              <SoundPressable
                 style={[styles.actionButton, { backgroundColor: profile?.isPrivate ? colors.goldMuted : colors.surface, borderColor: colors.border, borderWidth: 1 }]}
                 onPress={handleTogglePrivate}
               >
                 <Ionicons name={profile?.isPrivate ? 'lock-closed' : 'lock-open-outline'} size={16} color={profile?.isPrivate ? colors.gold : colors.textMuted} />
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           ) : (
             <View style={styles.ownButtonsRow}>
-              <TouchableOpacity
+              <SoundPressable
                 style={[styles.actionButton, { backgroundColor: following ? colors.surface : colors.red, borderColor: colors.border, borderWidth: following ? 1 : 0, flex: 1 }]}
                 onPress={handleFollow}
                 disabled={userBlocked}
@@ -224,8 +225,8 @@ export function UserProfileScreen({ navigation, route }: any) {
                 <Text style={[styles.actionButtonText, { color: following ? colors.textPrimary : '#FFF', opacity: userBlocked ? 0.4 : 1 }]}>
                   {following ? 'Following' : 'Follow'}
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </SoundPressable>
+              <SoundPressable
                 style={[styles.actionButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, flex: 1, opacity: userBlocked ? 0.4 : 1 }]}
                 onPress={() => !userBlocked && navigation.navigate('MessagesChat', {
                   otherUserId: userId,
@@ -236,8 +237,8 @@ export function UserProfileScreen({ navigation, route }: any) {
               >
                 <Ionicons name="paper-plane-outline" size={16} color={colors.textPrimary} />
                 <Text style={[styles.actionButtonText, { color: colors.textPrimary }]}>Message</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </SoundPressable>
+              <SoundPressable
                 style={[styles.actionButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, paddingHorizontal: spacing.sm }]}
                 onPress={() => {
                   Alert.alert(profile?.displayName || 'User', undefined, [
@@ -249,7 +250,7 @@ export function UserProfileScreen({ navigation, route }: any) {
                 accessibilityLabel="More options"
               >
                 <Ionicons name="ellipsis-horizontal" size={18} color={colors.textPrimary} />
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           )}
 
@@ -319,7 +320,7 @@ export function UserProfileScreen({ navigation, route }: any) {
                   autoCapitalize="none"
                 />
               </View>
-              <TouchableOpacity
+              <SoundPressable
                 style={[styles.saveButton, { backgroundColor: colors.red }]}
                 onPress={async () => {
                   await updateProfile({
@@ -331,7 +332,7 @@ export function UserProfileScreen({ navigation, route }: any) {
                 }}
               >
                 <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           </View>
         )}
@@ -340,7 +341,7 @@ export function UserProfileScreen({ navigation, route }: any) {
         {canSeePosts ? (
           <View style={styles.postsGrid}>
             {posts.map((post) => (
-              <TouchableOpacity key={post.id} style={styles.gridItem}>
+              <SoundPressable key={post.id} style={styles.gridItem}>
                 {post.mediaUrl ? (
                   <Image source={{ uri: post.mediaUrl }} style={styles.gridImage} resizeMode="cover" />
                 ) : (
@@ -350,7 +351,7 @@ export function UserProfileScreen({ navigation, route }: any) {
                     </Text>
                   </View>
                 )}
-              </TouchableOpacity>
+              </SoundPressable>
             ))}
             {posts.length === 0 && (
               <View style={styles.noPostsContainer}>

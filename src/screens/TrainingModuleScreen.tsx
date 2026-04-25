@@ -1,7 +1,7 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-} from 'react-native';
+  View, Text, StyleSheet, ScrollView} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -43,14 +43,14 @@ export function TrainingModuleScreen({ navigation, route }: Props) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity
+          <SoundPressable
             onPress={() => navigation.goBack()}
             style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
           <Text
             style={[styles.title, { color: colors.textPrimary }]}
             maxFontSizeMultiplier={1.3}
@@ -78,14 +78,14 @@ export function TrainingModuleScreen({ navigation, route }: Props) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.goBack()}
           style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text
           style={[styles.title, { color: colors.textPrimary }]}
           maxFontSizeMultiplier={1.3}

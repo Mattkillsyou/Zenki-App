@@ -52,6 +52,14 @@
           "neverForLocation": true,
           "bluetoothAlwaysPermission": "Zenki Dojo connects to Bluetooth heart-rate monitors so you can track BPM, zones, and calories during training sessions."
         }
+      ],
+      [
+        "react-native-health",
+        {
+          "isClinicalDataEnabled": false,
+          "healthSharePermission": "Zenki Dojo reads steps, calories, active minutes, and heart rate from Apple Health to give you a unified training and recovery view.",
+          "healthUpdatePermission": "Zenki Dojo writes your logged workouts, weight, nutrition, and heart-rate sessions to Apple Health so all your training data stays in one place."
+        }
       ]
     ],
     "ios": {
@@ -68,7 +76,14 @@
         "NSCalendarsFullAccessUsageDescription": "Zenki Dojo adds your booked classes and training sessions to your calendar when you opt in.",
         "NSCalendarsUsageDescription": "Zenki Dojo adds your booked classes and training sessions to your calendar when you opt in.",
         "NSBluetoothAlwaysUsageDescription": "Zenki Dojo connects to Bluetooth heart-rate monitors so you can track BPM, zones, and calories during training sessions.",
-        "NSBluetoothPeripheralUsageDescription": "Zenki Dojo uses Bluetooth to connect to heart-rate monitors during workouts."
+        "NSBluetoothPeripheralUsageDescription": "Zenki Dojo uses Bluetooth to connect to heart-rate monitors during workouts.",
+        "NSHealthShareUsageDescription": "Zenki Dojo reads steps, calories, active minutes, and heart rate from Apple Health to give you a unified training and recovery view.",
+        "NSHealthUpdateUsageDescription": "Zenki Dojo writes your logged workouts, weight, nutrition, and heart-rate sessions to Apple Health so all your training data stays in one place.",
+        "UIBackgroundModes": ["fetch"]
+      },
+      "entitlements": {
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.access": []
       }
     },
     "android": {

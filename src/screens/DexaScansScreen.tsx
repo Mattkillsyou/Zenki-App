@@ -4,9 +4,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  Dimensions,
-} from 'react-native';
+  Dimensions} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -52,19 +51,19 @@ export function DexaScansScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.goBack()}
           style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>DEXA</Text>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.navigate('DexaUpload')}
           style={[styles.backBtn, { backgroundColor: colors.gold }]}
         >
           <Ionicons name="add" size={22} color="#000" />
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
@@ -76,14 +75,14 @@ export function DexaScansScreen({ navigation }: any) {
               <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
                 Upload a DEXA report (PDF or photo) and the AI will extract all your metrics automatically.
               </Text>
-              <TouchableOpacity
+              <SoundPressable
                 activeOpacity={0.85}
                 onPress={() => navigation.navigate('DexaUpload')}
                 style={[styles.emptyCta, { backgroundColor: colors.gold }]}
               >
                 <Ionicons name="cloud-upload" size={18} color="#000" />
                 <Text style={styles.emptyCtaText}>Upload first scan</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           </FadeInView>
         ) : (
@@ -134,7 +133,7 @@ export function DexaScansScreen({ navigation }: any) {
             {/* Scan list */}
             <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>SCANS</Text>
             {scans.map((scan) => (
-              <TouchableOpacity
+              <SoundPressable
                 key={scan.id}
                 activeOpacity={0.85}
                 onPress={() => navigation.navigate('DexaScanDetail', { id: scan.id })}
@@ -149,7 +148,7 @@ export function DexaScansScreen({ navigation }: any) {
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-              </TouchableOpacity>
+              </SoundPressable>
             ))}
           </>
         )}

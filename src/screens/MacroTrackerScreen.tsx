@@ -1,17 +1,17 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
   KeyboardAvoidingView,
   Platform,
   Modal,
-  Pressable,
-} from 'react-native';
+  Pressable} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SoundPressable } from '../components/SoundPressable';
 import Svg, { Path, Circle as SvgCircle, G } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +21,7 @@ import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
 import { FadeInView } from '../components';
 import { FoodSearchModal } from '../components/FoodSearchModal';
+import { ReorderableSections, ReorderableItem } from '../components/ReorderableSections';
 import { MealType, MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from '../types/nutrition';
 
 function todayISO(): string {
@@ -84,6 +85,8 @@ export function MacroTrackerScreen({ navigation, route }: any) {
     runAdaptiveUpdate,
     effectiveTdee,
     profileFor,
+    macrosForDateByMeal,
+    totalsForDateByMeal,
   } = useNutrition();
 
   // Run adaptive expenditure update on mount (internally rate-limited to 7 days)
@@ -94,6 +97,85 @@ export function MacroTrackerScreen({ navigation, route }: any) {
   const hasSetup = user ? hasCompletedSetup(user.id) : false;
   const recentFoods = user ? recentFoodsFor(user.id) : [];
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // ── Meal-section reorder ──
+  const MEAL_ORDER_KEY = '@zenki_macro_meal_order';
+  const DEFAULT_MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snacks'];
+  const [mealOrder, setMealOrder] = useState<MealType[]>(DEFAULT_MEAL_ORDER);
+  const [mealEditMode, setMealEditMode] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(MEAL_ORDER_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return;
+        // Sanitize — keep only known meal types, append any missing
+        const valid = parsed.filter((m): m is MealType =>
+          ['breakfast', 'lunch', 'dinner', 'snacks'].includes(m),
+        );
+        const missing = DEFAULT_MEAL_ORDER.filter((m) => !valid.includes(m));
+        setMealOrder([...valid, ...missing]);
+      } catch { /* ignore */ }
+    });
+  }, []);
+
+  const handleMealReorder = useCallback((nextIds: string[]) => {
+    const next = nextIds.filter((id): id is MealType =>
+      ['breakfast', 'lunch', 'dinner', 'snacks'].includes(id),
+    );
+    setMealOrder(next as MealType[]);
+    AsyncStorage.setItem(MEAL_ORDER_KEY, JSON.stringify(next)).catch(() => {});
+  }, []);
+
+  // ── First-time macro-setup wizard ──
+  const SETUP_DONE_KEY = '@zenki_macro_setup_done';
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardChecked, setWizardChecked] = useState(false);
+  const [wizardCal, setWizardCal] = useState('2200');
+  const [wizardPro, setWizardPro] = useState('160');
+  const [wizardCarb, setWizardCarb] = useState('220');
+  const [wizardFat, setWizardFat] = useState('70');
+
+  // Check if first-time wizard should be shown — once per device
+  useEffect(() => {
+    if (!user) return;
+    if (wizardChecked) return;
+    AsyncStorage.getItem(SETUP_DONE_KEY).then((done) => {
+      setWizardChecked(true);
+      if (done === 'true') return;
+      if (hasSetup) return;
+      // Pre-fill from existing goals if any
+      const existing = goalsFor(user.id);
+      if (existing) {
+        setWizardCal(String(existing.calories));
+        setWizardPro(String(existing.protein));
+        setWizardCarb(String(existing.carbs));
+        setWizardFat(String(existing.fat));
+      }
+      setWizardOpen(true);
+    }).catch(() => setWizardChecked(true));
+  }, [user, hasSetup, wizardChecked, goalsFor]);
+
+  const handleWizardSkip = async () => {
+    setWizardOpen(false);
+    await AsyncStorage.setItem(SETUP_DONE_KEY, 'true').catch(() => {});
+  };
+
+  const handleWizardSave = async () => {
+    if (!user) return;
+    const cal = parseInt(wizardCal, 10);
+    const pro = parseInt(wizardPro, 10);
+    const carb = parseInt(wizardCarb, 10);
+    const fat = parseInt(wizardFat, 10);
+    if (![cal, pro, carb, fat].every((n) => Number.isFinite(n) && n > 0)) {
+      Alert.alert('Check your numbers', 'Each goal must be a positive number.');
+      return;
+    }
+    updateGoals(user.id, { calories: cal, protein: pro, carbs: carb, fat });
+    await AsyncStorage.setItem(SETUP_DONE_KEY, 'true').catch(() => {});
+    setWizardOpen(false);
+  };
 
   // If navigated with { openSearch: true } from the Home quick-actions row,
   // pop the Food Search modal automatically so tapping "Search" on Home
@@ -224,47 +306,47 @@ export function MacroTrackerScreen({ navigation, route }: any) {
         <ScrollView contentContainerStyle={{ paddingBottom: 120 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
+            <SoundPressable
               onPress={() => navigation.goBack()}
               style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
               <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-            </TouchableOpacity>
+            </SoundPressable>
             <Text style={[styles.title, { color: colors.textPrimary }]}>Macros</Text>
-            <TouchableOpacity
+            <SoundPressable
               onPress={() => navigation.navigate('MacroSetup')}
               style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
               <Ionicons name="options-outline" size={20} color={colors.textPrimary} />
-            </TouchableOpacity>
+            </SoundPressable>
           </View>
 
           {/* Search + Scan + Photo — top action row */}
           <View style={styles.actionRow}>
-            <TouchableOpacity
+            <SoundPressable
               activeOpacity={0.85}
               onPress={() => setSearchOpen(true)}
               style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
               <Ionicons name="search" size={22} color={colors.gold} />
               <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Search</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            </SoundPressable>
+            <SoundPressable
               activeOpacity={0.85}
               onPress={() => navigation.navigate('BarcodeScanner')}
               style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
               <Ionicons name="barcode-outline" size={22} color={colors.gold} />
               <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Scan</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            </SoundPressable>
+            <SoundPressable
               activeOpacity={0.85}
               onPress={() => navigation.navigate('PhotoFood')}
               style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
               <Ionicons name="sparkles-outline" size={22} color={colors.gold} />
               <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Photo</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           </View>
 
           {/* ─── Food Calendar (MacroFactor style) ─── */}
@@ -272,21 +354,21 @@ export function MacroTrackerScreen({ navigation, route }: any) {
             <View style={[styles.calendarCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {/* Month nav */}
               <View style={styles.calMonthRow}>
-                <TouchableOpacity onPress={() => setCalendarMonth((prev) => {
+                <SoundPressable onPress={() => setCalendarMonth((prev) => {
                   const d = new Date(prev.year, prev.month - 1, 1);
                   return { year: d.getFullYear(), month: d.getMonth() };
                 })}>
                   <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
-                </TouchableOpacity>
+                </SoundPressable>
                 <Text style={[styles.calMonthLabel, { color: colors.textPrimary }]}>
                   {(calendarDays as any).monthLabel || ''}
                 </Text>
-                <TouchableOpacity onPress={() => setCalendarMonth((prev) => {
+                <SoundPressable onPress={() => setCalendarMonth((prev) => {
                   const d = new Date(prev.year, prev.month + 1, 1);
                   return { year: d.getFullYear(), month: d.getMonth() };
                 })}>
                   <Ionicons name="chevron-forward" size={20} color={colors.textPrimary} />
-                </TouchableOpacity>
+                </SoundPressable>
               </View>
 
               {/* Day-of-week header */}
@@ -306,7 +388,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
                   const isSelected = day.date === selectedDate;
                   const isCurrentDay = day.date === today;
                   return (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={day.day}
                       style={[
                         styles.calCell,
@@ -328,7 +410,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
                           { backgroundColor: day.hitGoal ? colors.success : colors.gold },
                         ]} />
                       )}
-                    </TouchableOpacity>
+                    </SoundPressable>
                   );
                 })}
               </View>
@@ -343,7 +425,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
           {/* Setup CTA — shown until user completes the BMR wizard */}
           {!hasSetup && (
             <FadeInView>
-              <TouchableOpacity
+              <SoundPressable
                 activeOpacity={0.85}
                 onPress={() => navigation.navigate('MacroSetup')}
                 style={[styles.setupBanner, { backgroundColor: colors.gold }]}
@@ -355,7 +437,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
                   </Text>
                 </View>
                 <Ionicons name="arrow-forward-circle" size={28} color="#000" />
-              </TouchableOpacity>
+              </SoundPressable>
             </FadeInView>
           )}
 
@@ -531,7 +613,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
                   contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: 8 }}
                 >
                   {recentFoods.slice(0, 10).map((food, i) => (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={`${food.id}-${i}`}
                       activeOpacity={0.7}
                       onPress={() => {
@@ -555,14 +637,14 @@ export function MacroTrackerScreen({ navigation, route }: any) {
                       <Text style={[styles.quickAddCal, { color: colors.textMuted }]}>
                         {food.macros.calories} cal
                       </Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   ))}
-                  <TouchableOpacity
+                  <SoundPressable
                     onPress={() => setSearchOpen(true)}
                     style={[styles.quickAddChip, styles.quickAddMore, { backgroundColor: colors.goldMuted, borderColor: colors.gold + '30' }]}
                   >
                     <Ionicons name="add" size={18} color={colors.gold} />
-                  </TouchableOpacity>
+                  </SoundPressable>
                 </ScrollView>
               </View>
             </FadeInView>
@@ -617,7 +699,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
                 {(['breakfast', 'lunch', 'dinner', 'snacks'] as MealType[]).map((mt) => {
                   const active = mealType === mt;
                   return (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={mt}
                       style={[
                         styles.mealTypeChip,
@@ -633,7 +715,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
                       <Text style={[styles.mealTypeLabel, { color: active ? '#000' : colors.textSecondary }]}>
                         {MEAL_TYPE_LABELS[mt]}
                       </Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   );
                 })}
               </View>
@@ -685,44 +767,165 @@ export function MacroTrackerScreen({ navigation, route }: any) {
                 </View>
               </View>
 
-              <TouchableOpacity
+              <SoundPressable
                 onPress={handleAdd}
                 activeOpacity={0.85}
                 style={[styles.saveBtn, { backgroundColor: colors.gold }]}
               >
                 <Ionicons name="add-circle" size={18} color="#000" />
                 <Text style={styles.saveBtnText}>Add entry</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           </FadeInView>
 
-          {/* Today's entries */}
+          {/* Today's entries — grouped by meal, draggable order */}
           <FadeInView delay={180}>
-            <Text style={[styles.sectionLabel, styles.historyLabel, { color: colors.textMuted }]}>TODAY</Text>
+            <View style={[styles.historyLabel, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+              <Text style={[styles.sectionLabel, { color: colors.textMuted, marginLeft: 0, marginTop: 0 }]}>TODAY · DRAG TO REORDER</Text>
+              <SoundPressable onPress={() => setMealEditMode((v) => !v)} hitSlop={10} style={{ paddingHorizontal: spacing.lg }}>
+                <Text style={{ color: mealEditMode ? colors.gold : colors.textMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>
+                  {mealEditMode ? 'DONE' : 'EDIT'}
+                </Text>
+              </SoundPressable>
+            </View>
 
             {todayEntries.length === 0 ? (
               <View style={[styles.empty, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Ionicons name="restaurant-outline" size={28} color={colors.textMuted} />
                 <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No entries yet today. Log your first meal above.</Text>
               </View>
-            ) : (
-              todayEntries.map((m) => (
-                <View key={m.id} style={[styles.entryRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.entryName, { color: colors.textPrimary }]}>{m.name}</Text>
-                    <Text style={[styles.entryMacros, { color: colors.textSecondary }]}>
-                      {m.calories} cal · {m.protein}p · {m.carbs}c · {m.fat}f
-                    </Text>
-                  </View>
-                  <TouchableOpacity onPress={() => handleDelete(m.id)} hitSlop={10} style={styles.deleteBtn}>
-                    <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-                  </TouchableOpacity>
-                </View>
-              ))
-            )}
+            ) : user ? (() => {
+              const byMeal = macrosForDateByMeal(user.id, selectedDate);
+              const totalsByMeal = totalsForDateByMeal(user.id, selectedDate);
+              const items: ReorderableItem[] = mealOrder.map((meal) => {
+                const entries = byMeal[meal] ?? [];
+                const tot = totalsByMeal[meal];
+                return {
+                  id: meal,
+                  hidden: false,
+                  node: (
+                    <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', letterSpacing: 1, color: colors.textPrimary }}>
+                          {MEAL_TYPE_ICONS[meal]} {MEAL_TYPE_LABELS[meal].toUpperCase()}
+                        </Text>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted }}>
+                          {tot.calories} cal
+                        </Text>
+                      </View>
+                      {entries.length === 0 ? (
+                        <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 8, fontStyle: 'italic', paddingHorizontal: 4 }}>
+                          Nothing logged for {MEAL_TYPE_LABELS[meal].toLowerCase()}.
+                        </Text>
+                      ) : (
+                        entries.map((m) => (
+                          <View key={m.id} style={[styles.entryRow, { backgroundColor: colors.surface, borderColor: colors.border, marginHorizontal: 0 }]}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.entryName, { color: colors.textPrimary }]}>{m.name}</Text>
+                              <Text style={[styles.entryMacros, { color: colors.textSecondary }]}>
+                                {m.calories} cal · {m.protein}p · {m.carbs}c · {m.fat}f
+                              </Text>
+                            </View>
+                            <SoundPressable onPress={() => handleDelete(m.id)} hitSlop={10} style={styles.deleteBtn}>
+                              <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
+                            </SoundPressable>
+                          </View>
+                        ))
+                      )}
+                    </View>
+                  ),
+                };
+              });
+              return (
+                <ReorderableSections
+                  items={items}
+                  editMode={mealEditMode}
+                  onReorder={handleMealReorder}
+                />
+              );
+            })() : null}
           </FadeInView>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* First-time macro setup wizard */}
+      <Modal visible={wizardOpen} transparent animationType="fade" onRequestClose={handleWizardSkip}>
+        <View style={wizardStyles.backdrop}>
+          <View style={[wizardStyles.card, { backgroundColor: colors.backgroundElevated, borderColor: colors.gold }]}>
+            <View style={wizardStyles.headerRow}>
+              <View>
+                <Text style={[wizardStyles.title, { color: colors.textPrimary }]}>SET YOUR MACROS</Text>
+                <Text style={[wizardStyles.subtitle, { color: colors.textSecondary }]}>
+                  Pick daily targets — you can change anytime.
+                </Text>
+              </View>
+              <SoundPressable onPress={handleWizardSkip} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </SoundPressable>
+            </View>
+
+            <View style={wizardStyles.fieldRow}>
+              <Text style={[wizardStyles.fieldLabel, { color: colors.textMuted }]}>CALORIES</Text>
+              <TextInput
+                value={wizardCal}
+                onChangeText={setWizardCal}
+                keyboardType="numeric"
+                style={[wizardStyles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+                placeholder="2200"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+            <View style={wizardStyles.fieldRow}>
+              <Text style={[wizardStyles.fieldLabel, { color: colors.textMuted }]}>PROTEIN (g)</Text>
+              <TextInput
+                value={wizardPro}
+                onChangeText={setWizardPro}
+                keyboardType="numeric"
+                style={[wizardStyles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+                placeholder="160"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+            <View style={wizardStyles.fieldRow}>
+              <Text style={[wizardStyles.fieldLabel, { color: colors.textMuted }]}>CARBS (g)</Text>
+              <TextInput
+                value={wizardCarb}
+                onChangeText={setWizardCarb}
+                keyboardType="numeric"
+                style={[wizardStyles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+                placeholder="220"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+            <View style={wizardStyles.fieldRow}>
+              <Text style={[wizardStyles.fieldLabel, { color: colors.textMuted }]}>FAT (g)</Text>
+              <TextInput
+                value={wizardFat}
+                onChangeText={setWizardFat}
+                keyboardType="numeric"
+                style={[wizardStyles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+                placeholder="70"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <View style={wizardStyles.btnRow}>
+              <SoundPressable
+                onPress={handleWizardSkip}
+                style={[wizardStyles.skipBtn, { borderColor: colors.border }]}
+              >
+                <Text style={[wizardStyles.skipBtnText, { color: colors.textMuted }]}>SKIP</Text>
+              </SoundPressable>
+              <SoundPressable
+                onPress={handleWizardSave}
+                style={[wizardStyles.saveBtn, { backgroundColor: colors.gold }]}
+              >
+                <Text style={wizardStyles.saveBtnText}>SAVE</Text>
+              </SoundPressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Food search modal */}
       <FoodSearchModal
@@ -793,18 +996,18 @@ export function MacroTrackerScreen({ navigation, route }: any) {
             </View>
 
             <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-              <TouchableOpacity
+              <SoundPressable
                 onPress={() => setGoalsOpen(false)}
                 style={[styles.modalBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
               >
                 <Text style={[styles.modalBtnText, { color: colors.textPrimary }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </SoundPressable>
+              <SoundPressable
                 onPress={saveGoals}
                 style={[styles.modalBtn, { backgroundColor: colors.gold, borderColor: colors.gold }]}
               >
                 <Text style={[styles.modalBtnText, { color: '#000' }]}>Save</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           </Pressable>
         </Pressable>
@@ -830,26 +1033,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
   },
-  title: { fontSize: 20, fontWeight: '800', letterSpacing: 0.5 },
+  title: { fontSize: 17, fontWeight: '800', letterSpacing: 0.3 },
 
   // Action row (Search / Scan / Photo)
   actionRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   actionBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 14,
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: 12,
     borderWidth: 1.5,
   },
-  actionBtnLabel: { fontSize: 15, fontWeight: '700' },
+  actionBtnLabel: { fontSize: 13, fontWeight: '700' },
 
   // Food calendar
   calendarCard: {
@@ -1022,20 +1225,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    padding: spacing.md,
+    marginBottom: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: borderRadius.md,
     borderWidth: 1,
   },
-  entryName: { fontSize: 15, fontWeight: '700' },
-  entryMacros: { fontSize: 12, fontWeight: '600', marginTop: 2, letterSpacing: 0.2 },
+  entryName: { fontSize: 13, fontWeight: '700' },
+  entryMacros: { fontSize: 11, fontWeight: '600', marginTop: 1, letterSpacing: 0.2 },
   deleteBtn: { padding: 6 },
 
   empty: {
     marginHorizontal: spacing.lg,
-    padding: spacing.lg,
+    padding: spacing.md,
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 6,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
   },
@@ -1189,4 +1393,75 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 14,
   },
+});
+
+// Wizard modal styles (kept separate so they don't collide with the
+// per-card styles defined above)
+const wizardStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  card: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 20,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 12,
+  },
+  title: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+  },
+  subtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  fieldRow: { marginBottom: 10 },
+  fieldLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    marginBottom: 6,
+  },
+  input: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  btnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  skipBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  skipBtnText: { fontSize: 13, fontWeight: '800', letterSpacing: 1 },
+  saveBtn: {
+    flex: 2,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  saveBtnText: { color: '#000', fontSize: 13, fontWeight: '900', letterSpacing: 1.5 },
 });

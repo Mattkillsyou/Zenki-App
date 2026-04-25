@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-} from 'react-native';
+  View, Text, StyleSheet, ScrollView} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -102,12 +102,12 @@ export function BodyLabScreen({ navigation }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.goBack()}
           style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Body Lab</Text>
         <View style={{ width: 36 }} />
       </View>
@@ -117,14 +117,14 @@ export function BodyLabScreen({ navigation }: any) {
         {tabs.map((t) => {
           const active = tab === t.key;
           return (
-            <TouchableOpacity
+            <SoundPressable
               key={t.key}
               style={[styles.tab, active && { backgroundColor: colors.gold }]}
               onPress={() => setTab(t.key)}
             >
               <Ionicons name={t.icon as any} size={16} color={active ? '#000' : colors.textMuted} />
               <Text style={[styles.tabLabel, { color: active ? '#000' : colors.textMuted }]}>{t.label}</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           );
         })}
       </View>
@@ -184,7 +184,7 @@ export function BodyLabScreen({ navigation }: any) {
 
             {/* Medications & Peptides shortcut */}
             <FadeInView delay={50}>
-              <TouchableOpacity
+              <SoundPressable
                 style={[styles.uploadCard, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 12 }]}
                 onPress={() => navigation.navigate('MedicationTracker')}
               >
@@ -194,7 +194,7 @@ export function BodyLabScreen({ navigation }: any) {
                   <Text style={[styles.uploadSub, { color: colors.textMuted }]}>Track doses, set reminders, log adherence</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-              </TouchableOpacity>
+              </SoundPressable>
             </FadeInView>
 
             {/* Flagged biomarkers summary */}
@@ -248,7 +248,7 @@ export function BodyLabScreen({ navigation }: any) {
         {tab === 'dexa' && (
           <>
             {/* Upload CTA */}
-            <TouchableOpacity
+            <SoundPressable
               style={[styles.uploadCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}
               onPress={() => navigation.navigate('DexaUpload')}
             >
@@ -258,14 +258,14 @@ export function BodyLabScreen({ navigation }: any) {
                 <Text style={[styles.uploadSub, { color: colors.textMuted }]}>Photo or PDF of your body composition report</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
+            </SoundPressable>
 
             {/* Existing scans */}
             {dexaScans.length > 0 ? (
               <>
                 <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>YOUR SCANS · {dexaScans.length}</Text>
                 {dexaScans.map((scan: any) => (
-                  <TouchableOpacity
+                  <SoundPressable
                     key={scan.id}
                     style={[styles.listCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
                     onPress={() => navigation.navigate('DexaScanDetail', { scanId: scan.id })}
@@ -284,7 +284,7 @@ export function BodyLabScreen({ navigation }: any) {
                       )}
                     </View>
                     <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-                  </TouchableOpacity>
+                  </SoundPressable>
                 ))}
               </>
             ) : (
@@ -299,7 +299,7 @@ export function BodyLabScreen({ navigation }: any) {
 
         {tab === 'bloodwork' && (
           <>
-            <TouchableOpacity
+            <SoundPressable
               style={[styles.uploadCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}
               onPress={() => navigation.navigate('BloodworkUpload')}
             >
@@ -309,7 +309,7 @@ export function BodyLabScreen({ navigation }: any) {
                 <Text style={[styles.uploadSub, { color: colors.textMuted }]}>Photo or PDF of your lab results</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
+            </SoundPressable>
 
             {bloodwork.length > 0 ? (
               <>
@@ -317,7 +317,7 @@ export function BodyLabScreen({ navigation }: any) {
                 {bloodwork.map((report: any) => {
                   const flagged = report.biomarkers?.filter((b: any) => b.status === 'out_of_range').length || 0;
                   return (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={report.id}
                       style={[styles.listCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
                       onPress={() => navigation.navigate('BloodworkReportDetail', { reportId: report.id })}
@@ -334,7 +334,7 @@ export function BodyLabScreen({ navigation }: any) {
                         </Text>
                       </View>
                       <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-                    </TouchableOpacity>
+                    </SoundPressable>
                   );
                 })}
               </>

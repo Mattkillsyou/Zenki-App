@@ -49,7 +49,7 @@ export type TrainingModule = {
 export const TRAINING_MODULES: TrainingModule[] = [
   {
     id: 'hr',
-    title: 'HR Session',
+    title: 'Start Workout',
     subtitle: 'Train by zone with a Bluetooth HR monitor',
     icon: 'heart',
     accentToken: 'red',
@@ -58,9 +58,9 @@ export const TRAINING_MODULES: TrainingModule[] = [
         'Connect a Bluetooth HR monitor and train by zone (Z1 to Z5) in real time. Zones personalize to your age and resting HR.',
       howToUse: [
         'Pair your HR monitor in iPhone Bluetooth settings',
-        'Open HR Session → pick an Activity Type (Martial Arts, HIIT, Yoga, etc.)',
+        'Open Start Workout → pick an Activity Type (Martial Arts, HIIT, Yoga, etc.)',
         'Wet the chest-strap electrodes, put it on, tap Start',
-        'Train. Tap Stop to save. The session feeds your Weekly Report',
+        'Train. Tap Stop to save. Each session adds to your stats and streaks',
       ],
     },
   },
@@ -162,23 +162,6 @@ export const TRAINING_MODULES: TrainingModule[] = [
         'Wait for GPS lock (indicator turns green)',
         'Tap Start → swipe between tabs for pace, map, or splits',
         'Tap Stop → review summary → Save',
-      ],
-    },
-  },
-  {
-    id: 'report',
-    title: 'Weekly Report',
-    subtitle: 'Weekly summary with AI insights',
-    icon: 'bar-chart-outline',
-    accentToken: 'gold',
-    sections: {
-      whatItIs:
-        'Weekly summary with totals (Activities, Time, Calories), Progress (Day Streak, Diamonds, Badges), Daily Breakdown, and AI-generated Insights.',
-      howToUse: [
-        'Open Report → read top totals',
-        'Check Day Streak + Diamonds + Badges',
-        'Scroll the Daily Breakdown bar chart',
-        'Read Insights last. It suggests a focus for next week',
       ],
     },
   },

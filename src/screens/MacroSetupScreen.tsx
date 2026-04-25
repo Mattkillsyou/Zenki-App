@@ -4,12 +4,11 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -159,12 +158,12 @@ export function MacroSetupScreen({ navigation }: any) {
         >
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
+            <SoundPressable
               onPress={back}
               style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
               <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-            </TouchableOpacity>
+            </SoundPressable>
             <Text style={[styles.title, { color: colors.textPrimary }]}>Macro Setup</Text>
             <View style={styles.backBtn} />
           </View>
@@ -319,7 +318,7 @@ export function MacroSetupScreen({ navigation }: any) {
                 {(Object.keys(ACTIVITY_LABELS) as ActivityLevel[]).map((lvl) => {
                   const active = activity === lvl;
                   return (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={lvl}
                       activeOpacity={0.85}
                       onPress={() => setActivity(lvl)}
@@ -341,7 +340,7 @@ export function MacroSetupScreen({ navigation }: any) {
                         </Text>
                       </View>
                       {active && <Ionicons name="checkmark-circle" size={22} color={colors.gold} />}
-                    </TouchableOpacity>
+                    </SoundPressable>
                   );
                 })}
               </StepWrap>
@@ -354,7 +353,7 @@ export function MacroSetupScreen({ navigation }: any) {
                   const adj = GOAL_ADJUSTMENT[g];
                   const adjLabel = adj === 0 ? '±0%' : `${adj > 0 ? '+' : ''}${Math.round(adj * 100)}%`;
                   return (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={g}
                       activeOpacity={0.85}
                       onPress={() => setGoal(g)}
@@ -376,7 +375,7 @@ export function MacroSetupScreen({ navigation }: any) {
                         </Text>
                       </View>
                       {active && <Ionicons name="checkmark-circle" size={22} color={colors.gold} />}
-                    </TouchableOpacity>
+                    </SoundPressable>
                   );
                 })}
               </StepWrap>
@@ -419,7 +418,7 @@ export function MacroSetupScreen({ navigation }: any) {
         {/* Bottom CTA */}
         <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
           {step === 'review' ? (
-            <TouchableOpacity
+            <SoundPressable
               activeOpacity={0.85}
               style={[styles.cta, { backgroundColor: colors.gold }]}
               onPress={finish}
@@ -427,16 +426,16 @@ export function MacroSetupScreen({ navigation }: any) {
             >
               <Text style={styles.ctaText}>Save & continue</Text>
               <Ionicons name="checkmark" size={20} color="#000" />
-            </TouchableOpacity>
+            </SoundPressable>
           ) : (
-            <TouchableOpacity
+            <SoundPressable
               activeOpacity={0.85}
               style={[styles.cta, { backgroundColor: colors.gold }]}
               onPress={next}
             >
               <Text style={styles.ctaText}>Continue</Text>
               <Ionicons name="arrow-forward" size={20} color="#000" />
-            </TouchableOpacity>
+            </SoundPressable>
           )}
         </View>
       </KeyboardAvoidingView>
@@ -482,7 +481,7 @@ function ChoiceCard({
   colors: any;
 }) {
   return (
-    <TouchableOpacity
+    <SoundPressable
       activeOpacity={0.85}
       onPress={onPress}
       style={[
@@ -498,7 +497,7 @@ function ChoiceCard({
       <Text style={[styles.choiceLabel, { color: active ? colors.gold : colors.textPrimary }]}>
         {label}
       </Text>
-    </TouchableOpacity>
+    </SoundPressable>
   );
 }
 
@@ -518,7 +517,7 @@ function UnitToggle({
       {options.map((opt) => {
         const active = value === opt.key;
         return (
-          <TouchableOpacity
+          <SoundPressable
             key={opt.key}
             activeOpacity={0.85}
             onPress={() => onChange(opt.key)}
@@ -532,7 +531,7 @@ function UnitToggle({
               fontWeight: '800',
               fontSize: 13,
             }}>{opt.label}</Text>
-          </TouchableOpacity>
+          </SoundPressable>
         );
       })}
     </View>

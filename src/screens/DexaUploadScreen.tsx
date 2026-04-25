@@ -3,15 +3,14 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   TextInput,
   Image,
   ActivityIndicator,
   ScrollView,
   Alert,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -190,12 +189,12 @@ export function DexaUploadScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <View style={styles.header}>
-          <TouchableOpacity
+          <SoundPressable
             onPress={() => navigation.goBack()}
             style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
             <Ionicons name="close" size={22} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Upload DEXA</Text>
           <View style={styles.backBtn} />
         </View>
@@ -213,14 +212,14 @@ export function DexaUploadScreen({ navigation }: any) {
                 </Text>
               </View>
               <View style={styles.btnRow}>
-                <TouchableOpacity onPress={() => ensureConsent('pdf')} style={[styles.bigBtn, { backgroundColor: colors.gold }]}>
+                <SoundPressable onPress={() => ensureConsent('pdf')} style={[styles.bigBtn, { backgroundColor: colors.gold }]}>
                   <Ionicons name="document-attach" size={22} color="#000" />
                   <Text style={styles.bigBtnText}>Upload PDF</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => ensureConsent('image')} style={[styles.bigBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
+                </SoundPressable>
+                <SoundPressable onPress={() => ensureConsent('image')} style={[styles.bigBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
                   <Ionicons name="image" size={22} color={colors.textPrimary} />
                   <Text style={[styles.bigBtnText, { color: colors.textPrimary }]}>Pick photo</Text>
-                </TouchableOpacity>
+                </SoundPressable>
               </View>
             </FadeInView>
           )}
@@ -237,17 +236,17 @@ export function DexaUploadScreen({ navigation }: any) {
               ) : (
                 <Image source={{ uri: phase.uri }} style={styles.preview} />
               )}
-              <TouchableOpacity
+              <SoundPressable
                 activeOpacity={0.85}
                 onPress={analyze}
                 style={[styles.cta, { backgroundColor: colors.gold }]}
               >
                 <Ionicons name="sparkles" size={20} color="#000" />
                 <Text style={styles.ctaText}>Extract with AI</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setPhase({ kind: 'idle' })} style={{ alignSelf: 'center', marginTop: spacing.md }}>
+              </SoundPressable>
+              <SoundPressable onPress={() => setPhase({ kind: 'idle' })} style={{ alignSelf: 'center', marginTop: spacing.md }}>
                 <Text style={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>Choose different file</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </FadeInView>
           )}
 
@@ -280,14 +279,14 @@ export function DexaUploadScreen({ navigation }: any) {
                 <EditRow label="A/G ratio"       value={numStr(editing.androidGynoidRatio)} onChange={(v) => setField('androidGynoidRatio', v)} keyboard="decimal-pad" colors={colors} />
               </View>
 
-              <TouchableOpacity
+              <SoundPressable
                 activeOpacity={0.85}
                 onPress={save}
                 style={[styles.cta, { backgroundColor: colors.gold }]}
               >
                 <Ionicons name="checkmark" size={20} color="#000" />
                 <Text style={styles.ctaText}>Save scan</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </FadeInView>
           )}
 
@@ -298,13 +297,13 @@ export function DexaUploadScreen({ navigation }: any) {
                 <Ionicons name="alert-circle-outline" size={32} color={colors.gold} />
                 <Text style={[styles.errorText, { color: colors.textPrimary }]}>{phase.message}</Text>
               </View>
-              <TouchableOpacity
+              <SoundPressable
                 activeOpacity={0.85}
                 onPress={() => setPhase({ kind: 'idle' })}
                 style={[styles.cta, { backgroundColor: colors.gold }]}
               >
                 <Text style={styles.ctaText}>Try again</Text>
-              </TouchableOpacity>
+              </SoundPressable>
             </FadeInView>
           )}
         </ScrollView>

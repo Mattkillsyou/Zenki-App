@@ -4,13 +4,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Image,
   Alert,
   Dimensions,
   NativeSyntheticEvent,
-  NativeScrollEvent,
-} from 'react-native';
+  NativeScrollEvent} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -37,21 +36,21 @@ export function ProductDetailScreen({ navigation, route }: any) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
-          <TouchableOpacity
+          <SoundPressable
             onPress={() => navigation.goBack()}
             style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}
           >
             <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name="bag-outline" size={48} color={colors.textMuted} />
           <Text style={{ color: colors.textPrimary, marginTop: spacing.md, fontSize: 16, fontWeight: '600' }}>
             Product not found
           </Text>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }}>
+          <SoundPressable onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }}>
             <Text style={{ color: colors.gold, fontWeight: '600' }}>Go Back</Text>
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
       </SafeAreaView>
     );
@@ -102,12 +101,12 @@ export function ProductDetailScreen({ navigation, route }: any) {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
+          <SoundPressable
             onPress={() => navigation.goBack()}
             style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5 }]}
           >
             <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
 
         {/* Product Image Carousel */}
@@ -160,7 +159,7 @@ export function ProductDetailScreen({ navigation, route }: any) {
 
                 {/* Previous arrow */}
                 {gallery.length > 1 && activeImageIdx > 0 && (
-                  <TouchableOpacity
+                  <SoundPressable
                     style={[styles.arrowBtn, styles.arrowLeft]}
                     activeOpacity={0.8}
                     onPress={() => {
@@ -170,12 +169,12 @@ export function ProductDetailScreen({ navigation, route }: any) {
                     }}
                   >
                     <Ionicons name="chevron-back" size={22} color="#FFF" />
-                  </TouchableOpacity>
+                  </SoundPressable>
                 )}
 
                 {/* Next arrow */}
                 {gallery.length > 1 && activeImageIdx < gallery.length - 1 && (
-                  <TouchableOpacity
+                  <SoundPressable
                     style={[styles.arrowBtn, styles.arrowRight]}
                     activeOpacity={0.8}
                     onPress={() => {
@@ -185,14 +184,14 @@ export function ProductDetailScreen({ navigation, route }: any) {
                     }}
                   >
                     <Ionicons name="chevron-forward" size={22} color="#FFF" />
-                  </TouchableOpacity>
+                  </SoundPressable>
                 )}
 
                 {/* Pagination dots (bottom-center) — tap to jump */}
                 {gallery.length > 1 && (
                   <View style={styles.dotsRow}>
                     {gallery.map((_, i) => (
-                      <TouchableOpacity
+                      <SoundPressable
                         key={i}
                         onPress={() => {
                           setActiveImageIdx(i);
@@ -209,7 +208,7 @@ export function ProductDetailScreen({ navigation, route }: any) {
                             },
                           ]}
                         />
-                      </TouchableOpacity>
+                      </SoundPressable>
                     ))}
                   </View>
                 )}
@@ -268,7 +267,7 @@ export function ProductDetailScreen({ navigation, route }: any) {
                 {product.sizes!.map((size) => {
                   const isSelected = size === selectedSize;
                   return (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={size}
                       style={[
                         styles.sizeChip,
@@ -283,7 +282,7 @@ export function ProductDetailScreen({ navigation, route }: any) {
                       ]}>
                         {size}
                       </Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   );
                 })}
               </View>
@@ -294,21 +293,21 @@ export function ProductDetailScreen({ navigation, route }: any) {
           <View style={styles.quantitySection}>
             <Text style={[styles.sizeLabel, { color: colors.gold, fontSize: 13, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' }]}>QUANTITY</Text>
             <View style={styles.quantityRow}>
-              <TouchableOpacity
+              <SoundPressable
                 style={[styles.qtyButton, { width: 48, height: 48, borderRadius: 14, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surface }]}
                 onPress={() => setQuantity(Math.max(1, quantity - 1))}
               >
 
                 <Ionicons name="remove" size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
+              </SoundPressable>
               <Text style={[styles.qtyText, { color: colors.textPrimary }]}>{quantity}</Text>
-              <TouchableOpacity
+              <SoundPressable
                 style={[styles.qtyButton, { width: 48, height: 48, borderRadius: 14, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surface }]}
                 onPress={() => setQuantity(Math.min(10, quantity + 1))}
               >
 
                 <Ionicons name="add" size={20} color={colors.textPrimary} />
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           </View>
 

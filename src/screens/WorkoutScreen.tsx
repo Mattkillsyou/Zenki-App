@@ -4,13 +4,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
   KeyboardAvoidingView,
   Platform,
-  RefreshControl,
-} from 'react-native';
+  RefreshControl} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -78,12 +77,12 @@ export function WorkoutScreen({ navigation }: any) {
         <ScrollView contentContainerStyle={{ paddingBottom: 120 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
+            <SoundPressable
               onPress={() => navigation.goBack()}
               style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
               <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-            </TouchableOpacity>
+            </SoundPressable>
             <Text style={[styles.title, { color: colors.textPrimary }]}>Training</Text>
             <View style={styles.backBtn} />
           </View>
@@ -99,7 +98,7 @@ export function WorkoutScreen({ navigation }: any) {
             ).map((t) => {
               const active = tab === t.key;
               return (
-                <TouchableOpacity
+                <SoundPressable
                   key={t.key}
                   style={[styles.tab, active && { backgroundColor: colors.gold }]}
                   onPress={() => setTab(t.key)}
@@ -108,7 +107,7 @@ export function WorkoutScreen({ navigation }: any) {
                   <Text style={[styles.tabLabel, { color: active ? '#000' : colors.textSecondary }]}>
                     {t.label}
                   </Text>
-                </TouchableOpacity>
+                </SoundPressable>
               );
             })}
           </View>
@@ -197,7 +196,7 @@ function LogTab({
     <View>
       {/* Log button */}
       <FadeInView delay={0} slideUp={8}>
-        <TouchableOpacity
+        <SoundPressable
           style={[
             styles.primaryBtn,
             { backgroundColor: loggedToday ? colors.success : colors.red },
@@ -213,7 +212,7 @@ function LogTab({
           <Text style={styles.primaryBtnText}>
             {showForm ? 'Cancel' : loggedToday ? 'Logged Today · Add Another' : 'Log a Workout'}
           </Text>
-        </TouchableOpacity>
+        </SoundPressable>
       </FadeInView>
 
       {showForm && (
@@ -234,7 +233,7 @@ function LogTab({
               {(['AMRAP', 'EMOM', 'FOR_TIME', 'TABATA', 'CHIPPER', 'STRENGTH', 'OTHER'] as WorkoutFormat[]).map((f) => {
                 const active = format === f;
                 return (
-                  <TouchableOpacity
+                  <SoundPressable
                     key={f}
                     style={[
                       styles.chip,
@@ -253,7 +252,7 @@ function LogTab({
                     >
                       {WORKOUT_FORMAT_LABEL[f]}
                     </Text>
-                  </TouchableOpacity>
+                  </SoundPressable>
                 );
               })}
             </View>
@@ -272,7 +271,7 @@ function LogTab({
               {(['Rx', 'Scaled'] as WodResult[]).map((opt) => {
                 const active = rxOrScaled === opt;
                 return (
-                  <TouchableOpacity
+                  <SoundPressable
                     key={opt}
                     style={[
                       styles.chip,
@@ -286,7 +285,7 @@ function LogTab({
                     <Text style={[styles.chipText, { color: active ? '#000' : colors.textSecondary }]}>
                       {opt}
                     </Text>
-                  </TouchableOpacity>
+                  </SoundPressable>
                 );
               })}
             </View>
@@ -306,12 +305,12 @@ function LogTab({
               maxLength={200}
             />
 
-            <TouchableOpacity
+            <SoundPressable
               style={[styles.saveBtn, { backgroundColor: colors.gold }]}
               onPress={handleSave}
             >
               <Text style={styles.saveBtnText}>Save</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           </View>
         </FadeInView>
       )}
@@ -409,7 +408,7 @@ function PRsTab({
                 const history = user ? prsForExercise(user.id, ex.key) : [];
                 const entries = history.length;
                 return (
-                  <TouchableOpacity
+                  <SoundPressable
                     key={ex.key}
                     style={[styles.prRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
                     onPress={() => navigation.navigate('PRDetail', { exerciseKey: ex.key })}
@@ -430,7 +429,7 @@ function PRsTab({
                     ) : (
                       <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
                     )}
-                  </TouchableOpacity>
+                  </SoundPressable>
                 );
               })}
             </View>

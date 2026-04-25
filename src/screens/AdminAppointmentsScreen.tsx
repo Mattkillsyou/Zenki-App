@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -38,9 +39,9 @@ export function AdminAppointmentsScreen({ navigation }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.iconBtn, { backgroundColor: colors.surface }]}>
+        <SoundPressable onPress={() => navigation.goBack()} style={[styles.iconBtn, { backgroundColor: colors.surface }]}>
           <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Appointments</Text>
         <View style={styles.iconBtn} />
       </View>
@@ -50,13 +51,13 @@ export function AdminAppointmentsScreen({ navigation }: any) {
         {TABS.map((t) => {
           const active = tab === t.key;
           return (
-            <TouchableOpacity
+            <SoundPressable
               key={t.key}
               style={[styles.tab, { backgroundColor: active ? colors.gold : colors.surface }]}
               onPress={() => setTab(t.key)}
             >
               <Text style={[styles.tabText, { color: active ? '#000' : colors.textSecondary }]}>{t.label}</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           );
         })}
       </View>
@@ -90,23 +91,23 @@ export function AdminAppointmentsScreen({ navigation }: any) {
 
             {a.status === 'pending' && (
               <View style={styles.actions}>
-                <TouchableOpacity style={[styles.btn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]} onPress={() => handleCancel(a)}>
+                <SoundPressable style={[styles.btn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]} onPress={() => handleCancel(a)}>
                   <Text style={[styles.btnText, { color: colors.textSecondary }]}>Decline</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, { backgroundColor: colors.gold }]} onPress={() => handleConfirm(a)}>
+                </SoundPressable>
+                <SoundPressable style={[styles.btn, { backgroundColor: colors.gold }]} onPress={() => handleConfirm(a)}>
                   <Ionicons name="checkmark" size={16} color="#000" />
                   <Text style={[styles.btnText, { color: '#000' }]}>Confirm</Text>
-                </TouchableOpacity>
+                </SoundPressable>
               </View>
             )}
             {a.status === 'confirmed' && (
               <View style={styles.actions}>
-                <TouchableOpacity style={[styles.btn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]} onPress={() => handleCancel(a)}>
+                <SoundPressable style={[styles.btn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]} onPress={() => handleCancel(a)}>
                   <Text style={[styles.btnText, { color: colors.error }]}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, { backgroundColor: colors.success }]} onPress={() => completeAppointment(a.id)}>
+                </SoundPressable>
+                <SoundPressable style={[styles.btn, { backgroundColor: colors.success }]} onPress={() => completeAppointment(a.id)}>
                   <Text style={[styles.btnText, { color: '#FFF' }]}>Mark Complete</Text>
-                </TouchableOpacity>
+                </SoundPressable>
               </View>
             )}
           </View>

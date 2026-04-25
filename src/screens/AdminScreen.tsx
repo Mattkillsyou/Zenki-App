@@ -3,9 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-} from 'react-native';
+  ScrollView} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -69,12 +68,12 @@ export function AdminScreen({ navigation }: any) {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
+          <SoundPressable
             onPress={() => navigation.goBack()}
             style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5 }]}
           >
             <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
           <Text style={[styles.title, { color: colors.textPrimary, fontSize: 34, fontWeight: '800' }]}>Admin Panel</Text>
           <View style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5 }]} />
         </View>
@@ -235,7 +234,7 @@ export function AdminScreen({ navigation }: any) {
               { icon: 'add-circle-outline' as const, label: 'Add New Product', screen: 'AdminProducts' },
               { icon: 'time-outline' as const, label: 'Edit Schedule', screen: 'AdminSchedule' },
             ].map((action) => (
-              <TouchableOpacity
+              <SoundPressable
                 key={action.label}
                 style={[styles.quickAction, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 20 }]}
                 onPress={() => navigation.navigate(action.screen)}
@@ -247,7 +246,7 @@ export function AdminScreen({ navigation }: any) {
                   {action.label}
                 </Text>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-              </TouchableOpacity>
+              </SoundPressable>
             ))}
           </View>
         </FadeInView>

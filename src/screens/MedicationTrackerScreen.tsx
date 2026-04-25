@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
+  View, Text, StyleSheet, ScrollView, TextInput,
   Modal, Alert, Switch, ActivityIndicator, FlatList, Platform,
-  KeyboardAvoidingView,
-} from 'react-native';
+  KeyboardAvoidingView} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
@@ -201,19 +201,19 @@ export function MedicationTrackerScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.goBack()}
           style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Medications</Text>
-        <TouchableOpacity
+        <SoundPressable
           onPress={handleAddNew}
           style={[styles.addBtn, { backgroundColor: colors.gold }]}
         >
           <Ionicons name="add" size={22} color="#000" />
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
 
       {/* Tab bar */}
@@ -224,14 +224,14 @@ export function MedicationTrackerScreen({ navigation }: any) {
         ]).map((t) => {
           const active = tab === t.key;
           return (
-            <TouchableOpacity
+            <SoundPressable
               key={t.key}
               style={[styles.tab, active && { backgroundColor: colors.gold }]}
               onPress={() => setTab(t.key)}
             >
               <Ionicons name={t.icon} size={16} color={active ? '#000' : colors.textMuted} />
               <Text style={[styles.tabLabel, { color: active ? '#000' : colors.textMuted }]}>{t.label}</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           );
         })}
       </View>
@@ -246,15 +246,15 @@ export function MedicationTrackerScreen({ navigation }: any) {
             <FadeInView>
               <View style={[styles.calCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.calNav}>
-                  <TouchableOpacity onPress={handlePrevWeek} style={styles.calNavBtn}>
+                  <SoundPressable onPress={handlePrevWeek} style={styles.calNavBtn}>
                     <Ionicons name="chevron-back" size={18} color={colors.textPrimary} />
-                  </TouchableOpacity>
+                  </SoundPressable>
                   <Text style={[styles.calTitle, { color: colors.textPrimary }]}>
                     {weekRangeLabel(weekStart)}
                   </Text>
-                  <TouchableOpacity onPress={handleNextWeek} style={styles.calNavBtn}>
+                  <SoundPressable onPress={handleNextWeek} style={styles.calNavBtn}>
                     <Ionicons name="chevron-forward" size={18} color={colors.textPrimary} />
-                  </TouchableOpacity>
+                  </SoundPressable>
                 </View>
                 <View style={styles.weekRow}>
                   {calendarDays.map((d) => {
@@ -268,7 +268,7 @@ export function MedicationTrackerScreen({ navigation }: any) {
                       isToday || new Date(d.date) < new Date(todayIso()) ? colors.error :
                       colors.textMuted;
                     return (
-                      <TouchableOpacity
+                      <SoundPressable
                         key={d.date}
                         style={[
                           styles.dayCol,
@@ -290,7 +290,7 @@ export function MedicationTrackerScreen({ navigation }: any) {
                           {dayNumber(d.date)}
                         </Text>
                         <View style={[styles.dayDot, { backgroundColor: dotColor }]} />
-                      </TouchableOpacity>
+                      </SoundPressable>
                     );
                   })}
                 </View>
@@ -312,13 +312,13 @@ export function MedicationTrackerScreen({ navigation }: any) {
                   <Text style={[styles.emptySub, { color: colors.textMuted }]}>
                     Add a medication or peptide to get started.
                   </Text>
-                  <TouchableOpacity
+                  <SoundPressable
                     onPress={handleAddNew}
                     style={[styles.emptyBtn, { backgroundColor: colors.gold }]}
                   >
                     <Ionicons name="add" size={16} color="#000" />
                     <Text style={styles.emptyBtnText}>Add Medication</Text>
-                  </TouchableOpacity>
+                  </SoundPressable>
                 </View>
               ) : (
                 buildScheduleSlots(dayItems).map(({ time, items }) => (
@@ -368,18 +368,18 @@ export function MedicationTrackerScreen({ navigation }: any) {
                           <View style={styles.doseActions}>
                             {!log && (
                               <>
-                                <TouchableOpacity
+                                <SoundPressable
                                   onPress={() => handleSkip(item, t)}
                                   style={[styles.actionBtn, { borderColor: colors.border }]}
                                 >
                                   <Ionicons name="close" size={16} color={colors.textMuted} />
-                                </TouchableOpacity>
-                                <TouchableOpacity
+                                </SoundPressable>
+                                <SoundPressable
                                   onPress={() => handleMarkTaken(item, t)}
                                   style={[styles.actionBtn, { backgroundColor: colors.success, borderColor: colors.success }]}
                                 >
                                   <Ionicons name="checkmark" size={16} color="#FFF" />
-                                </TouchableOpacity>
+                                </SoundPressable>
                               </>
                             )}
                             {taken && (
@@ -418,20 +418,20 @@ export function MedicationTrackerScreen({ navigation }: any) {
                 <Text style={[styles.emptySub, { color: colors.textMuted }]}>
                   Search the drug & peptide database to add your first one.
                 </Text>
-                <TouchableOpacity
+                <SoundPressable
                   onPress={handleAddNew}
                   style={[styles.emptyBtn, { backgroundColor: colors.gold }]}
                 >
                   <Ionicons name="add" size={16} color="#000" />
                   <Text style={styles.emptyBtnText}>Add Medication</Text>
-                </TouchableOpacity>
+                </SoundPressable>
               </View>
             ) : (
               meds.map((med) => {
                 const adherence = getAdherence(med.id, 30);
                 const catColor = CATEGORY_COLORS[med.category];
                 return (
-                  <TouchableOpacity
+                  <SoundPressable
                     key={med.id}
                     activeOpacity={0.85}
                     onPress={() => handleEditMed(med)}
@@ -464,7 +464,7 @@ export function MedicationTrackerScreen({ navigation }: any) {
                       <AdherenceRing rate={adherence.rate} color={catColor} />
                       <Text style={[styles.medCardAdherenceLabel, { color: colors.textMuted }]}>30d</Text>
                     </View>
-                  </TouchableOpacity>
+                  </SoundPressable>
                 );
               })
             )}
@@ -756,13 +756,13 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
     >
       <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
         <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: colors.surface }]}>
+          <SoundPressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: colors.surface }]}>
             <Ionicons name="close" size={20} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
           <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
             {editing ? 'Edit Medication' : 'Add Medication'}
           </Text>
-          <TouchableOpacity
+          <SoundPressable
             onPress={handleSave}
             disabled={!canSave || saving}
             style={[
@@ -777,7 +777,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                 Save
               </Text>
             )}
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
 
         <KeyboardAvoidingView
@@ -808,9 +808,9 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
               />
               {searching && <ActivityIndicator size="small" color={colors.gold} />}
               {!searching && query.length > 0 && (
-                <TouchableOpacity onPress={() => { setQuery(''); setSelected(null); }}>
+                <SoundPressable onPress={() => { setQuery(''); setSelected(null); }}>
                   <Ionicons name="close-circle" size={16} color={colors.textMuted} />
-                </TouchableOpacity>
+                </SoundPressable>
               )}
             </View>
 
@@ -821,7 +821,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                   <Text style={[styles.resultsHeader, { color: colors.textMuted }]}>POPULAR</Text>
                 )}
                 {searchResults.slice(0, 12).map((r) => (
-                  <TouchableOpacity
+                  <SoundPressable
                     key={`${r.externalId}_${r.name}`}
                     style={[styles.resultRow, { borderBottomColor: colors.borderSubtle }]}
                     onPress={() => handlePickResult(r)}
@@ -840,7 +840,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                     <Text style={[styles.resultCat, { color: CATEGORY_COLORS[r.category] }]}>
                       {CATEGORY_LABELS[r.category]}
                     </Text>
-                  </TouchableOpacity>
+                  </SoundPressable>
                 ))}
               </View>
             )}
@@ -879,7 +879,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                 </View>
                 <View style={styles.unitChips}>
                   {['mg', 'mcg', 'IU', 'ml', 'g'].map((u) => (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={u}
                       onPress={() => setDoseUnit(u)}
                       style={[
@@ -889,7 +889,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                       ]}
                     >
                       <Text style={[styles.unitChipText, { color: doseUnit === u ? '#000' : colors.textPrimary }]}>{u}</Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   ))}
                 </View>
 
@@ -897,7 +897,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                 <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: 16 }]}>CATEGORY</Text>
                 <View style={styles.chipRow}>
                   {(Object.keys(CATEGORY_LABELS) as MedicationCategory[]).map((c) => (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={c}
                       onPress={() => setCategory(c)}
                       style={[
@@ -909,7 +909,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                       <Text style={[styles.chipText, { color: category === c ? '#FFF' : colors.textPrimary }]}>
                         {CATEGORY_LABELS[c]}
                       </Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   ))}
                 </View>
 
@@ -917,7 +917,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                 <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: 16 }]}>ROUTE</Text>
                 <View style={styles.chipRow}>
                   {(Object.keys(ROUTE_LABELS) as RouteOfAdministration[]).map((r) => (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={r}
                       onPress={() => setRoute(r)}
                       style={[
@@ -930,7 +930,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                       <Text style={[styles.chipText, { color: route === r ? '#000' : colors.textPrimary }]}>
                         {ROUTE_LABELS[r]}
                       </Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   ))}
                 </View>
 
@@ -938,7 +938,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                 <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: 16 }]}>FREQUENCY</Text>
                 <View style={styles.chipRow}>
                   {(Object.keys(FREQUENCY_LABELS) as FrequencyType[]).map((f) => (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={f}
                       onPress={() => {
                         setFrequency(f);
@@ -955,14 +955,14 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                       <Text style={[styles.chipText, { color: frequency === f ? '#000' : colors.textPrimary }]}>
                         {FREQUENCY_LABELS[f]}
                       </Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   ))}
                 </View>
 
                 {frequency === 'custom' && (
                   <View style={styles.weekdayRow}>
                     {WEEKDAY_NAMES.map((name, idx) => (
-                      <TouchableOpacity
+                      <SoundPressable
                         key={name}
                         onPress={() => toggleCustomDay(idx)}
                         style={[
@@ -977,7 +977,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                         ]}>
                           {name.slice(0, 1)}
                         </Text>
-                      </TouchableOpacity>
+                      </SoundPressable>
                     ))}
                   </View>
                 )}
@@ -985,9 +985,9 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                 {/* TIMES OF DAY */}
                 <View style={[styles.timesHeader, { marginTop: 16 }]}>
                   <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>TIMES OF DAY</Text>
-                  <TouchableOpacity onPress={handleAddTime} style={styles.addTimeBtn}>
+                  <SoundPressable onPress={handleAddTime} style={styles.addTimeBtn}>
                     <Ionicons name="add-circle" size={20} color={colors.gold} />
-                  </TouchableOpacity>
+                  </SoundPressable>
                 </View>
                 {timesOfDay.map((t, idx) => (
                   <View key={`${idx}_${t}`} style={[styles.timeEditRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -996,23 +996,23 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                       {formatTimeLabel(t)}
                     </Text>
                     <View style={styles.timeAdjustGroup}>
-                      <TouchableOpacity onPress={() => adjustTime(idx, -60)} style={[styles.timeAdjBtn, { borderColor: colors.border }]}>
+                      <SoundPressable onPress={() => adjustTime(idx, -60)} style={[styles.timeAdjBtn, { borderColor: colors.border }]}>
                         <Text style={[styles.timeAdjText, { color: colors.textPrimary }]}>-1h</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => adjustTime(idx, -15)} style={[styles.timeAdjBtn, { borderColor: colors.border }]}>
+                      </SoundPressable>
+                      <SoundPressable onPress={() => adjustTime(idx, -15)} style={[styles.timeAdjBtn, { borderColor: colors.border }]}>
                         <Text style={[styles.timeAdjText, { color: colors.textPrimary }]}>-15</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => adjustTime(idx, 15)} style={[styles.timeAdjBtn, { borderColor: colors.border }]}>
+                      </SoundPressable>
+                      <SoundPressable onPress={() => adjustTime(idx, 15)} style={[styles.timeAdjBtn, { borderColor: colors.border }]}>
                         <Text style={[styles.timeAdjText, { color: colors.textPrimary }]}>+15</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => adjustTime(idx, 60)} style={[styles.timeAdjBtn, { borderColor: colors.border }]}>
+                      </SoundPressable>
+                      <SoundPressable onPress={() => adjustTime(idx, 60)} style={[styles.timeAdjBtn, { borderColor: colors.border }]}>
                         <Text style={[styles.timeAdjText, { color: colors.textPrimary }]}>+1h</Text>
-                      </TouchableOpacity>
+                      </SoundPressable>
                     </View>
                     {timesOfDay.length > 1 && (
-                      <TouchableOpacity onPress={() => handleRemoveTime(idx)}>
+                      <SoundPressable onPress={() => handleRemoveTime(idx)}>
                         <Ionicons name="trash-outline" size={16} color={colors.error} />
-                      </TouchableOpacity>
+                      </SoundPressable>
                     )}
                   </View>
                 ))}
@@ -1042,7 +1042,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                     <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: 16 }]}>INJECTION SITES (ROTATION)</Text>
                     <View style={styles.chipRow}>
                       {INJECTION_SITES.map((site) => (
-                        <TouchableOpacity
+                        <SoundPressable
                           key={site}
                           onPress={() => toggleInjectionSite(site)}
                           style={[
@@ -1054,7 +1054,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
                           <Text style={[styles.chipText, { color: injectionSites.includes(site) ? '#FFF' : colors.textPrimary }]}>
                             {site}
                           </Text>
-                        </TouchableOpacity>
+                        </SoundPressable>
                       ))}
                     </View>
                   </>

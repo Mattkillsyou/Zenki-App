@@ -4,13 +4,12 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  TouchableOpacity,
   FlatList,
   ActivityIndicator,
   Modal,
   Platform,
-  KeyboardAvoidingView,
-} from 'react-native';
+  KeyboardAvoidingView} from 'react-native';
+import { SoundPressable } from './SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -105,12 +104,12 @@ export function FoodSearchModal({ visible, onClose, onSelect, recentFoods = [], 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
+            <SoundPressable
               onPress={onClose}
               style={[styles.headerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
               <Ionicons name="close" size={22} color={colors.textPrimary} />
-            </TouchableOpacity>
+            </SoundPressable>
             <Text style={[styles.title, { color: colors.textPrimary }]}>Search foods</Text>
             <View style={styles.headerBtn} />
           </View>
@@ -130,9 +129,9 @@ export function FoodSearchModal({ visible, onClose, onSelect, recentFoods = [], 
             />
             {loading && <ActivityIndicator color={colors.gold} size="small" />}
             {!loading && query.length > 0 && (
-              <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
+              <SoundPressable onPress={() => setQuery('')} hitSlop={8}>
                 <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-              </TouchableOpacity>
+              </SoundPressable>
             )}
           </View>
 
@@ -151,7 +150,7 @@ export function FoodSearchModal({ visible, onClose, onSelect, recentFoods = [], 
               <Text style={[styles.empty, { color: colors.textMuted }]}>{emptyLabel}</Text>
             }
             renderItem={({ item }) => (
-              <TouchableOpacity
+              <SoundPressable
                 activeOpacity={0.85}
                 onPress={() => handlePick(item)}
                 style={[styles.resultRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
@@ -172,7 +171,7 @@ export function FoodSearchModal({ visible, onClose, onSelect, recentFoods = [], 
                     {item.source === 'usda' ? 'USDA' : 'OFF'}
                   </Text>
                 </View>
-              </TouchableOpacity>
+              </SoundPressable>
             )}
           />
 
@@ -186,7 +185,7 @@ export function FoodSearchModal({ visible, onClose, onSelect, recentFoods = [], 
                 <Text style={[styles.pickMeta, { color: colors.textMuted }]}>{picked.serving.label}</Text>
               </View>
               <View style={[styles.servingsBox, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                <TouchableOpacity
+                <SoundPressable
                   onPress={() => {
                     const n = parseFloat(servings) || 1;
                     const next = Math.max(0.25, Math.round((n - 0.5) * 4) / 4);
@@ -196,14 +195,14 @@ export function FoodSearchModal({ visible, onClose, onSelect, recentFoods = [], 
                   style={styles.servingsBtn}
                 >
                   <Ionicons name="remove" size={18} color={colors.textPrimary} />
-                </TouchableOpacity>
+                </SoundPressable>
                 <TextInput
                   style={[styles.servingsInput, { color: colors.textPrimary }]}
                   keyboardType="decimal-pad"
                   value={servings}
                   onChangeText={setServings}
                 />
-                <TouchableOpacity
+                <SoundPressable
                   onPress={() => {
                     const n = parseFloat(servings) || 1;
                     const next = Math.round((n + 0.5) * 4) / 4;
@@ -213,14 +212,14 @@ export function FoodSearchModal({ visible, onClose, onSelect, recentFoods = [], 
                   style={styles.servingsBtn}
                 >
                   <Ionicons name="add" size={18} color={colors.textPrimary} />
-                </TouchableOpacity>
+                </SoundPressable>
               </View>
-              <TouchableOpacity
+              <SoundPressable
                 onPress={handleConfirm}
                 style={[styles.confirmBtn, { backgroundColor: colors.gold }]}
               >
                 <Ionicons name="checkmark" size={22} color="#000" />
-              </TouchableOpacity>
+              </SoundPressable>
             </View>
           )}
         </KeyboardAvoidingView>

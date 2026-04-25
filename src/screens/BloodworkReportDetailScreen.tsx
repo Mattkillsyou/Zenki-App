@@ -4,9 +4,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
+  Alert} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -61,12 +60,12 @@ export function BloodworkReportDetailScreen({ route, navigation }: any) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
-          <TouchableOpacity
+          <SoundPressable
             onPress={() => navigation.goBack()}
             style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Report not found</Text>
           <View style={styles.backBtn} />
         </View>
@@ -91,19 +90,19 @@ export function BloodworkReportDetailScreen({ route, navigation }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity
+        <SoundPressable
           onPress={() => navigation.goBack()}
           style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Report</Text>
-        <TouchableOpacity
+        <SoundPressable
           onPress={confirmDelete}
           style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
           <Ionicons name="trash-outline" size={18} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>

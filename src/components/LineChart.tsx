@@ -18,6 +18,11 @@ interface LineChartProps {
   formatY?: (v: number) => string;
   /** True when lower Y values are better (e.g. run times). Flips the visual trend color. */
   lowerIsBetter?: boolean;
+  /** Optional dashed overlay line (e.g. rolling-average trend). Y values share the
+   *  same axis as `data` — included in min/max range computation. */
+  trendOverlay?: LineChartPoint[];
+  /** Color for the trend overlay. Defaults to a muted version of `color`. */
+  trendOverlayColor?: string;
 }
 
 const PADDING_X = 28;
@@ -36,9 +41,12 @@ export function LineChart({
   fillGradient = true,
   formatY,
   lowerIsBetter = false,
+  trendOverlay,
+  trendOverlayColor,
 }: LineChartProps) {
   const { colors } = useTheme();
   const strokeColor = color ?? colors.gold;
+  const overlayStroke = trendOverlayColor ?? colors.textMuted;
 
   if (data.length === 0) {
     return (
@@ -54,8 +62,10 @@ export function LineChart({
   const n = data.length;
   const xStep = n > 1 ? plotWidth / (n - 1) : 0;
 
-  // Find y range; add a little padding so line doesn't touch edges
-  const ys = data.map((d) => d.y);
+  // Find y range — include the overlay so both lines are visible.
+  // Add a little padding so neither line touches edges.
+  const overlayYs = (trendOverlay ?? []).map((p) => p.y);
+  const ys = [...data.map((d) => d.y), ...overlayYs];
   let minY = Math.min(...ys);
   let maxY = Math.max(...ys);
   if (minY === maxY) {
@@ -72,6 +82,17 @@ export function LineChart({
     value: d.y,
     label: d.label,
   }));
+
+  // Overlay points — distributed evenly across the same plot width.
+  const overlayN = trendOverlay?.length ?? 0;
+  const overlayStep = overlayN > 1 ? plotWidth / (overlayN - 1) : 0;
+  const overlayPoints = (trendOverlay ?? []).map((d, i) => ({
+    x: PADDING_X + (overlayN > 1 ? i * overlayStep : plotWidth / 2),
+    y: PADDING_TOP + plotHeight - ((d.y - minY) / yRange) * plotHeight,
+  }));
+  const overlayPath = overlayPoints
+    .map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`))
+    .join(' ');
 
   // Build SVG path
   const linePath = points
@@ -109,6 +130,20 @@ export function LineChart({
         {/* Subtle area fill */}
         {fillGradient && (
           <Path d={fillPath} fill={strokeColor} fillOpacity={0.12} />
+        )}
+
+        {/* Trend overlay (dashed) — drawn before main line so points sit on top */}
+        {overlayPoints.length > 1 && (
+          <Path
+            d={overlayPath}
+            stroke={overlayStroke}
+            strokeWidth={1.5}
+            strokeDasharray="5 4"
+            fill="none"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            opacity={0.85}
+          />
         )}
 
         {/* Line */}

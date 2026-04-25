@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Modal, ScrollView, Pressable } from 'react-native';
+import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
@@ -67,18 +68,18 @@ export function HealthDataConsentModal({ visible, onAccept, onDecline, feature }
           </ScrollView>
 
           <View style={styles.btnRow}>
-            <TouchableOpacity
+            <SoundPressable
               onPress={onDecline}
               style={[styles.btn, styles.btnSecondary, { borderColor: colors.border }]}
             >
               <Text style={[styles.btnText, { color: colors.textSecondary }]}>Not now</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            </SoundPressable>
+            <SoundPressable
               onPress={onAccept}
               style={[styles.btn, { backgroundColor: colors.gold }]}
             >
               <Text style={[styles.btnText, { color: '#000' }]}>I understand, continue</Text>
-            </TouchableOpacity>
+            </SoundPressable>
           </View>
         </Pressable>
       </Pressable>

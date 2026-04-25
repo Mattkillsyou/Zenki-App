@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, Alert } from 'react-native';
+import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
@@ -96,7 +97,7 @@ export function ClassCard({ name, instructor, time, duration, spotsLeft, type, o
   };
 
   return (
-    <TouchableOpacity activeOpacity={0.8} onPress={onBook} style={[styles.container, { backgroundColor: colors.surface, marginBottom: 10 }]}>
+    <SoundPressable activeOpacity={0.8} onPress={onBook} style={[styles.container, { backgroundColor: colors.surface, marginBottom: 10 }]}>
       <View style={[styles.iconWrap, { backgroundColor: accent + '20' }]}>
         <Ionicons name={typeIcons[type] || 'fitness-outline'} size={22} color={accent} />
       </View>
@@ -125,7 +126,7 @@ export function ClassCard({ name, instructor, time, duration, spotsLeft, type, o
       </View>
 
       {/* Calendar quick-add */}
-      <TouchableOpacity
+      <SoundPressable
         onPress={handleAddToCalendar}
         style={[styles.calBtn, { backgroundColor: colors.backgroundElevated, opacity: addingToCal ? 0.5 : 1 }]}
         activeOpacity={0.7}
@@ -133,12 +134,12 @@ export function ClassCard({ name, instructor, time, duration, spotsLeft, type, o
         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
       >
         <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
-      </TouchableOpacity>
+      </SoundPressable>
 
-      <TouchableOpacity onPress={onBook} style={[styles.bookBtn, { backgroundColor: booked ? colors.backgroundElevated : colors.red }]} activeOpacity={0.8}>
+      <SoundPressable onPress={onBook} style={[styles.bookBtn, { backgroundColor: booked ? colors.backgroundElevated : colors.red }]} activeOpacity={0.8}>
         <Ionicons name={booked ? 'checkmark' : 'arrow-forward'} size={16} color={booked ? statusColor : '#FFF'} />
-      </TouchableOpacity>
-    </TouchableOpacity>
+      </SoundPressable>
+    </SoundPressable>
   );
 }
 

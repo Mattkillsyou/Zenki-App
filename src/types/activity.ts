@@ -394,7 +394,6 @@ export interface NotificationPreferences {
   classReminders: boolean;
   streakAlerts: boolean;
   communityMentions: boolean;
-  weeklyReport: boolean;
   achievementUnlocks: boolean;
   quietHoursStart?: string;    // "22:00"
   quietHoursEnd?: string;      // "07:00"

@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Alert, ActionSheetIOS, Platform } from 'react-native';
+import { View, Text, StyleSheet, Image, Animated, Alert, ActionSheetIOS, Platform } from 'react-native';
+import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useMotion } from '../context/MotionContext';
@@ -122,7 +123,7 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerLeft} onPress={() => onUserPress(post.userId)} activeOpacity={0.7}>
+        <SoundPressable style={styles.headerLeft} onPress={() => onUserPress(post.userId)} activeOpacity={0.7}>
           <View style={[styles.avatarRing, { borderColor: colors.gold }]}>
             <View style={[styles.avatar, { backgroundColor: colors.goldMuted }]}>
               {post.avatar && !avatarErrored ? (
@@ -142,14 +143,14 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
             </Text>
             <Text style={[styles.timeAgo, { color: colors.textMuted }]}>{timeAgo}</Text>
           </View>
-        </TouchableOpacity>
-        <TouchableOpacity
+        </SoundPressable>
+        <SoundPressable
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           onPress={openMenu}
           accessibilityLabel={`Post options from ${post.displayName}`}
         >
           <Ionicons name="ellipsis-horizontal" size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
 
       <ReportModal
@@ -163,14 +164,14 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
 
       {/* Media (photo/video) OR text caption prominence */}
       {post.mediaUrl && !mediaErrored ? (
-        <TouchableOpacity activeOpacity={0.98} onPress={handleMediaTap}>
+        <SoundPressable activeOpacity={0.98} onPress={handleMediaTap}>
           <Image
             source={{ uri: post.mediaUrl }}
             style={styles.media}
             resizeMode="cover"
             onError={() => setMediaErrored(true)}
           />
-        </TouchableOpacity>
+        </SoundPressable>
       ) : (
         <View style={styles.textPostWrap}>
           <Text style={[styles.textPostBody, { color: colors.textPrimary }]}>
@@ -182,7 +183,7 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
       {/* Actions */}
       <View style={styles.actions}>
         <View style={styles.actionsLeft}>
-          <TouchableOpacity onPress={handleLike} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <SoundPressable onPress={handleLike} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
             <Animated.View style={{ transform: [{ scale: heartAnim }] }}>
               <Ionicons
                 name={post.liked ? 'heart' : 'heart-outline'}
@@ -190,17 +191,17 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
                 color={post.liked ? colors.red : colors.textPrimary}
               />
             </Animated.View>
-          </TouchableOpacity>
-          <TouchableOpacity hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          </SoundPressable>
+          <SoundPressable hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
             <Ionicons name="chatbubble-outline" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <TouchableOpacity hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          </SoundPressable>
+          <SoundPressable hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
             <Ionicons name="paper-plane-outline" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
-        <TouchableOpacity hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+        <SoundPressable hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
           <Ionicons name="bookmark-outline" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
 
       {/* Like count */}

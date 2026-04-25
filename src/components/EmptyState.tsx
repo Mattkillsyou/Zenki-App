@@ -224,7 +224,7 @@ function HREmpty({ onAction, style }: PresetProps) {
   return (
     <EmptyState
       icon="❤️"
-      title="NO HR SESSIONS"
+      title="NO WORKOUTS"
       subtitle="Connect a heart rate monitor or start a demo session to track your workout intensity."
       actionLabel="START SESSION"
       onAction={onAction}

@@ -10,9 +10,6 @@ export type ThemeMode =
   | 'clean-dark'
   | 'matrix'
   | 'alien'
-  | 'jurassic'
-  | 'ghost'
-  | 'bladerunner'
   | 'sheikah'
   | 'senpai';
 
@@ -41,7 +38,10 @@ const VALID_MODES = new Set<string>(ALL_THEMES.map((t) => t.id));
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme();
-  const [mode, setModeState] = useState<ThemeMode>('clean-dark');
+  // First-launch default = 'system' so we follow the device's color scheme.
+  // If the user has previously picked a theme it'll be loaded from AsyncStorage
+  // and override this initial value (see effect below).
+  const [mode, setModeState] = useState<ThemeMode>('system');
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -49,6 +49,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       if (stored && VALID_MODES.has(stored)) {
         setModeState(stored as ThemeMode);
       }
+      // No stored value → keep 'system' default (set above).
       setLoaded(true);
     });
   }, []);

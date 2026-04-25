@@ -4,13 +4,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
   Modal,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -150,13 +149,13 @@ export function AdminScheduleScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <SoundPressable onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>Schedule</Text>
-        <TouchableOpacity onPress={openAddModal} style={styles.backButton}>
+        <SoundPressable onPress={openAddModal} style={styles.backButton}>
           <Ionicons name="add-circle-outline" size={26} color={colors.gold} />
-        </TouchableOpacity>
+        </SoundPressable>
       </View>
 
       {/* Day Selector */}
@@ -165,7 +164,7 @@ export function AdminScheduleScreen({ navigation }: any) {
           const isActive = day === selectedDay;
           const count = (schedule[day] || []).length;
           return (
-            <TouchableOpacity
+            <SoundPressable
               key={day}
               style={[styles.dayChip, isActive && { backgroundColor: colors.gold }]}
               onPress={() => setSelectedDay(day)}
@@ -176,7 +175,7 @@ export function AdminScheduleScreen({ navigation }: any) {
               <Text style={[styles.dayCount, { color: isActive ? colors.textInverse : colors.textMuted }]}>
                 {count}
               </Text>
-            </TouchableOpacity>
+            </SoundPressable>
           );
         })}
       </View>
@@ -198,7 +197,7 @@ export function AdminScheduleScreen({ navigation }: any) {
           </View>
         ) : (
           dayClasses.map((cls) => (
-            <TouchableOpacity
+            <SoundPressable
               key={cls.id}
               style={[styles.classCard, { backgroundColor: colors.surface }]}
               onPress={() => openEditModal(cls)}
@@ -215,14 +214,14 @@ export function AdminScheduleScreen({ navigation }: any) {
                 </Text>
               </View>
               <View style={styles.classActions}>
-                <TouchableOpacity onPress={() => openEditModal(cls)} style={styles.iconBtn}>
+                <SoundPressable onPress={() => openEditModal(cls)} style={styles.iconBtn}>
                   <Ionicons name="create-outline" size={18} color={colors.gold} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDelete(cls)} style={styles.iconBtn}>
+                </SoundPressable>
+                <SoundPressable onPress={() => handleDelete(cls)} style={styles.iconBtn}>
                   <Ionicons name="trash-outline" size={18} color={colors.error} />
-                </TouchableOpacity>
+                </SoundPressable>
               </View>
-            </TouchableOpacity>
+            </SoundPressable>
           ))
         )}
         <View style={{ height: spacing.xxl * 2 }} />
@@ -233,9 +232,9 @@ export function AdminScheduleScreen({ navigation }: any) {
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setModalVisible(false)}>
+            <SoundPressable onPress={() => setModalVisible(false)}>
               <Text style={[styles.modalCancel, { color: colors.textMuted }]}>Cancel</Text>
-            </TouchableOpacity>
+            </SoundPressable>
             <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
               {editingClass ? 'Edit Class' : `Add Class · ${selectedDay}`}
             </Text>
@@ -305,7 +304,7 @@ export function AdminScheduleScreen({ navigation }: any) {
                 {CLASS_TYPES.map((ct) => {
                   const isActive = ct.value === classType;
                   return (
-                    <TouchableOpacity
+                    <SoundPressable
                       key={ct.value}
                       style={[
                         styles.typeChip,
@@ -316,7 +315,7 @@ export function AdminScheduleScreen({ navigation }: any) {
                       <Text style={[styles.typeChipText, { color: isActive ? '#FFF' : colors.textMuted }]}>
                         {ct.label}
                       </Text>
-                    </TouchableOpacity>
+                    </SoundPressable>
                   );
                 })}
               </View>

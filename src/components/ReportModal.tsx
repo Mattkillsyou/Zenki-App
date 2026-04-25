@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
-  Modal, View, Text, TouchableOpacity, TextInput, StyleSheet,
-  ActivityIndicator, Alert, ScrollView, KeyboardAvoidingView, Platform,
-} from 'react-native';
+  Modal, View, Text, TextInput, StyleSheet,
+  ActivityIndicator, Alert, ScrollView, KeyboardAvoidingView, Platform} from 'react-native';
+import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import {
@@ -81,9 +81,9 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
         <View style={[styles.card, { backgroundColor: colors.backgroundElevated, borderColor: colors.border }]}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>Report content</Text>
-            <TouchableOpacity onPress={handleClose} hitSlop={{ top: 8, left: 8, right: 8, bottom: 8 }}>
+            <SoundPressable onPress={handleClose} hitSlop={{ top: 8, left: 8, right: 8, bottom: 8 }}>
               <Ionicons name="close" size={22} color={colors.textMuted} />
-            </TouchableOpacity>
+            </SoundPressable>
           </View>
 
           {targetPreview ? (
@@ -98,7 +98,7 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
             {REASONS.map((r) => {
               const selected = reason === r;
               return (
-                <TouchableOpacity
+                <SoundPressable
                   key={r}
                   style={[
                     styles.reasonRow,
@@ -112,7 +112,7 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
                 >
                   <Text style={[styles.reasonText, { color: colors.textPrimary }]}>{REPORT_REASON_LABELS[r]}</Text>
                   {selected && <Ionicons name="checkmark-circle" size={18} color={colors.gold || '#D4A017'} />}
-                </TouchableOpacity>
+                </SoundPressable>
               );
             })}
           </ScrollView>
@@ -131,7 +131,7 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
             }]}
           />
 
-          <TouchableOpacity
+          <SoundPressable
             style={[
               styles.submitBtn,
               { backgroundColor: reason ? (colors.gold || '#D4A017') : (colors.surface),
@@ -145,7 +145,7 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
               ? <ActivityIndicator color="#000" />
               : <Text style={[styles.submitText, { color: reason ? '#000' : colors.textMuted }]}>Submit Report</Text>
             }
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
       </KeyboardAvoidingView>
     </Modal>

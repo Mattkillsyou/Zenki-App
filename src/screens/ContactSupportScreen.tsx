@@ -4,13 +4,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -77,12 +76,12 @@ export function ContactSupportScreen({ navigation }: any) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity
+          <SoundPressable
             onPress={() => navigation.goBack()}
             style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Support</Text>
           <View style={{ width: 36 }} />
         </View>
@@ -95,7 +94,7 @@ export function ContactSupportScreen({ navigation }: any) {
             Our team at Zenki IT will review your message and follow up by email if needed.
             Typical response time is within 24 hours.
           </Text>
-          <TouchableOpacity
+          <SoundPressable
             onPress={() => {
               setSubmitted(false);
               setSubject('');
@@ -105,13 +104,13 @@ export function ContactSupportScreen({ navigation }: any) {
             style={[styles.secondaryBtn, { borderColor: colors.border }]}
           >
             <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>Send another</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </SoundPressable>
+          <SoundPressable
             onPress={() => navigation.goBack()}
             style={[styles.primaryBtn, { backgroundColor: colors.gold }]}
           >
             <Text style={styles.primaryBtnText}>Done</Text>
-          </TouchableOpacity>
+          </SoundPressable>
         </View>
       </SafeAreaView>
     );
@@ -125,12 +124,12 @@ export function ContactSupportScreen({ navigation }: any) {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
+          <SoundPressable
             onPress={() => navigation.goBack()}
             style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-          </TouchableOpacity>
+          </SoundPressable>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Contact IT</Text>
           <View style={{ width: 36 }} />
         </View>
@@ -151,7 +150,7 @@ export function ContactSupportScreen({ navigation }: any) {
             {CATEGORIES.map((c) => {
               const active = category === c.value;
               return (
-                <TouchableOpacity
+                <SoundPressable
                   key={c.value}
                   onPress={() => setCategory(c.value)}
                   style={[
@@ -166,7 +165,7 @@ export function ContactSupportScreen({ navigation }: any) {
                   <Text style={[styles.catLabel, { color: active ? c.color : colors.textSecondary }]}>
                     {c.label}
                   </Text>
-                </TouchableOpacity>
+                </SoundPressable>
               );
             })}
           </View>
@@ -211,7 +210,7 @@ export function ContactSupportScreen({ navigation }: any) {
           </View>
 
           {/* Submit */}
-          <TouchableOpacity
+          <SoundPressable
             onPress={handleSubmit}
             disabled={submitting || !subject.trim() || message.trim().length < 5}
             style={[
@@ -230,7 +229,7 @@ export function ContactSupportScreen({ navigation }: any) {
                 <Text style={styles.primaryBtnText}>Send to IT</Text>
               </>
             )}
-          </TouchableOpacity>
+          </SoundPressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
