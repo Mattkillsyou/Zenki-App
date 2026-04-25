@@ -97,7 +97,13 @@ function AppContent() {
     </NavigationContainer>
   );
 
-  // On web, constrain to mobile width for premium app-like feel
+  // On web, constrain to mobile width for premium app-like feel.
+  // Top padding (54) + bottom padding (34) reserve space for an iPhone
+  // Dynamic Island and home-indicator. We can't rely on
+  // react-native-safe-area-context's `initialMetrics` here because the
+  // library reads CSS env(safe-area-inset-*) which are 0 in the browser
+  // and override the initial values. Padding the phone frame itself is
+  // the correct fix.
   if (Platform.OS === 'web') {
     return (
       <View style={webStyles.outerContainer}>
@@ -109,6 +115,9 @@ function AppContent() {
             boxShadow: colors.frameGlow || '0 0 80px rgba(0, 255, 65, 0.06), 0 0 0 1px rgba(0,255,65,0.08)',
           },
         ]}>
+          {/* Simulated Dynamic Island so the user can visualize how content
+              clears the notch on a real iPhone 14 Pro. */}
+          <View style={webStyles.fakeIsland} pointerEvents="none" />
           {content}
         </View>
       </View>
@@ -132,23 +141,30 @@ const webStyles = StyleSheet.create({
     maxHeight: 932,
     overflow: 'hidden',
     borderRadius: 0,
+    // Reserve space at the top + bottom that mirrors the iPhone 14 Pro
+    // Dynamic Island and home indicator so screen content stops where it
+    // would on a real device.
+    paddingTop: 54,
+    paddingBottom: 34,
+  },
+  // Visual representation of the Dynamic Island — pill at the top center.
+  fakeIsland: {
+    position: 'absolute',
+    top: 12,
+    left: '50%',
+    width: 120,
+    height: 32,
+    marginLeft: -60,
+    backgroundColor: '#000',
+    borderRadius: 20,
+    zIndex: 100,
   },
 });
-
-// On web, simulate an iPhone Dynamic Island top inset so the phone-frame
-// preview matches real iOS layout. Real iPhones override this with the OS
-// inset values automatically.
-const WEB_INITIAL_METRICS = Platform.OS === 'web'
-  ? {
-      insets: { top: 54, bottom: 34, left: 0, right: 0 },
-      frame: { x: 0, y: 0, width: 430, height: 932 },
-    }
-  : undefined;
 
 export default function App() {
   return (
     <ErrorBoundary screenName="App Root">
-      <SafeAreaProvider initialMetrics={WEB_INITIAL_METRICS}>
+      <SafeAreaProvider>
         <AuthProvider>
         <BlocksProvider>
         <MotionProvider>
