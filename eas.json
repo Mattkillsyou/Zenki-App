@@ -19,6 +19,9 @@
     },
     "production": {
       "autoIncrement": true,
+      "ios": {
+        "resourceClass": "m-large"
+      },
       "env": {
         "EXPO_PUBLIC_ENV": "production"
       }

@@ -110,7 +110,7 @@ export function DexaUploadScreen({ navigation }: any) {
       const asset = r.assets?.[0];
       if (!asset) return;
       const base64 = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64',
       });
       // Enforce 8 MB ceiling matching the Cloud Function
       const bytes = (base64.length * 3) / 4;

@@ -1,0 +1,23 @@
+Merge sdk-55-upgrade into main
+
+Brings the project to Expo SDK 55 (iOS 26 SDK / Xcode 26) ahead of
+Apple's April 28 2026 deadline for new App Store uploads.
+
+Highlights from the branch:
+- expo 52 -> 55, react 18.3.1 -> 19.2.0, react-native 0.76.9 -> 0.83.6
+- @types/react -> ~19.2.10
+- All Expo and React Native module versions aligned to SDK 55 ranges
+- expo-file-system: FileSystem.EncodingType.Base64 -> 'base64' literal
+- React 19 useRef typing fix in HomeScreen.measureCoachTarget
+- newArchEnabled: false in app.json — react-native-health is flagged
+  "Untested on New Architecture", so we ship on the legacy bridge with
+  iOS 26 SDK; flip NA on later once react-native-health (or its
+  replacement) is verified.
+- eas.json production profile: resourceClass: m-large for ~30% faster
+  EAS iOS builds (paid plan only — drop to m-medium if cost matters).
+
+Verified before merge:
+- npx tsc --noEmit clean
+- npx expo export --platform ios succeeds (~6.4 MB iOS bundle)
+- EAS production build #21 succeeds on Apple's infra (verifies native
+  iOS compile / pod install / fastlane)
