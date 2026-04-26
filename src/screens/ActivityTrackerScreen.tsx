@@ -25,7 +25,6 @@ import { formatDuration } from '../utils/heartRate';
 import { spacing, borderRadius } from '../theme';
 import * as Location from 'expo-location';
 import { ActivityMap } from '../components/ActivityMap';
-import { MatrixActivityTrackerScreen } from './ActivityTrackerScreen.matrix';
 
 const ACTIVITY_TYPES: GpsActivityType[] = ['run', 'walk', 'bike', 'hike'];
 const DEFAULT_LAT = 34.1006;
@@ -47,13 +46,7 @@ const RADIO_SERVICES: { name: string; url: string; icon: keyof typeof Ionicons.g
   { name: 'SoundCloud',    url: 'https://soundcloud.com',    icon: 'cloud-outline' },
 ];
 
-/**
- * Top-level GPS screen. Routes to the matrix-only Pip-Boy version for
- * `themeMode === 'matrix'`, otherwise renders the clean themed experience.
- */
 export function ActivityTrackerScreen(props: any) {
-  const { mode } = useTheme();
-  if (mode === 'matrix') return <MatrixActivityTrackerScreen {...props} />;
   return <CleanActivityTrackerScreen {...props} />;
 }
 
