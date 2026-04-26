@@ -28,6 +28,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 const INVITE_CODE = 'dragon';
 const INVITE_VERIFIED_KEY = '@zenki_invite_verified';
+const LAST_USERNAME_KEY = '@zenki_last_username';
 
 export function SignInScreen({ navigation }: any) {
   const { colors, isDark } = useTheme();
@@ -41,11 +42,20 @@ export function SignInScreen({ navigation }: any) {
   const [inviteCode, setInviteCode] = useState('');
   const [checkingInvite, setCheckingInvite] = useState(true);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(INVITE_VERIFIED_KEY).then((val) => {
       if (val !== 'true') setShowInviteGate(true);
       setCheckingInvite(false);
+    });
+  }, []);
+
+  // Prefill username from the last signed-out account so returning users
+  // don't have to retype it. Saved by AuthContext.signOut.
+  useEffect(() => {
+    AsyncStorage.getItem(LAST_USERNAME_KEY).then((val) => {
+      if (val) setUsername(val);
     });
   }, []);
 
@@ -198,8 +208,9 @@ export function SignInScreen({ navigation }: any) {
   };
 
   const handleSignIn = async () => {
+    setErrorMsg(null);
     if (!username || !password) {
-      Alert.alert('Error', 'Please enter your username and password');
+      setErrorMsg('Please enter your username and password.');
       return;
     }
     setLoading(true);
@@ -244,14 +255,12 @@ export function SignInScreen({ navigation }: any) {
     } catch (error: any) {
       const code = error?.code ?? error?.message ?? 'unknown';
       const userMessage =
-        code === 'auth/wrong-password' || code === 'auth/invalid-credential'
-          ? 'Check your username and password.'
-          : code === 'auth/too-many-requests'
-            ? 'Too many attempts. Wait a minute and try again.'
-            : code === 'auth/network-request-failed'
-              ? 'Network error. Please check your connection.'
-              : 'Check your username and password.';
-      Alert.alert('Invalid Credentials', userMessage);
+        code === 'auth/too-many-requests'
+          ? 'Too many attempts — take a breather and try again in a minute.'
+          : code === 'auth/network-request-failed'
+            ? "Couldn't connect — check your internet and try again."
+            : "Hmm, that username or password doesn't look right.";
+      setErrorMsg(userMessage);
     } finally {
       setLoading(false);
     }
@@ -269,7 +278,7 @@ export function SignInScreen({ navigation }: any) {
         const member = MEMBERS.find((m) => m.id === cred.memberId);
         if (member) { await auth.signIn(member); navigation.replace('Main'); return; }
       }
-      Alert.alert('Invalid Credentials', 'Check your username and password.');
+      setErrorMsg("Hmm, that username or password doesn't look right.");
     } finally {
       setLoading(false);
     }
@@ -406,6 +415,13 @@ export function SignInScreen({ navigation }: any) {
               <Text style={[styles.forgotText, { color: colors.gold }]}>Forgot password?</Text>
             </SoundPressable>
 
+            {errorMsg ? (
+              <View style={[styles.errorBanner, { backgroundColor: colors.red + '20', borderColor: colors.red }]}>
+                <Ionicons name="alert-circle" size={20} color={colors.red} />
+                <Text style={[styles.errorBannerText, { color: colors.red }]}>{errorMsg}</Text>
+              </View>
+            ) : null}
+
             <Button title="Sign In" onPress={handleSignIn} loading={loading} fullWidth size="lg" style={{ marginTop: 6 }} />
           </View>
 
@@ -463,6 +479,13 @@ const styles = StyleSheet.create({
   // Forgot
   forgotRow: { alignSelf: 'center', paddingVertical: 4 },
   forgotText: { fontSize: 14, fontWeight: '600' },
+
+  // Error banner
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 8,
+  },
+  errorBannerText: { fontSize: 14, fontWeight: '500', flex: 1, marginLeft: 8 },
 
   // Footer
   footer: { flexDirection: 'row', justifyContent: 'center', paddingBottom: 12 },

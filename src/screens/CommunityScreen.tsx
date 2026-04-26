@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useBlocks } from '../context/BlocksContext';
-import { spacing, typography } from '../theme';
+import { spacing } from '../theme';
 import { PostCard } from '../components/PostCard';
 import { AnimatedLogo } from '../components/AnimatedLogo';
 import { Post, getFeed, likePost, unlikePost } from '../services/firebasePosts';

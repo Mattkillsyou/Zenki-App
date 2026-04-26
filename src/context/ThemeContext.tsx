@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useColorScheme, View, ActivityIndicator, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { darkColors, lightColors, ThemeColors, ThemeOverlayConfig, ThemeDefinition, NO_OVERLAY, palette } from '../theme/colors';
+import { darkColors, ThemeColors, ThemeOverlayConfig, ThemeDefinition, NO_OVERLAY, palette } from '../theme/colors';
 import { ALL_THEMES, THEMES_BY_ID, cleanLightTheme, cleanDarkTheme } from '../theme/themes';
 
 export type ThemeMode =

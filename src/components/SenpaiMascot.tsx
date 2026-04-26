@@ -4,7 +4,7 @@ import {
 import { SoundPressable } from './SoundPressable';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useSenpai, MascotMood } from '../context/SenpaiContext';
+import { useSenpai } from '../context/SenpaiContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 import { useTheme } from '../context/ThemeContext';
 

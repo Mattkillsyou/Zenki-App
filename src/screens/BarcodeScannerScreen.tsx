@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Alert,
   ActivityIndicator,
   Dimensions} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';

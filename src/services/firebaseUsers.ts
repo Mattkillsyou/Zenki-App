@@ -1,4 +1,4 @@
-import { collection, getDocs, query, orderBy, limit, where } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import { getCurrentUid } from './firebaseAuth';
 

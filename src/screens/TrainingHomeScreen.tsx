@@ -8,7 +8,6 @@ import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
 import {
   TRAINING_MODULES,
-  TrainingModule,
   TrainingAccentToken,
 } from '../content/trainingModules';
 

@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAppointments, Appointment, AppointmentStatus } from '../context/AppointmentContext';
-import { spacing } from '../theme';
 
 const TABS: { key: AppointmentStatus | 'all'; label: string }[] = [
   { key: 'pending', label: 'Pending' },

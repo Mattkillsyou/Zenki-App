@@ -9,9 +9,8 @@ import {
   sendPasswordResetEmail,
   getIdToken,
   getAuth,
-  initializeAuth,
 } from 'firebase/auth';
-import { initializeApp, deleteApp, getApps } from 'firebase/app';
+import { initializeApp, deleteApp } from 'firebase/app';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { Member } from '../data/members';
 import { generateId } from '../utils/generateId';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
-import { searchFoods, scaleMacrosToGrams } from '../services/foodSearch';
+import { searchFoods } from '../services/foodSearch';
 import { FoodSearchResult, FoodMacros } from '../types/food';
 
 interface FoodSearchModalProps {

@@ -126,27 +126,53 @@ export const MEMBERS: Member[] = [
   },
 ];
 
-// Seeded test credentials — username → { password, memberId }.
+// Seeded username → memberId map. Production keeps the username mapping (the
+// sign-in flow looks up which Member a typed username points at, then asks
+// Firebase to verify the password) but strips the seed passwords so they
+// never ship in the App Store JS bundle.
 //
-// On the first sign-in attempt for a seeded account, SignInScreen calls
-// firebaseSignInOrSeedAccount which creates the real Firebase Auth record
-// using the password the user typed. Subsequent sign-ins go straight through
-// Firebase. The default passwords below are only used on that first attempt,
-// and only survive until the user changes their password (via
-// Settings → Change Password, which calls updatePassword on Firebase).
+// In dev, the literal passwords are kept for two reasons:
+// 1. First-sign-in seeding — firebaseSignInOrSeedAccount creates the real
+//    Firebase Auth record using the password the user typed. The seed
+//    password is what the dev *types* on first run; subsequent sign-ins go
+//    straight through Firebase.
+// 2. Offline fallback — SignInScreen.legacyLocalSignIn (only fires when
+//    !FIREBASE_CONFIGURED) compares cred.password literally so devs can
+//    work without Firebase reachable.
 //
-// For offline / Firebase-unavailable dev, SignInScreen has a legacy
-// CREDENTIALS-only path that accepts these passwords literally.
-export const CREDENTIALS: Record<string, { password: string; memberId: string }> = {
-  'sensei.tim': { password: 'password', memberId: '1' },
-  'tim@zenkidojo.com': { password: 'password', memberId: '1' },
-  'matt.b': { password: 'password', memberId: '2' },
-  'mattbrowntheemail@gmail.com': { password: 'password', memberId: '2' },
-  apple: { password: 'password', memberId: '3' },
-  admin: { password: 'password', memberId: '4' },
-  reviewer: { password: 'ZenkiTest2026!', memberId: '5' },
-  'reviewer@zenkidojo.com': { password: 'ZenkiTest2026!', memberId: '5' },
+// Firebase Auth is the source of truth in any production iOS build, so the
+// stripped (empty) seed passwords are harmless: the legacy path can't fire
+// (FIREBASE_CONFIGURED is true), and the empty-string check at the top of
+// handleSignIn refuses empty passwords before they reach the comparison.
+const SEED_USERNAMES: Record<string, string> = {
+  'sensei.tim': '1',
+  'tim@zenkidojo.com': '1',
+  'matt.b': '2',
+  'mattbrowntheemail@gmail.com': '2',
+  apple: '3',
+  admin: '4',
+  reviewer: '5',
+  'reviewer@zenkidojo.com': '5',
 };
+
+const DEV_SEED_PASSWORDS: Record<string, string> = {
+  'sensei.tim': 'password',
+  'tim@zenkidojo.com': 'password',
+  'matt.b': 'password',
+  'mattbrowntheemail@gmail.com': 'password',
+  apple: 'password',
+  admin: 'password',
+  reviewer: 'ZenkiTest2026!',
+  'reviewer@zenkidojo.com': 'ZenkiTest2026!',
+};
+
+export const CREDENTIALS: Record<string, { password: string; memberId: string }> =
+  Object.fromEntries(
+    Object.entries(SEED_USERNAMES).map(([username, memberId]) => [
+      username,
+      { password: __DEV__ ? (DEV_SEED_PASSWORDS[username] ?? '') : '', memberId },
+    ]),
+  );
 
 export const BELT_ORDER: BeltLevel[] = ['none', 'white', 'blue', 'purple', 'brown', 'black'];
 

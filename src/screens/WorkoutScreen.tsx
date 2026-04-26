@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  RefreshControl} from 'react-native';
+} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,8 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { useWorkouts } from '../context/WorkoutContext';
 import { useGamification } from '../context/GamificationContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, LineChart } from '../components';
-import { EmptyState } from '../components/EmptyState';
+import { FadeInView } from '../components';
 import { WORKOUT_FORMAT_LABEL, WodResult, WorkoutFormat } from '../types/workout';
 import {
   EXERCISES,
@@ -28,21 +27,13 @@ import {
   CATEGORY_LABEL,
   formatPRValue,
   estimate1RM,
-  STRUCTURED_EXERCISES,
-  searchStructuredExercises,
   ALL_MUSCLE_GROUPS,
   MUSCLE_GROUP_LABELS,
   MUSCLE_GROUP_ICONS,
 } from '../data/exercises';
 import {
-  WorkoutSet,
-  LoggedExercise,
   StructuredWorkoutLog,
-  WorkoutTemplate,
-  MuscleGroup,
   volumeByMuscleGroup,
-  totalVolume as calcTotalVolume,
-  estimated1RM,
 } from '../types/activity';
 
 type Tab = 'log' | 'prs' | 'stats';

@@ -1,14 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
-  Alert, Switch, RefreshControl, KeyboardAvoidingView, Platform} from 'react-native';
+  Alert, Switch, KeyboardAvoidingView, Platform} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useCycleTracker } from '../context/CycleTrackerContext';
-import { spacing, borderRadius } from '../theme';
+import { spacing } from '../theme';
 import { FadeInView } from '../components';
 import {
   CycleSymptom, FlowIntensity, SYMPTOM_LABELS, SYMPTOM_ICONS,

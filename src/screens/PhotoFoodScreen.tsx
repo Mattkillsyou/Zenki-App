@@ -6,8 +6,7 @@ import {
   Image,
   ActivityIndicator,
   ScrollView,
-  Alert,
-  Platform} from 'react-native';
+  Alert} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';

@@ -6,7 +6,6 @@ import {
   ScrollView,
   Image,
   Alert,
-  Dimensions,
   NativeSyntheticEvent,
   NativeScrollEvent} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';

@@ -14,6 +14,7 @@ import { seedReviewerDataIfNeeded } from '../utils/seedReviewerData';
 
 const STORAGE_KEY = '@zenki_current_user';
 const CUSTOM_MEMBER_KEY = '@zenki_custom_member';
+const LAST_USERNAME_KEY = '@zenki_last_username';
 
 interface AuthContextValue {
   user: Member | null;
@@ -139,6 +140,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Stash the username so SignInScreen can prefill it on next launch.
+    if (user) await AsyncStorage.setItem(LAST_USERNAME_KEY, user.username?.toLowerCase() ?? user.id ?? '');
+
     // Local state first so UI updates immediately
     setUser(null);
 
@@ -148,7 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Wipe local identity state
     await AsyncStorage.removeItem(STORAGE_KEY);
     await AsyncStorage.removeItem(CUSTOM_MEMBER_KEY);
-  }, []);
+  }, [user]);
 
   return (
     <AuthContext.Provider value={{ user, isLoading, signIn, createAccount, signOut }}>

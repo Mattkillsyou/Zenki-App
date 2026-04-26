@@ -3,8 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  FlatList} from 'react-native';
+  ScrollView} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';

@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { spacing, typography } from '../theme';
+import { spacing } from '../theme';
 import { submitSupportMessage, flushSupportQueue, SupportCategory } from '../services/supportMessages';
 
 const CATEGORIES: { value: SupportCategory; label: string; icon: keyof typeof import('@expo/vector-icons').Ionicons.glyphMap; color: string }[] = [

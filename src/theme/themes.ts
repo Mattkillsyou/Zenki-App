@@ -6,7 +6,6 @@
 import {
   ThemeDefinition,
   ThemeColors,
-  ThemeOverlayConfig,
   NO_OVERLAY,
   darkColors,
   lightColors,

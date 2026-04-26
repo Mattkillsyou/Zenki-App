@@ -1,4 +1,4 @@
-import { BiweeklyPeriod, TimeEntry } from '../types/timeclock';
+import { BiweeklyPeriod } from '../types/timeclock';
 import { getHolidayInfo } from '../data/holidays';
 
 // ──────────────────────────────────────────────────────────────────

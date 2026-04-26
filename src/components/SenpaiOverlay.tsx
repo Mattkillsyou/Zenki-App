@@ -9,10 +9,8 @@ const STAR_GLYPH = '\u2605';       // ★
 const GLINT_GLYPH = '\u2726';      // ✦
 const MOON_GLYPH = '\u263D';       // ☽ (spec: waxing crescent)
 const HEART_GLYPH = '\u2661';      // ♡
-const HEART_FILL_GLYPH = '\u2665'; // ♥
 
 const AMBIENT_COLORS = ['#FFB3DF', '#5158FF', '#FFF666'];
-const HEART_COLORS = ['#FF2E51', '#FFB3DF', '#D260FF'];
 const CONFETTI_COLORS = ['#FF2E51', '#FFB3DF', '#5158FF', '#FFF666', '#D260FF', '#FFFFFF'];
 
 /**

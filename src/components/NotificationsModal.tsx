@@ -7,7 +7,6 @@ import { useAnnouncements } from '../context/AnnouncementContext';
 import { useAppointments } from '../context/AppointmentContext';
 import { useAuth } from '../context/AuthContext';
 import { useGamification } from '../context/GamificationContext';
-import { spacing } from '../theme';
 
 interface NotificationItem {
   id: string;

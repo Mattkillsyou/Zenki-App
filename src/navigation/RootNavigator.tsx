@@ -7,7 +7,7 @@ import {
 } from '@react-navigation/stack';
 import { TabNavigator } from './TabNavigator';
 import { useAuth } from '../context/AuthContext';
-import { easing, duration, scale, opacity } from '../theme';
+import { easing, duration, opacity } from '../theme';
 import { palette } from '../theme/colors';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useMemo } from 'react';
 import { View, StyleSheet, Platform, Animated, Dimensions } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const { height: SCREEN_H } = Dimensions.get('window');
 
 /**
  * ThemeOverlay — renders scanlines, vignette, flicker, particles, and textures

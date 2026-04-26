@@ -5,7 +5,7 @@ import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
-import { spacing, borderRadius } from '../theme';
+import { borderRadius } from '../theme';
 
 const TUTORIAL_KEY = '@zenki_tutorial_v2_completed';
 const { width: SW, height: SH } = Dimensions.get('window');

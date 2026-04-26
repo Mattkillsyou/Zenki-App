@@ -12,7 +12,7 @@ import {
   Pressable} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SoundPressable } from '../components/SoundPressable';
-import Svg, { Path, Circle as SvgCircle, G } from 'react-native-svg';
+import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';

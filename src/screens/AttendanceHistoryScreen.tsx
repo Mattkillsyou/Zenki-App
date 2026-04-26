@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAttendance } from '../context/AttendanceContext';
 import { FadeInView } from '../components';
-import { typography, spacing, borderRadius } from '../theme';
+import { spacing, borderRadius } from '../theme';
 import { getTodayString } from '../utils/location';
 
 export function AttendanceHistoryScreen({ navigation }: any) {

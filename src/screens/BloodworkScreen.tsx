@@ -14,7 +14,7 @@ import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
 import { FadeInView, LineChart } from '../components';
 import { BloodworkReport, BiomarkerStatus } from '../types/bloodwork';
-import { BIOMARKER_REFS, lookupBiomarkerRef } from '../data/biomarkers';
+import { lookupBiomarkerRef } from '../data/biomarkers';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 

@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useEmployeeTasks } from '../context/EmployeeTaskContext';
-import { spacing, borderRadius } from '../theme';
+import { spacing } from '../theme';
 import { FadeInView } from '../components';
 
 export function EmployeeChecklistScreen({ navigation }: any) {

@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useWorkouts } from '../context/WorkoutContext';
-import { spacing, borderRadius } from '../theme';
+import { spacing } from '../theme';
 import { FadeInView, LineChart } from '../components';
 import {
   EXERCISES_BY_KEY,

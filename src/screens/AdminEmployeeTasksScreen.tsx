@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useEmployeeTasks } from '../context/EmployeeTaskContext';
 import { MEMBERS } from '../data/members';
-import { spacing, borderRadius } from '../theme';
+import { spacing } from '../theme';
 
 type TaskMode = 'default' | 'assigned';
 

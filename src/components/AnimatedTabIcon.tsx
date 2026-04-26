@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Text } from 'react-native';
+import { Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { duration, easing } from '../theme';
 import { useMotion } from '../context/MotionContext';

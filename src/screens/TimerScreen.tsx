@@ -7,7 +7,6 @@ import {
   AppState,
   Vibration,
   ScrollView,
-  TextInput,
   Platform,
   Alert,
 } from 'react-native';
@@ -18,7 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useSound } from '../context/SoundContext';
 import { useSenpai } from '../context/SenpaiContext';
 import { randomDialogue } from '../data/senpaiDialogue';
-import { spacing, borderRadius } from '../theme';
+import { spacing } from '../theme';
 import { TimerPreset, TimerSessionLog } from '../types/activity';
 
 type TimerTab = 'round' | 'interval' | 'stopwatch' | 'meditate';

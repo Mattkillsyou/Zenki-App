@@ -4,7 +4,7 @@ import {
   StyleSheet,
   ViewStyle,
   ActivityIndicator,
-  View} from 'react-native';
+} from 'react-native';
 import { SoundPressable } from './SoundPressable';
 import { useTheme } from '../context/ThemeContext';
 import { typography, borderRadius, spacing, shadows } from '../theme';

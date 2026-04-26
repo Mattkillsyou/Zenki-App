@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
-import { typography, spacing, borderRadius } from '../theme';
+import { typography, spacing } from '../theme';
 import { Button } from './Button';
 import { FadeInView } from './FadeInView';
 

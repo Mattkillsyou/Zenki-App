@@ -6,7 +6,6 @@ import {
   Image,
   ActivityIndicator,
   ScrollView,
-  Alert,
   Platform,
   KeyboardAvoidingView} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';

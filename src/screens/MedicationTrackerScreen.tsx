@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
-  Modal, Alert, Switch, ActivityIndicator, FlatList, Platform,
+  Modal, Alert, Switch, ActivityIndicator, Platform,
   KeyboardAvoidingView} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,7 +10,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useMedicationTracker, DailyMedicationItem, CalendarDay } from '../context/MedicationTrackerContext';
-import { spacing, borderRadius } from '../theme';
+import { spacing } from '../theme';
 import { FadeInView } from '../components';
 import {
   MedicationEntry, MedicationCategory, FrequencyType, RouteOfAdministration,
