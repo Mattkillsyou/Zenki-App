@@ -234,7 +234,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingTop: 0,
+    paddingBottom: spacing.md,
   },
   backBtn: {
     width: 44,

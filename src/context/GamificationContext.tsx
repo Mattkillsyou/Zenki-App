@@ -170,7 +170,12 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           const initial = createInitialAchievements();
           const merged = initial.map((a) => {
             const existing = saved.achievements?.find((e: any) => e.id === a.id);
-            return existing || a;
+            if (!existing) return a;
+            return {
+              ...a,
+              unlocked: !!existing.unlocked,
+              unlockedAt: existing.unlockedAt,
+            };
           });
           setState({ ...defaultState, ...saved, achievements: merged });
         } catch {

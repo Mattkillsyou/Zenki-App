@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TextInput,
   Alert,
   KeyboardAvoidingView,
@@ -11,6 +10,7 @@ import {
   Dimensions,
   Modal,
   Pressable,
+  ScrollView,
 } from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,7 +30,14 @@ import { WeightGoal } from '../types/activity';
 type ChartRange = '7D' | '14D' | '30D' | 'TOTAL';
 const WEIGHT_GOAL_KEY = '@zenki_weight_goal';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Reasonable adult weight bounds — protects the chart from typo/outlier entries
+// (e.g. a stray "22" lb log that breaks the y-axis scale).
+const WEIGHT_BOUNDS = {
+  lb: { min: 50, max: 700 },
+  kg: { min: 23, max: 318 },
+};
 
 function todayISO(): string {
   return new Date().toISOString().split('T')[0];
@@ -50,10 +57,11 @@ export function WeightTrackerScreen({ navigation }: any) {
 
   const [weight, setWeight] = useState('');
   const [unit, setUnit] = useState<WeightUnit>('lb');
-  const [note, setNote] = useState('');
 
-  const [chartRange, setChartRange] = useState<ChartRange>('TOTAL');
+  const [chartRange, setChartRange] = useState<ChartRange>('30D');
   const [goalOpen, setGoalOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [goalTarget, setGoalTarget] = useState('');
   const [goalDate, setGoalDate] = useState('');
   const [savedGoal, setSavedGoal] = useState<WeightGoal | null>(null);
@@ -74,14 +82,25 @@ export function WeightTrackerScreen({ navigation }: any) {
   const dexaScans = user ? myDexaScans(user.id) : [];
   const latestDexa = dexaScans.length > 0 ? dexaScans[0] : null;
 
+  // Filter out obviously invalid weights so legacy bad data doesn't break the
+  // chart. We don't delete the user's data, but we exclude impossible values
+  // (e.g. < 23 kg / 50 lb or > 318 kg / 700 lb) from the trend / chart math.
+  const validMine = useMemo(
+    () => mine.filter((w) => {
+      const lbs = w.unit === 'kg' ? kgToLbs(w.weight) : w.weight;
+      return lbs >= WEIGHT_BOUNDS.lb.min && lbs <= WEIGHT_BOUNDS.lb.max;
+    }),
+    [mine],
+  );
+
   // Compute trend series once from canonical-kg weigh-ins
   const trend = useMemo(() => {
-    const raws = mine.map((w) => ({
+    const raws = validMine.map((w) => ({
       date: w.date,
       weightKg: w.unit === 'kg' ? w.weight : w.weight / 2.20462,
     }));
     return computeTrendWeight(raws);
-  }, [mine]);
+  }, [validMine]);
 
   const latestTrendKg = trend.length ? trend[trend.length - 1].trendKg : null;
   const startTrendKg = trend.length ? trend[0].trendKg : null;
@@ -100,19 +119,17 @@ export function WeightTrackerScreen({ navigation }: any) {
     return toDisplay(latestTrendKg - startTrendKg);
   }, [latestTrendKg, startTrendKg, trend, displayUnit]);
 
-  // Helper — number of days in the active range (TOTAL = all)
   const rangeDays: Record<ChartRange, number> = { '7D': 7, '14D': 14, '30D': 30, 'TOTAL': 99999 };
 
-  // Chart RAW data — actual weigh-ins as plotted points (one per log)
+  // Chart raw weigh-ins — uses validMine so outliers can't dominate the y-axis
   const chartData = useMemo(() => {
-    if (mine.length < 1) return [];
+    if (validMine.length < 1) return [];
     const now = Date.now();
     const dayMs = 86400000;
     const maxAge = rangeDays[chartRange] * dayMs;
-    // mine is sorted newest-first; reverse to chronological for charting
-    const chronological = [...mine].reverse();
+    const chronological = [...validMine].reverse();
     const filtered = chronological.filter((w) => now - new Date(w.date).getTime() <= maxAge);
-    const series = filtered.length >= 1 ? filtered : chronological.slice(-2);
+    const series = filtered.length >= 2 ? filtered : chronological.slice(-Math.min(2, chronological.length));
     return series.map((w, i) => ({
       x: i,
       y: toDisplay(w.unit === 'kg' ? w.weight : w.weight / 2.20462),
@@ -121,9 +138,9 @@ export function WeightTrackerScreen({ navigation }: any) {
         : undefined,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mine, displayUnit, chartRange]);
+  }, [validMine, displayUnit, chartRange]);
 
-  // Chart TREND OVERLAY — smoothed rolling average for the same range
+  // Trend overlay — same range as chart raw
   const chartTrendOverlay = useMemo(() => {
     if (trend.length < 2) return [];
     const now = Date.now();
@@ -135,36 +152,26 @@ export function WeightTrackerScreen({ navigation }: any) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trend, displayUnit, chartRange]);
 
-  // Weight stats
-  const weightStats = useMemo(() => {
-    if (mine.length === 0) return null;
-    const all = mine.map((w) => w.unit === 'kg' ? kgToLbs(w.weight) : w.weight);
+  // Inline stats summary (4 mini stats shown on main view)
+  const inlineStats = useMemo(() => {
+    if (validMine.length === 0) return null;
+    const all = validMine.map((w) => w.unit === 'kg' ? kgToLbs(w.weight) : w.weight);
     const highest = Math.max(...all);
     const lowest = Math.min(...all);
-    const highestEntry = mine.find((w) => (w.unit === 'kg' ? kgToLbs(w.weight) : w.weight) === highest);
-    const lowestEntry = mine.find((w) => (w.unit === 'kg' ? kgToLbs(w.weight) : w.weight) === lowest);
-    const first = mine[mine.length - 1];
-    const last = mine[0];
+    const first = validMine[validMine.length - 1];
+    const last = validMine[0];
     const firstVal = first.unit === 'kg' ? kgToLbs(first.weight) : first.weight;
     const lastVal = last.unit === 'kg' ? kgToLbs(last.weight) : last.weight;
     const totalChange = lastVal - firstVal;
-    const daysSinceLog = Math.floor((Date.now() - new Date(last.date).getTime()) / 86400000);
-
-    // Weekly rate from linear regression (simplified: delta / weeks)
     const weeks = Math.max(1, (new Date(last.date).getTime() - new Date(first.date).getTime()) / (7 * 86400000));
     const weeklyRate = totalChange / weeks;
-
     return {
       highest: displayUnit === 'kg' ? highest / 2.20462 : highest,
-      highestDate: highestEntry?.date || '',
       lowest: displayUnit === 'kg' ? lowest / 2.20462 : lowest,
-      lowestDate: lowestEntry?.date || '',
-      totalChange: displayUnit === 'kg' ? totalChange / 2.20462 : totalChange,
       weeklyRate: displayUnit === 'kg' ? weeklyRate / 2.20462 : weeklyRate,
-      daysSinceLog,
-      totalEntries: mine.length,
+      totalEntries: validMine.length,
     };
-  }, [mine, displayUnit]);
+  }, [validMine, displayUnit]);
 
   // Goal progress
   const goalProgress = useMemo(() => {
@@ -188,8 +195,12 @@ export function WeightTrackerScreen({ navigation }: any) {
       Alert.alert('Enter a weight', 'Please enter a valid positive number.');
       return;
     }
-    if (num > 1500) {
-      Alert.alert('Check your entry', 'That weight seems off. Please double-check.');
+    const bounds = WEIGHT_BOUNDS[unit];
+    if (num < bounds.min || num > bounds.max) {
+      Alert.alert(
+        'Check your entry',
+        `That weight looks unusual. Expected ${bounds.min}–${bounds.max} ${unit}.`,
+      );
       return;
     }
     addWeight({
@@ -197,10 +208,9 @@ export function WeightTrackerScreen({ navigation }: any) {
       date: todayISO(),
       weight: num,
       unit,
-      note: note.trim() || undefined,
+      note: undefined,
     });
     setWeight('');
-    setNote('');
     if (senpaiState.enabled && senpaiShouldReact()) {
       try { senpaiTrigger('cheering', randomDialogue('bodyLab'), 3000); } catch { /* ignore */ }
     }
@@ -232,251 +242,56 @@ export function WeightTrackerScreen({ navigation }: any) {
     ]);
   }
 
+  // Detect any invalid legacy entries so we can hint the user
+  const invalidCount = mine.length - validMine.length;
+  const heroValue = latestTrendKg != null
+    ? toDisplay(latestTrendKg).toFixed(1)
+    : latest
+      ? (latest.unit === displayUnit ? latest.weight : displayUnit === 'kg' ? latest.weight / 2.20462 : kgToLbs(latest.weight)).toFixed(1)
+      : '—';
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 120 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          {/* Header */}
+        {/* Header sits outside ScrollView so it stays visible */}
+        <View style={styles.headerWrap}>
           <View style={styles.header}>
             <SoundPressable
               onPress={() => navigation.goBack()}
-              style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              style={[styles.iconBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
-              <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+              <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
             </SoundPressable>
             <Text style={[styles.title, { color: colors.textPrimary }]}>Weight</Text>
-            <View style={styles.backBtn} />
+            <SoundPressable
+              onPress={() => setHistoryOpen(true)}
+              style={[styles.iconBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <Ionicons name="time-outline" size={18} color={colors.textPrimary} />
+            </SoundPressable>
           </View>
+        </View>
 
-          {/* Hero — trend-weighted primary display */}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Log form — primary action, top of scroll content */}
           <FadeInView>
-            <View style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={styles.heroCenter}>
-                <Text style={[styles.heroLabel, { color: colors.textMuted }]}>TREND WEIGHT</Text>
-                <Text style={[styles.heroNum, { color: colors.gold }]}>
-                  {latestTrendKg != null ? toDisplay(latestTrendKg).toFixed(1) : '—'}
-                </Text>
-                <Text style={[styles.heroUnit, { color: colors.textSecondary }]}>{displayUnit}</Text>
-                {latest && (
-                  <Text style={[styles.heroSub, { color: colors.textMuted }]}>
-                    Today's scale: {latest.weight.toFixed(1)} {latest.unit}
-                  </Text>
-                )}
-              </View>
-              <View style={styles.heroRow}>
-                <TrendStat
-                  label="7D"
-                  delta={delta7 == null ? null : toDisplay(delta7)}
-                  unit={displayUnit}
-                  colors={colors}
-                />
-                <View style={[styles.heroDivider, { backgroundColor: colors.border }]} />
-                <TrendStat
-                  label="14D"
-                  delta={delta14 == null ? null : toDisplay(delta14)}
-                  unit={displayUnit}
-                  colors={colors}
-                />
-                <View style={[styles.heroDivider, { backgroundColor: colors.border }]} />
-                <TrendStat
-                  label="30D"
-                  delta={delta30 == null ? null : toDisplay(delta30)}
-                  unit={displayUnit}
-                  colors={colors}
-                />
-                <View style={[styles.heroDivider, { backgroundColor: colors.border }]} />
-                <View style={styles.heroStat}>
-                  <Text style={[styles.heroStatLabel, { color: colors.textMuted }]}>TOTAL</Text>
-                  <Text style={[styles.heroStatVal, {
-                    color: change == null ? colors.textMuted : change < 0 ? colors.gold : colors.textPrimary,
-                  }]}>
-                    {change == null ? '—' : `${change > 0 ? '+' : ''}${change.toFixed(1)}`}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </FadeInView>
-
-          {/* Goal progress card */}
-          {goalProgress && (
-            <FadeInView delay={40}>
-              <View style={[styles.goalCard, { backgroundColor: colors.surface, borderColor: colors.gold + '30' }]}>
-                <View style={styles.goalHeader}>
-                  <Text style={[styles.goalLabel, { color: colors.textMuted }]}>GOAL</Text>
-                  <Text style={[styles.goalTarget, { color: colors.gold }]}>
-                    {goalProgress.target.toFixed(1)} {goalProgress.unit}
-                  </Text>
-                </View>
-                <View style={[styles.goalBarBg, { backgroundColor: colors.backgroundElevated }]}>
-                  <View style={[styles.goalBarFill, { backgroundColor: colors.gold, width: `${goalProgress.pct}%` }]} />
-                </View>
-                <View style={styles.goalMeta}>
-                  <Text style={[styles.goalMetaText, { color: colors.textSecondary }]}>
-                    {Math.abs(goalProgress.remaining).toFixed(1)} {goalProgress.unit} to go
-                  </Text>
-                  <Text style={[styles.goalMetaText, { color: colors.textMuted }]}>
-                    {goalProgress.daysLeft} days left
-                  </Text>
-                </View>
-              </View>
-            </FadeInView>
-          )}
-
-          {/* Chart + range selector */}
-          {chartData.length >= 2 && (
-            <FadeInView delay={60}>
-              <View style={[styles.chartWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <View style={{ width: 10, height: 2, backgroundColor: colors.gold, borderRadius: 1 }} />
-                      <Text style={[styles.sectionLabel, { color: colors.textMuted, marginBottom: 0, fontSize: 9 }]}>WEIGH-INS</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <View style={{ width: 10, height: 2, backgroundColor: colors.textMuted, borderRadius: 1, opacity: 0.85 }} />
-                      <Text style={[styles.sectionLabel, { color: colors.textMuted, marginBottom: 0, fontSize: 9 }]}>TREND</Text>
-                    </View>
-                  </View>
-                  <View style={styles.rangeRow}>
-                    {(['7D', '14D', '30D', 'TOTAL'] as ChartRange[]).map((r) => (
-                      <SoundPressable
-                        key={r}
-                        onPress={() => setChartRange(r)}
-                        style={[
-                          styles.rangeBtn,
-                          chartRange === r && { backgroundColor: colors.gold },
-                        ]}
-                      >
-                        <Text style={[styles.rangeBtnText, { color: chartRange === r ? '#000' : colors.textMuted }]}>
-                          {r}
-                        </Text>
-                      </SoundPressable>
-                    ))}
-                  </View>
-                </View>
-                <LineChart
-                  data={chartData}
-                  trendOverlay={chartTrendOverlay}
-                  trendOverlayColor={colors.textMuted}
-                  width={SCREEN_WIDTH - spacing.lg * 2 - spacing.md * 2}
-                  height={160}
-                  color={colors.gold}
-                  lowerIsBetter
-                  formatY={(v) => v.toFixed(0)}
-                />
-              </View>
-            </FadeInView>
-          )}
-
-          {/* Monthly logged-day calendar */}
-          {mine.length > 0 && (
-            <FadeInView delay={75}>
-              <WeightLogCalendar
-                loggedDates={new Set(mine.map((w) => w.date))}
-              />
-            </FadeInView>
-          )}
-
-          {/* Weight Stats Panel */}
-          {weightStats && (
-            <FadeInView delay={80}>
-              <View style={[styles.statsPanel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>STATS</Text>
-                <View style={styles.statsGrid}>
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statItemValue, { color: colors.textPrimary }]}>{weightStats.highest.toFixed(1)}</Text>
-                    <Text style={[styles.statItemLabel, { color: colors.textMuted }]}>Highest {displayUnit}</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statItemValue, { color: colors.textPrimary }]}>{weightStats.lowest.toFixed(1)}</Text>
-                    <Text style={[styles.statItemLabel, { color: colors.textMuted }]}>Lowest {displayUnit}</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statItemValue, { color: weightStats.weeklyRate < 0 ? colors.gold : colors.textPrimary }]}>
-                      {weightStats.weeklyRate > 0 ? '+' : ''}{weightStats.weeklyRate.toFixed(1)}
-                    </Text>
-                    <Text style={[styles.statItemLabel, { color: colors.textMuted }]}>{displayUnit}/week</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statItemValue, { color: colors.textPrimary }]}>{weightStats.totalEntries}</Text>
-                    <Text style={[styles.statItemLabel, { color: colors.textMuted }]}>Total logs</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statItemValue, { color: weightStats.totalChange < 0 ? colors.gold : colors.textPrimary }]}>
-                      {weightStats.totalChange > 0 ? '+' : ''}{weightStats.totalChange.toFixed(1)}
-                    </Text>
-                    <Text style={[styles.statItemLabel, { color: colors.textMuted }]}>Total change</Text>
-                  </View>
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statItemValue, { color: weightStats.daysSinceLog > 3 ? colors.warning : colors.textPrimary }]}>
-                      {weightStats.daysSinceLog}d
-                    </Text>
-                    <Text style={[styles.statItemLabel, { color: colors.textMuted }]}>Since last log</Text>
-                  </View>
-                </View>
-              </View>
-            </FadeInView>
-          )}
-
-          {/* DEXA integration card */}
-          {latestDexa && (
-            <FadeInView delay={90}>
-              <View style={[styles.dexaCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>BODY COMPOSITION (DEXA)</Text>
-                <View style={styles.dexaRow}>
-                  <View style={styles.dexaStat}>
-                    <Text style={[styles.dexaValue, { color: colors.gold }]}>
-                      {latestDexa.totalBodyFatPct?.toFixed(1) || '--'}%
-                    </Text>
-                    <Text style={[styles.dexaLabel, { color: colors.textMuted }]}>Body Fat</Text>
-                  </View>
-                  <View style={styles.dexaStat}>
-                    <Text style={[styles.dexaValue, { color: colors.textPrimary }]}>
-                      {latestDexa.leanMassKg ? (kgToLbs(latestDexa.leanMassKg)).toFixed(1) : '--'} lb
-                    </Text>
-                    <Text style={[styles.dexaLabel, { color: colors.textMuted }]}>Lean Mass</Text>
-                  </View>
-                  <View style={styles.dexaStat}>
-                    <Text style={[styles.dexaValue, { color: colors.textPrimary }]}>
-                      {latestDexa.fatMassKg ? (kgToLbs(latestDexa.fatMassKg)).toFixed(1) : '--'} lb
-                    </Text>
-                    <Text style={[styles.dexaLabel, { color: colors.textMuted }]}>Fat Mass</Text>
-                  </View>
-                </View>
-                <Text style={[styles.dexaDate, { color: colors.textMuted }]}>
-                  Scanned {formatDateShort(latestDexa.scanDate)}
-                </Text>
-              </View>
-            </FadeInView>
-          )}
-
-          {/* Set Goal button */}
-          {!savedGoal && (
-            <FadeInView delay={95}>
-              <SoundPressable
-                style={[styles.setGoalBtn, { backgroundColor: colors.goldMuted, borderColor: colors.gold + '30' }]}
-                onPress={() => setGoalOpen(true)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="flag-outline" size={18} color={colors.gold} />
-                <Text style={[styles.setGoalText, { color: colors.gold }]}>Set Weight Goal</Text>
-              </SoundPressable>
-            </FadeInView>
-          )}
-
-          {/* Log form */}
-          <FadeInView delay={120}>
-            <View style={[styles.form, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>LOG WEIGH-IN</Text>
-
-              <View style={styles.row}>
+            <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.gold + '40' }]}>
+              <Text style={[styles.formLabel, { color: colors.textMuted }]}>LOG WEIGH-IN</Text>
+              <View style={styles.formRow}>
                 <TextInput
-                  style={[styles.input, styles.inputLarge, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
-                  placeholder="0.0"
+                  style={[styles.formInput, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
+                  placeholder={`0.0`}
                   placeholderTextColor={colors.textMuted}
                   keyboardType="decimal-pad"
                   value={weight}
                   onChangeText={setWeight}
+                  returnKeyType="done"
+                  onSubmitEditing={handleSave}
                 />
                 <View style={[styles.unitToggle, { backgroundColor: colors.background, borderColor: colors.border }]}>
                   {(['lb', 'kg'] as WeightUnit[]).map((u) => (
@@ -491,60 +306,380 @@ export function WeightTrackerScreen({ navigation }: any) {
                       <Text style={{
                         color: unit === u ? '#000' : colors.textPrimary,
                         fontWeight: '800',
-                        fontSize: 14,
+                        fontSize: 13,
                       }}>{u}</Text>
+                    </SoundPressable>
+                  ))}
+                </View>
+                <SoundPressable
+                  onPress={handleSave}
+                  activeOpacity={0.85}
+                  style={[styles.formSaveBtn, { backgroundColor: colors.gold }]}
+                >
+                  <Ionicons name="add" size={18} color="#000" />
+                  <Text style={styles.formSaveText}>SAVE</Text>
+                </SoundPressable>
+              </View>
+            </View>
+          </FadeInView>
+
+          {/* Chart card */}
+          <FadeInView delay={40}>
+            <View style={[styles.chartWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.chartHead}>
+                <View style={styles.legendRow}>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDash, { backgroundColor: colors.gold }]} />
+                    <Text style={[styles.legendText, { color: colors.textMuted }]}>WEIGH-INS</Text>
+                  </View>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDash, { backgroundColor: colors.textMuted, opacity: 0.85 }]} />
+                    <Text style={[styles.legendText, { color: colors.textMuted }]}>TREND</Text>
+                  </View>
+                </View>
+                <View style={styles.rangeRow}>
+                  {(['7D', '14D', '30D', 'TOTAL'] as ChartRange[]).map((r) => (
+                    <SoundPressable
+                      key={r}
+                      onPress={() => setChartRange(r)}
+                      style={[
+                        styles.rangeBtn,
+                        chartRange === r && { backgroundColor: colors.gold },
+                      ]}
+                    >
+                      <Text style={[styles.rangeBtnText, { color: chartRange === r ? '#000' : colors.textMuted }]}>
+                        {r}
+                      </Text>
                     </SoundPressable>
                   ))}
                 </View>
               </View>
 
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border, marginTop: spacing.sm }]}
-                placeholder="Note (optional)"
-                placeholderTextColor={colors.textMuted}
-                value={note}
-                onChangeText={setNote}
-              />
-
-              <SoundPressable
-                onPress={handleSave}
-                activeOpacity={0.85}
-                style={[styles.saveBtn, { backgroundColor: colors.gold }]}
-              >
-                <Ionicons name="add-circle" size={18} color="#000" />
-                <Text style={styles.saveBtnText}>Save weigh-in</Text>
-              </SoundPressable>
+              {chartData.length >= 2 ? (
+                <LineChart
+                  data={chartData}
+                  trendOverlay={chartTrendOverlay}
+                  trendOverlayColor={colors.textMuted}
+                  width={SCREEN_WIDTH - spacing.md * 4}
+                  height={120}
+                  color={colors.gold}
+                  lowerIsBetter
+                  formatY={(v) => v.toFixed(0)}
+                />
+              ) : (
+                <View style={[styles.chartEmpty, { borderColor: colors.borderSubtle }]}>
+                  <Ionicons name="trending-up" size={20} color={colors.textMuted} />
+                  <Text style={[styles.chartEmptyText, { color: colors.textMuted }]}>
+                    {validMine.length === 0
+                      ? 'Log a weigh-in to see your trend'
+                      : 'Log one more weigh-in to see your trend'}
+                  </Text>
+                </View>
+              )}
             </View>
           </FadeInView>
 
-          {/* History */}
-          <FadeInView delay={180}>
-            <Text style={[styles.sectionLabel, styles.historyLabel, { color: colors.textMuted }]}>HISTORY</Text>
-
-            {mine.length === 0 ? (
-              <View style={[styles.empty, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Ionicons name="scale-outline" size={28} color={colors.textMuted} />
-                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No weigh-ins yet. Log your first above.</Text>
+          {/* Hero — trend weight + 4 deltas */}
+          <FadeInView delay={60}>
+            <View style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.heroLabel, { color: colors.textMuted }]}>TREND WEIGHT</Text>
+              <View style={styles.heroNumRow}>
+                <Text style={[styles.heroNum, { color: colors.gold }]}>{heroValue}</Text>
+                <Text style={[styles.heroUnit, { color: colors.textSecondary }]}>{displayUnit}</Text>
               </View>
-            ) : (
-              mine.map((w) => (
-                <View key={w.id} style={[styles.row, styles.historyRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.historyDate, { color: colors.textMuted }]}>{formatDateShort(w.date)}</Text>
-                    <Text style={[styles.historyWeight, { color: colors.textPrimary }]}>
-                      {w.weight.toFixed(1)} <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: '600' }}>{w.unit}</Text>
-                    </Text>
-                    {!!w.note && <Text style={[styles.historyNote, { color: colors.textSecondary }]}>{w.note}</Text>}
-                  </View>
-                  <SoundPressable onPress={() => handleDelete(w.id)} hitSlop={10} style={styles.deleteBtn}>
-                    <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-                  </SoundPressable>
-                </View>
-              ))
-            )}
+              {latest && (
+                <Text style={[styles.heroSub, { color: colors.textMuted }]}>
+                  Today's scale {latest.weight.toFixed(1)} {latest.unit}
+                </Text>
+              )}
+              <View style={styles.heroRow}>
+                <TrendStat label="7D" delta={delta7 == null ? null : toDisplay(delta7)} colors={colors} />
+                <View style={[styles.heroDivider, { backgroundColor: colors.border }]} />
+                <TrendStat label="14D" delta={delta14 == null ? null : toDisplay(delta14)} colors={colors} />
+                <View style={[styles.heroDivider, { backgroundColor: colors.border }]} />
+                <TrendStat label="30D" delta={delta30 == null ? null : toDisplay(delta30)} colors={colors} />
+                <View style={[styles.heroDivider, { backgroundColor: colors.border }]} />
+                <TrendStat label="TOTAL" delta={change} colors={colors} highlight />
+              </View>
+            </View>
           </FadeInView>
+
+          {/* Inline stats — 4 chips */}
+          {inlineStats && (
+            <FadeInView delay={80}>
+              <View style={styles.statsRow}>
+                <StatChip
+                  label="HIGH"
+                  value={inlineStats.highest.toFixed(1)}
+                  colors={colors}
+                />
+                <StatChip
+                  label="LOW"
+                  value={inlineStats.lowest.toFixed(1)}
+                  colors={colors}
+                />
+                <StatChip
+                  label={`${displayUnit.toUpperCase()}/WK`}
+                  value={`${inlineStats.weeklyRate > 0 ? '+' : ''}${inlineStats.weeklyRate.toFixed(1)}`}
+                  highlight={inlineStats.weeklyRate < 0}
+                  colors={colors}
+                />
+                <StatChip
+                  label="LOGS"
+                  value={String(inlineStats.totalEntries)}
+                  colors={colors}
+                />
+              </View>
+            </FadeInView>
+          )}
+
+          {/* Action chips */}
+          <FadeInView delay={100}>
+            <View style={styles.actionRow}>
+              <ActionChip
+                icon="calendar-outline"
+                label="Calendar"
+                onPress={() => setCalendarOpen(true)}
+                colors={colors}
+              />
+              <ActionChip
+                icon={savedGoal ? 'flag' : 'flag-outline'}
+                label={savedGoal ? 'Goal' : 'Set Goal'}
+                onPress={() => {
+                  setGoalTarget('');
+                  setGoalDate('');
+                  setGoalOpen(true);
+                }}
+                colors={colors}
+                accent={!!savedGoal}
+              />
+              <ActionChip
+                icon="scan-outline"
+                label="DEXA"
+                onPress={() => navigation.navigate('DexaScans')}
+                colors={colors}
+                badge={latestDexa ? `${latestDexa.totalBodyFatPct?.toFixed(0) ?? '--'}%` : undefined}
+              />
+              <ActionChip
+                icon="time-outline"
+                label="History"
+                onPress={() => setHistoryOpen(true)}
+                colors={colors}
+                badge={mine.length > 0 ? String(mine.length) : undefined}
+              />
+            </View>
+          </FadeInView>
+
+          {/* Recent Logs — last 10 entries */}
+          {mine.length > 0 && (
+            <FadeInView delay={120}>
+              <View style={[styles.recentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={styles.recentHeader}>
+                  <Text style={[styles.formLabel, { color: colors.textMuted, marginBottom: 0 }]}>RECENT LOGS</Text>
+                  {mine.length > 10 && (
+                    <SoundPressable onPress={() => setHistoryOpen(true)}>
+                      <Text style={[styles.recentSeeAll, { color: colors.gold }]}>See all</Text>
+                    </SoundPressable>
+                  )}
+                </View>
+                {mine.slice(0, 10).map((w, i, arr) => {
+                  const prev = arr[i + 1]; // newer first → next index is older entry
+                  const prevSameUnit = prev
+                    ? (prev.unit === w.unit ? prev.weight
+                      : w.unit === 'kg' ? prev.weight / 2.20462 : kgToLbs(prev.weight))
+                    : null;
+                  const delta = prevSameUnit != null ? w.weight - prevSameUnit : null;
+                  const lbsForFlag = w.unit === 'kg' ? kgToLbs(w.weight) : w.weight;
+                  const isInvalid = lbsForFlag < WEIGHT_BOUNDS.lb.min || lbsForFlag > WEIGHT_BOUNDS.lb.max;
+                  return (
+                    <View
+                      key={w.id}
+                      style={[
+                        styles.recentRow,
+                        i < Math.min(9, mine.length - 1) && { borderBottomWidth: 1, borderBottomColor: colors.border },
+                      ]}
+                    >
+                      <Text style={[styles.recentDate, { color: colors.textMuted }]} numberOfLines={1}>
+                        {formatDateShort(w.date)}
+                      </Text>
+                      <View style={styles.recentWeightCol}>
+                        <Text style={[styles.recentWeight, { color: isInvalid ? colors.error : colors.textPrimary }]}>
+                          {w.weight.toFixed(1)}
+                          <Text style={[styles.recentUnit, { color: colors.textSecondary }]}> {w.unit}</Text>
+                        </Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.recentDelta,
+                          {
+                            color: delta == null ? colors.textMuted
+                              : delta < 0 ? colors.gold
+                              : delta > 0 ? colors.textPrimary
+                              : colors.textMuted,
+                          },
+                        ]}
+                      >
+                        {delta == null ? '—' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}`}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </FadeInView>
+          )}
+
+          {/* Goal Progress — current vs target with ETA from weekly rate */}
+          {goalProgress && inlineStats && (() => {
+            const rate = inlineStats.weeklyRate; // signed lb (or kg) / week in displayUnit
+            const remaining = goalProgress.remaining; // signed: target - current
+            const onTrack = rate !== 0 && remaining !== 0 && Math.sign(rate) === Math.sign(remaining);
+            const etaWeeks = onTrack ? remaining / rate : null;
+            const etaDate = etaWeeks != null
+              ? new Date(Date.now() + etaWeeks * 7 * 86400000)
+              : null;
+            const etaLabel = etaDate
+              ? etaDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              : remaining === 0 ? 'Goal hit' : rate === 0 ? 'No trend yet' : 'Off track';
+            return (
+              <FadeInView delay={140}>
+                <View style={[styles.goalProgressCard, { backgroundColor: colors.surface, borderColor: colors.gold + '40' }]}>
+                  <View style={styles.goalProgressHead}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="flag" size={13} color={colors.gold} />
+                      <Text style={[styles.formLabel, { color: colors.textMuted, marginBottom: 0 }]}>GOAL PROGRESS</Text>
+                    </View>
+                    <Text style={[styles.goalProgressPct, { color: colors.gold }]}>
+                      {Math.round(goalProgress.pct)}%
+                    </Text>
+                  </View>
+                  <View style={styles.goalProgressRow}>
+                    <View style={styles.goalProgressCol}>
+                      <Text style={[styles.goalProgressLabel, { color: colors.textMuted }]}>CURRENT</Text>
+                      <Text style={[styles.goalProgressVal, { color: colors.textPrimary }]}>
+                        {goalProgress.current.toFixed(1)}
+                        <Text style={[styles.goalProgressUnit, { color: colors.textSecondary }]}> {goalProgress.unit}</Text>
+                      </Text>
+                    </View>
+                    <View style={styles.goalProgressCol}>
+                      <Text style={[styles.goalProgressLabel, { color: colors.textMuted }]}>TARGET</Text>
+                      <Text style={[styles.goalProgressVal, { color: colors.gold }]}>
+                        {goalProgress.target.toFixed(1)}
+                        <Text style={[styles.goalProgressUnit, { color: colors.textSecondary }]}> {goalProgress.unit}</Text>
+                      </Text>
+                    </View>
+                    <View style={styles.goalProgressCol}>
+                      <Text style={[styles.goalProgressLabel, { color: colors.textMuted }]}>REMAINING</Text>
+                      <Text style={[styles.goalProgressVal, { color: colors.textPrimary }]}>
+                        {Math.abs(goalProgress.remaining).toFixed(1)}
+                        <Text style={[styles.goalProgressUnit, { color: colors.textSecondary }]}> {goalProgress.unit}</Text>
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={[styles.goalBarBg, { backgroundColor: colors.backgroundElevated }]}>
+                    <View style={[styles.goalBarFill, { backgroundColor: colors.gold, width: `${goalProgress.pct}%` }]} />
+                  </View>
+                  <View style={styles.goalEtaRow}>
+                    <Text style={[styles.goalEtaLabel, { color: colors.textMuted }]}>
+                      EST. COMPLETION
+                    </Text>
+                    <Text
+                      style={[
+                        styles.goalEtaValue,
+                        {
+                          color: etaDate ? colors.textPrimary
+                            : remaining === 0 ? colors.gold
+                            : colors.warning,
+                        },
+                      ]}
+                    >
+                      {etaLabel}
+                    </Text>
+                  </View>
+                  <Text style={[styles.goalEtaSub, { color: colors.textMuted }]}>
+                    Target {new Date(savedGoal!.targetDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · {goalProgress.daysLeft}d left · {rate > 0 ? '+' : ''}{rate.toFixed(2)} {goalProgress.unit}/wk
+                  </Text>
+                </View>
+              </FadeInView>
+            );
+          })()}
+
+          {invalidCount > 0 && (
+            <Text style={[styles.invalidHint, { color: colors.textMuted }]}>
+              {invalidCount} entry{invalidCount === 1 ? '' : 'ies'} excluded — open History to review.
+            </Text>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* History modal — full list with delete */}
+      <Modal visible={historyOpen} transparent animationType="slide" onRequestClose={() => setHistoryOpen(false)}>
+        <View style={styles.sheetBackdrop}>
+          <Pressable style={{ flex: 1 }} onPress={() => setHistoryOpen(false)} />
+          <View style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.sheetHandle}>
+              <View style={[styles.sheetGrip, { backgroundColor: colors.border }]} />
+            </View>
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>History</Text>
+              <Text style={[styles.sheetSub, { color: colors.textMuted }]}>{mine.length} entries</Text>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl }}>
+              {mine.length === 0 ? (
+                <View style={[styles.empty, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <Ionicons name="scale-outline" size={28} color={colors.textMuted} />
+                  <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No weigh-ins yet.</Text>
+                </View>
+              ) : (
+                mine.map((w) => {
+                  const lbs = w.unit === 'kg' ? kgToLbs(w.weight) : w.weight;
+                  const isInvalid = lbs < WEIGHT_BOUNDS.lb.min || lbs > WEIGHT_BOUNDS.lb.max;
+                  return (
+                    <View
+                      key={w.id}
+                      style={[
+                        styles.historyRow,
+                        {
+                          backgroundColor: colors.background,
+                          borderColor: isInvalid ? colors.error + '60' : colors.border,
+                        },
+                      ]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.historyDate, { color: colors.textMuted }]}>
+                          {formatDateShort(w.date)}{isInvalid ? ' · likely invalid' : ''}
+                        </Text>
+                        <Text style={[styles.historyWeight, { color: isInvalid ? colors.error : colors.textPrimary }]}>
+                          {w.weight.toFixed(1)} <Text style={{ color: colors.textSecondary, fontSize: 14, fontWeight: '600' }}>{w.unit}</Text>
+                        </Text>
+                        {!!w.note && <Text style={[styles.historyNote, { color: colors.textSecondary }]}>{w.note}</Text>}
+                      </View>
+                      <SoundPressable onPress={() => handleDelete(w.id)} hitSlop={10} style={styles.deleteBtn}>
+                        <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
+                      </SoundPressable>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Calendar modal */}
+      <Modal visible={calendarOpen} transparent animationType="fade" onRequestClose={() => setCalendarOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setCalendarOpen(false)}>
+          <Pressable style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => {}}>
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Weigh-in Calendar</Text>
+            <WeightLogCalendar loggedDates={new Set(mine.map((w) => w.date))} />
+            <SoundPressable
+              onPress={() => setCalendarOpen(false)}
+              style={[styles.modalBtn, { backgroundColor: colors.gold, borderColor: colors.gold, marginTop: spacing.md }]}
+            >
+              <Text style={[styles.modalBtnText, { color: '#000' }]}>Done</Text>
+            </SoundPressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Goal setting modal */}
       <Modal visible={goalOpen} transparent animationType="fade" onRequestClose={() => setGoalOpen(false)}>
@@ -572,7 +707,7 @@ export function WeightTrackerScreen({ navigation }: any) {
             />
 
             <Text style={[styles.modalHint, { color: colors.textMuted }]}>
-              Recommended: 0.5-1 lb/week for loss, 0.25-0.5 lb/week for gain
+              Recommended: 0.5–1 lb/week loss, 0.25–0.5 lb/week gain
             </Text>
 
             <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
@@ -596,9 +731,14 @@ export function WeightTrackerScreen({ navigation }: any) {
   );
 }
 
-function TrendStat({ label, delta, unit, colors }: { label: string; delta: number | null; unit: string; colors: any }) {
+function TrendStat({
+  label, delta, colors, highlight,
+}: { label: string; delta: number | null; colors: any; highlight?: boolean }) {
   const color =
-    delta == null ? colors.textMuted : delta < 0 ? colors.gold : delta > 0 ? colors.textPrimary : colors.textSecondary;
+    delta == null ? colors.textMuted
+      : delta < 0 ? colors.gold
+      : delta > 0 ? (highlight ? colors.textPrimary : colors.textPrimary)
+      : colors.textSecondary;
   const sign = delta == null ? '' : delta > 0 ? '+' : '';
   const val = delta == null ? '—' : `${sign}${delta.toFixed(1)}`;
   return (
@@ -609,107 +749,346 @@ function TrendStat({ label, delta, unit, colors }: { label: string; delta: numbe
   );
 }
 
+function StatChip({
+  label, value, colors, highlight,
+}: { label: string; value: string; colors: any; highlight?: boolean }) {
+  return (
+    <View style={[styles.statChip, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <Text style={[styles.statChipValue, { color: highlight ? colors.gold : colors.textPrimary }]}>{value}</Text>
+      <Text style={[styles.statChipLabel, { color: colors.textMuted }]}>{label}</Text>
+    </View>
+  );
+}
+
+function ActionChip({
+  icon, label, onPress, colors, badge, accent,
+}: {
+  icon: any;
+  label: string;
+  onPress: () => void;
+  colors: any;
+  badge?: string;
+  accent?: boolean;
+}) {
+  return (
+    <SoundPressable
+      onPress={onPress}
+      style={[
+        styles.actionChip,
+        {
+          backgroundColor: accent ? colors.goldMuted : colors.surface,
+          borderColor: accent ? colors.gold + '40' : colors.border,
+        },
+      ]}
+    >
+      <Ionicons name={icon} size={16} color={accent ? colors.gold : colors.textPrimary} />
+      <Text style={[styles.actionChipLabel, { color: accent ? colors.gold : colors.textPrimary }]}>{label}</Text>
+      {badge && (
+        <View style={[styles.actionChipBadge, { backgroundColor: colors.gold + '22' }]}>
+          <Text style={[styles.actionChipBadgeText, { color: colors.gold }]}>{badge}</Text>
+        </View>
+      )}
+    </SoundPressable>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  headerWrap: {
+    paddingHorizontal: spacing.md,
+  },
+  scrollView: { flex: 1 },
+  scrollContent: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xl,
+  },
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.xs,
   },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  iconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
   },
-  title: { fontSize: 20, fontWeight: '800', letterSpacing: 0.5 },
+  title: { fontSize: 18, fontWeight: '800', letterSpacing: 0.5 },
 
+  // ── Hero ──
   hero: {
-    marginHorizontal: spacing.lg,
-    padding: spacing.lg,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.smd,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     alignItems: 'center',
   },
-  heroCenter: { alignItems: 'center', marginBottom: spacing.md },
   heroLabel: { fontSize: 10, letterSpacing: 1.2, fontWeight: '700' },
-  heroNum: { fontSize: 56, fontWeight: '900', marginTop: 2, marginBottom: -4 },
-  heroUnit: { fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
-  heroSub: { fontSize: 11, fontWeight: '600', letterSpacing: 0.2, marginTop: 6 },
-  heroRow: { flexDirection: 'row', alignSelf: 'stretch', marginTop: spacing.md },
+  heroNumRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 0 },
+  heroNum: { fontSize: 38, fontWeight: '900', lineHeight: 42 },
+  heroUnit: { fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
+  heroSub: { fontSize: 11, fontWeight: '600', letterSpacing: 0.2, marginTop: 1 },
+  heroRow: { flexDirection: 'row', alignSelf: 'stretch', marginTop: spacing.sm },
   heroStat: { flex: 1, alignItems: 'center' },
   heroStatLabel: { fontSize: 9, letterSpacing: 1, fontWeight: '700', marginBottom: 2 },
-  heroStatVal: { fontSize: 15, fontWeight: '800' },
-  heroDivider: { width: 1, marginHorizontal: spacing.sm },
+  heroStatVal: { fontSize: 14, fontWeight: '800' },
+  heroDivider: { width: 1, marginHorizontal: spacing.xs },
+  heroSep: { height: 1, alignSelf: 'stretch', marginVertical: spacing.xs, opacity: 0.6 },
+  goalInline: { alignSelf: 'stretch' },
+  goalInlineHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  goalInlineLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
+  goalInlineMeta: { fontSize: 10, fontWeight: '600' },
+  goalBarBg: { height: 5, borderRadius: 3, overflow: 'hidden' },
+  goalBarFill: { height: '100%', borderRadius: 3 },
 
+  // ── Chart ──
   chartWrap: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-  },
-
-  form: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    letterSpacing: 1.2,
-    fontWeight: '700',
-    marginBottom: spacing.sm,
-  },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  input: {
-    flex: 1,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.smd,
     paddingHorizontal: spacing.md,
-    paddingVertical: 12,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    fontSize: 15,
   },
-  inputLarge: { fontSize: 22, fontWeight: '800', textAlign: 'center' },
-  unitToggle: {
+  chartHead: {
     flexDirection: 'row',
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    padding: 3,
-    gap: 2,
-  },
-  unitBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: borderRadius.sm,
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 44,
+    marginBottom: 4,
   },
-  saveBtn: {
-    flexDirection: 'row',
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  legendDash: { width: 10, height: 2, borderRadius: 1 },
+  legendText: { fontSize: 9, fontWeight: '700', letterSpacing: 0.6 },
+  rangeRow: { flexDirection: 'row', gap: 2 },
+  rangeBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  rangeBtnText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },
+  chartEmpty: {
+    height: 120,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginTop: spacing.md,
-    paddingVertical: 14,
+  },
+  chartEmptyText: { fontSize: 12, fontWeight: '600' },
+
+  // ── Inline stat chips ──
+  statsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  statChip: {
+    flex: 1,
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  statChipValue: { fontSize: 15, fontWeight: '800' },
+  statChipLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.4, marginTop: 2 },
+
+  // ── Log form (top-of-page, primary action) ──
+  formCard: {
+    paddingVertical: spacing.smd,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+  },
+  formLabel: { fontSize: 10, letterSpacing: 1.2, fontWeight: '700', marginBottom: 8 },
+  formRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  formInput: {
+    flex: 1,
+    minWidth: 0, // RN-Web fix: allow shrink so SAVE button doesn't get clipped
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 10,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    fontSize: 17,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  unitToggle: {
+    flexDirection: 'row',
+    flexShrink: 0,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    padding: 2,
+    gap: 1,
+  },
+  unitBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: borderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 30,
+  },
+  formSaveBtn: {
+    flexDirection: 'row',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    paddingHorizontal: spacing.sm,
+    height: 42,
     borderRadius: borderRadius.md,
   },
-  saveBtnText: { color: '#000', fontWeight: '800', fontSize: 15, letterSpacing: 0.3 },
+  formSaveText: {
+    color: '#000',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+  },
 
-  historyLabel: { marginLeft: spacing.lg, marginTop: spacing.lg },
+  // ── Recent Logs (last 10 entries) ──
+  recentCard: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.smd,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  recentSeeAll: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4 },
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  recentDate: {
+    flex: 0,
+    width: 56,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  recentWeightCol: { flex: 1, alignItems: 'flex-start' },
+  recentWeight: { fontSize: 15, fontWeight: '800' },
+  recentUnit: { fontSize: 11, fontWeight: '600' },
+  recentDelta: {
+    fontSize: 13,
+    fontWeight: '800',
+    minWidth: 56,
+    textAlign: 'right',
+  },
+
+  // ── Goal Progress card ──
+  goalProgressCard: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.smd,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+  },
+  goalProgressHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  goalProgressPct: { fontSize: 18, fontWeight: '900' },
+  goalProgressRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.smd,
+  },
+  goalProgressCol: { flex: 1, alignItems: 'center' },
+  goalProgressLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.6, marginBottom: 2 },
+  goalProgressVal: { fontSize: 18, fontWeight: '900' },
+  goalProgressUnit: { fontSize: 10, fontWeight: '600' },
+  goalEtaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  goalEtaLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
+  goalEtaValue: { fontSize: 14, fontWeight: '800' },
+  goalEtaSub: { fontSize: 10, fontWeight: '600', marginTop: 4 },
+
+  // ── Action row ──
+  actionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  actionChip: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    flexDirection: 'column',
+  },
+  actionChipLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
+  actionChipBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+  },
+  actionChipBadgeText: { fontSize: 8, fontWeight: '800', letterSpacing: 0.2 },
+  invalidHint: {
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+
+  // ── History sheet ──
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    maxHeight: SCREEN_HEIGHT * 0.75,
+    minHeight: SCREEN_HEIGHT * 0.5,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    borderTopWidth: 1,
+  },
+  sheetHandle: { alignItems: 'center', paddingVertical: 6 },
+  sheetGrip: { width: 40, height: 4, borderRadius: 2 },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  sheetTitle: { fontSize: 18, fontWeight: '800', letterSpacing: 0.3 },
+  sheetSub: { fontSize: 12, fontWeight: '600' },
+
   historyRow: {
-    marginHorizontal: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: spacing.sm,
     padding: spacing.md,
     borderRadius: borderRadius.md,
     borderWidth: 1,
+    gap: spacing.sm,
   },
   historyDate: { fontSize: 11, letterSpacing: 0.8, fontWeight: '700', marginBottom: 2 },
   historyWeight: { fontSize: 18, fontWeight: '800' },
@@ -717,7 +1096,6 @@ const styles = StyleSheet.create({
   deleteBtn: { padding: 6 },
 
   empty: {
-    marginHorizontal: spacing.lg,
     padding: spacing.lg,
     alignItems: 'center',
     gap: spacing.sm,
@@ -726,108 +1104,7 @@ const styles = StyleSheet.create({
   },
   emptyText: { fontSize: 13, textAlign: 'center' },
 
-  // ── Goal card ──
-  goalCard: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-  },
-  goalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  goalLabel: { fontSize: 10, letterSpacing: 1.2, fontWeight: '700' },
-  goalTarget: { fontSize: 16, fontWeight: '900' },
-  goalBarBg: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  goalBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  goalMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 6,
-  },
-  goalMetaText: { fontSize: 11, fontWeight: '600' },
-
-  // ── Chart range selector ──
-  rangeRow: {
-    flexDirection: 'row',
-    gap: 2,
-  },
-  rangeBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  rangeBtnText: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-
-  // ── Stats panel ──
-  statsPanel: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  statItem: {
-    width: '30%',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  statItemValue: { fontSize: 16, fontWeight: '900' },
-  statItemLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.3, marginTop: 2 },
-
-  // ── DEXA card ──
-  dexaCard: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-  },
-  dexaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 4,
-  },
-  dexaStat: { alignItems: 'center' },
-  dexaValue: { fontSize: 18, fontWeight: '900' },
-  dexaLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.3, marginTop: 2 },
-  dexaDate: { fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 8 },
-
-  // ── Set goal button ──
-  setGoalBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    paddingVertical: 12,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-  },
-  setGoalText: { fontSize: 13, fontWeight: '700' },
-
-  // ── Modal ──
+  // ── Modal (goal + calendar) ──
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -837,7 +1114,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    maxWidth: 340,
+    maxWidth: 360,
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -878,12 +1155,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalBtnText: { fontSize: 14, fontWeight: '800' },
-  // ── Calendar ──
+
+  // ── Calendar (used inside calendar modal) ──
   calCard: {
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
+    padding: spacing.sm,
   },
   calNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   calNavBtn: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
@@ -910,13 +1185,11 @@ function WeightLogCalendar({ loggedDates }: { loggedDates: Set<string> }) {
   const monthStart = new Date(cursor.year, cursor.month, 1);
   const monthLabel = monthStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   const daysInMonth = new Date(cursor.year, cursor.month + 1, 0).getDate();
-  const startWeekday = monthStart.getDay(); // 0 = Sun
+  const startWeekday = monthStart.getDay();
 
-  // Build cells: leading blanks + day numbers
   const cells: Array<number | null> = [];
   for (let i = 0; i < startWeekday; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-  // Pad to multiple of 7
   while (cells.length % 7 !== 0) cells.push(null);
 
   const todayIso = new Date().toISOString().split('T')[0];
@@ -933,7 +1206,7 @@ function WeightLogCalendar({ loggedDates }: { loggedDates: Set<string> }) {
   };
 
   return (
-    <View style={[styles.calCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+    <View style={styles.calCard}>
       <View style={styles.calNav}>
         <SoundPressable onPress={goPrev} style={[styles.calNavBtn, { backgroundColor: colors.surfaceSecondary }]}>
           <Ionicons name="chevron-back" size={16} color={colors.textPrimary} />

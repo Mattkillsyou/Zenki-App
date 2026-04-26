@@ -1,4 +1,4 @@
-import { auth, db, FIREBASE_CONFIGURED } from '../config/firebase';
+import { app, auth, db, FIREBASE_CONFIGURED } from '../config/firebase';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -8,7 +8,10 @@ import {
   signOut as fbSignOut,
   sendPasswordResetEmail,
   getIdToken,
+  getAuth,
+  initializeAuth,
 } from 'firebase/auth';
+import { initializeApp, deleteApp, getApps } from 'firebase/app';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { Member } from '../data/members';
 import { generateId } from '../utils/generateId';
@@ -122,6 +125,56 @@ export async function firebaseSendPasswordReset(email: string): Promise<void> {
     throw new Error('firebase-unavailable');
   }
   await sendPasswordResetEmail(auth, email);
+}
+
+/**
+ * Admin-side "create Firebase Auth account for a new member" without
+ * disturbing the admin's current sign-in session.
+ *
+ * Why a secondary app: the v9 SDK's `createUserWithEmailAndPassword` always
+ * promotes the new user as the *current user* on whichever Auth instance you
+ * pass in. If we used the primary `auth`, calling this from AdminMembersScreen
+ * would silently sign the admin out and sign the new member in. We work
+ * around that by spinning up a sibling Firebase app named "admin-create-X",
+ * creating the Auth user there, seeding the /users/{uid} doc against the
+ * shared Firestore, then tearing the sibling down.
+ *
+ * Returns the new user's uid so the caller can write it onto the member
+ * record (member.firebaseUid) for later linking.
+ */
+export async function adminCreateMemberAccount(
+  email: string,
+  password: string,
+  member: Member,
+): Promise<string> {
+  if (!FIREBASE_CONFIGURED || !app || !db) {
+    throw new Error('firebase-unavailable');
+  }
+  const siblingName = `admin-create-${Date.now()}`;
+  const siblingApp = initializeApp(app.options, siblingName);
+  let createdUid: string | null = null;
+  try {
+    const siblingAuth = getAuth(siblingApp);
+    const cred = await createUserWithEmailAndPassword(siblingAuth, email, password);
+    createdUid = cred.user.uid;
+    // Seed the /users/{uid} profile against the shared Firestore — uses the
+    // primary db so the new doc is visible to the rest of the app.
+    await setDoc(doc(db, 'users', cred.user.uid), {
+      displayName: `${member.firstName} ${member.lastName}`.trim(),
+      avatar: null,
+      bio: '',
+      isPrivate: false,
+      memberId: member.id,
+      createdAt: new Date().toISOString(),
+      seededByAdmin: true,
+    });
+    // Sign the sibling out so its in-memory session can't be used.
+    await fbSignOut(siblingAuth).catch(() => {});
+  } finally {
+    await deleteApp(siblingApp).catch(() => {});
+  }
+  if (!createdUid) throw new Error('admin-create-failed');
+  return createdUid;
 }
 
 export function getCurrentUid(): string | null {

@@ -62,6 +62,14 @@ export function LineChart({
   const n = data.length;
   const xStep = n > 1 ? plotWidth / (n - 1) : 0;
 
+  // With very few points the area fill becomes a single triangular block that
+  // looks like a broken rectangle, and the dashed trend overlay sitting nearly
+  // on top of the solid line just adds visual noise. Hide both until we have
+  // enough points to draw a meaningful trend.
+  const sparse = n <= 3;
+  const showFill = fillGradient && !sparse;
+  const showOverlay = !sparse;
+
   // Find y range — include the overlay so both lines are visible.
   // Add a little padding so neither line touches edges.
   const overlayYs = (trendOverlay ?? []).map((p) => p.y);
@@ -128,12 +136,12 @@ export function LineChart({
         ))}
 
         {/* Subtle area fill */}
-        {fillGradient && (
-          <Path d={fillPath} fill={strokeColor} fillOpacity={0.12} />
+        {showFill && (
+          <Path d={fillPath} fill={strokeColor} fillOpacity={0.06} />
         )}
 
         {/* Trend overlay (dashed) — drawn before main line so points sit on top */}
-        {overlayPoints.length > 1 && (
+        {showOverlay && overlayPoints.length > 1 && (
           <Path
             d={overlayPath}
             stroke={overlayStroke}
@@ -173,10 +181,10 @@ export function LineChart({
         })}
 
         {/* Y-axis labels: min + max */}
-        <SvgText x={4} y={PADDING_TOP + 4} fontSize={10} fill={colors.textMuted} fontWeight="600">
+        <SvgText x={6} y={PADDING_TOP + 4} fontSize={10} fill={colors.textMuted} fontWeight="600">
           {formatY ? formatY(maxY) : Math.round(maxY).toString()}
         </SvgText>
-        <SvgText x={4} y={baseline} fontSize={10} fill={colors.textMuted} fontWeight="600">
+        <SvgText x={6} y={baseline} fontSize={10} fill={colors.textMuted} fontWeight="600">
           {formatY ? formatY(minY) : Math.round(minY).toString()}
         </SvgText>
 

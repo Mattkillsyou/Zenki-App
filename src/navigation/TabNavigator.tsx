@@ -16,6 +16,8 @@ import {
   ProfileScreen,
   DrinkScreen,
   CommunityScreen,
+  EmployeeChecklistScreen,
+  TimeClockScreen,
 } from '../screens';
 
 const Tab = createBottomTabNavigator();
@@ -27,6 +29,8 @@ const TAB_ICONS: Record<string, { active: keyof typeof Ionicons.glyphMap; inacti
   Book: { active: 'add-circle', inactive: 'add-circle-outline' },
   Hydration: { active: 'water', inactive: 'water-outline' },
   Store: { active: 'bag', inactive: 'bag-outline' },
+  Tasks: { active: 'checkbox', inactive: 'checkbox-outline' },
+  Clock: { active: 'time', inactive: 'time-outline' },
   Profile: { active: 'person', inactive: 'person-outline' },
 };
 
@@ -79,11 +83,13 @@ export function TabNavigator() {
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
-      {!isEmployee && <Tab.Screen name="Schedule" component={ScheduleScreen} />}
-      {!isEmployee && <Tab.Screen name="Community" component={CommunityScreen} />}
-      {!isEmployee && <Tab.Screen name="Book" component={BookScreen} />}
+      <Tab.Screen name="Schedule" component={ScheduleScreen} />
+      <Tab.Screen name="Community" component={CommunityScreen} />
+      <Tab.Screen name="Book" component={BookScreen} />
       {!isEmployee && <Tab.Screen name="Hydration" component={DrinkScreen} />}
       {!isEmployee && <Tab.Screen name="Store" component={StoreScreen} />}
+      {isEmployee && <Tab.Screen name="Tasks" component={EmployeeChecklistScreen} />}
+      {isEmployee && <Tab.Screen name="Clock" component={TimeClockScreen} />}
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );

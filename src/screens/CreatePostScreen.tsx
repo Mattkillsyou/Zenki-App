@@ -238,7 +238,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingTop: 0,
+    paddingBottom: 14,
   },
   title: { fontSize: 18, fontWeight: '700' },
   postButton: {

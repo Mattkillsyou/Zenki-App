@@ -421,7 +421,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingTop: 0,
+    paddingBottom: spacing.md,
   },
   title: {
     fontSize: 34,

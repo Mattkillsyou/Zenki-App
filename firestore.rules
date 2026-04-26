@@ -32,12 +32,14 @@ service cloud.firestore {
       allow create, update, delete: if isOwner(uid);
     }
 
-    // Legacy members collection — read-only from the app.
-    // Admin writes happen server-side (Cloud Functions) until admin UI
-    // is wired with custom claims.
+    // Members collection — keyed by the app's local member id (not the
+    // Firebase Auth uid). Anyone signed in can read for community / admin
+    // browsing. Admins write from AdminMembersScreen (role flips, belt
+    // promotions, etc.); members keep ownership of their own /users/{uid}
+    // doc above for self-edits.
     match /members/{memberId} {
       allow read: if isSignedIn();
-      allow write: if false;
+      allow create, update, delete: if isAdmin();
     }
 
     // Posts — any signed-in user can read.

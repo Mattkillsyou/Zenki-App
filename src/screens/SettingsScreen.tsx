@@ -46,6 +46,27 @@ const SOUND_THEME_KEY = '@zenki_sound_theme';
 type UnitPref = 'imperial' | 'metric';
 type SoundTheme = 'default' | 'retro' | 'zen' | 'pipboy';
 
+// React Native Web's Alert.alert with multiple buttons collapses to a single-
+// button window.alert, making destructive confirmations un-confirmable in the
+// browser preview. Use window.confirm on web, Alert.alert on native.
+function confirmDestructive(
+  title: string,
+  message: string,
+  confirmLabel: string,
+  onConfirm: () => void,
+) {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && window.confirm(`${title}\n\n${message}`)) {
+      onConfirm();
+    }
+    return;
+  }
+  Alert.alert(title, message, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: confirmLabel, style: 'destructive', onPress: onConfirm },
+  ]);
+}
+
 // Old THEME_OPTIONS removed — replaced by visual theme picker grid using ALL_THEMES
 
 
@@ -56,49 +77,37 @@ export function SettingsScreen({ navigation }: any) {
 
   // ── Real sign-out: clear local state + Firebase Auth session ──
   const handleSignOut = () => {
-    Alert.alert('Sign Out?', 'You will need to sign back in next time.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await signOut(); // clears Firebase session + local identity
-          } catch {
-            /* ignore */
-          }
-          navigation.replace('SignIn');
-        },
+    confirmDestructive(
+      'Sign Out?',
+      'You will need to sign back in next time.',
+      'Sign Out',
+      async () => {
+        try {
+          await signOut(); // clears Firebase session + local identity
+        } catch {
+          /* ignore */
+        }
+        navigation.replace('SignIn');
       },
-    ]);
+    );
   };
 
   // ── Delete Account (Apple 5.1.1(v) requirement) ──
   const handleDeleteAccount = () => {
-    Alert.alert(
+    confirmDestructive(
       'Delete Account?',
       'This permanently deletes your account, posts, messages, attendance history, and all training data. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Forever',
-          style: 'destructive',
-          onPress: () => confirmDeleteAccount(),
-        },
-      ],
+      'Delete Forever',
+      () => confirmDeleteAccount(),
     );
   };
 
   const confirmDeleteAccount = () => {
-    Alert.alert(
+    confirmDestructive(
       'Really?',
       'Tap Delete again to confirm. Your data will be gone immediately and cannot be recovered.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
+      'Delete',
+      async () => {
             try {
               // Ask the server to cascade-delete Firestore docs + Storage
               if (FIREBASE_CONFIGURED) {
@@ -149,9 +158,7 @@ export function SettingsScreen({ navigation }: any) {
             } catch {
               Alert.alert('Could not delete account', 'Please try again or contact support.');
             }
-          },
-        },
-      ],
+      },
     );
   };
 
@@ -860,7 +867,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingTop: 0,
+    paddingBottom: spacing.md,
   },
   backButton: {
     width: 44,

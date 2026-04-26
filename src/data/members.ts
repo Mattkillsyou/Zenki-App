@@ -31,6 +31,12 @@ export interface Member {
   memberSince: string; // YYYY-MM-DD
   isAdmin: boolean;
   isEmployee?: boolean;
+  /**
+   * Firebase Auth uid linked to this member, when one exists. Set by the
+   * admin "Create Account" flow and by self-signups; absent for seed members
+   * who haven't logged in yet.
+   */
+  firebaseUid?: string;
   hourlyRate?: number;
   profilePhoto?: string; // URI from device
   totalSessions: number;

@@ -32,7 +32,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius, shadows } from '../theme';
-import { ClassCard, AnimatedLogo, FadeInView, PressableScale, TimeClock, StreakBadge, PointsBadge, XPProgressBar, AchievementGrid, CelebrationModal } from '../components';
+import { ClassCard, AnimatedLogo, FadeInView, PressableScale, TimeClock, PointsBadge, XPProgressBar, AchievementGrid, CelebrationModal } from '../components';
 import { ReorderableSections, ReorderableItem } from '../components/ReorderableSections';
 import { Skeleton } from '../components/Skeleton';
 import { SpinWheelModal } from '../components/SpinWheelModal';
@@ -92,16 +92,19 @@ function parseTimeSort(label: string): number {
 }
 
 /**
- * Employee-only card on Home showing today's checklist progress.
- * Tap to open full EmployeeChecklist screen.
+ * Employee-only card on Home: shows today's progress summary, then renders
+ * each task as a full-row pill that toggles completion when tapped anywhere.
+ * The "Open" button still navigates to the full screen for adding personal
+ * tasks / managing the list.
  */
 function EmployeeChecklistCard({ navigation, memberId }: { navigation: any; memberId: string }) {
   const { colors } = useTheme();
-  const { todayTasksFor } = useEmployeeTasks();
+  const { todayTasksFor, toggleComplete } = useEmployeeTasks();
   const tasks = todayTasksFor(memberId);
   const done = tasks.filter((t) => t.completedToday).length;
   const total = tasks.length;
   const progressPct = total > 0 ? (done / total) * 100 : 0;
+  const allDone = total > 0 && done === total;
 
   return (
     <FadeInView delay={160} slideUp={16}>
@@ -117,40 +120,91 @@ function EmployeeChecklistCard({ navigation, memberId }: { navigation: any; memb
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          onPress={() => navigation.navigate('EmployeeChecklist')}
-          activeOpacity={0.85}
-          style={[
-            {
-              padding: 18,
-              borderRadius: 18,
-              borderWidth: 1.5,
-              gap: 10,
-              marginHorizontal: spacing.lg,
-              backgroundColor: colors.surface,
-              borderColor: done === total && total > 0 ? colors.success : colors.border,
-            },
-          ]}
+        <View
+          style={{
+            padding: 16,
+            borderRadius: 18,
+            borderWidth: 1.5,
+            gap: 10,
+            backgroundColor: colors.surface,
+            borderColor: allDone ? colors.success : colors.border,
+          }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Ionicons
-                name={total > 0 && done === total ? 'checkmark-circle' : 'list-outline'}
-                size={22}
-                color={total > 0 && done === total ? colors.success : colors.gold}
-              />
-              <Text style={{ fontSize: 16, fontWeight: '800', color: colors.textPrimary }}>
-                {total === 0 ? 'No tasks today' : `${done}/${total} complete`}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Ionicons
+              name={allDone ? 'checkmark-circle' : 'list-outline'}
+              size={22}
+              color={allDone ? colors.success : colors.gold}
+            />
+            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.textPrimary }}>
+              {total === 0 ? 'No tasks today' : `${done}/${total} complete`}
+            </Text>
           </View>
           {total > 0 && (
             <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.backgroundElevated, overflow: 'hidden' }}>
               <View style={{ height: '100%', width: `${progressPct}%`, backgroundColor: colors.gold, borderRadius: 3 }} />
             </View>
           )}
-        </TouchableOpacity>
+        </View>
+
+        {tasks.length > 0 && (
+          <View style={{ marginTop: 10, gap: 6 }}>
+            {tasks.map((t) => (
+              <TouchableOpacity
+                key={t.id}
+                onPress={() => toggleComplete(t.id, memberId)}
+                activeOpacity={0.85}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: 14,
+                  borderRadius: 14,
+                  borderWidth: 1.5,
+                  backgroundColor: colors.surface,
+                  borderColor: t.completedToday ? colors.gold : colors.border,
+                }}
+              >
+                <View
+                  pointerEvents="none"
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 6,
+                    borderWidth: 2,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: t.completedToday ? colors.gold : 'transparent',
+                    borderColor: t.completedToday ? colors.gold : colors.textMuted,
+                  }}
+                >
+                  {t.completedToday && <Ionicons name="checkmark" size={14} color="#000" />}
+                </View>
+                <View style={{ flex: 1 }} pointerEvents="none">
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: '700',
+                      color: t.completedToday ? colors.textMuted : colors.textPrimary,
+                      textDecorationLine: t.completedToday ? 'line-through' : 'none',
+                    }}
+                    numberOfLines={2}
+                  >
+                    {t.title}
+                  </Text>
+                  {t.description ? (
+                    <Text
+                      style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}
+                      numberOfLines={2}
+                    >
+                      {t.description}
+                    </Text>
+                  ) : null}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
     </FadeInView>
   );
@@ -569,7 +623,11 @@ export function HomeScreen({ navigation }: any) {
   }, []);
 
   // ── Module reorder (drag to rearrange) + show/hide ──
-  const DEFAULT_MODULE_ORDER = ['quote', 'announcements', 'xpBar', 'achievements', 'training', 'quickFoodActions', 'dashboard', 'quickStats'];
+  // Employees swap the food / training tools for clock-in + today's checklist;
+  // every other module (announcements, xp, dashboard, etc.) stays the same.
+  const NON_EMPLOYEE_MODULE_ORDER = ['announcements', 'quote', 'xpBar', 'achievements', 'training', 'quickFoodActions', 'dashboard', 'quickStats'];
+  const EMPLOYEE_MODULE_ORDER = ['timeclock', 'checklist', 'announcements', 'quote', 'xpBar', 'achievements', 'dashboard', 'quickStats'];
+  const DEFAULT_MODULE_ORDER = isEmployee ? EMPLOYEE_MODULE_ORDER : NON_EMPLOYEE_MODULE_ORDER;
   const [moduleOrder, setModuleOrder] = useState<string[]>(DEFAULT_MODULE_ORDER);
   const [moduleVisibility, setModuleVisibility] = useState<Record<string, boolean>>({});
   const [editMode, setEditMode] = useState(false);
@@ -649,51 +707,30 @@ export function HomeScreen({ navigation }: any) {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        contentInsetAdjustmentBehavior="never"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />
         }
       >
 
-        {/* ─── Header (compact with corner logo) ─── */}
+        {/* ─── Header — single row that wraps AROUND the iPhone status-bar area
+                  (clock on left of island, signal/battery on right of island).
+                  Left cluster: logo + points. Right cluster: flames + bell.
+                  The middle gap holds the iOS Dynamic Island / clock / signal icons. */}
         <FadeInView delay={0} slideUp={0}>
           <View style={styles.header}>
-            <View style={styles.headerRight}>
+            <View style={styles.headerCluster}>
               <AnimatedLogo size={28} />
-              {!isEmployee && !hasSpunToday && (
-                <TouchableOpacity
-                  ref={spinFabRef}
-                  onLayout={measureCoachTarget('spinFab', spinFabRef)}
-                  style={[
-                    styles.spinHeaderBtn,
-                    {
-                      backgroundColor: colors.surface,
-                      shadowColor: '#D4A017',
-                      // @ts-ignore — boxShadow is web-only
-                      boxShadow: '0 0 10px rgba(212,160,23,0.65), 0 0 18px rgba(212,160,23,0.3)',
-                    },
-                  ]}
-                  onPress={() => { play('navigate'); setSpinOpen(true); }}
-                  activeOpacity={0.7}
-                  accessibilityLabel="Daily spin"
-                >
-                  <Ionicons name="aperture" size={22} color="#D4A017" />
-                </TouchableOpacity>
-              )}
-              {!isEmployee && (
-                <PointsBadge
-                  points={gamState.dojoPoints || 0}
-                  compact
-                />
-              )}
-              {!isEmployee && (
-                <View style={[styles.flamesChip, { backgroundColor: colors.surface }]}>
-                  <Ionicons name="flame" size={16} color={colors.flames} />
-                  <Text style={[styles.flamesChipText, { color: colors.textPrimary }]}>
-                    {formatCount(gamState.flames || 0)}
-                  </Text>
-                </View>
-              )}
-              {!isEmployee && <StreakBadge streak={gamState.streak} compact />}
+              <PointsBadge points={gamState.dojoPoints || 0} compact />
+            </View>
+
+            <View style={styles.headerCluster}>
+              <View style={[styles.flamesChip, { backgroundColor: colors.surface }]}>
+                <Ionicons name="flame" size={16} color={colors.flames} />
+                <Text style={[styles.flamesChipText, { color: colors.textPrimary }]}>
+                  {formatCount(gamState.flames || 0)}
+                </Text>
+              </View>
               <TouchableOpacity
                 style={[styles.iconButton, { backgroundColor: colors.surface }]}
                 onPress={() => { play('navigate'); setNotifsSeen(true); setNotifOpen(true); }}
@@ -717,86 +754,103 @@ export function HomeScreen({ navigation }: any) {
                 {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Member'}
               </Text>
             </Text>
-            {!isEmployee && !editMode && (
-              <View ref={editPillRef} onLayout={measureCoachTarget('edit', editPillRef)}>
+            <View style={styles.welcomeActions}>
+              {!hasSpunToday && (
                 <TouchableOpacity
-                  onPress={() => toggleEditMode(true)}
-                  activeOpacity={0.8}
-                  style={[styles.editPill, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  ref={spinFabRef}
+                  onLayout={measureCoachTarget('spinFab', spinFabRef)}
+                  style={[
+                    styles.spinHeaderBtn,
+                    {
+                      backgroundColor: colors.surface,
+                      shadowColor: '#D4A017',
+                      // @ts-ignore — boxShadow is web-only
+                      boxShadow: '0 0 10px rgba(212,160,23,0.65), 0 0 18px rgba(212,160,23,0.3)',
+                    },
+                  ]}
+                  onPress={() => { play('navigate'); setSpinOpen(true); }}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Daily spin"
                 >
-                  <Ionicons name="create-outline" size={11} color={colors.textSecondary} />
-                  <Text style={[styles.editPillText, { color: colors.textSecondary }]}>Edit</Text>
+                  <Ionicons name="aperture" size={22} color="#D4A017" />
                 </TouchableOpacity>
-              </View>
-            )}
+              )}
+              {!editMode && (
+                <View ref={editPillRef} onLayout={measureCoachTarget('edit', editPillRef)}>
+                  <TouchableOpacity
+                    onPress={() => toggleEditMode(true)}
+                    activeOpacity={0.8}
+                    style={[styles.editPill, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  >
+                    <Ionicons name="create-outline" size={11} color={colors.textSecondary} />
+                    <Text style={[styles.editPillText, { color: colors.textSecondary }]}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           </View>
         </FadeInView>
 
-        {/* ─── Employee Clock ─── */}
-        {isEmployee && (
-          <FadeInView delay={120} slideUp={16}>
-            <View style={styles.section}><TimeClock /></View>
+        {/* ── Cycle Phase Pill (female members only) ── */}
+        {showCyclePhase && cycleInfo && (
+          <FadeInView delay={180} slideUp={10}>
+            <TouchableOpacity
+              style={[styles.cyclePill, { backgroundColor: PHASE_COLORS[cycleInfo.currentPhase] + '18', borderColor: PHASE_COLORS[cycleInfo.currentPhase] + '40' }]}
+              onPress={() => navigation.navigate('CycleTracker')}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontSize: 14 }}>{PHASE_ICONS[cycleInfo.currentPhase]}</Text>
+              <Text style={[styles.cyclePillText, { color: PHASE_COLORS[cycleInfo.currentPhase] }]}>
+                {PHASE_LABELS[cycleInfo.currentPhase]} · Day {cycleInfo.cycleDay}
+              </Text>
+              {cycleInfo.daysUntilNextPeriod <= 5 && !cycleInfo.isOnPeriod && (
+                <Text style={[styles.cyclePillAlert, { color: PHASE_COLORS.menstrual }]}>
+                  {cycleInfo.daysUntilNextPeriod}d
+                </Text>
+              )}
+              <Ionicons name="chevron-forward" size={14} color={PHASE_COLORS[cycleInfo.currentPhase]} />
+            </TouchableOpacity>
           </FadeInView>
         )}
 
-        {/* ─── Employee Checklist (employee-only) ─── */}
-        {isEmployee && <EmployeeChecklistCard navigation={navigation} memberId={user?.id ?? ''} />}
+        {/* ── Edit-mode bar ── */}
+        {editMode && (
+          <Animated.View
+            style={[
+              styles.editBar,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.gold + '40',
+                opacity: editBarOpacity,
+                transform: [{ translateY: editBarTranslate }],
+              },
+            ]}
+          >
+            <Ionicons name="move-outline" size={16} color={colors.gold} />
+            <Text style={[styles.editHint, { color: colors.textSecondary }]}>
+              Drag to rearrange · tap − to hide
+            </Text>
+            <TouchableOpacity
+              style={[styles.doneBtn, { backgroundColor: colors.gold }]}
+              onPress={() => toggleEditMode(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.doneBtnText, { color: '#000' }]}>DONE</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
 
-        {/* ─── Member Content ─── */}
-        {!isEmployee && (
-          <>
-            {/* ── Cycle Phase Pill (female users only) ── */}
-            {showCyclePhase && cycleInfo && (
-              <FadeInView delay={180} slideUp={10}>
-                <TouchableOpacity
-                  style={[styles.cyclePill, { backgroundColor: PHASE_COLORS[cycleInfo.currentPhase] + '18', borderColor: PHASE_COLORS[cycleInfo.currentPhase] + '40' }]}
-                  onPress={() => navigation.navigate('CycleTracker')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={{ fontSize: 14 }}>{PHASE_ICONS[cycleInfo.currentPhase]}</Text>
-                  <Text style={[styles.cyclePillText, { color: PHASE_COLORS[cycleInfo.currentPhase] }]}>
-                    {PHASE_LABELS[cycleInfo.currentPhase]} · Day {cycleInfo.cycleDay}
-                  </Text>
-                  {cycleInfo.daysUntilNextPeriod <= 5 && !cycleInfo.isOnPeriod && (
-                    <Text style={[styles.cyclePillAlert, { color: PHASE_COLORS.menstrual }]}>
-                      {cycleInfo.daysUntilNextPeriod}d
-                    </Text>
-                  )}
-                  <Ionicons name="chevron-forward" size={14} color={PHASE_COLORS[cycleInfo.currentPhase]} />
-                </TouchableOpacity>
-              </FadeInView>
-            )}
-
-            {/* ── Edit-mode bar: shown while reordering ── */}
-            {editMode && (
-              <Animated.View
-                style={[
-                  styles.editBar,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.gold + '40',
-                    opacity: editBarOpacity,
-                    transform: [{ translateY: editBarTranslate }],
-                  },
-                ]}
-              >
-                <Ionicons name="move-outline" size={16} color={colors.gold} />
-                <Text style={[styles.editHint, { color: colors.textSecondary }]}>
-                  Drag to rearrange · tap − to hide
-                </Text>
-                <TouchableOpacity
-                  style={[styles.doneBtn, { backgroundColor: colors.gold }]}
-                  onPress={() => toggleEditMode(false)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.doneBtnText, { color: '#000' }]}>DONE</Text>
-                </TouchableOpacity>
-              </Animated.View>
-            )}
-
-            {/* ── Reorderable sections ── */}
-            {(() => {
+        {/* ── Reorderable sections (members + employees) ── */}
+        {(() => {
               const sectionsById: Record<string, React.ReactElement | null> = {
+                timeclock: isEmployee ? (
+                  <FadeInView delay={120} slideUp={16}>
+                    <View style={styles.section}><TimeClock /></View>
+                  </FadeInView>
+                ) : null,
+                checklist: isEmployee ? (
+                  <EmployeeChecklistCard navigation={navigation} memberId={user?.id ?? ''} />
+                ) : null,
                 announcements: visibleAnnouncements.length > 0 ? (
                   <FadeInView delay={80} slideUp={12}>
                     <View style={[styles.announcementsWrap, { marginTop: 4 }]}>
@@ -1104,14 +1158,9 @@ export function HomeScreen({ navigation }: any) {
               );
             })()}
 
-          </>
-        )}
-
       </ScrollView>
 
-      {!isEmployee && (
-        <CelebrationModal celebration={gamState.pendingCelebration} onDismiss={dismissCelebration} />
-      )}
+      <CelebrationModal celebration={gamState.pendingCelebration} onDismiss={dismissCelebration} />
 
       {/* Daily Spin Wheel */}
       <SpinWheelModal visible={spinOpen} onClose={() => setSpinOpen(false)} />
@@ -1171,20 +1220,33 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { paddingBottom: 120 },
 
-  // Header
+  // Header — single row split into two clusters with the iPhone Dynamic
+  // Island sitting in the empty middle. Sits flush against the safe-area
+  // boundary; no extra top padding so the logo/badges/bell clear the notch
+  // without whitespace.
   header: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 0,
     paddingBottom: 8,
+  },
+  headerCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  welcomeActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 
   // Welcome + Quote
   welcomeSection: {
     paddingHorizontal: 24,
-    paddingTop: 4,
+    paddingTop: 0,
     paddingBottom: 4,
   },
   welcomeLine: {

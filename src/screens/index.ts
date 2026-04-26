@@ -18,6 +18,7 @@ export { WorkoutScreen } from './WorkoutScreen';
 export { TimerScreen } from './TimerScreen';
 export { PRDetailScreen } from './PRDetailScreen';
 export { EmployeeChecklistScreen } from './EmployeeChecklistScreen';
+export { TimeClockScreen } from './TimeClockScreen';
 export { AdminEmployeeTasksScreen } from './AdminEmployeeTasksScreen';
 export { AdminReportsScreen } from './AdminReportsScreen';
 export { WeightTrackerScreen } from './WeightTrackerScreen';

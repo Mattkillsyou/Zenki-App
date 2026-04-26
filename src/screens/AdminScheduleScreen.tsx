@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
-  Alert,
   Modal,
   KeyboardAvoidingView,
   Platform} from 'react-native';
@@ -15,20 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { Button } from '../components';
-
-type ClassType = 'jiu-jitsu' | 'muay-thai' | 'pilates' | 'open-mat';
-
-interface ScheduleClass {
-  id: string;
-  name: string;
-  instructor: string;
-  time: string;
-  duration: string;
-  spotsLeft: number;
-  type: ClassType;
-}
-
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+import { showAlert, confirmAlert } from '../utils/alert';
+import { useSchedule, ScheduleClass, DayKey } from '../context/ScheduleContext';
+import { ClassType, DAYS } from '../data/schedule';
 
 const CLASS_TYPES: { value: ClassType; label: string }[] = [
   { value: 'jiu-jitsu', label: 'Jiu-Jitsu' },
@@ -36,33 +24,6 @@ const CLASS_TYPES: { value: ClassType; label: string }[] = [
   { value: 'pilates', label: 'Pilates' },
   { value: 'open-mat', label: 'Open Mat' },
 ];
-
-const INITIAL_SCHEDULE: Record<string, ScheduleClass[]> = {
-  Mon: [
-    { id: '1', name: 'Group Workout', instructor: 'Carnage', time: '11:00 AM', duration: '60 min', spotsLeft: 8, type: 'open-mat' },
-    { id: '2', name: 'Jiu-Jitsu (Adults)', instructor: 'Sensei Tim', time: '12:00 PM', duration: '60 min', spotsLeft: 6, type: 'jiu-jitsu' },
-    { id: '3', name: 'Kids Jiu-Jitsu', instructor: 'Sensei Tim', time: '6:30 PM', duration: '45 min', spotsLeft: 8, type: 'jiu-jitsu' },
-  ],
-  Tue: [
-    { id: '4', name: 'Muay Thai', instructor: 'Carnage', time: '12:00 PM', duration: '60 min', spotsLeft: 7, type: 'muay-thai' },
-    { id: '5', name: 'Open Mat', instructor: 'Self-guided', time: '5:00 PM', duration: '90 min', spotsLeft: 10, type: 'open-mat' },
-  ],
-  Wed: [
-    { id: '6', name: 'Jiu-Jitsu (Adults)', instructor: 'Sensei Tim', time: '12:00 PM', duration: '60 min', spotsLeft: 5, type: 'jiu-jitsu' },
-    { id: '7', name: 'Muay Thai', instructor: 'Carnage', time: '5:00 PM', duration: '60 min', spotsLeft: 6, type: 'muay-thai' },
-  ],
-  Thu: [
-    { id: '8', name: 'Muay Thai', instructor: 'Carnage', time: '12:00 PM', duration: '60 min', spotsLeft: 7, type: 'muay-thai' },
-    { id: '9', name: 'Open Mat', instructor: 'Self-guided', time: '5:00 PM', duration: '90 min', spotsLeft: 10, type: 'open-mat' },
-  ],
-  Fri: [
-    { id: '10', name: 'Jiu-Jitsu (Adults)', instructor: 'Sensei Tim', time: '12:00 PM', duration: '60 min', spotsLeft: 6, type: 'jiu-jitsu' },
-  ],
-  Sat: [
-    { id: '11', name: 'Open Mat', instructor: 'Self-guided', time: '10:00 AM', duration: '120 min', spotsLeft: 10, type: 'open-mat' },
-  ],
-  Sun: [],
-};
 
 const TYPE_COLORS: Record<ClassType, string> = {
   'jiu-jitsu': '#1565C0',
@@ -73,8 +34,8 @@ const TYPE_COLORS: Record<ClassType, string> = {
 
 export function AdminScheduleScreen({ navigation }: any) {
   const { colors } = useTheme();
-  const [schedule, setSchedule] = useState(INITIAL_SCHEDULE);
-  const [selectedDay, setSelectedDay] = useState('Mon');
+  const { schedule, addClass, updateClass, removeClass } = useSchedule();
+  const [selectedDay, setSelectedDay] = useState<DayKey>('Mon');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingClass, setEditingClass] = useState<ScheduleClass | null>(null);
 
@@ -108,13 +69,12 @@ export function AdminScheduleScreen({ navigation }: any) {
     setModalVisible(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!className || !instructor || !time) {
-      Alert.alert('Missing Info', 'Fill in class name, instructor, and time.');
+      showAlert('Missing Info', 'Fill in class name, instructor, and time.');
       return;
     }
-    const entry: ScheduleClass = {
-      id: editingClass?.id || Date.now().toString(),
+    const patch = {
       name: className,
       instructor,
       time,
@@ -122,25 +82,30 @@ export function AdminScheduleScreen({ navigation }: any) {
       spotsLeft: parseInt(spots) || 10,
       type: classType,
     };
-
-    setSchedule((prev) => {
-      const dayClasses = [...(prev[selectedDay] || [])];
+    try {
       if (editingClass) {
-        const idx = dayClasses.findIndex((c) => c.id === editingClass.id);
-        if (idx >= 0) dayClasses[idx] = entry;
+        await updateClass(selectedDay, editingClass.id, patch);
       } else {
-        dayClasses.push(entry);
+        await addClass(selectedDay, patch);
       }
-      return { ...prev, [selectedDay]: dayClasses };
-    });
-    setModalVisible(false);
+      setModalVisible(false);
+    } catch (err: any) {
+      showAlert('Save failed', err?.message || String(err));
+    }
   };
 
-  const handleDelete = (cls: ScheduleClass) => {
-    setSchedule((prev) => ({
-      ...prev,
-      [selectedDay]: prev[selectedDay].filter((c) => c.id !== cls.id),
-    }));
+  const handleDelete = async (cls: ScheduleClass) => {
+    const ok = await confirmAlert(
+      'Delete class',
+      `Remove "${cls.name}" from ${selectedDay}?`,
+      'Delete',
+    );
+    if (!ok) return;
+    try {
+      await removeClass(selectedDay, cls.id);
+    } catch (err: any) {
+      showAlert('Delete failed', err?.message || String(err));
+    }
   };
 
   const dayClasses = schedule[selectedDay] || [];
@@ -332,7 +297,7 @@ export function AdminScheduleScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingTop: 0, paddingBottom: spacing.md },
   backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   title: { ...typography.sectionTitle, fontSize: 20 },
   dayRow: { flexDirection: 'row', paddingHorizontal: spacing.md, marginBottom: spacing.md, gap: 4 },

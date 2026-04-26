@@ -31,7 +31,7 @@ function getTabColor(total: number): string {
   return `rgb(${r},${g},${b})`;
 }
 
-function AnimatedDrinkButton({ type, label, icon, color, price, onAdd }: {
+function AnimatedDrinkButton({ type, label, icon, color, onAdd }: {
   type: DrinkType; label: string; icon: string; color: string; price: number;
   onAdd: (type: DrinkType) => void;
 }) {
@@ -54,9 +54,8 @@ function AnimatedDrinkButton({ type, label, icon, color, price, onAdd }: {
   return (
     <TouchableOpacity onPress={handlePress} activeOpacity={0.8} style={styles.drinkButtonWrapper}>
       <Animated.View style={[styles.drinkButton, { backgroundColor: color + '12', borderColor: color, transform: [{ scale: bounceAnim }] }]}>
-        <Ionicons name={icon as any} size={28} color={color} />
+        <Ionicons name={icon as any} size={26} color={color} />
         <Text style={[styles.drinkLabel, { color: colors.textPrimary }]}>{label}</Text>
-        <Text style={[styles.drinkPrice, { color }]}>${price.toFixed(2)}</Text>
       </Animated.View>
     </TouchableOpacity>
   );
@@ -77,8 +76,9 @@ export function DrinkScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Toggle — always at top */}
-      <View style={styles.toggleRow}>
+      {/* Top row — MENU title on left, Monthly/Today toggle on right */}
+      <View style={styles.topRow}>
+        <Text style={[styles.menuTitle, { color: colors.textPrimary }]}>MENU</Text>
         <TouchableOpacity
           style={[styles.toggleButton, { backgroundColor: showMonthly ? colors.gold : colors.surface, borderColor: showMonthly ? colors.gold : colors.borderSubtle }]}
           onPress={() => setShowMonthly(!showMonthly)}
@@ -91,20 +91,9 @@ export function DrinkScreen() {
       </View>
 
       {!showMonthly ? (
-        /* ═════ Today view — single screen, flex layout ═════ */
+        /* ═════ Today view — fixed flex layout, no page scrolling ═════ */
         <View style={styles.todayBody}>
-          {/* Menu header */}
-          <View style={styles.menuHeaderRow}>
-            <Text style={styles.menuEmoji}>🍴</Text>
-            <View style={[styles.menuUnderline, { borderBottomColor: colors.gold }]}>
-              <Text style={[styles.menuTitle, { color: colors.textPrimary }]}>
-                MENU
-              </Text>
-            </View>
-            <Text style={styles.menuEmoji}>🍴</Text>
-          </View>
-
-          {/* Drink grid */}
+          {/* Drink grid — auto height */}
           <View style={styles.section}>
             <View style={styles.drinkGrid}>
               {DRINK_DEFINITIONS.map((d) => (
@@ -113,7 +102,7 @@ export function DrinkScreen() {
             </View>
           </View>
 
-          {/* Cart area — always rendered so layout never shifts when items are added. */}
+          {/* Cart area — flex:1 fills remaining vertical space; items scroll inside the card */}
           <View style={[styles.section, styles.cartFlex]}>
             <View style={styles.cartHeader}>
               <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>YOUR ORDER</Text>
@@ -132,10 +121,7 @@ export function DrinkScreen() {
                   </Text>
                 </View>
               ) : (
-                <ScrollView
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={{ flexGrow: 1 }}
-                >
+                <ScrollView showsVerticalScrollIndicator={false}>
                   {DRINK_DEFINITIONS.filter((d) => pendingCounts[d.type] > 0).map((d) => (
                     <View key={d.type} style={[styles.cartItemRow, { borderBottomColor: colors.divider }]}>
                       <Ionicons name={d.icon as any} size={20} color={d.color} />
@@ -164,7 +150,7 @@ export function DrinkScreen() {
               )}
             </View>
 
-            {/* Commit button — always rendered; disabled when cart is empty */}
+            {/* Commit button */}
             <TouchableOpacity
               style={[
                 styles.commitBtn,
@@ -184,7 +170,6 @@ export function DrinkScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-
         </View>
       ) : (
         /* ═════ Monthly view — scrollable history ═════ */
@@ -224,8 +209,6 @@ export function DrinkScreen() {
               )}
             </View>
           </FadeInView>
-
-          <View style={{ height: spacing.xxl * 2 }} />
         </ScrollView>
       )}
 
@@ -234,7 +217,15 @@ export function DrinkScreen() {
         <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.borderSubtle }]}>
           <View style={styles.bottomBalance}>
             <Text style={[styles.bottomLabel, { color: colors.textMuted }]}>BALANCE DUE</Text>
-            <Text style={[styles.bottomAmount, { color: getTabColor(unpaidTotal) }]}>
+            <Text
+              style={[
+                styles.bottomAmount,
+                { color: unpaidTotal > 0 ? getTabColor(unpaidTotal) : colors.textPrimary },
+              ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            >
               ${unpaidTotal.toFixed(2)}
             </Text>
             <Text style={[styles.bottomCount, { color: colors.textMuted }]}>
@@ -248,7 +239,7 @@ export function DrinkScreen() {
               await payAllUnpaid();
             }}
           >
-            <Ionicons name="logo-apple" size={20} color={unpaidTotal > 0 ? colors.background : colors.textMuted} />
+            <Ionicons name="logo-apple" size={18} color={unpaidTotal > 0 ? colors.background : colors.textMuted} />
             <Text style={[styles.bottomPayText, { color: unpaidTotal > 0 ? colors.background : colors.textMuted }]}>
               Pay
             </Text>
@@ -265,7 +256,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingTop: 0,
     paddingBottom: spacing.sm,
     position: 'relative',
   },
@@ -275,12 +266,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
     textAlign: 'center',
   },
-  toggleRow: {
+  topRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingHorizontal: spacing.lg,
-    paddingTop: 4,
-    paddingBottom: 0,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   toggleButton: {
     flexDirection: 'row',
@@ -293,16 +285,16 @@ const styles = StyleSheet.create({
   },
   toggleText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },
   totalCard: {
-    marginHorizontal: spacing.lg,
+    marginHorizontal: spacing.md,
     borderRadius: 20,
-    paddingVertical: 18,
-    paddingHorizontal: 24,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
     gap: 4,
     borderWidth: 0,
   },
   totalLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' },
-  totalNumber: { fontSize: 44, fontWeight: '800', letterSpacing: -1, marginTop: 2 },
+  totalNumber: { fontSize: 32, fontWeight: '800', letterSpacing: -1, marginTop: 2 },
   totalDrinks: { fontSize: 13, fontWeight: '500', marginTop: 2 },
   tabBarBg: { height: 6, borderRadius: 3, width: '100%', marginTop: spacing.sm, overflow: 'hidden' },
   tabBarFill: { height: '100%', borderRadius: 3 },
@@ -322,21 +314,21 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   section: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     marginTop: 12,
   },
   todayBody: {
     flex: 1,
-    paddingBottom: 140,   // reserve room for the fixed BALANCE DUE bar so Commit Order is never hidden
   },
   cartFlex: {
-    flex: 1,                // fills remaining vertical space
-    minHeight: 180,
+    flex: 1,
+    minHeight: 140,
     paddingBottom: 0,
   },
   cartListWrap: {
-    flex: 1,                // cart items scroll within this box
+    flex: 1,
     minHeight: 60,
+    overflow: 'hidden',
   },
   cartEmptyState: {
     flex: 1,
@@ -355,20 +347,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: 10,
+    rowGap: 8,
   },
   drinkButtonWrapper: {
     width: '32%',
-    aspectRatio: 1.15,
-    minHeight: 88,
+    aspectRatio: 1.5,
+    minHeight: 72,
   },
   drinkButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1.5,
-    gap: 4,
+    gap: 3,
     paddingHorizontal: 4,
   },
   cartHeader: {
@@ -397,59 +389,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 12,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
     borderRadius: 14,
   },
   commitBtnText: { fontSize: 15, fontWeight: '800', color: '#000', letterSpacing: 0.3 },
   bottomBar: {
-    position: 'absolute',
-    bottom: 0, left: 0, right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    paddingBottom: 24,
-    gap: 16,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    paddingBottom: 20,
+    gap: 12,
     borderTopWidth: 1,
   },
-  bottomBalance: { flex: 1 },
+  bottomBalance: { flex: 1, minWidth: 0 },
   bottomLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1.2 },
-  bottomAmount: { fontSize: 28, fontWeight: '900', letterSpacing: -0.5, marginTop: 2 },
+  bottomAmount: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5, marginTop: 2 },
   bottomCount: { fontSize: 11, fontWeight: '500', marginTop: 2 },
   bottomPayBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 28,
-    paddingVertical: 16,
+    gap: 6,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
     borderRadius: 14,
   },
   bottomPayText: { fontSize: 15, fontWeight: '700' },
-  drinkLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
-  drinkPrice: { fontSize: 14, fontWeight: '800' },
+  drinkLabel: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
 
-  menuHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 18,
-    paddingHorizontal: spacing.lg,
-    marginTop: 8,
-    marginBottom: 2,
-  },
-  menuEmoji: {
-    fontSize: 30,
-  },
-  menuUnderline: {
-    paddingBottom: 3,
-    borderBottomWidth: 3,
-  },
   menuTitle: {
     fontSize: 30,
     fontWeight: '900',
-    textAlign: 'center',
-    textShadowColor: 'transparent',
     letterSpacing: 4,
     textTransform: 'uppercase',
     includeFontPadding: false,

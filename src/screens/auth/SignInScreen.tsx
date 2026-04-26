@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, KeyboardAvoidingView, Platform, Image, Alert, Modal, ScrollView} from 'react-native';
+  View, Text, StyleSheet, TextInput, KeyboardAvoidingView, Platform, Image, Alert, Modal, Animated, Easing, ScrollView } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Google from 'expo-auth-session/providers/google';
 import * as Crypto from 'expo-crypto';
@@ -56,6 +56,38 @@ export function SignInScreen({ navigation }: any) {
     AppleAuthentication.isAvailableAsync().then(setAppleAvailable).catch(() => setAppleAvailable(false));
   }, []);
 
+  // ── Logo + tagline mount animations ──
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.85)).current;
+  const taglineOpacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    // Native driver works for opacity/transform on iOS/Android but the RN-Web
+    // fallback for useNativeDriver:true doesn't reliably drive the JS values,
+    // so disable on web. Animations are short and only run once on mount.
+    const useNative = Platform.OS !== 'web';
+    Animated.parallel([
+      Animated.timing(logoOpacity, {
+        toValue: 1,
+        duration: 800,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: useNative,
+      }),
+      Animated.timing(logoScale, {
+        toValue: 1,
+        duration: 800,
+        easing: Easing.out(Easing.back(1.5)),
+        useNativeDriver: useNative,
+      }),
+    ]).start();
+    Animated.timing(taglineOpacity, {
+      toValue: 1,
+      duration: 600,
+      delay: 400,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: useNative,
+    }).start();
+  }, []);
+
   // ── Google Sign In auth request ──
   // Uses an ID-token flow which we exchange for a Firebase session.
   const [, googleResponse, promptGoogle] = Google.useIdTokenAuthRequest({
@@ -85,6 +117,10 @@ export function SignInScreen({ navigation }: any) {
   }, [googleResponse]);
 
   const handleAppleSignIn = async () => {
+    if (Platform.OS !== 'ios') {
+      Alert.alert('Apple Sign-In is only available on iOS devices');
+      return;
+    }
     if (!FIREBASE_CONFIGURED) {
       Alert.alert('Sign in unavailable', 'Apple Sign-In requires Firebase to be configured.');
       return;
@@ -264,22 +300,30 @@ export function SignInScreen({ navigation }: any) {
       </Modal>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <View style={styles.contentContainer}>
 
           {/* Logo */}
           <View style={styles.logoSection}>
-            <Image source={isDark ? require('../../../assets/icon-dark.png') : require('../../../assets/icon-light.png')} style={styles.logo} resizeMode="contain" />
-            <Text style={[styles.tagline, { color: colors.textTertiary }]}>PRIVATE TRAINING · EST. 1997</Text>
+            <Animated.View style={{ opacity: logoOpacity, transform: [{ scale: logoScale }] }}>
+              <Image source={isDark ? require('../../../assets/icon-dark.png') : require('../../../assets/icon-light.png')} style={styles.logo} resizeMode="contain" />
+            </Animated.View>
+            <Animated.View style={{ opacity: taglineOpacity }}>
+              <Text style={[styles.tagline, { color: colors.textTertiary }]}>PRIVATE TRAINING · EST. 1997</Text>
+            </Animated.View>
           </View>
 
           {/* Welcome */}
           <View style={styles.formSection}>
-            <Text style={[styles.heading, { color: colors.textPrimary }]}>Welcome back</Text>
-            <Text style={[styles.subheading, { color: colors.textSecondary }]}>Sign in to your member account</Text>
+            <View style={styles.welcomeBlock}>
+              <Text style={[styles.subheading, { color: colors.textSecondary }]}>Welcome to</Text>
+              <Text style={[styles.heading, { color: colors.textPrimary }]}>Zenki Dojo</Text>
+              <Text style={[styles.subheading, { color: colors.textSecondary }]}>Please sign In</Text>
+            </View>
 
             {/* Social Login */}
             <SoundPressable
-              style={[styles.socialBtn, { backgroundColor: '#FAFAFA' }]}
+              style={[styles.socialBtn, { backgroundColor: '#FAFAFA', borderWidth: 1, borderColor: colors.border }]}
               activeOpacity={0.8}
               onPress={handleGoogleSignIn}
               disabled={loading || !GOOGLE_CLIENT_ID}
@@ -288,17 +332,15 @@ export function SignInScreen({ navigation }: any) {
               <Text style={styles.socialBtnText}>Continue with Google</Text>
             </SoundPressable>
 
-            {Platform.OS === 'ios' && appleAvailable && (
-              <SoundPressable
-                style={[styles.socialBtn, { backgroundColor: '#000000' }]}
-                activeOpacity={0.8}
-                onPress={handleAppleSignIn}
-                disabled={loading}
-              >
-                <Ionicons name="logo-apple" size={24} color="#FFFFFF" />
-                <Text style={[styles.socialBtnText, { color: '#FFFFFF' }]}>Continue with Apple</Text>
-              </SoundPressable>
-            )}
+            <SoundPressable
+              style={[styles.socialBtn, { backgroundColor: '#000000' }]}
+              activeOpacity={0.8}
+              onPress={handleAppleSignIn}
+              disabled={loading}
+            >
+              <Ionicons name="logo-apple" size={24} color="#FFFFFF" />
+              <Text style={[styles.socialBtnText, { color: '#FFFFFF' }]}>Continue with Apple</Text>
+            </SoundPressable>
 
             {/* Divider */}
             <View style={styles.dividerRow}>
@@ -363,16 +405,17 @@ export function SignInScreen({ navigation }: any) {
               <Text style={[styles.forgotText, { color: colors.gold }]}>Forgot password?</Text>
             </SoundPressable>
 
-            <Button title="Sign In" onPress={handleSignIn} loading={loading} fullWidth size="lg" style={{ marginTop: 12 }} />
+            <Button title="Sign In" onPress={handleSignIn} loading={loading} fullWidth size="lg" style={{ marginTop: 6 }} />
           </View>
 
           {/* Footer */}
-          <View style={[styles.footer, { marginTop: 40 }]}>
+          <View style={styles.footer}>
             <Text style={[styles.footerText, { color: colors.textTertiary }]}>Not a member? </Text>
             <SoundPressable onPress={() => navigation.navigate('Contact')}>
               <Text style={[styles.footerLink, { color: colors.gold }]}>Inquire</Text>
             </SoundPressable>
           </View>
+        </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -381,47 +424,47 @@ export function SignInScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollContent: { flexGrow: 1 },
-  inner: { flex: 1, justifyContent: 'center', paddingHorizontal: spacing.lg },
+  contentContainer: { flexGrow: 1, justifyContent: 'space-evenly', paddingHorizontal: 32 },
 
   // Logo
-  logoSection: { alignItems: 'center', marginBottom: 40 },
-  logo: { width: 120, height: 120, marginBottom: 16 },
-  tagline: { fontSize: 11, fontWeight: '600', letterSpacing: 4, marginTop: 12 },
+  logoSection: { alignItems: 'center' },
+  logo: { width: 140, height: 140, marginBottom: 8 },
+  tagline: { fontSize: 11, fontWeight: '600', letterSpacing: 4, marginTop: 4 },
 
   // Form
-  formSection: { gap: 18 },
-  heading: { fontSize: 32, fontWeight: '800', letterSpacing: -0.8 },
-  subheading: { fontSize: 16, fontWeight: '400', marginBottom: 8, lineHeight: 24 },
+  formSection: { gap: 10 },
+  welcomeBlock: { alignItems: 'center' },
+  heading: { fontSize: 32, fontWeight: '800', letterSpacing: -0.8, lineHeight: 36, textAlign: 'center' },
+  subheading: { fontSize: 16, fontWeight: '400', lineHeight: 20, textAlign: 'center' },
 
   // Social buttons
   socialBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 10, paddingVertical: 18, borderRadius: 14,
+    gap: 10, paddingVertical: 12, borderRadius: 14,
   },
   socialBtnText: { fontSize: 15, fontWeight: '600', color: '#333' },
 
   // Divider
-  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 4 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 0 },
   dividerLine: { flex: 1, height: 1 },
   dividerText: { fontSize: 12, fontWeight: '500' },
 
   // Fields
   fieldGroup: { gap: 6 },
-  fieldLabel: { fontSize: 13, fontWeight: '600', marginLeft: 2, marginBottom: 2 },
+  fieldLabel: { fontSize: 13, fontWeight: '600', marginBottom: 2, textAlign: 'center' },
   inputWrap: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderRadius: 14, paddingHorizontal: 16, paddingVertical: 16,
+    borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12,
     borderWidth: 1.5,
   },
   input: { flex: 1, fontSize: 16 },
 
   // Forgot
-  forgotRow: { alignSelf: 'flex-end', paddingVertical: 4 },
+  forgotRow: { alignSelf: 'center', paddingVertical: 4 },
   forgotText: { fontSize: 14, fontWeight: '600' },
 
   // Footer
-  footer: { flexDirection: 'row', justifyContent: 'center', paddingBottom: 24 },
+  footer: { flexDirection: 'row', justifyContent: 'center', paddingBottom: 12 },
   footerText: { fontSize: 15 },
   footerLink: { fontSize: 15, fontWeight: '700' },
 

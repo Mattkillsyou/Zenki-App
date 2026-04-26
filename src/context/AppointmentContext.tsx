@@ -156,7 +156,17 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const completeAppointment = useCallback((id: string) => {
-    setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status: 'completed' } : a)));
+    setAppointments((prev) => {
+      const existing = prev.find((a) => a.id === id);
+      if (existing?.notificationId) {
+        // Fire-and-forget — the scheduled "in 1 hour" reminder is no longer
+        // useful once the session is marked complete.
+        cancelNotification(existing.notificationId).catch(() => {});
+      }
+      return prev.map((a) =>
+        a.id === id ? { ...a, status: 'completed' as const, notificationId: undefined } : a,
+      );
+    });
   }, []);
 
   // Filtered views (memberId / admin filters happen at the screen level)

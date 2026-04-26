@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Member, MEMBERS } from '../data/members';
-import { pushMemberToSheets, pushMemberToFirestore } from '../services/memberSync';
+import { pushMemberToSheets, pushMemberToFirestore, subscribeToMember } from '../services/memberSync';
+import { getMemberOverride, saveMemberOverride } from '../services/memberOverrides';
 import { registerForPushNotifications, savePushTokenToFirestore } from '../services/pushNotifications';
 import {
   firebaseCreateAccount,
@@ -44,24 +45,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const id = await AsyncStorage.getItem(STORAGE_KEY);
         if (!id) return;
-        const member = MEMBERS.find((m) => m.id === id);
-        if (member) {
-          if (!cancelled) setUser(member);
-          // Run reviewer-seed on persisted-session startup too, so we cover
-          // the case where the reviewer signed in yesterday, closed the app,
-          // and reopens it today expecting sample data.
-          seedReviewerDataIfNeeded(member).catch(() => {});
-          return;
-        }
-        const raw = await AsyncStorage.getItem(CUSTOM_MEMBER_KEY);
-        if (raw) {
-          try {
-            const custom: Member = JSON.parse(raw);
-            if (custom.id === id && !cancelled) setUser(custom);
-          } catch {
-            /* ignore */
+
+        // Resolve the base record (seed first, then custom-signup blob).
+        let base: Member | null = MEMBERS.find((m) => m.id === id) ?? null;
+        if (!base) {
+          const raw = await AsyncStorage.getItem(CUSTOM_MEMBER_KEY);
+          if (raw) {
+            try {
+              const custom: Member = JSON.parse(raw);
+              if (custom.id === id) base = custom;
+            } catch {
+              /* ignore */
+            }
           }
         }
+        if (!base) return;
+
+        // Apply admin overrides (set from AdminMembersScreen) so role / belt
+        // edits persist across reloads even when offline.
+        const override = await getMemberOverride(id);
+        const merged: Member = override ? { ...base, ...override } : base;
+
+        if (!cancelled) setUser(merged);
+        // Run reviewer-seed on persisted-session startup too, so we cover
+        // the case where the reviewer signed in yesterday, closed the app,
+        // and reopens it today expecting sample data.
+        seedReviewerDataIfNeeded(merged).catch(() => {});
       } catch {
         /* ignore — start signed-out */
       } finally {
@@ -72,6 +81,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // Live Firestore subscription on the signed-in user's member doc. Picks
+  // up admin role flips (e.g. isEmployee true) made on another device and
+  // mirrors them to the local override cache so they survive app reload.
+  useEffect(() => {
+    const id = user?.id;
+    if (!id) return;
+    const unsub = subscribeToMember(id, (fresh) => {
+      if (!fresh) return;
+      setUser((prev) => {
+        const merged: Member = prev ? { ...prev, ...fresh } : fresh;
+        saveMemberOverride(merged).catch(() => {});
+        return merged;
+      });
+    });
+    return unsub;
+  }, [user?.id]);
 
   const signIn = useCallback(async (member: Member) => {
     setUser(member);

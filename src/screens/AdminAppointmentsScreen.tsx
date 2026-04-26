@@ -134,7 +134,7 @@ function StatusBadge({ status, colors }: { status: AppointmentStatus; colors: an
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 0, paddingBottom: 12 },
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 22, fontWeight: '700', letterSpacing: -0.4 },
   tabs: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 12 },

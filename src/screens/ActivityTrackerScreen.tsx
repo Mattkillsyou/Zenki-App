@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, Alert, Platform, Linking} from 'react-native';
+  View, Text, StyleSheet, Alert, Platform, Linking, ScrollView, Pressable,
+} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useGpsActivity } from '../context/GpsActivityContext';
 import { useSenpai } from '../context/SenpaiContext';
+import { useTheme } from '../context/ThemeContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 import {
   GpsActivityType,
@@ -20,44 +22,48 @@ import {
   paceUnit,
 } from '../utils/gps';
 import { formatDuration } from '../utils/heartRate';
-import { pipboy } from '../theme/colors';
-import { pipboyFont } from '../theme/typography';
+import { spacing, borderRadius } from '../theme';
 import * as Location from 'expo-location';
-import { PipBoyMap } from '../components/PipBoyMap';
-import { useTheme } from '../context/ThemeContext';
-// Metro resolves this to PipBoyMap.web.tsx on web, PipBoyMap.native.tsx on
-// native — so the Leaflet dependency stays out of the native bundle.
+import { ActivityMap } from '../components/ActivityMap';
+import { MatrixActivityTrackerScreen } from './ActivityTrackerScreen.matrix';
 
 const ACTIVITY_TYPES: GpsActivityType[] = ['run', 'walk', 'bike', 'hike'];
 const DEFAULT_LAT = 34.1006;
 const DEFAULT_LNG = -118.2916;
 
-const PB = pipboy; // shorthand
+type Tab = 'track' | 'stats' | 'history' | 'radio';
 
-// ─── Pip-Boy tabs ───
-type PipTab = 'STAT' | 'MAP' | 'DATA' | 'RADIO';
-const PIP_TABS: PipTab[] = ['STAT', 'MAP', 'DATA', 'RADIO'];
+const TABS: { key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: 'track',   label: 'Track',   icon: 'navigate-outline' },
+  { key: 'stats',   label: 'Stats',   icon: 'stats-chart-outline' },
+  { key: 'history', label: 'History', icon: 'time-outline' },
+  { key: 'radio',   label: 'Radio',   icon: 'musical-notes-outline' },
+];
 
-// ─── Dot-leader stat row (e.g. "DIST......... 2.34 MI") ───
-function StatRow({ label, value, unit }: { label: string; value: string; unit?: string }) {
-  const dots = '.'.repeat(Math.max(2, 22 - label.length - value.length - (unit?.length || 0)));
-  return (
-    <View style={pb.statRow}>
-      <Text style={pb.statLabel}>{label}</Text>
-      <Text style={pb.statDots}>{dots}</Text>
-      <Text style={pb.statValue}>{value}</Text>
-      {unit && <Text style={pb.statUnit}> {unit}</Text>}
-    </View>
-  );
+const RADIO_SERVICES: { name: string; url: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { name: 'Spotify',       url: 'https://open.spotify.com',  icon: 'logo-soundcloud' },
+  { name: 'Apple Music',   url: 'https://music.apple.com',   icon: 'musical-note' },
+  { name: 'YouTube Music', url: 'https://youtube.com/music', icon: 'logo-youtube' },
+  { name: 'SoundCloud',    url: 'https://soundcloud.com',    icon: 'cloud-outline' },
+];
+
+/**
+ * Top-level GPS screen. Routes to the matrix-only Pip-Boy version for
+ * `themeMode === 'matrix'`, otherwise renders the clean themed experience.
+ */
+export function ActivityTrackerScreen(props: any) {
+  const { mode } = useTheme();
+  if (mode === 'matrix') return <MatrixActivityTrackerScreen {...props} />;
+  return <CleanActivityTrackerScreen {...props} />;
 }
 
-export function ActivityTrackerScreen({ navigation }: any) {
+// ═════════════════════════════════════════════════════
+// Clean theme-aware GPS tracker
+// ═════════════════════════════════════════════════════
+
+function CleanActivityTrackerScreen({ navigation }: any) {
   const { user } = useAuth();
-  // Read current theme to gate the retro Pip-Boy effects.
-  // Only the Matrix theme should get the green CRT/scanline overlay; other
-  // themes show a clean map with no retro filter.
-  const { mode: themeMode } = useTheme();
-  const isMatrix = themeMode === 'matrix';
+  const { colors } = useTheme();
   const {
     isTracking, currentActivityType,
     liveDistance, liveDuration, livePace, liveElevGain, liveSpeed,
@@ -69,14 +75,7 @@ export function ActivityTrackerScreen({ navigation }: any) {
   const [routeCoords, setRouteCoords] = useState<{ lat: number; lng: number }[]>([]);
   const [initialLat, setInitialLat] = useState(DEFAULT_LAT);
   const [initialLng, setInitialLng] = useState(DEFAULT_LNG);
-  const [blinkVisible, setBlinkVisible] = useState(true);
-  const [activeTab, setActiveTab] = useState<PipTab>('MAP');
-
-  // Blinking cursor
-  useEffect(() => {
-    const t = setInterval(() => setBlinkVisible((v) => !v), 600);
-    return () => clearInterval(t);
-  }, []);
+  const [activeTab, setActiveTab] = useState<Tab>('track');
 
   // Get user's real location on mount
   useEffect(() => {
@@ -92,7 +91,7 @@ export function ActivityTrackerScreen({ navigation }: any) {
     })();
   }, []);
 
-  // Accumulate route
+  // Accumulate route while tracking
   useEffect(() => {
     if (currentPosition) {
       setRouteCoords((prev) => [...prev, { lat: currentPosition.latitude, lng: currentPosition.longitude }]);
@@ -103,22 +102,22 @@ export function ActivityTrackerScreen({ navigation }: any) {
     if (!user) return;
     setRouteCoords([]);
     const ok = await startTracking(selectedType, user.id);
-    if (!ok) Alert.alert('LOCATION REQUIRED', 'Enable location access to track activity.');
+    if (!ok) Alert.alert('Location required', 'Enable location access to track your activity.');
   };
 
   const handleStop = () => {
     Alert.alert(
-      'END ACTIVITY?',
+      'End activity?',
       `${formatDistance(liveDistance)} ${distanceUnit()} · ${formatDuration(liveDuration)}`,
       [
-        { text: 'NEGATIVE', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'AFFIRMATIVE',
+          text: 'End',
           style: 'destructive',
           onPress: () => {
             const activity = stopTracking();
             if (activity) {
-              Alert.alert('DATA LOGGED', `${formatDistance(activity.distanceMeters)} ${distanceUnit()} recorded.`);
+              Alert.alert('Activity saved', `${formatDistance(activity.distanceMeters)} ${distanceUnit()} recorded.`);
               setRouteCoords([]);
               if (senpaiState.enabled && senpaiShouldReact()) {
                 try { senpaiTrigger('impressed', randomDialogue('gpsActivity'), 4000); } catch { /* ignore */ }
@@ -135,421 +134,602 @@ export function ActivityTrackerScreen({ navigation }: any) {
   const history = user ? memberActivities(user.id) : [];
 
   return (
-    <View style={pb.container}>
-      {/* Full-screen green-filtered map (z-index 1 — below UI panels) */}
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Map background — extends up under the simulated Dynamic Island on
+          web so the dark map reads as a single full-bleed surface instead of
+          sitting below a white notch bar. The phone frame's overflow: hidden
+          clips the bleed at the top edge. */}
       {Platform.OS === 'web' && (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1 }}>
-          <PipBoyMap routeCoords={routeCoords} userLat={userLat} userLng={userLng} />
+        <View style={[styles.mapLayer, styles.mapLayerWebBleed]}>
+          <ActivityMap
+            routeCoords={routeCoords}
+            userLat={userLat}
+            userLng={userLng}
+            tileFilter={colors.mapTileFilter}
+            accentColor={colors.mapRouteColor || colors.gold}
+          />
         </View>
       )}
 
-      {/* CRT scanline overlay (z-index 50) — Matrix theme only.
-          Other themes get a clean map with no retro effects. */}
-      {Platform.OS === 'web' && isMatrix && (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 }} pointerEvents="none">
-          <div className="pipboy-scanlines" />
+      {/* Header */}
+      <SafeAreaView edges={['top']} style={styles.headerWrap}>
+        <View style={styles.header}>
+          <Pressable
+            onPress={() => { if (!isTracking) navigation.goBack(); }}
+            style={[
+              styles.iconBtn,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                opacity: isTracking ? 0.4 : 1,
+              },
+            ]}
+            disabled={isTracking}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+          </Pressable>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>GPS Tracker</Text>
+          <View style={styles.iconBtn} />
         </View>
-      )}
 
-      {/* ═══ Top: Pip-Boy tab bar ═══ */}
-      <SafeAreaView style={pb.topBar} edges={['top']}>
-        <SoundPressable onPress={() => { if (!isTracking) navigation.goBack(); }} style={pb.backBtn}>
-          <Text style={pb.backText}>{'< BACK'}</Text>
-        </SoundPressable>
-
-        <View style={pb.tabBar}>
-          {PIP_TABS.map((t) => (
-            <SoundPressable key={t} style={[pb.tab, t === activeTab && pb.tabActive]} onPress={() => setActiveTab(t)} activeOpacity={0.7}>
-              <Text style={[pb.tabText, t === activeTab && pb.tabTextActive]}>{t}</Text>
-            </SoundPressable>
-          ))}
+        {/* Tab bar */}
+        <View style={[styles.tabRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {TABS.map((t) => {
+            const active = activeTab === t.key;
+            return (
+              <SoundPressable
+                key={t.key}
+                style={[styles.tab, active && { backgroundColor: colors.gold }]}
+                onPress={() => setActiveTab(t.key)}
+              >
+                <Ionicons name={t.icon} size={15} color={active ? colors.textInverse : colors.textSecondary} />
+                <Text style={[styles.tabLabel, { color: active ? colors.textInverse : colors.textSecondary }]}>
+                  {t.label}
+                </Text>
+              </SoundPressable>
+            );
+          })}
         </View>
       </SafeAreaView>
 
-      {/* ═══ Bottom: Tab-aware panel ═══ */}
-      <View style={pb.bottomPanel}>
-        {/* Terminal header with blinking cursor */}
-        <View style={pb.terminalHeader}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={pb.terminalTitle}>
-              {isTracking
-                ? `TRACKING: ${GPS_ACTIVITY_LABELS[currentActivityType].toUpperCase()}`
-                : activeTab === 'STAT' ? 'VITAL STATISTICS'
-                : activeTab === 'DATA' ? 'ACTIVITY LOG'
-                : activeTab === 'RADIO' ? 'ZENKI RADIO'
-                : 'ZENKI GPS TRACKER v1.0'}
-            </Text>
-            <Text style={[pb.terminalTitle, { opacity: blinkVisible ? 1 : 0, width: 14 }]}>▮</Text>
-          </View>
+      {/* Bottom panel — content varies by tab */}
+      <SafeAreaView edges={['bottom']} style={styles.panelWrap}>
+        <View style={[
+          styles.panel,
+          { backgroundColor: colors.background, borderColor: colors.border },
+        ]}>
+          {activeTab === 'track' && (
+            <TrackPanel
+              isTracking={isTracking}
+              currentActivityType={currentActivityType}
+              selectedType={selectedType}
+              setSelectedType={setSelectedType}
+              liveDistance={liveDistance}
+              liveDuration={liveDuration}
+              livePace={livePace}
+              liveElevGain={liveElevGain}
+              liveSpeed={liveSpeed}
+              onStart={handleStart}
+              onStop={handleStop}
+            />
+          )}
+
+          {activeTab === 'stats' && (
+            <StatsPanel
+              history={history}
+              isTracking={isTracking}
+              userLat={userLat}
+              userLng={userLng}
+            />
+          )}
+
+          {activeTab === 'history' && (
+            <HistoryPanel history={history} />
+          )}
+
+          {activeTab === 'radio' && (
+            <RadioPanel />
+          )}
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+// ═════════════════════════════════════════════════════
+// Track panel — start/stop activity with live stats
+// ═════════════════════════════════════════════════════
+
+function TrackPanel({
+  isTracking, currentActivityType, selectedType, setSelectedType,
+  liveDistance, liveDuration, livePace, liveElevGain, liveSpeed,
+  onStart, onStop,
+}: {
+  isTracking: boolean;
+  currentActivityType: GpsActivityType;
+  selectedType: GpsActivityType;
+  setSelectedType: (t: GpsActivityType) => void;
+  liveDistance: number;
+  liveDuration: number;
+  livePace: number;
+  liveElevGain: number;
+  liveSpeed: number;
+  onStart: () => void;
+  onStop: () => void;
+}) {
+  const { colors } = useTheme();
+
+  if (isTracking) {
+    return (
+      <View>
+        <Text style={[styles.panelTitle, { color: colors.textMuted }]}>
+          Tracking · {GPS_ACTIVITY_LABELS[currentActivityType]}
+        </Text>
+
+        <View style={styles.heroStat}>
+          <Text style={[styles.heroValue, { color: colors.textPrimary }]}>
+            {formatDistance(liveDistance)}
+          </Text>
+          <Text style={[styles.heroUnit, { color: colors.textMuted }]}>
+            {distanceUnit()}
+          </Text>
         </View>
 
-        {/* ─── MAP TAB ─── */}
-        {activeTab === 'MAP' && (
-          isTracking ? (
-            <>
-              <View style={pb.statsBlock}>
-                <StatRow label="DIST" value={formatDistance(liveDistance)} unit={distanceUnit().toUpperCase()} />
-                <StatRow label="TIME" value={formatDuration(liveDuration)} />
-                <StatRow label="PACE" value={formatPaceForUnit(livePace)} unit={paceUnit().toUpperCase()} />
-                <StatRow label="ELEV" value={`${Math.round(liveElevGain * 3.281)}`} unit="FT" />
-                <StatRow label="SPEED" value={`${(liveSpeed * 2.237).toFixed(1)}`} unit="MPH" />
-                <StatRow label="COORDS" value={`${userLat.toFixed(4)},${userLng.toFixed(4)}`} />
-              </View>
-              <SoundPressable style={pb.stopBtn} onPress={handleStop} activeOpacity={0.8}>
-                <Text style={pb.stopBtnText}>[ TERMINATE TRACKING ]</Text>
-              </SoundPressable>
-            </>
-          ) : (
-            <>
-              <View style={pb.typeRow}>
-                {ACTIVITY_TYPES.map((type) => {
-                  const active = type === selectedType;
-                  return (
-                    <SoundPressable key={type} style={[pb.typeChip, active && pb.typeChipActive]} onPress={() => setSelectedType(type)}>
-                      <Text style={[pb.typeText, active && pb.typeTextActive]}>{GPS_ACTIVITY_LABELS[type].toUpperCase()}</Text>
-                    </SoundPressable>
-                  );
-                })}
-              </View>
-              <SoundPressable style={pb.startBtn} onPress={handleStart} activeOpacity={0.8}>
-                <Text style={pb.startBtnText}>[ INITIATE {GPS_ACTIVITY_LABELS[selectedType].toUpperCase()} ]</Text>
-              </SoundPressable>
-            </>
-          )
-        )}
+        <View style={styles.statGrid}>
+          <StatCell label="Time" value={formatDuration(liveDuration)} />
+          <StatCell label={`Pace (${paceUnit()})`} value={formatPaceForUnit(livePace)} />
+          <StatCell label="Speed" value={`${(liveSpeed * 2.237).toFixed(1)} mph`} />
+          <StatCell label="Elev" value={`${Math.round(liveElevGain * 3.281)} ft`} />
+        </View>
 
-        {/* ─── STAT TAB — full stats overview ─── */}
-        {activeTab === 'STAT' && (
-          <View style={pb.statsBlock}>
-            <StatRow label="TOTAL RUNS" value={`${history.filter((a) => a.type === 'run').length}`} />
-            <StatRow label="TOTAL WALKS" value={`${history.filter((a) => a.type === 'walk').length}`} />
-            <StatRow label="TOTAL BIKES" value={`${history.filter((a) => a.type === 'bike').length}`} />
-            <StatRow label="TOTAL HIKES" value={`${history.filter((a) => a.type === 'hike').length}`} />
-            <StatRow label="ALL TIME DIST" value={formatDistance(history.reduce((s, a) => s + a.distanceMeters, 0))} unit={distanceUnit().toUpperCase()} />
-            <StatRow label="ALL TIME CAL" value={`${history.reduce((s, a) => s + a.calories, 0)}`} unit="KCAL" />
-            <StatRow label="TOTAL TIME" value={formatDuration(history.reduce((s, a) => s + a.durationSeconds, 0))} />
-            <StatRow label="BEST PACE" value={history.length > 0 ? formatPaceForUnit(Math.min(...history.filter(a => a.avgPaceSecsPerKm > 0).map(a => a.avgPaceSecsPerKm))) : '--:--'} unit={paceUnit().toUpperCase()} />
-            <StatRow label="LOCATION" value={`${userLat.toFixed(4)}, ${userLng.toFixed(4)}`} />
-            <StatRow label="STATUS" value={isTracking ? 'ACTIVE' : 'STANDBY'} />
-          </View>
-        )}
+        <Pressable
+          style={[styles.primaryBtn, { backgroundColor: colors.error }]}
+          onPress={onStop}
+        >
+          <Ionicons name="stop" size={18} color="#FFF" />
+          <Text style={styles.primaryBtnText}>End Activity</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
-        {/* ─── DATA TAB — activity log ─── */}
-        {activeTab === 'DATA' && (
-          <View style={pb.statsBlock}>
-            {history.length === 0 ? (
-              <Text style={pb.logEntry}>{'> NO ACTIVITIES RECORDED'}</Text>
-            ) : (
-              history.slice(0, 8).map((a) => (
-                <Text key={a.id} style={pb.logEntry}>
-                  {new Date(a.startedAt).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })}
-                  {' '}{GPS_ACTIVITY_LABELS[a.type].toUpperCase().padEnd(6)}
-                  {' '}{formatDistance(a.distanceMeters).padStart(5)} {distanceUnit()}
-                  {' '}{formatDuration(a.durationSeconds)}
-                  {' '}{a.calories}cal
-                </Text>
-              ))
-            )}
-          </View>
-        )}
+  return (
+    <View>
+      <Text style={[styles.panelTitle, { color: colors.textMuted }]}>Choose activity</Text>
 
-        {/* ─── RADIO TAB — music service launcher ─── */}
-        {activeTab === 'RADIO' && (
-          <View style={pb.statsBlock}>
-            <Text style={pb.logEntry}>{'> ZENKI RADIO · SELECT SOURCE'}</Text>
-            <Text style={pb.logEntry}>{' '}</Text>
-
+      <View style={styles.typeRow}>
+        {ACTIVITY_TYPES.map((type) => {
+          const active = type === selectedType;
+          return (
             <SoundPressable
-              style={pb.radioBtn}
-              onPress={() => Linking.openURL('https://open.spotify.com').catch(() => {})}
-              activeOpacity={0.7}
+              key={type}
+              style={[
+                styles.typeChip,
+                {
+                  backgroundColor: active ? colors.gold : colors.surface,
+                  borderColor: active ? colors.gold : colors.border,
+                },
+              ]}
+              onPress={() => setSelectedType(type)}
             >
-              <Text style={pb.radioBtnText}>{'  ♫  SPOTIFY          [ LAUNCH ]'}</Text>
+              <Ionicons
+                name={GPS_ACTIVITY_ICONS[type] as keyof typeof Ionicons.glyphMap}
+                size={20}
+                color={active ? colors.textInverse : colors.textSecondary}
+              />
+              <Text style={[styles.typeText, { color: active ? colors.textInverse : colors.textSecondary }]}>
+                {GPS_ACTIVITY_LABELS[type]}
+              </Text>
             </SoundPressable>
+          );
+        })}
+      </View>
 
-            <SoundPressable
-              style={pb.radioBtn}
-              onPress={() => Linking.openURL('https://music.apple.com').catch(() => {})}
-              activeOpacity={0.7}
-            >
-              <Text style={pb.radioBtnText}>{'  ♫  APPLE MUSIC      [ LAUNCH ]'}</Text>
-            </SoundPressable>
+      <Pressable
+        style={[styles.primaryBtn, { backgroundColor: colors.gold }]}
+        onPress={onStart}
+      >
+        <Ionicons name="play" size={18} color={colors.textInverse} />
+        <Text style={[styles.primaryBtnText, { color: colors.textInverse }]}>
+          Start {GPS_ACTIVITY_LABELS[selectedType]}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
 
-            <SoundPressable
-              style={pb.radioBtn}
-              onPress={() => Linking.openURL('https://youtube.com/music').catch(() => {})}
-              activeOpacity={0.7}
-            >
-              <Text style={pb.radioBtnText}>{'  ♫  YOUTUBE MUSIC    [ LAUNCH ]'}</Text>
-            </SoundPressable>
+// ═════════════════════════════════════════════════════
+// Stats panel — all-time totals
+// ═════════════════════════════════════════════════════
 
-            <SoundPressable
-              style={pb.radioBtn}
-              onPress={() => Linking.openURL('https://soundcloud.com').catch(() => {})}
-              activeOpacity={0.7}
-            >
-              <Text style={pb.radioBtnText}>{'  ♫  SOUNDCLOUD       [ LAUNCH ]'}</Text>
-            </SoundPressable>
+function StatsPanel({ history, isTracking, userLat, userLng }: {
+  history: any[];
+  isTracking: boolean;
+  userLat: number;
+  userLng: number;
+}) {
+  const { colors } = useTheme();
+  const totalDist = history.reduce((s, a) => s + a.distanceMeters, 0);
+  const totalCal = history.reduce((s, a) => s + a.calories, 0);
+  const totalTime = history.reduce((s, a) => s + a.durationSeconds, 0);
+  const validPaces = history.filter((a) => a.avgPaceSecsPerKm > 0).map((a) => a.avgPaceSecsPerKm);
+  const bestPace = validPaces.length > 0 ? Math.min(...validPaces) : null;
 
-            <Text style={pb.logEntry}>{' '}</Text>
-            <Text style={pb.logEntry}>{'> SIGNAL: STRONG'}</Text>
-            <Text style={pb.logEntry}>{'> "TRAIN HARD. FIGHT SMART."'}</Text>
-          </View>
-        )}
+  return (
+    <View>
+      <Text style={[styles.panelTitle, { color: colors.textMuted }]}>All-time stats</Text>
+
+      <View style={styles.statGrid}>
+        <StatCell label="Total distance" value={`${formatDistance(totalDist)} ${distanceUnit()}`} />
+        <StatCell label="Total time" value={formatDuration(totalTime)} />
+        <StatCell label="Calories" value={`${totalCal} kcal`} />
+        <StatCell label="Best pace" value={bestPace ? `${formatPaceForUnit(bestPace)} ${paceUnit()}` : '—'} />
+      </View>
+
+      <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+
+      <View style={styles.statGrid}>
+        <StatCell label="Runs"  value={`${history.filter((a) => a.type === 'run').length}`} />
+        <StatCell label="Walks" value={`${history.filter((a) => a.type === 'walk').length}`} />
+        <StatCell label="Bikes" value={`${history.filter((a) => a.type === 'bike').length}`} />
+        <StatCell label="Hikes" value={`${history.filter((a) => a.type === 'hike').length}`} />
+      </View>
+
+      <View style={[styles.metaRow, { borderTopColor: colors.divider }]}>
+        <Text style={[styles.metaText, { color: colors.textMuted }]}>
+          {userLat.toFixed(4)}, {userLng.toFixed(4)}
+        </Text>
+        <View style={[styles.statusDot, { backgroundColor: isTracking ? colors.success : colors.textTertiary }]} />
+        <Text style={[styles.metaText, { color: colors.textMuted }]}>
+          {isTracking ? 'Tracking' : 'Standby'}
+        </Text>
       </View>
     </View>
   );
 }
 
-// ═══════════════════════════════════════════════
-// Pip-Boy StyleSheet — green monochrome terminal
-// ═══════════════════════════════════════════════
-const pb = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: PB.bg,
+// ═════════════════════════════════════════════════════
+// History panel — recent activity log
+// ═════════════════════════════════════════════════════
+
+function HistoryPanel({ history }: { history: any[] }) {
+  const { colors } = useTheme();
+
+  if (history.length === 0) {
+    return (
+      <View>
+        <Text style={[styles.panelTitle, { color: colors.textMuted }]}>Recent activity</Text>
+        <View style={styles.emptyState}>
+          <Ionicons name="footsteps-outline" size={32} color={colors.textTertiary} />
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+            No activities recorded yet
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      <Text style={[styles.panelTitle, { color: colors.textMuted }]}>Recent activity</Text>
+      <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
+        {history.slice(0, 8).map((a) => (
+          <View key={a.id} style={[styles.historyRow, { borderBottomColor: colors.divider }]}>
+            <View style={[styles.historyIcon, { backgroundColor: colors.surfaceSecondary }]}>
+              <Ionicons
+                name={GPS_ACTIVITY_ICONS[a.type as GpsActivityType] as keyof typeof Ionicons.glyphMap}
+                size={16}
+                color={colors.gold}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.historyName, { color: colors.textPrimary }]}>
+                {GPS_ACTIVITY_LABELS[a.type as GpsActivityType]}
+              </Text>
+              <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
+                {new Date(a.startedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {formatDuration(a.durationSeconds)} · {a.calories} kcal
+              </Text>
+            </View>
+            <Text style={[styles.historyDist, { color: colors.textPrimary }]}>
+              {formatDistance(a.distanceMeters)} {distanceUnit()}
+            </Text>
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+// ═════════════════════════════════════════════════════
+// Radio panel — quick links to streaming services
+// ═════════════════════════════════════════════════════
+
+function RadioPanel() {
+  const { colors } = useTheme();
+  return (
+    <View>
+      <Text style={[styles.panelTitle, { color: colors.textMuted }]}>Music</Text>
+      <View style={styles.radioGrid}>
+        {RADIO_SERVICES.map((s) => (
+          <SoundPressable
+            key={s.name}
+            style={[
+              styles.radioBtn,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+            onPress={() => Linking.openURL(s.url).catch(() => {})}
+          >
+            <Ionicons name={s.icon} size={20} color={colors.gold} />
+            <Text style={[styles.radioBtnText, { color: colors.textPrimary }]}>{s.name}</Text>
+          </SoundPressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// ═════════════════════════════════════════════════════
+// Shared cells
+// ═════════════════════════════════════════════════════
+
+function StatCell({ label, value }: { label: string; value: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.statCell}>
+      <Text style={[styles.statCellLabel, { color: colors.textMuted }]}>{label}</Text>
+      <Text style={[styles.statCellValue, { color: colors.textPrimary }]}>{value}</Text>
+    </View>
+  );
+}
+
+// ═════════════════════════════════════════════════════
+// Styles — clean, theme-driven, no monospace / scanlines
+// ═════════════════════════════════════════════════════
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+
+  mapLayer: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 1,
+  },
+  // Web-only bleed: phone frame in App.tsx reserves 54px of paddingTop for the
+  // simulated Dynamic Island. Pull the map up by that amount so the dark map
+  // surface fills the entire phone frame and the notch sits on top of the map
+  // rather than on a separate white bar.
+  mapLayerWebBleed: {
+    top: -54,
   },
 
-  // Top bar
-  topBar: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
-    zIndex: 100,
-    elevation: 100,
-    backgroundColor: PB.bg + 'F0',
-    paddingHorizontal: 12,
-    paddingTop: 4,
-    paddingBottom: 4,
-    borderBottomWidth: 2,
-    borderBottomColor: PB.primary,
+  // ── Header ──
+  headerWrap: {
+    zIndex: 10,
   },
-  backBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-  },
-  backText: {
-    color: PB.dim,
-    fontSize: 14,
-    ...pipboyFont,
-    // @ts-ignore web text-shadow
-    textShadowColor: PB.primary,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 4,
-  },
-  tabBar: {
+  header: {
     flexDirection: 'row',
-    borderTopWidth: 2,
-    borderTopColor: PB.primary,
-    marginTop: 4,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  iconBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+
+  // ── Tab bar ──
+  tabRow: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 4,
+    gap: 4,
   },
   tab: {
     flex: 1,
-    paddingVertical: 6,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: PB.dark,
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 10,
+    gap: 6,
   },
-  tabActive: {
-    borderBottomColor: PB.primary,
-    backgroundColor: PB.primary + '15',
-  },
-  tabText: {
-    color: PB.dark,
-    fontSize: 16,
+  tabLabel: {
+    fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 3,
-    ...pipboyFont,
-  },
-  tabTextActive: {
-    color: PB.primary,
-    // @ts-ignore
-    textShadowColor: PB.primary,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 6,
+    letterSpacing: 0.2,
   },
 
-  // Bottom panel
-  bottomPanel: {
+  // ── Panel ──
+  panelWrap: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
-    zIndex: 100,
-    elevation: 100,
-    backgroundColor: PB.bg + 'F5',
-    borderTopWidth: 2,
-    borderTopColor: PB.primary,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 32,
+    zIndex: 10,
   },
-
-  // Terminal header
-  terminalHeader: {
-    borderBottomWidth: 1,
-    borderBottomColor: PB.dark,
-    paddingBottom: 8,
-    marginBottom: 10,
+  panel: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    padding: spacing.lg,
   },
-  terminalTitle: {
-    color: PB.primary,
-    fontSize: 18,
+  panelTitle: {
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 2,
-    ...pipboyFont,
-    // @ts-ignore
-    textShadowColor: PB.primary,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
-  },
-
-  // Stats block — dot-leader rows
-  statsBlock: {
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
     marginBottom: 12,
   },
-  statRow: {
+
+  // ── Hero stat (live distance) ──
+  heroStat: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    paddingVertical: 3,
+    justifyContent: 'center',
+    marginBottom: 16,
+    gap: 6,
   },
-  statLabel: {
-    color: PB.dim,
+  heroValue: {
+    fontSize: 56,
+    fontWeight: '800',
+    letterSpacing: -2,
+    fontVariant: ['tabular-nums'],
+  },
+  heroUnit: {
     fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 1,
-    ...pipboyFont,
-  },
-  statDots: {
-    color: PB.dark,
-    fontSize: 16,
-    flex: 1,
-    letterSpacing: 1,
-    ...pipboyFont,
-  },
-  statValue: {
-    color: PB.primary,
-    fontSize: 18,
-    fontWeight: '700',
-    ...pipboyFont,
-    // @ts-ignore
-    textShadowColor: PB.primary,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 4,
-  },
-  statUnit: {
-    color: PB.dim,
-    fontSize: 14,
-    ...pipboyFont,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
 
-  // Activity type selector
+  // ── Stat grid ──
+  statGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 16,
+  },
+  statCell: {
+    width: '50%',
+    paddingVertical: 8,
+  },
+  statCellLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  statCellValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+
+  divider: {
+    height: 1,
+    marginVertical: 4,
+    marginBottom: 12,
+  },
+
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+  },
+  metaText: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  statusDot: {
+    width: 6, height: 6, borderRadius: 3,
+  },
+
+  // ── Activity-type chips ──
   typeRow: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 12,
+    gap: 8,
+    marginBottom: 16,
   },
   typeChip: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 12,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: PB.dark,
-    borderRadius: 0, // sharp terminal corners
-  },
-  typeChipActive: {
-    borderColor: PB.primary,
-    backgroundColor: PB.primary + '20',
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    gap: 4,
   },
   typeText: {
-    color: PB.dark,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 1,
-    ...pipboyFont,
-  },
-  typeTextActive: {
-    color: PB.primary,
-    // @ts-ignore
-    textShadowColor: PB.primary,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 4,
+    letterSpacing: 0.3,
   },
 
-  // Buttons
-  startBtn: {
-    borderWidth: 2,
-    borderColor: PB.primary,
-    paddingVertical: 14,
+  // ── Buttons ──
+  primaryBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 0,
-  },
-  startBtnText: {
-    color: PB.primary,
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 2,
-    ...pipboyFont,
-    // @ts-ignore
-    textShadowColor: PB.primary,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
-  },
-  stopBtn: {
-    borderWidth: 2,
-    borderColor: '#ff3333',
+    justifyContent: 'center',
+    gap: 8,
     paddingVertical: 14,
-    alignItems: 'center',
-    borderRadius: 0,
-    backgroundColor: '#ff333315',
+    borderRadius: borderRadius.md,
   },
-  stopBtnText: {
-    color: '#ff3333',
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 2,
-    ...pipboyFont,
-    // @ts-ignore
-    textShadowColor: '#ff3333',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 6,
+  primaryBtnText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.4,
   },
 
-  // Activity log
-  logBlock: {
-    marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: PB.dark,
-    paddingTop: 8,
+  // ── History rows ──
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 10,
+    borderBottomWidth: 1,
   },
-  logHeader: {
-    color: PB.dim,
-    fontSize: 14,
-    letterSpacing: 2,
-    textAlign: 'center',
-    marginBottom: 6,
-    ...pipboyFont,
+  historyIcon: {
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center',
   },
-  logEntry: {
-    color: PB.dim,
+  historyName: {
     fontSize: 14,
-    ...pipboyFont,
-    paddingVertical: 2,
-    letterSpacing: 0.5,
+    fontWeight: '700',
+  },
+  historyMeta: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  historyDist: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+
+  // ── Empty state ──
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    gap: 8,
+  },
+  emptyText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+
+  // ── Radio grid ──
+  radioGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   radioBtn: {
+    width: '48.5%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: PB.dark,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    marginBottom: 6,
-    borderRadius: 0,
+    gap: 8,
   },
   radioBtnText: {
-    color: PB.primary,
-    fontSize: 14,
-    ...pipboyFont,
-    letterSpacing: 0.5,
-    // @ts-ignore
-    textShadowColor: PB.primary,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 4,
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

@@ -65,6 +65,15 @@ export function AdminEmployeeTasksScreen({ navigation }: any) {
       Alert.alert('Missing title', 'Please enter a task title.');
       return;
     }
+    // Assigned (one-time) tasks need a real due date — without it the task
+    // never appears on any employee's checklist (todayTasksFor filters by it).
+    if (mode === 'assigned' && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate.trim())) {
+      Alert.alert(
+        'Due date required',
+        'One-time tasks need a due date in YYYY-MM-DD format so they appear on the right day\'s checklist.',
+      );
+      return;
+    }
     if (editingId) {
       updateTask(editingId, {
         title: title.trim(),
@@ -313,7 +322,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingTop: 0,
+    paddingBottom: spacing.md,
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 20,

@@ -28,7 +28,7 @@ function AdminCard({ icon, title, subtitle, count, accentColor, onPress }: Admin
   const { colors } = useTheme();
   return (
     <PressableScale onPress={onPress}>
-      <View style={[styles.adminCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 22 }]}>
+      <View style={[styles.adminCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 16 }]}>
         <View style={styles.adminCardTop}>
           <View style={[styles.adminCardIcon, { backgroundColor: accentColor + '20', width: 52, height: 52, borderRadius: 16 }]}>
             <Ionicons name={icon} size={26} color={accentColor} />
@@ -264,7 +264,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingTop: 0,
+    paddingBottom: spacing.md,
   },
   backButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
   title: { ...typography.sectionTitle },
@@ -284,11 +285,11 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
+    marginBottom: 14,
   },
   gridItem: { flex: 1 },
   adminCard: {
-    minHeight: 160,
+    minHeight: 170,
   },
   adminCardTop: {
     flexDirection: 'row',

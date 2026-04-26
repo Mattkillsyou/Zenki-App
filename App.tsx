@@ -12,6 +12,7 @@ import { DrinkTrackerProvider } from './src/context/DrinkTrackerContext';
 import { AttendanceProvider } from './src/context/AttendanceContext';
 import { AnnouncementProvider } from './src/context/AnnouncementContext';
 import { AppointmentProvider } from './src/context/AppointmentContext';
+import { ScheduleProvider } from './src/context/ScheduleContext';
 import { EmployeeTaskProvider } from './src/context/EmployeeTaskContext';
 import { WorkoutProvider } from './src/context/WorkoutContext';
 import { HeartRateProvider } from './src/context/HeartRateContext';
@@ -141,11 +142,10 @@ const webStyles = StyleSheet.create({
     maxHeight: 932,
     overflow: 'hidden',
     borderRadius: 0,
-    // Reserve space at the top + bottom that mirrors the iPhone 14 Pro
-    // Dynamic Island and home indicator so screen content stops where it
-    // would on a real device.
+    // Top inset mirrors iPhone 14 Pro Dynamic Island so screen content
+    // clears the notch. No bottom padding — the tab bar should sit flush
+    // with the bottom of the phone frame.
     paddingTop: 54,
-    paddingBottom: 34,
   },
   // Visual representation of the Dynamic Island — pill at the top center.
   fakeIsland: {
@@ -175,6 +175,7 @@ export default function App() {
                   <AttendanceProvider>
                     <AnnouncementProvider>
                       <AppointmentProvider>
+                        <ScheduleProvider>
                         <EmployeeTaskProvider>
                         <WorkoutProvider>
                         <HeartRateProvider>
@@ -200,6 +201,7 @@ export default function App() {
                         </HeartRateProvider>
                         </WorkoutProvider>
                         </EmployeeTaskProvider>
+                        </ScheduleProvider>
                       </AppointmentProvider>
                     </AnnouncementProvider>
                   </AttendanceProvider>
