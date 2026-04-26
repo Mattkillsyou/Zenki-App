@@ -133,6 +133,11 @@ export function AdminReportsScreen({ navigation }: any) {
               return;
             }
             setReports((prev) => prev.filter((x) => x.id !== r.id));
+            if (res.error) {
+              // Soft-failure: action mostly succeeded but content delete didn't
+              // (e.g. post already gone, or rule denied). Surface the detail.
+              Alert.alert('Action complete with warning', res.error);
+            }
           },
         },
       ],

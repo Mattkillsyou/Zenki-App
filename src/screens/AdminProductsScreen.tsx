@@ -11,6 +11,7 @@ import {
   Switch,
   KeyboardAvoidingView,
   Platform} from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ import { useAuth } from '../context/AuthContext';
 import { useProducts } from '../context/ProductContext';
 import { CATEGORIES, ProductCategory } from '../data/products';
 import { spacing } from '../theme';
+import { uploadProductImage } from '../services/storage';
 
 const CATEGORY_OPTIONS = CATEGORIES.filter((c) => c !== 'All') as Exclude<ProductCategory, 'All'>[];
 
@@ -57,6 +59,39 @@ export function AdminProductsScreen({ navigation }: any) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const pickAndUploadImage = async () => {
+    if (uploadingImage) return;
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (perm.status !== 'granted') {
+        Alert.alert('Permission needed', 'Allow photo access to pick a product image.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+        allowsEditing: true,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      setUploadingImage(true);
+      const url = await uploadProductImage(result.assets[0].uri);
+      setForm((prev) => ({ ...prev, imageUrl: url }));
+    } catch (err: any) {
+      const code = err?.code || err?.message || '';
+      Alert.alert(
+        'Upload failed',
+        code === 'firebase-not-configured'
+          ? 'Firebase Storage is not configured.'
+          : code === 'not-signed-in'
+          ? 'Sign in as an admin first — Firebase Storage upload requires an Auth session.'
+          : `Couldn't upload image: ${err?.message || 'unknown error'}`,
+      );
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   if (!user?.isAdmin) {
     return (
@@ -296,6 +331,25 @@ export function AdminProductsScreen({ navigation }: any) {
                 placeholder="https://..."
                 autoCapitalize="none"
               />
+              <View style={styles.imageUploadRow}>
+                <SoundPressable
+                  style={[styles.uploadBtn, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border, opacity: uploadingImage ? 0.6 : 1 }]}
+                  onPress={pickAndUploadImage}
+                  disabled={uploadingImage}
+                >
+                  <Ionicons
+                    name={uploadingImage ? 'sync' : 'cloud-upload-outline'}
+                    size={16}
+                    color={colors.gold}
+                  />
+                  <Text style={[styles.uploadBtnText, { color: colors.textPrimary }]}>
+                    {uploadingImage ? 'Uploading…' : form.imageUrl ? 'Replace from Photos' : 'Upload from Photos'}
+                  </Text>
+                </SoundPressable>
+                {form.imageUrl ? (
+                  <Image source={{ uri: form.imageUrl }} style={styles.imagePreview} resizeMode="cover" />
+                ) : null}
+              </View>
               <Input
                 label="Gallery URLs (one per line)"
                 value={form.galleryRaw}
@@ -500,4 +554,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveBtnText: { color: '#000', fontSize: 15, fontWeight: '800', letterSpacing: 0.3 },
+  imageUploadRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    marginTop: -4, marginBottom: spacing.md,
+  },
+  uploadBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 10, borderWidth: 1.5, flex: 1,
+    justifyContent: 'center',
+  },
+  uploadBtnText: { fontSize: 13, fontWeight: '700' },
+  imagePreview: { width: 56, height: 56, borderRadius: 8 },
 });

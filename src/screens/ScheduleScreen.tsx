@@ -14,7 +14,8 @@ import { useAuth } from '../context/AuthContext';
 import { useAppointments } from '../context/AppointmentContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { ClassCard } from '../components';
-import { DAYS as SCHED_DAYS, SCHEDULES as SHARED_SCHEDULES, PILATES_ENTRY as SHARED_PILATES } from '../data/schedule';
+import { DAYS as SCHED_DAYS, PILATES_ENTRY as SHARED_PILATES } from '../data/schedule';
+import { useSchedule } from '../context/ScheduleContext';
 
 const DAYS = SCHED_DAYS as unknown as string[];
 
@@ -53,7 +54,6 @@ const getTodayIndex = (): number => {
   return dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Convert to Mon=0 index
 };
 
-const SCHEDULES = SHARED_SCHEDULES;
 const PILATES_ENTRY = SHARED_PILATES;
 
 
@@ -84,6 +84,7 @@ export function ScheduleScreen({ navigation }: any) {
   useScreenSoundTheme('schedule');
   const { user } = useAuth();
   const { myAppointments } = useAppointments();
+  const { schedule } = useSchedule();
   const [selectedDay, setSelectedDay] = useState(getTodayIndex());
   const [weekOffset, setWeekOffset] = useState(0);
   const [filter, setFilter] = useState<ClassFilter>('all');
@@ -103,8 +104,8 @@ export function ScheduleScreen({ navigation }: any) {
     })
     .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
 
-  const dayKey = DAYS[selectedDay];
-  const allClasses = [...(SCHEDULES[dayKey] || []), PILATES_ENTRY];
+  const dayKey = DAYS[selectedDay] as keyof typeof schedule;
+  const allClasses = [...((schedule as Record<string, any>)[dayKey] || []), PILATES_ENTRY];
   const filtered = filter === 'all' ? allClasses : allClasses.filter((cls: any) => {
     const type = (cls.type || '').toLowerCase();
     if (filter === 'bjj') return type.includes('jiu') || type.includes('bjj');

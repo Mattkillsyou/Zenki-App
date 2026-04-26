@@ -49,7 +49,7 @@ import { useNutrition } from '../context/NutritionContext';
 import { useEmployeeTasks } from '../context/EmployeeTaskContext';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { getDailyQuote } from '../data/quotes';
-import { getTodaysSchedule } from '../data/schedule';
+import { useSchedule } from '../context/ScheduleContext';
 import { useHasUnreadNotifications } from './NotificationsScreen';
 import { formatCount } from '../utils/formatCount';
 import { formatDistance, distanceUnit, formatDurationHuman } from '../utils/gps';
@@ -432,8 +432,10 @@ export function HomeScreen({ navigation }: any) {
     .filter((a) => isToday(a.startsAt))
     .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
 
-  // Today's full studio schedule (group classes)
-  const studioClasses = getTodaysSchedule();
+  // Today's full studio schedule (group classes) — sourced from the live
+  // ScheduleContext so admin edits in AdminScheduleScreen flow through here.
+  const { getToday } = useSchedule();
+  const studioClasses = getToday();
 
   // Merged view: studio classes + user's private sessions, sorted by time
   const todaysFullSchedule = [

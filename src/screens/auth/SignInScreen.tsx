@@ -314,13 +314,14 @@ export function SignInScreen({ navigation }: any) {
           </View>
 
           {/* Welcome */}
-          <View style={styles.formSection}>
-            <View style={styles.welcomeBlock}>
-              <Text style={[styles.subheading, { color: colors.textSecondary }]}>Welcome to</Text>
-              <Text style={[styles.heading, { color: colors.textPrimary }]}>Zenki Dojo</Text>
-              <Text style={[styles.subheading, { color: colors.textSecondary }]}>Please sign In</Text>
-            </View>
+          <View style={styles.welcomeBlock}>
+            <Text style={[styles.subheading, { color: colors.textSecondary }]}>Welcome to</Text>
+            <Text style={[styles.heading, { color: colors.textPrimary }]}>Zenki Dojo</Text>
+            <Text style={[styles.subheading, { color: colors.textSecondary }]}>Please sign In</Text>
+          </View>
 
+          {/* Form */}
+          <View style={styles.formSection}>
             {/* Social Login */}
             <SoundPressable
               style={[styles.socialBtn, { backgroundColor: '#FAFAFA', borderWidth: 1, borderColor: colors.border }]}
@@ -428,7 +429,7 @@ const styles = StyleSheet.create({
 
   // Logo
   logoSection: { alignItems: 'center' },
-  logo: { width: 140, height: 140, marginBottom: 8 },
+  logo: { width: 160, height: 160, marginBottom: 8 },
   tagline: { fontSize: 11, fontWeight: '600', letterSpacing: 4, marginTop: 4 },
 
   // Form

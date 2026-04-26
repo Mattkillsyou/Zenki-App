@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { FadeInView } from '../components';
-import { broadcastPushNotification } from '../services/pushNotifications';
+import { broadcastPushNotification, fetchAllPushTokens } from '../services/pushNotifications';
 import { spacing, borderRadius } from '../theme';
 
 const HISTORY_KEY = '@zenki_broadcast_history';
@@ -27,6 +27,21 @@ export function AdminBroadcastScreen({ navigation }: any) {
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
   const [history, setHistory] = useState<Broadcast[]>([]);
+  // Number of devices with a push token registered. null = still loading.
+  const [recipientCount, setRecipientCount] = useState<number | null>(null);
+  const [recipientLoading, setRecipientLoading] = useState(true);
+
+  const refreshRecipientCount = async () => {
+    setRecipientLoading(true);
+    try {
+      const tokens = await fetchAllPushTokens();
+      setRecipientCount(tokens.length);
+    } catch {
+      setRecipientCount(null);
+    } finally {
+      setRecipientLoading(false);
+    }
+  };
 
   useEffect(() => {
     AsyncStorage.getItem(HISTORY_KEY).then((raw) => {
@@ -34,6 +49,7 @@ export function AdminBroadcastScreen({ navigation }: any) {
         try { setHistory(JSON.parse(raw)); } catch { /* ignore */ }
       }
     });
+    refreshRecipientCount();
   }, []);
 
   const saveHistory = async (next: Broadcast[]) => {
@@ -68,10 +84,11 @@ export function AdminBroadcastScreen({ navigation }: any) {
               await saveHistory([record, ...history].slice(0, MAX_HISTORY));
               setTitle('');
               setBody('');
+              refreshRecipientCount();
               Alert.alert(
                 'Broadcast sent',
                 sent === 0
-                  ? 'No recipients had push tokens registered. Make sure Firebase is configured and members have granted notification permission.'
+                  ? 'No recipients had push tokens registered. Members need to sign in on a phone (iOS/Android) and grant notification permission for tokens to be saved — push tokens are not generated on web or simulators.'
                   : `Delivered to ${sent} member${sent === 1 ? '' : 's'}.${errors > 0 ? ` (${errors} failed)` : ''}`,
               );
             } catch (err) {
@@ -134,6 +151,31 @@ export function AdminBroadcastScreen({ navigation }: any) {
                 />
                 <Text style={[styles.charCount, { color: colors.textMuted }]}>{body.length}/200</Text>
 
+                {/* Recipient pre-flight — shows how many devices will actually
+                    receive this push, plus a hint when there are zero so the
+                    admin understands why nothing will land. */}
+                <View style={[styles.recipientPill, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+                  <Ionicons
+                    name={recipientLoading ? 'sync' : recipientCount && recipientCount > 0 ? 'phone-portrait-outline' : 'phone-portrait-outline'}
+                    size={14}
+                    color={recipientCount && recipientCount > 0 ? colors.success : colors.textMuted}
+                  />
+                  <Text style={[styles.recipientText, { color: colors.textSecondary }]}>
+                    {recipientLoading
+                      ? 'Counting recipients…'
+                      : recipientCount === null
+                      ? 'Recipient count unavailable'
+                      : recipientCount === 0
+                      ? '0 devices have push enabled — members need to sign in on a phone first'
+                      : `${recipientCount} device${recipientCount === 1 ? '' : 's'} will receive this`}
+                  </Text>
+                  {!recipientLoading && (
+                    <SoundPressable onPress={refreshRecipientCount} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                      <Ionicons name="refresh" size={14} color={colors.textMuted} />
+                    </SoundPressable>
+                  )}
+                </View>
+
                 <SoundPressable
                   style={[
                     styles.sendButton,
@@ -148,7 +190,7 @@ export function AdminBroadcastScreen({ navigation }: any) {
                     <>
                       <Ionicons name="megaphone" size={20} color={title && body ? '#FFF' : colors.textMuted} />
                       <Text style={[styles.sendButtonText, { color: title && body ? '#FFF' : colors.textMuted }]}>
-                        Send to all members
+                        {!title || !body ? 'Enter title and message' : 'Send to all members'}
                       </Text>
                     </>
                   )}
@@ -226,6 +268,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   sendButtonText: { fontSize: 15, fontWeight: '700' },
+  recipientPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: borderRadius.md, borderWidth: 1,
+    marginTop: spacing.md,
+  },
+  recipientText: { flex: 1, fontSize: 12, fontWeight: '600' },
   emptyCard: {
     alignItems: 'center',
     paddingVertical: spacing.xl,

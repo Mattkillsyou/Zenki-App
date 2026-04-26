@@ -386,14 +386,6 @@ export function ProfileScreen({ navigation }: any) {
               onPress={() => navigation.navigate('Admin')}
             />
           )}
-          {isAdmin && (
-            <MenuTile
-              icon="people-outline"
-              label="Employee Mode"
-              sub="View as staff member"
-              onPress={() => navigation.navigate('EmployeeChecklist')}
-            />
-          )}
         </View>
 
         <View style={{ height: 24 }} />

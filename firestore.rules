@@ -43,13 +43,16 @@ service cloud.firestore {
     }
 
     // Posts — any signed-in user can read.
-    // The poster owns the post and can edit/delete their own.
+    // The poster owns the post and can edit/delete their own; admins can
+    // delete any post for moderation actions (Reports → Remove & Block).
     match /posts/{postId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn()
                     && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isSignedIn()
-                            && resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn()
+                    && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn()
+                    && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     // Direct-message threads — only participants read/write.
@@ -88,10 +91,11 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Product catalog — read-only from client.
+    // Product catalog — readable by any signed-in member; writes restricted
+    // to admins so AdminProductsScreen can manage the catalog directly.
     match /products/{productId} {
       allow read: if isSignedIn();
-      allow write: if false;
+      allow create, update, delete: if isAdmin();
     }
 
     // Waivers — submit-only. No one reads from client (admin reads server-side).
@@ -116,14 +120,18 @@ service cloud.firestore {
     }
 
     // Blocks — each user owns a /blocks/{uid}/blocked subcollection of
-    // UIDs they've blocked. Only the owner can read or write their own list.
+    // UIDs they've blocked. The owner reads/writes their own list, and
+    // admins can write on the owner's behalf when actioning a report
+    // (so a "Remove & Block" decision protects the reporter automatically).
     match /blocks/{uid}/blocked/{blockedUid} {
-      allow read, write: if isOwner(uid);
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if isOwner(uid) || isAdmin();
     }
 
     // Reports — users can file a report (write-only from client).
-    // Admins can read the queue via AdminReportsScreen; updates happen
-    // server-side via the adminActionReport Cloud Function.
+    // Admins can read the queue and update the status (dismiss / actioned)
+    // directly from AdminReportsScreen; deletes still blocked so we keep
+    // the audit trail.
     match /reports/{reportId} {
       allow read: if isAdmin();
       allow create: if isSignedIn()
@@ -132,7 +140,8 @@ service cloud.firestore {
                     && request.resource.data.reason is string
                     && request.resource.data.targetId is string
                     && request.resource.data.targetUserId is string;
-      allow update, delete: if false;
+      allow update: if isAdmin();
+      allow delete: if false;
     }
 
     // Admins collection — the /admins/{uid} doc opens up isAdmin() for that

@@ -16,8 +16,7 @@ import {
   collection, addDoc, deleteDoc, doc, setDoc, getDocs, getDoc,
   query, where, orderBy,
 } from 'firebase/firestore';
-import { getCurrentUid, getCurrentIdToken } from './firebaseAuth';
-import { AI_FUNCTION_BASE_URL } from '../config/api';
+import { getCurrentUid } from './firebaseAuth';
 
 // ─────────────────────────────────────────────
 // Blocks
@@ -180,35 +179,81 @@ export async function listOpenReports(): Promise<Report[]> {
 }
 
 /**
- * Admin-only action on a report. Calls the `adminActionReport` Cloud Function
- * so content deletion happens via the Admin SDK (bypassing Firestore rules).
+ * Admin-only action on a report. Runs entirely client-side against Firestore
+ * — the deployed firestore.rules grant admins (members of /admins/{uid})
+ * the privileges needed to update the report, delete the target content,
+ * and add a block on behalf of the reporter.
  *
- *   'dismiss'         — just mark the report resolved, leave content
- *   'removeAndBlock'  — delete target content + block target user from reporter
+ *   'dismiss'         — mark the report resolved, leave content untouched
+ *   'removeAndBlock'  — delete target content (when supported), auto-block
+ *                       the offender for the reporter, mark report actioned
+ *
+ * Per-target behavior:
+ *   - 'post'    : `/posts/{targetId}` is deleted (rules allow admin delete).
+ *   - 'message' : we don't store the parent threadId on the report, so the
+ *                 message itself is left in place but the report is still
+ *                 resolved + the offender blocked from the reporter.
+ *   - 'user'    : nothing to delete — there's no concept of removing a
+ *                 user from /users at this tier; the block is the action.
+ *   - 'comment' : no comments collection wired yet; behaves like 'user'.
  */
 export async function adminActionReport(
   reportId: string,
   action: 'dismiss' | 'removeAndBlock',
 ): Promise<{ ok: boolean; error?: string }> {
-  if (!FIREBASE_CONFIGURED) return { ok: false, error: 'firebase-unavailable' };
-  const token = await getCurrentIdToken();
-  if (!token) return { ok: false, error: 'no-auth' };
+  if (!FIREBASE_CONFIGURED || !db) return { ok: false, error: 'firebase-unavailable' };
+  const adminUid = getCurrentUid();
+  if (!adminUid) return { ok: false, error: 'no-auth' };
+
   try {
-    const res = await fetch(`${AI_FUNCTION_BASE_URL}/adminActionReport`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ reportId, action }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      return { ok: false, error: `HTTP ${res.status}: ${text}` };
+    const reportRef = doc(db, 'reports', reportId);
+    const reportSnap = await getDoc(reportRef);
+    if (!reportSnap.exists()) return { ok: false, error: 'report-not-found' };
+    const r = reportSnap.data() as Report;
+
+    if (action === 'dismiss') {
+      await setDoc(
+        reportRef,
+        { status: 'dismissed', resolvedBy: adminUid, resolvedAt: new Date().toISOString() },
+        { merge: true },
+      );
+      return { ok: true };
     }
-    return { ok: true };
+
+    // 'removeAndBlock' — best-effort delete of content + always block + mark actioned.
+    let deleteWarning: string | undefined;
+    if (r.targetType === 'post' && r.targetId) {
+      try {
+        await deleteDoc(doc(db, 'posts', r.targetId));
+      } catch (e: any) {
+        deleteWarning = `Couldn't delete post (${e?.code ?? 'unknown'}); offender still blocked.`;
+        console.warn('[Moderation] post delete failed:', e);
+      }
+    }
+    // 'message' / 'user' / 'comment' don't have a deletable Firestore path
+    // at this tier — the block + status flip is the meaningful action.
+
+    if (r.reporterId && r.targetUserId && r.reporterId !== r.targetUserId) {
+      try {
+        await setDoc(
+          doc(db, 'blocks', r.reporterId, 'blocked', r.targetUserId),
+          { blockedAt: new Date().toISOString(), via: 'admin-report', reportId },
+          { merge: true },
+        );
+      } catch (e) {
+        console.warn('[Moderation] block write failed:', e);
+      }
+    }
+
+    await setDoc(
+      reportRef,
+      { status: 'actioned', resolvedBy: adminUid, resolvedAt: new Date().toISOString() },
+      { merge: true },
+    );
+
+    return deleteWarning ? { ok: true, error: deleteWarning } : { ok: true };
   } catch (e: any) {
-    return { ok: false, error: e?.message ?? 'unknown' };
+    return { ok: false, error: e?.message || e?.code || 'unknown' };
   }
 }
 
