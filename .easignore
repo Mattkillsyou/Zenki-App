@@ -1,0 +1,8 @@
+# Inherit gitignore by default; this file only adds extras for EAS uploads.
+
+# Stray untracked directory containing a 53MB duplicate of the project tree —
+# present at clone time, not relevant to the build.
+Simulator Screenshot - iPhone 17 Pro Max - 2026-04-24 at 23.39.52/
+
+# App Store screenshot work-in-progress (not needed for the binary build)
+app-store-screenshots/
