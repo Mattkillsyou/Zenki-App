@@ -393,7 +393,7 @@ export function HomeScreen({ navigation }: any) {
   const [coachRects, setCoachRects] = useState<Record<string, { x: number; y: number; width: number; height: number }>>({});
   const [coachmarksOpen, setCoachmarksOpen] = useState(false);
 
-  const measureCoachTarget = useCallback((name: string, ref: React.RefObject<View>) => () => {
+  const measureCoachTarget = useCallback((name: string, ref: React.RefObject<View | null>) => () => {
     // Delay so layout has settled before we pull screen-space coords
     setTimeout(() => {
       ref.current?.measureInWindow?.((x: number, y: number, width: number, height: number) => {

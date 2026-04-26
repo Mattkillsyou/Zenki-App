@@ -113,7 +113,7 @@ export function BloodworkUploadScreen({ navigation }: any) {
       const asset = r.assets?.[0];
       if (!asset) return;
       const base64 = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64',
       });
       const bytes = (base64.length * 3) / 4;
       if (bytes > 8 * 1024 * 1024) {
