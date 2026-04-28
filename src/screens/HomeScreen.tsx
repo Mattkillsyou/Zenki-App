@@ -33,7 +33,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { spacing, typography, borderRadius } from '../theme';
+import { spacing, borderRadius } from '../theme';
 import { AnimatedLogo, FadeInView, TimeClock, PointsBadge, CelebrationModal } from '../components';
 import { ReorderableSections, ReorderableItem } from '../components/ReorderableSections';
 import { SpinWheelModal } from '../components/SpinWheelModal';
@@ -747,6 +747,26 @@ export function HomeScreen({ navigation }: any) {
                   {formatCount(gamState.flames || 0)}
                 </Text>
               </View>
+              {!hasSpunToday && (
+                <TouchableOpacity
+                  ref={spinFabRef}
+                  onLayout={measureCoachTarget('spinFab', spinFabRef)}
+                  style={[
+                    styles.iconButton,
+                    {
+                      backgroundColor: colors.surface,
+                      shadowColor: '#D4A017',
+                      // @ts-ignore — boxShadow is web-only
+                      boxShadow: '0 0 10px rgba(212,160,23,0.65), 0 0 18px rgba(212,160,23,0.3)',
+                    },
+                  ]}
+                  onPress={() => { play('navigate'); setSpinOpen(true); }}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Daily spin"
+                >
+                  <Ionicons name="aperture" size={22} color="#D4A017" />
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={[styles.iconButton, { backgroundColor: colors.surface }]}
                 onPress={() => { play('navigate'); setNotifsSeen(true); setNotifOpen(true); }}
@@ -771,26 +791,6 @@ export function HomeScreen({ navigation }: any) {
               </Text>
             </Text>
             <View style={styles.welcomeActions}>
-              {!hasSpunToday && (
-                <TouchableOpacity
-                  ref={spinFabRef}
-                  onLayout={measureCoachTarget('spinFab', spinFabRef)}
-                  style={[
-                    styles.spinHeaderBtn,
-                    {
-                      backgroundColor: colors.surface,
-                      shadowColor: '#D4A017',
-                      // @ts-ignore — boxShadow is web-only
-                      boxShadow: '0 0 10px rgba(212,160,23,0.65), 0 0 18px rgba(212,160,23,0.3)',
-                    },
-                  ]}
-                  onPress={() => { play('navigate'); setSpinOpen(true); }}
-                  activeOpacity={0.7}
-                  accessibilityLabel="Daily spin"
-                >
-                  <Ionicons name="aperture" size={22} color="#D4A017" />
-                </TouchableOpacity>
-              )}
               {!editMode && (
                 <View ref={editPillRef} onLayout={measureCoachTarget('edit', editPillRef)}>
                   <TouchableOpacity
@@ -861,7 +861,7 @@ export function HomeScreen({ navigation }: any) {
               const sectionsById: Record<string, React.ReactElement | null> = {
                 vouchers: (freeDrinkCredits > 0 || freeShirtCredits > 0) ? (
                   <FadeInView delay={90} slideUp={14}>
-                    <Text style={[styles.voucherSectionLabel, { color: colors.textMuted }]}>VOUCHERS</Text>
+                    <Text style={[styles.sectionTitle, { color: colors.textMuted, paddingHorizontal: spacing.lg, marginTop: spacing.md, marginBottom: spacing.sm }]}>VOUCHERS</Text>
                     <View style={styles.voucherRow}>
                       {freeDrinkCredits > 0 && (
                         <TouchableOpacity
@@ -1442,31 +1442,12 @@ const styles = StyleSheet.create({
     marginTop: 10,
     textAlign: 'center',
   },
-  headerRight: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-  },
   iconButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  // Spin wheel button — pill-height to match the gem/fire/streak chips.
-  // Solid white wheel with a soft white glow.
-  spinHeaderBtn: {
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.65,
-    shadowRadius: 10,
-    elevation: 4,
   },
   notifDot: {
     position: 'absolute',
@@ -2066,13 +2047,6 @@ const styles = StyleSheet.create({
   },
 
   // ── Vouchers (moved from ProfileScreen) ──
-  voucherSectionLabel: {
-    ...typography.label,
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-    letterSpacing: 1.5,
-  },
   voucherRow: {
     paddingHorizontal: spacing.lg,
     gap: spacing.sm,
