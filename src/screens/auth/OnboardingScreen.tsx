@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TextInput, ScrollView,
-  Image, Animated, Dimensions, KeyboardAvoidingView, Platform} from 'react-native';
+  Image, Animated, Dimensions, KeyboardAvoidingView, Platform, ActivityIndicator} from 'react-native';
 import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -149,6 +149,13 @@ export function OnboardingScreen({ navigation, route }: any) {
   const [notificationsGranted, setNotificationsGranted] = useState(false);
   const [cameraGranted, setCameraGranted] = useState(false);
   const [photoLibraryGranted, setPhotoLibraryGranted] = useState(false);
+  // Tracks the permission slot currently being requested. iOS only allows one
+  // permission prompt on screen at a time — if the user mashes buttons we'd
+  // silently skip prompts. This flag drives the sequential walk-through and
+  // disables row taps mid-request.
+  const [permRequesting, setPermRequesting] = useState<
+    null | 'location' | 'health' | 'camera' | 'notifications' | 'photoLibrary'
+  >(null);
   const [data, setData] = useState<OnboardingData>({
     email: '', password: '', confirmPassword: '',
     firstName: '', lastName: '', phone: '', photo: null, bio: '', funFact: '', nickname: '',
@@ -402,6 +409,49 @@ export function OnboardingScreen({ navigation, route }: any) {
       setPhotoLibraryGranted(status === 'granted');
     } catch {
       setPhotoLibraryGranted(false);
+    }
+  };
+
+  // Walks through every permission prompt in sequence, awaiting each so
+  // iOS shows one dialog at a time. If the user denies a permission the
+  // flow keeps going — the next dialog just won't show because iOS marks
+  // the previous one resolved.
+  const runPermissionFlow = async () => {
+    if (permRequesting) return;
+    try {
+      setPermRequesting('location');
+      await requestLocationPermission();
+
+      if (Platform.OS === 'ios') {
+        setPermRequesting('health');
+        await requestHealthPermission();
+      }
+
+      setPermRequesting('camera');
+      await requestCameraPermission();
+
+      setPermRequesting('notifications');
+      await requestNotificationsPermission();
+
+      setPermRequesting('photoLibrary');
+      await requestPhotoLibraryPermission();
+    } finally {
+      setPermRequesting(null);
+    }
+  };
+
+  // Wrap the individual row handlers so they also flip the in-flight flag
+  // (lets the row UI show "Asking…" and prevents adjacent taps).
+  const guardedRequest = async (
+    slot: NonNullable<typeof permRequesting>,
+    fn: () => Promise<void>,
+  ) => {
+    if (permRequesting) return;
+    try {
+      setPermRequesting(slot);
+      await fn();
+    } finally {
+      setPermRequesting(null);
     }
   };
 
@@ -1346,95 +1396,147 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 16: Location permission (was 9)
-      case 16: return (
-        <View style={styles.stepContent}>
-          <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
-            <Ionicons name="shield-checkmark-outline" size={64} color={colors.gold} />
-          </Animated.View>
-          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>App Permissions</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-            These help the app work at its best. All are optional. You can change them later in Settings.
-          </Text>
-
-          {/* Location */}
-          <SoundPressable
-            style={[styles.permRow, { backgroundColor: colors.surface, borderColor: locationGranted ? colors.success + '40' : colors.border }]}
-            onPress={requestLocationPermission}
-          >
-            <View style={[styles.permIcon, { backgroundColor: '#3B82F620' }]}>
-              <Ionicons name="location-outline" size={20} color="#3B82F6" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Location</Text>
-              <Text style={[styles.permDesc, { color: colors.textMuted }]}>Auto check-in when you arrive at the dojo + GPS workout tracking</Text>
-            </View>
-            <Ionicons name={locationGranted ? 'checkmark-circle' : 'chevron-forward'} size={20} color={locationGranted ? colors.success : colors.textMuted} />
-          </SoundPressable>
-
-          {/* Apple Health (iOS only) */}
-          {Platform.OS === 'ios' && (
+      // Step 16: App permissions — sequential walk-through. iOS only allows
+      // one permission dialog at a time; tapping rapidly was silently skipping
+      // prompts. Now there's a single "Grant All Permissions" primary button
+      // that walks through them in order, awaiting each. Individual rows still
+      // work for re-requesting one at a time, but they're disabled while a
+      // request is in flight.
+      case 16: {
+        const renderPermRow = (args: {
+          slot: 'location' | 'health' | 'camera' | 'notifications' | 'photoLibrary';
+          icon: keyof typeof Ionicons.glyphMap;
+          tint: string;
+          title: string;
+          desc: string;
+          granted: boolean;
+          onPress: () => Promise<void>;
+        }) => {
+          const isAsking = permRequesting === args.slot;
+          const isLocked = permRequesting !== null && !isAsking;
+          return (
             <SoundPressable
-              style={[styles.permRow, { backgroundColor: colors.surface, borderColor: healthGranted ? colors.success + '40' : colors.border }]}
-              onPress={requestHealthPermission}
+              key={args.slot}
+              style={[
+                styles.permRow,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: args.granted ? colors.success + '40' : colors.border,
+                  opacity: isLocked ? 0.5 : 1,
+                },
+              ]}
+              onPress={() => guardedRequest(args.slot, args.onPress)}
+              disabled={isLocked || args.granted}
             >
-              <View style={[styles.permIcon, { backgroundColor: '#FF294920' }]}>
-                <Ionicons name="heart-outline" size={20} color="#FF2949" />
+              <View style={[styles.permIcon, { backgroundColor: args.tint + '20' }]}>
+                <Ionicons name={args.icon} size={20} color={args.tint} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Apple Health</Text>
-                <Text style={[styles.permDesc, { color: colors.textMuted }]}>Sync workouts, weight, nutrition, and heart rate both ways with Apple Health</Text>
+                <Text style={[styles.permTitle, { color: colors.textPrimary }]}>{args.title}</Text>
+                <Text style={[styles.permDesc, { color: colors.textMuted }]}>{args.desc}</Text>
               </View>
-              <Ionicons name={healthGranted ? 'checkmark-circle' : 'chevron-forward'} size={20} color={healthGranted ? colors.success : colors.textMuted} />
+              {isAsking ? (
+                <ActivityIndicator size="small" color={colors.gold} />
+              ) : (
+                <Ionicons
+                  name={args.granted ? 'checkmark-circle' : 'chevron-forward'}
+                  size={20}
+                  color={args.granted ? colors.success : colors.textMuted}
+                />
+              )}
             </SoundPressable>
-          )}
+          );
+        };
 
-          {/* Camera */}
-          <SoundPressable
-            style={[styles.permRow, { backgroundColor: colors.surface, borderColor: cameraGranted ? colors.success + '40' : colors.border }]}
-            onPress={requestCameraPermission}
-          >
-            <View style={[styles.permIcon, { backgroundColor: '#F9731620' }]}>
-              <Ionicons name="camera-outline" size={20} color="#F97316" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Camera</Text>
-              <Text style={[styles.permDesc, { color: colors.textMuted }]}>Scan barcodes for food logging + take progress photos + profile pic</Text>
-            </View>
-            <Ionicons name={cameraGranted ? 'checkmark-circle' : 'chevron-forward'} size={20} color={cameraGranted ? colors.success : colors.textMuted} />
-          </SoundPressable>
+        const allGranted =
+          locationGranted && cameraGranted && notificationsGranted && photoLibraryGranted &&
+          (Platform.OS !== 'ios' || healthGranted);
 
-          {/* Notifications */}
-          <SoundPressable
-            style={[styles.permRow, { backgroundColor: colors.surface, borderColor: notificationsGranted ? colors.success + '40' : colors.border }]}
-            onPress={requestNotificationsPermission}
-          >
-            <View style={[styles.permIcon, { backgroundColor: '#EF444420' }]}>
-              <Ionicons name="notifications-outline" size={20} color="#EF4444" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Notifications</Text>
-              <Text style={[styles.permDesc, { color: colors.textMuted }]}>Class reminders 1hr before, achievement unlocks, and dojo announcements</Text>
-            </View>
-            <Ionicons name={notificationsGranted ? 'checkmark-circle' : 'chevron-forward'} size={20} color={notificationsGranted ? colors.success : colors.textMuted} />
-          </SoundPressable>
+        return (
+          <View style={styles.stepContent}>
+            <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
+              <Ionicons name="shield-checkmark-outline" size={64} color={colors.gold} />
+            </Animated.View>
+            <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>App Permissions</Text>
+            <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
+              Tap "Grant All" to walk through them one at a time. All are optional and can be changed later in Settings.
+            </Text>
 
-          {/* Photo Library */}
-          <SoundPressable
-            style={[styles.permRow, { backgroundColor: colors.surface, borderColor: photoLibraryGranted ? colors.success + '40' : colors.border }]}
-            onPress={requestPhotoLibraryPermission}
-          >
-            <View style={[styles.permIcon, { backgroundColor: '#22C55E20' }]}>
-              <Ionicons name="images-outline" size={20} color="#22C55E" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Photo Library</Text>
-              <Text style={[styles.permDesc, { color: colors.textMuted }]}>Upload food photos for AI macro tracking + share to the community feed</Text>
-            </View>
-            <Ionicons name={photoLibraryGranted ? 'checkmark-circle' : 'chevron-forward'} size={20} color={photoLibraryGranted ? colors.success : colors.textMuted} />
-          </SoundPressable>
-        </View>
-      );
+            {!allGranted && (
+              <SoundPressable
+                style={[
+                  styles.permGrantAll,
+                  {
+                    backgroundColor: permRequesting ? colors.surface : colors.gold,
+                    borderColor: colors.gold,
+                  },
+                ]}
+                onPress={runPermissionFlow}
+                disabled={permRequesting !== null}
+              >
+                {permRequesting ? (
+                  <>
+                    <ActivityIndicator size="small" color={colors.gold} />
+                    <Text style={[styles.permGrantAllText, { color: colors.gold }]}>
+                      Asking for {permRequesting === 'photoLibrary' ? 'Photos' : permRequesting.charAt(0).toUpperCase() + permRequesting.slice(1)}…
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="shield-checkmark" size={18} color="#000" />
+                    <Text style={[styles.permGrantAllText, { color: '#000' }]}>Grant All Permissions</Text>
+                  </>
+                )}
+              </SoundPressable>
+            )}
+
+            {renderPermRow({
+              slot: 'location',
+              icon: 'location-outline', tint: '#3B82F6',
+              title: 'Location',
+              desc: 'Auto check-in when you arrive at the dojo + GPS workout tracking',
+              granted: locationGranted,
+              onPress: requestLocationPermission,
+            })}
+
+            {Platform.OS === 'ios' && renderPermRow({
+              slot: 'health',
+              icon: 'heart-outline', tint: '#FF2949',
+              title: 'Apple Health',
+              desc: 'Sync workouts, weight, nutrition, and heart rate both ways with Apple Health',
+              granted: healthGranted,
+              onPress: requestHealthPermission,
+            })}
+
+            {renderPermRow({
+              slot: 'camera',
+              icon: 'camera-outline', tint: '#F97316',
+              title: 'Camera',
+              desc: 'Scan barcodes for food logging + take progress photos + profile pic',
+              granted: cameraGranted,
+              onPress: requestCameraPermission,
+            })}
+
+            {renderPermRow({
+              slot: 'notifications',
+              icon: 'notifications-outline', tint: '#EF4444',
+              title: 'Notifications',
+              desc: 'Class reminders 1hr before, achievement unlocks, and dojo announcements',
+              granted: notificationsGranted,
+              onPress: requestNotificationsPermission,
+            })}
+
+            {renderPermRow({
+              slot: 'photoLibrary',
+              icon: 'images-outline', tint: '#22C55E',
+              title: 'Photo Library',
+              desc: 'Upload food photos for AI macro tracking + share to the community feed',
+              granted: photoLibraryGranted,
+              onPress: requestPhotoLibraryPermission,
+            })}
+          </View>
+        );
+      }
 
       // Step 17: Welcome (was 10)
       case 17: return (
@@ -1753,6 +1855,23 @@ const styles = StyleSheet.create({
   },
   permTitle: { fontSize: 14, fontWeight: '800' },
   permDesc: { fontSize: 11, lineHeight: 15, marginTop: 2 },
+  permGrantAll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    width: '100%',
+    marginBottom: 14,
+  },
+  permGrantAllText: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
 
   waiverBox: {
     width: '100%',
