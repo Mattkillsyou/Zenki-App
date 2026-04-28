@@ -28,7 +28,7 @@ function AdminCard({ icon, title, subtitle, count, accentColor, onPress }: Admin
   const { colors } = useTheme();
   return (
     <PressableScale onPress={onPress}>
-      <View style={[styles.adminCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 16 }]}>
+      <View style={[styles.adminCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.adminCardTop}>
           <View style={[styles.adminCardIcon, { backgroundColor: accentColor + '20', width: 52, height: 52, borderRadius: 16 }]}>
             <Ionicons name={icon} size={26} color={accentColor} />
@@ -289,7 +289,14 @@ const styles = StyleSheet.create({
   },
   gridItem: { flex: 1 },
   adminCard: {
-    minHeight: 170,
+    // Fixed height so siblings in a row align regardless of title/subtitle
+    // wrap. justifyContent docks the Manage chevron to the bottom so the
+    // header (icon + count) stays put even when content above varies.
+    height: 180,
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    justifyContent: 'space-between',
   },
   adminCardTop: {
     flexDirection: 'row',
