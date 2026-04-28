@@ -119,7 +119,7 @@ export function SignInScreen({ navigation }: any) {
         await auth.signIn(member);
         navigation.replace('Main');
       } catch (err: any) {
-        Alert.alert('Google sign-in failed', err?.message || 'Please try again or use email + password.');
+        setErrorMsg(err?.message ? `Google sign-in didn't go through — ${err.message}` : "Google sign-in didn't go through — try email + password instead.");
       } finally {
         setLoading(false);
       }
@@ -128,11 +128,11 @@ export function SignInScreen({ navigation }: any) {
 
   const handleAppleSignIn = async () => {
     if (Platform.OS !== 'ios') {
-      Alert.alert('Apple Sign-In is only available on iOS devices');
+      setErrorMsg('Apple Sign-In only works on iPhone or iPad.');
       return;
     }
     if (!FIREBASE_CONFIGURED) {
-      Alert.alert('Sign in unavailable', 'Apple Sign-In requires Firebase to be configured.');
+      setErrorMsg("Apple Sign-In needs Firebase set up first — try email + password.");
       return;
     }
     setLoading(true);
@@ -168,7 +168,7 @@ export function SignInScreen({ navigation }: any) {
     } catch (err: any) {
       // User canceling the prompt is not a real error — silence it.
       if (err?.code === 'ERR_REQUEST_CANCELED') return;
-      Alert.alert('Apple sign-in failed', err?.message || 'Please try again or use email + password.');
+      setErrorMsg(err?.message ? `Apple sign-in didn't go through — ${err.message}` : "Apple sign-in didn't go through — try email + password instead.");
     } finally {
       setLoading(false);
     }
@@ -176,17 +176,17 @@ export function SignInScreen({ navigation }: any) {
 
   const handleGoogleSignIn = async () => {
     if (!GOOGLE_CLIENT_ID) {
-      Alert.alert('Sign in unavailable', 'Google Sign-In is not configured. Please use email + password.');
+      setErrorMsg("Google Sign-In isn't configured — use email + password.");
       return;
     }
     if (!FIREBASE_CONFIGURED) {
-      Alert.alert('Sign in unavailable', 'Google Sign-In requires Firebase to be configured.');
+      setErrorMsg("Google Sign-In needs Firebase set up first — use email + password.");
       return;
     }
     try {
       await promptGoogle();
     } catch (err: any) {
-      Alert.alert('Google sign-in failed', err?.message || 'Please try again.');
+      setErrorMsg(err?.message ? `Couldn't reach Google — ${err.message}` : "Couldn't reach Google — try again or use email + password.");
     }
   };
 
