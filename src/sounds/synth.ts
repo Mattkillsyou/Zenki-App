@@ -233,6 +233,14 @@ function matrixSound(ctx: any, e: SoundEvent) {
     case 'navigate': return chord(ctx, [{ freq: 550, wave: 'square', duration: 0.05, gain: 0.07 }]);
     case 'open':     return chord(ctx, [{ freq: 300, wave: 'square', duration: 0.12, gain: 0.09, sweep: 800 }]);
     case 'close':    return chord(ctx, [{ freq: 700, wave: 'square', duration: 0.10, gain: 0.08, sweep: 200 }]);
+    // Binary stair-step ascent capped by a glitch sawtooth sweep — "code recompiling"
+    case 'transform': return chord(ctx, [
+      { freq: 200,  wave: 'square',   duration: 0.10, gain: 0.10 },
+      { freq: 400,  wave: 'square',   duration: 0.10, gain: 0.10, delay: 0.08 },
+      { freq: 800,  wave: 'square',   duration: 0.10, gain: 0.10, delay: 0.16 },
+      { freq: 1600, wave: 'square',   duration: 0.18, gain: 0.10, delay: 0.24 },
+      { freq: 1200, wave: 'sawtooth', duration: 0.22, gain: 0.05, delay: 0.30, sweep: 2400 },
+    ]);
     default:         return chord(ctx, [{ freq: 600, wave: 'square', duration: 0.03, gain: 0.06 }]);
   }
 }
@@ -270,6 +278,12 @@ function alienSound(ctx: any, e: SoundEvent) {
       // Pressure door slamming — descending sawtooth thud
       { freq: 380, wave: 'sawtooth', duration: 0.25, gain: 0.10, sweep: 80 },
       { freq: 60,  wave: 'sine',     duration: 0.30, gain: 0.07, sweep: 30, delay: 0.05 },
+    ]);
+    // MOTHER waking up — long sub-bass rumble rising into industrial hum
+    case 'transform': return chord(ctx, [
+      { freq: 60,  wave: 'sawtooth', duration: 0.55, gain: 0.12, sweep: 220 },
+      { freq: 90,  wave: 'sawtooth', duration: 0.50, gain: 0.10, sweep: 240, delay: 0.08, detune: 8 },
+      { freq: 180, wave: 'sine',     duration: 0.40, gain: 0.07, sweep: 380, delay: 0.20 },
     ]);
     default:         return chord(ctx, [{ freq: 200, wave: 'sawtooth', duration: 0.05, gain: 0.07 }]);
   }
@@ -350,6 +364,14 @@ function sheikahSound(ctx: any, e: SoundEvent) {
     case 'navigate': return chord(ctx, [{ freq: 1047, wave: 'sine', duration: 0.06, gain: 0.07 }]);
     case 'open':     return chord(ctx, [{ freq: 523, wave: 'sine', duration: 0.15, gain: 0.08, sweep: 880 }]);
     case 'close':    return chord(ctx, [{ freq: 784, wave: 'sine', duration: 0.12, gain: 0.07, sweep: 440 }]);
+    // Shrine activation — ascending pure-sine chimes (C5 → G5 → C6 → G6) with a soft triangle shimmer
+    case 'transform': return chord(ctx, [
+      { freq: 523,  wave: 'sine',     duration: 0.22, gain: 0.10 },
+      { freq: 784,  wave: 'sine',     duration: 0.22, gain: 0.10, delay: 0.10 },
+      { freq: 1047, wave: 'sine',     duration: 0.26, gain: 0.10, delay: 0.20 },
+      { freq: 1568, wave: 'sine',     duration: 0.32, gain: 0.10, delay: 0.30 },
+      { freq: 2093, wave: 'triangle', duration: 0.22, gain: 0.04, delay: 0.35 },
+    ]);
     default:         return chord(ctx, [{ freq: 700, wave: 'sine', duration: 0.05, gain: 0.06 }]);
   }
 }
