@@ -73,12 +73,35 @@ export function SenpaiMascot() {
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
-      // Capture variant lets the parent View steal the touch from the inner
-      // Pressable once movement crosses the threshold — so taps still work,
-      // but a drag gesture actually gets the responder.
-      onMoveShouldSetPanResponderCapture: (_, gs) => Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5,
+      // Only claim responder when (a) the user has clearly started a drag
+      // (>5px movement on either axis), AND (b) the touch origin is within
+      // the mascot's bounds. The locationX/Y check matters because the
+      // container is positioned-absolute over the rest of the screen — if
+      // we claimed responder for any movement anywhere we'd block the
+      // underlying ScrollView from scrolling.
+      onMoveShouldSetPanResponder: (evt, gs) => {
+        const movedEnough = Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5;
+        if (!movedEnough) return false;
+        const { locationX, locationY } = evt.nativeEvent;
+        return (
+          locationX >= 0 && locationX <= MASCOT_SIZE &&
+          locationY >= 0 && locationY <= MASCOT_SIZE
+        );
+      },
+      onMoveShouldSetPanResponderCapture: (evt, gs) => {
+        const movedEnough = Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5;
+        if (!movedEnough) return false;
+        const { locationX, locationY } = evt.nativeEvent;
+        return (
+          locationX >= 0 && locationX <= MASCOT_SIZE &&
+          locationY >= 0 && locationY <= MASCOT_SIZE
+        );
+      },
       onPanResponderTerminationRequest: () => false,
+      // Don't block the native scroll responder. Without this, claiming
+      // pan responder once means the ScrollView underneath stops scrolling
+      // for the rest of the gesture even after the mascot is dismissed.
+      onShouldBlockNativeResponder: () => false,
       onPanResponderGrant: () => {
         pan.setOffset({ x: (pan.x as any)._value, y: (pan.y as any)._value });
         pan.setValue({ x: 0, y: 0 });
