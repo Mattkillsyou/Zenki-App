@@ -4,8 +4,8 @@
   "main": "index.js",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web"
   },
   "dependencies": {
@@ -18,8 +18,8 @@
     "@react-navigation/stack": "^7.8.9",
     "expo": "^55.0.0",
     "expo-apple-authentication": "~55.0.13",
+    "expo-audio": "~55.0.14",
     "expo-auth-session": "~55.0.15",
-    "expo-av": "~15.0.2",
     "expo-calendar": "~55.0.14",
     "expo-camera": "~55.0.16",
     "expo-crypto": "~55.0.14",

@@ -3,13 +3,13 @@
 // On web: procedurally synthesizes short tones via Web Audio API
 //         (themed waveforms / chords per profile, see *Sound functions below).
 // On native (iOS/Android): plays bundled placeholder WAVs from
-//         src/assets/sounds/ via expo-av Audio.Sound, with a per-theme
+//         src/assets/sounds/ via expo-audio's AudioPlayer, with a per-theme
 //         playbackRate shift so each theme still feels distinct. Real
 //         theme-specific audio files can replace the placeholders later
 //         without changing the dispatch layer (see Master Prompt §13).
 
 import { Platform } from 'react-native';
-import { Audio } from 'expo-av';
+import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from 'expo-audio';
 
 type Waveform = 'sine' | 'square' | 'sawtooth' | 'triangle';
 
@@ -102,7 +102,7 @@ const NATIVE_SOURCES: Record<SoundEvent, number> = {
   transform: require('../assets/sounds/transform.wav'),
 };
 
-const nativeSoundCache = new Map<SoundEvent, Audio.Sound>();
+const nativeSoundCache = new Map<SoundEvent, AudioPlayer>();
 let nativeAudioInit: Promise<void> | null = null;
 
 function ensureNativeAudio(): Promise<void> {
@@ -110,23 +110,22 @@ function ensureNativeAudio(): Promise<void> {
   if (nativeAudioInit) return nativeAudioInit;
   nativeAudioInit = (async () => {
     try {
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        interruptionMode: 'mixWithOthers',
       });
     } catch { /* ignore — sound is non-critical */ }
   })();
   return nativeAudioInit;
 }
 
-async function getNativeSound(event: SoundEvent): Promise<Audio.Sound | null> {
+function getNativeSound(event: SoundEvent): AudioPlayer | null {
   const cached = nativeSoundCache.get(event);
   if (cached) return cached;
   try {
-    const { sound } = await Audio.Sound.createAsync(NATIVE_SOURCES[event], { shouldPlay: false });
-    nativeSoundCache.set(event, sound);
-    return sound;
+    const player = createAudioPlayer(NATIVE_SOURCES[event]);
+    nativeSoundCache.set(event, player);
+    return player;
   } catch {
     return null;
   }
@@ -152,11 +151,12 @@ function themeRate(theme: SoundTheme): number {
 
 async function playNative(theme: SoundTheme, event: SoundEvent): Promise<void> {
   await ensureNativeAudio();
-  const sound = await getNativeSound(event);
+  const sound = getNativeSound(event);
   if (!sound) return;
   try {
-    await sound.setRateAsync(themeRate(theme), false);
-    await sound.replayAsync();
+    sound.setPlaybackRate(themeRate(theme));
+    await sound.seekTo(0);
+    sound.play();
   } catch { /* ignore */ }
 }
 
