@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -233,15 +233,28 @@ export function DrinkScreen() {
             </Text>
           </View>
           <TouchableOpacity
-            style={[styles.bottomPayBtn, { backgroundColor: unpaidTotal > 0 ? colors.textPrimary : colors.surfaceSecondary }]}
+            style={[styles.bottomPayBtn, { backgroundColor: unpaidTotal > 0 ? colors.gold : colors.surfaceSecondary }]}
             disabled={unpaidTotal === 0}
-            onPress={async () => {
-              await payAllUnpaid();
+            onPress={() => {
+              Alert.alert(
+                'Settle drink tab',
+                `Mark $${unpaidTotal.toFixed(2)} as settled? Payment is handled in person at the dojo — this just clears your in-app tab once you've paid the front desk.`,
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Mark settled',
+                    onPress: async () => {
+                      await payAllUnpaid();
+                      Alert.alert('Tab cleared', 'Your drink charges have been marked settled.');
+                    },
+                  },
+                ],
+              );
             }}
           >
-            <Ionicons name="logo-apple" size={18} color={unpaidTotal > 0 ? colors.background : colors.textMuted} />
-            <Text style={[styles.bottomPayText, { color: unpaidTotal > 0 ? colors.background : colors.textMuted }]}>
-              Pay
+            <Ionicons name="checkmark-circle" size={18} color={unpaidTotal > 0 ? '#000' : colors.textMuted} />
+            <Text style={[styles.bottomPayText, { color: unpaidTotal > 0 ? '#000' : colors.textMuted }]}>
+              Settle Tab
             </Text>
           </TouchableOpacity>
         </View>

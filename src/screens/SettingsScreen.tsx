@@ -20,6 +20,7 @@ import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { ALL_THEMES } from '../theme/themes';
 import type { ThemeDefinition } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
+import { useHealthKit } from '../context/HealthKitContext';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { useSenpai } from '../context/SenpaiContext';
 import { senpaiJingle } from '../sounds/synth';
@@ -73,6 +74,10 @@ export function SettingsScreen({ navigation }: any) {
   const { colors, mode, setMode } = useTheme();
   const { user, signOut } = useAuth();
   const isAdmin = user?.isAdmin === true;
+
+  // Apple HealthKit — controls a clearly-labeled section so users (and
+  // App Review) can see exactly what HealthKit data this app touches.
+  const healthKit = useHealthKit();
 
   // ── Real sign-out: clear local state + Firebase Auth session ──
   const handleSignOut = () => {
@@ -511,6 +516,62 @@ export function SettingsScreen({ navigation }: any) {
           {renderNavRow('school-outline', 'Training', () => navigation.navigate('TrainingHome'))}
         </View>
 
+        {/* Apple Health — clearly identified per App Review guideline 2.5.1 */}
+        {Platform.OS === 'ios' && (
+          <>
+            {renderSectionHeader('APPLE HEALTH')}
+            <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+              <View style={styles.healthRow}>
+                <View style={styles.healthRowLeft}>
+                  <Ionicons name="heart" size={22} color="#FF3B30" />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={[styles.healthRowTitle, { color: colors.textPrimary }]}>
+                      Connect to Apple Health
+                    </Text>
+                    <Text style={[styles.healthRowSubtitle, { color: colors.textMuted }]}>
+                      {!healthKit.available
+                        ? 'Available on iPhone only.'
+                        : healthKit.enabled
+                          ? healthKit.authorized
+                            ? 'Connected — syncing workouts, weight, nutrition, and heart rate.'
+                            : 'Enabled — tap to grant permissions.'
+                          : 'Off. Turn on to sync workouts, weight, nutrition, and heart rate with Apple Health.'}
+                    </Text>
+                  </View>
+                </View>
+                <Switch
+                  value={healthKit.enabled}
+                  onValueChange={async (on) => {
+                    healthKit.setEnabled(on);
+                    if (on && !healthKit.authorized) {
+                      await healthKit.authorize();
+                    }
+                  }}
+                  disabled={!healthKit.available}
+                  trackColor={{ false: colors.border, true: colors.gold }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+              {healthKit.enabled && healthKit.available && (
+                <>
+                  <View style={[styles.healthDataRow, { borderTopColor: colors.divider }]}>
+                    <Text style={[styles.healthDataLabel, { color: colors.textMuted }]}>READS FROM HEALTH</Text>
+                    <Text style={[styles.healthDataValue, { color: colors.textSecondary }]}>
+                      Steps · Active Energy · Heart Rate · Body Mass
+                    </Text>
+                  </View>
+                  <View style={[styles.healthDataRow, { borderTopColor: colors.divider }]}>
+                    <Text style={[styles.healthDataLabel, { color: colors.textMuted }]}>WRITES TO HEALTH</Text>
+                    <Text style={[styles.healthDataValue, { color: colors.textSecondary }]}>
+                      Workouts · Weight · Nutrition · Heart-Rate Sessions
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
+          </>
+        )}
+
         {/* Privacy & Safety */}
         {renderSectionHeader('PRIVACY & SAFETY')}
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
@@ -919,6 +980,42 @@ const styles = StyleSheet.create({
   navRowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  // ── Apple Health section (transparency for App Review 2.5.1) ──
+  healthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  healthRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 12,
+  },
+  healthRowTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  healthRowSubtitle: {
+    fontSize: 13,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  healthDataRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  healthDataLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  healthDataValue: {
+    fontSize: 13,
+    marginTop: 4,
   },
   navIconCircle: {
     alignItems: 'center',
