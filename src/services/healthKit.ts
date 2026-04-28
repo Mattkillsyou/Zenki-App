@@ -78,7 +78,19 @@ function getAppleHealthKit(): any {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mod = require('react-native-health');
     // The package exports default + named (Constants). We accept either shape.
-    _AppleHealthKit = mod?.default ?? mod;
+    const HK = mod?.default ?? mod;
+    // Verify the native bridge actually registered its methods. On RN 0.80+
+    // bridgeless / hybrid builds, react-native-health@1.19.0's JS shim can
+    // load while NativeModules.AppleHealthKit is undefined — the package
+    // surface is then just `{ Constants }` with no callable methods. Treat
+    // that as "native bridge unavailable" so callers degrade cleanly instead
+    // of throwing 'HK.initHealthKit is not a function' at first use.
+    if (typeof HK?.initHealthKit !== 'function') {
+      console.warn('[HealthKit] Native bridge not registered — running without HealthKit sync');
+      _AppleHealthKit = null;
+      return null;
+    }
+    _AppleHealthKit = HK;
   } catch (err) {
     console.warn('[HealthKit] Native module unavailable — running without HealthKit sync:', err);
     _AppleHealthKit = null;
