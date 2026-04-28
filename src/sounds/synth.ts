@@ -1,11 +1,15 @@
-// Web Audio API sound synthesis — no external files needed.
-// Generates short theme-appropriate tones procedurally.
+// Theme-appropriate UI sound playback.
 //
-// On web: uses AudioContext directly.
-// On native (iOS/Android): this module no-ops. Native playback should go
-// through expo-av with real sound files (see SoundContext).
+// On web: procedurally synthesizes short tones via Web Audio API
+//         (themed waveforms / chords per profile, see *Sound functions below).
+// On native (iOS/Android): plays bundled placeholder WAVs from
+//         src/assets/sounds/ via expo-av Audio.Sound, with a per-theme
+//         playbackRate shift so each theme still feels distinct. Real
+//         theme-specific audio files can replace the placeholders later
+//         without changing the dispatch layer (see Master Prompt §13).
 
 import { Platform } from 'react-native';
+import { Audio } from 'expo-av';
 
 type Waveform = 'sine' | 'square' | 'sawtooth' | 'triangle';
 
@@ -86,11 +90,90 @@ export type SoundTheme =
 
 export type SoundEvent = 'tap' | 'success' | 'error' | 'navigate' | 'open' | 'close' | 'transform';
 
+// ──────────────────── NATIVE PLAYBACK (expo-av) ────────────────────
+
+const NATIVE_SOURCES: Record<SoundEvent, number> = {
+  tap:       require('../assets/sounds/tap.wav'),
+  success:   require('../assets/sounds/success.wav'),
+  error:     require('../assets/sounds/error.wav'),
+  navigate:  require('../assets/sounds/navigate.wav'),
+  open:      require('../assets/sounds/open.wav'),
+  close:     require('../assets/sounds/close.wav'),
+  transform: require('../assets/sounds/transform.wav'),
+};
+
+const nativeSoundCache = new Map<SoundEvent, Audio.Sound>();
+let nativeAudioInit: Promise<void> | null = null;
+
+function ensureNativeAudio(): Promise<void> {
+  if (Platform.OS === 'web') return Promise.resolve();
+  if (nativeAudioInit) return nativeAudioInit;
+  nativeAudioInit = (async () => {
+    try {
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+      });
+    } catch { /* ignore — sound is non-critical */ }
+  })();
+  return nativeAudioInit;
+}
+
+async function getNativeSound(event: SoundEvent): Promise<Audio.Sound | null> {
+  const cached = nativeSoundCache.get(event);
+  if (cached) return cached;
+  try {
+    const { sound } = await Audio.Sound.createAsync(NATIVE_SOURCES[event], { shouldPlay: false });
+    nativeSoundCache.set(event, sound);
+    return sound;
+  } catch {
+    return null;
+  }
+}
+
+// Per-theme playback-rate shift gives each theme a distinct feel without
+// requiring per-theme asset files. Replace with real per-theme assets later.
+function themeRate(theme: SoundTheme): number {
+  switch (theme) {
+    case 'matrix':    return 1.18;
+    case 'alien':     return 0.82;
+    case 'sheikah':   return 1.06;
+    case 'senpai':    return 1.22;
+    case 'home':      return 0.95;
+    case 'schedule':  return 1.04;
+    case 'store':     return 1.10;
+    case 'drinks':    return 1.12;
+    case 'community': return 0.98;
+    case 'profile':   return 1.02;
+    default:          return 1.0;
+  }
+}
+
+async function playNative(theme: SoundTheme, event: SoundEvent): Promise<void> {
+  await ensureNativeAudio();
+  const sound = await getNativeSound(event);
+  if (!sound) return;
+  try {
+    await sound.setRateAsync(themeRate(theme), false);
+    await sound.replayAsync();
+  } catch { /* ignore */ }
+}
+
 /**
- * Play a themed sound event. Safe to call from anywhere — becomes a no-op
- * when Web Audio is unavailable (i.e. on native without configured files).
+ * Play a themed UI sound event. Safe to call from anywhere — failures are
+ * swallowed since audio is non-critical.
+ *
+ * Web: synthesizes via Web Audio API (themed waveform/chord profiles).
+ * Native: plays bundled placeholder WAV with a per-theme playbackRate.
  */
 export function playSynth(theme: SoundTheme, event: SoundEvent) {
+  if (Platform.OS !== 'web') {
+    // Fire and forget — audio is non-critical
+    void playNative(theme, event);
+    return;
+  }
+
   const ctx = getCtx();
   if (!ctx) return;
   // User-gesture requirement — resume on first play
