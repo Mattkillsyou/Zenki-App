@@ -24,6 +24,7 @@ import { useHealthKit } from '../context/HealthKitContext';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { useSenpai } from '../context/SenpaiContext';
 import { senpaiJingle } from '../sounds/synth';
+import Constants from 'expo-constants';
 import { typography, spacing } from '../theme';
 import { AI_FUNCTION_BASE_URL } from '../config/api';
 import { FIREBASE_CONFIGURED, auth as firebaseAuth } from '../config/firebase';
@@ -844,7 +845,7 @@ export function SettingsScreen({ navigation }: any) {
         </View>
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, marginTop: spacing.sm, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
           <Text style={[styles.versionText, { color: colors.textMuted }]}>
-            Zenki Dojo v1.0.0
+            Zenki Dojo v{Constants.expoConfig?.version ?? '1.0.0'}
           </Text>
         </View>
 
