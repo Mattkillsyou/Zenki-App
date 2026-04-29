@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
-  Modal, Alert, Switch, ActivityIndicator, Platform,
-  KeyboardAvoidingView} from 'react-native';
+  Modal, Alert, Switch, ActivityIndicator, Platform} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,7 +10,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useMedicationTracker, DailyMedicationItem, CalendarDay } from '../context/MedicationTrackerContext';
 import { spacing } from '../theme';
-import { FadeInView } from '../components';
+import { FadeInView, KeyboardAwareScrollView } from '../components';
 import {
   MedicationEntry, MedicationCategory, FrequencyType, RouteOfAdministration,
   DrugSearchResult, INJECTION_SITES,
@@ -781,16 +780,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
           </SoundPressable>
         </View>
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ flex: 1 }}
-          keyboardVerticalOffset={64}
-        >
-          <ScrollView
-            contentContainerStyle={styles.modalScroll}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
+        <KeyboardAwareScrollView offset={64} contentContainerStyle={styles.modalScroll}>
             {/* SEARCH */}
             <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>SEARCH DRUG / PEPTIDE</Text>
             <View style={[styles.searchInputWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -1100,8 +1090,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
             )}
 
             <View style={{ height: 40 }} />
-          </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
       </SafeAreaView>
       </SafeAreaProvider>
     </Modal>

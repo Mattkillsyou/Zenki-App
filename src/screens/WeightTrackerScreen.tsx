@@ -5,8 +5,6 @@ import {
   StyleSheet,
   TextInput,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Dimensions,
   Modal,
   Pressable,
@@ -22,7 +20,7 @@ import { useNutrition } from '../context/NutritionContext';
 import { useSenpai } from '../context/SenpaiContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, LineChart } from '../components';
+import { FadeInView, LineChart, KeyboardAwareScrollView } from '../components';
 import { WeightUnit } from '../types/nutrition';
 import { computeTrendWeight, trendChange, kgToLbs } from '../utils/nutrition';
 import { WeightGoal } from '../types/activity';
@@ -252,7 +250,6 @@ export function WeightTrackerScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         {/* Header sits outside ScrollView so it stays visible */}
         <View style={styles.headerWrap}>
           <View style={styles.header}>
@@ -272,12 +269,7 @@ export function WeightTrackerScreen({ navigation }: any) {
           </View>
         </View>
 
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+        <KeyboardAwareScrollView contentContainerStyle={styles.scrollContent}>
           {/* Chart card — visualization first, per master prompt §9 */}
           <FadeInView>
             <View style={[styles.chartWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -613,8 +605,7 @@ export function WeightTrackerScreen({ navigation }: any) {
               {invalidCount} entry{invalidCount === 1 ? '' : 'ies'} excluded — open History to review.
             </Text>
           )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
 
       {/* History modal — full list with delete */}
       <Modal visible={historyOpen} transparent animationType="slide" onRequestClose={() => setHistoryOpen(false)}>

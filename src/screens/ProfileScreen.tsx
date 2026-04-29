@@ -5,12 +5,9 @@ import {
   StyleSheet,
   Image,
   Alert,
-  ScrollView,
   Modal,
   Pressable,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform} from 'react-native';
+  TextInput} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { BeltDisplay } from '../components';
+import { BeltDisplay, KeyboardAwareScrollView } from '../components';
 import { BELT_DISPLAY_COLORS } from '../data/members';
 import { useGamification } from '../context/GamificationContext';
 import { useWorkouts } from '../context/WorkoutContext';
@@ -106,16 +103,7 @@ export function ProfileScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={64}
-      >
-        <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-      >
+      <KeyboardAwareScrollView offset={64} contentContainerStyle={styles.scroll}>
         {/* ── Profile header (avatar + name + badge) ── */}
         <View style={styles.header}>
           {/* Edit Profile — pinned to the top-right corner */}
@@ -331,8 +319,7 @@ export function ProfileScreen({ navigation }: any) {
         </View>
 
         <View style={{ height: 24 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
 
       {/* ── Edit Profile Modal ── */}
       <Modal visible={editOpen} animationType="slide" transparent onRequestClose={() => setEditOpen(false)}>

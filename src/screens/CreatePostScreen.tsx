@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Image, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { KeyboardAwareScrollView } from '../components';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -112,6 +113,7 @@ export function CreatePostScreen({ navigation }: any) {
         </SoundPressable>
       </View>
 
+      <KeyboardAwareScrollView>
       {/* Mode toggle — Photo vs Text */}
       <View style={[styles.modeToggle, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <SoundPressable
@@ -227,6 +229,7 @@ export function CreatePostScreen({ navigation }: any) {
           <Text style={[styles.charCount, { color: colors.textMuted }]}>{caption.length}/500</Text>
         </View>
       )}
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

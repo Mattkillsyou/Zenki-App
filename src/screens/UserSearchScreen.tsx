@@ -137,6 +137,9 @@ export function UserSearchScreen({ navigation, route }: any) {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
         />
       )}
     </SafeAreaView>

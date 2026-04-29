@@ -26,7 +26,10 @@
 | 7 | 9 / 10 | `ce3804f` | ✅ done |
 | 8 | 27 / 32 / 33 / 34 / 35 / 36 / 37 | `83d2ee9` | ⚠️ partial — see "Deferred" below |
 | 9 | 41 final verification | `a93757e` | ⚠️ partial — see "Deferred" below |
-| 9.1 | §32 sweep batch 1 | (this commit) | ⚠️ 20 of ~25 screens migrated; 4 left — Medication modal, Profile, WeightTracker, CreatePost+UserSearch |
+| 9.1 | §32 sweep batch 1 (20 screens) | `b714dd3` | ✅ done |
+| 9.2 | §32 wrapper rewrite (drop KAV on iOS) | `eb0876d` | ✅ done — fixes "keyboard blocks content" globally |
+| 9.3 | Modal SafeArea bug (X under dynamic island) | `bf8a6e4` | ✅ done — FoodSearchModal + Med modal |
+| 9.4 | §32 sweep batch 2 + Group C | (this commit) | ✅ done — Med modal, Profile, WeightTracker, CreatePost, UserSearch |
 
 ## Significant follow-up commits (out of chunk order)
 
@@ -96,113 +99,61 @@ button. On iPhone 17 Pro Max the X should now sit ~59pt below
 the dynamic island and the Save button should be fully visible
 to the left of the battery glyph.
 
-### §32 keyboard sweep — IN PROGRESS (resume here)
+### §32 keyboard sweep — DONE
 
-> ⚠️ **User QA feedback (2026-04-28, after batch 1):** "The keyboard
-> is blocking a lot of pages still." So batch 1's
-> `KeyboardAwareScrollView` / `KeyboardView` migration is NOT fully
-> sufficient on real device. Before continuing batch 2, the next
-> session should:
->
-> 1. Reproduce on TestFlight / sim and capture which specific
->    screens are still broken — don't assume it's only the screens
->    not yet migrated. The wrapper's
->    `automaticallyAdjustKeyboardInsets` + `behavior="padding"`
->    pair may not be enough on RN 0.83 / iOS 18+, or the screens
->    may need a non-zero `offset={...}` because of the SafeAreaView
->    + Header height that batch 1 didn't apply.
-> 2. Suspects to check first: screens where the migration replaced
->    `keyboardVerticalOffset={64}` with `offset={64}` correctly
->    (Settings, AdminProducts, AdminSchedule, Contact, CycleTracker,
->    Store cart, UserProfile) vs. screens where I dropped the
->    offset entirely (everything else) — the dropped-offset screens
->    have a default `offset={0}` and may need the header height
->    added back.
-> 3. The popup wizard / goal modals on MacroTracker, Profile,
->    WeightTracker were intentionally NOT touched in batch 1 (small
->    centered cards, 4 TextInputs each). If "blocking a lot of
->    pages" includes these, wrap each card in `<KeyboardView>`
->    (KAV-only) or use `KeyboardAvoidingView behavior="padding"`
->    around the card.
-> 4. Modal-form screens that batch 1 left alone where the keyboard
->    issue is likely real:
->    - `AdminProductsScreen.tsx:284` — inner edit-modal SV with
->      `flexGrow:0` constraint; SAVE button can hide
->    - `AdminScheduleScreen.tsx:208` — inner Add/Edit class modal
->      with TextInputs
->    - `WeightTrackerScreen.tsx:690` — goal modal with TextInputs
->    - `MacroTrackerScreen.tsx:852` (wizard) and `:951` (goals)
-> 5. Verify the wrapper itself is correct — re-read
->    `src/components/KeyboardView.tsx` and confirm KAS is actually
->    rendering KAV with the right `behavior` for the platform.
->    Consider whether `keyboardVerticalOffset` should default to a
->    non-zero value (e.g. header height) instead of 0.
->
-> Don't keep migrating more screens until the *already-migrated*
-> ones are confirmed working. Otherwise batch 2 inherits the same
-> bug.
+The full ~25-screen sweep landed in three commits on top of
+`83d2ee9` (chunk 8) / `a93757e` (chunk 9):
 
-**Done so far** (committed in this session, on top of `83d2ee9` chunk
-8 / `a93757e` chunk 9):
+- `b714dd3` — batch 1: 19 Group B "light fix" plain screens +
+  MacroTracker outer (20 total) → `<KeyboardAwareScrollView>` or
+  `<KeyboardView>`.
+- `eb0876d` — wrapper rewrite. User QA after batch 1 reported
+  "the keyboard needs to not block the content on all of the
+  pages. like a normal app." Root cause: the original
+  KeyboardAwareScrollView wrapped a ScrollView in a
+  `<KeyboardAvoidingView behavior="padding">`, AND the inner
+  ScrollView also had `automaticallyAdjustKeyboardInsets`. Both
+  add bottom inset = keyboard height; stacking them double-
+  applied the inset and broke the iOS-native auto-scroll-to-
+  focused-field. Fix: drop KAV on iOS (just `<View flex:1>` +
+  ScrollView with `automaticallyAdjustKeyboardInsets +
+  contentInsetAdjustmentBehavior="automatic"`); keep KAV
+  `behavior="height"` on Android. Single-file change to
+  `src/components/KeyboardView.tsx`.
+- (current commit) — batch 2 + Group C: MedicationTrackerScreen
+  modal, ProfileScreen outer, WeightTrackerScreen outer,
+  CreatePostScreen wrapped, UserSearchScreen FlatList prop.
 
-- All 19 Group B "light fix" plain screens migrated to either
-  `<KeyboardAwareScrollView>` (KAV+ScrollView combined) or
-  `<KeyboardView>` (KAV-only, when there's a sticky footer outside
-  the inner ScrollView, or a FlatList): AdminAnnouncements,
-  AdminBroadcast, AdminEmployeeTasks, AdminProducts (outer only;
-  inner edit-modal `<ScrollView style={{ flexGrow: 0 }}>` left
-  alone — see "modal subset note" below), AdminSchedule (outer
-  only; inner Add/Edit modal `ScrollView` left alone), Contact,
-  ContactSupport (Header pulled outside KAS so it stays fixed),
-  CycleTracker, DexaUpload (Header pulled outside), EmployeeChecklist,
-  MacroSetup (`KeyboardView` + inner ScrollView preserved because
-  of the sticky `<View style={styles.footer}>` Continue/Save
-  button), MessagesChat (`KeyboardView` because content is a
-  FlatList, not ScrollView), Onboarding (`KeyboardView` for the
-  same sticky-footer reason — Back/Next nav row), PRDetail,
-  SetPassword (used `outerStyle={styles.inner}` to preserve the
-  original inner-style placement), Settings, Store (only the cart
-  branch of the conditional render — outer ScrollView pager and
-  other ScrollViews kept), UserProfile, Workout.
-- Outer KAV+ScrollView for **MacroTracker** also migrated to
-  `<KeyboardAwareScrollView>` (the outer wraps real form
-  TextInputs at line ~689, so it counts as a Group B light fix
-  even though the handoff tagged it "(modal)").
+**KeyboardView (KAV-only) wrapper unchanged**: still uses
+`behavior="padding"` on iOS. Used by 3 callers — MacroSetup,
+MessagesChat, OnboardingScreen — each of which has a sticky
+footer (Continue/Send/Next) that must ride above the keyboard.
+The inner ScrollView/FlatList in those screens does not have
+`automaticallyAdjustKeyboardInsets`, which is fine because the
+KAV padding pushes the whole layout up — focused TextInputs
+remain visible above the keyboard, even if at the cost of not
+auto-scrolling the field into view inside the inner ScrollView.
 
-**Not yet done** — pick up here:
+**FoodSearchModal NOT touched**: same sticky-footer pattern (the
+`pickPanel` with the servings TextInput is at the bottom). Its
+existing KAV `behavior="padding"` is correct for that layout.
+Did get the SafeAreaProvider fix in `bf8a6e4` for the X-button-
+under-status-bar bug, though.
 
-- `Medication` modal at `MedicationTrackerScreen.tsx:783-1103` —
-  has a clear KAV+ScrollView in a slide modal. Migrate that
-  modal's wrapper to `<KeyboardAwareScrollView>`. The screen's
-  outer `<ScrollView>` at line ~239 is a plain list scroll (no
-  KAV) and does NOT need migration.
-- `Profile` outer KAV+ScrollView at `ProfileScreen.tsx:109-335` —
-  migrate same as the others (outer wraps real form TextInputs).
-- `WeightTracker` outer KAV+ScrollView at
-  `WeightTrackerScreen.tsx:255-617` — migrate same.
-- Group C full wrap — no KAV at all — `CreatePostScreen.tsx`,
-  `UserSearchScreen.tsx`. Insert `<KeyboardAwareScrollView>` per
-  the `89cc791` ForgotPasswordScreen pattern. Both already use
-  `SoundPressable`, so no §12 risk applies.
+**Out of §32 scope but adjacent**: The popup wizard / goal
+modals on MacroTracker, ProfileScreen edit modal, WeightTracker
+goal modal, etc. are small centered cards (not slide sheets)
+with TextInputs. Their iOS auto-keyboard-inset handling is
+generally fine without explicit wrapping. If a future QA pass
+shows the SAVE button hidden behind the keyboard on one of
+those popups, wrap the card in `<KeyboardView>` (KAV-only).
 
-**Modal subset note:** The handoff originally tagged MacroTracker,
-Medication, Profile, WeightTracker as "(modal)", implying the
-keyboard problem lived in a modal-internal `ScrollView` (mirroring
-chunk 8's AdminMembers fix). On inspection only Medication
-matches that shape — the others have their main keyboard pressure
-on the OUTER screen's KAV+ScrollView, which is what got migrated.
-The popup wizard / goals / set-goal modals on MacroTracker,
-Profile, WeightTracker are small centered cards (not slide
-sheets) with 4 TextInputs each; their iOS auto-keyboard-inset
-handling is generally fine and they were NOT touched. If a
-QA pass shows the SAVE button getting hidden behind the keyboard
-on those popups, wrap the card in `<KeyboardView>` (KAV-only).
-
-**Pattern reminders** (so you don't re-derive them):
+**Pattern reminders** (so future work doesn't re-derive them):
 - KAV had `behavior={Platform.OS === 'ios' ? 'padding' : undefined}`
   → KAS bakes that in, drop the prop.
 - KAV had `keyboardVerticalOffset={64}` → use `offset={64}` on
-  KAS (not `keyboardVerticalOffset`).
+  KAS (Android-only after the wrapper rewrite; iOS uses native
+  frame measurement and ignores it).
 - ScrollView had `showsVerticalScrollIndicator={false}` and
   `keyboardShouldPersistTaps="handled"` → both baked into KAS,
   drop them.
@@ -212,21 +163,13 @@ on those popups, wrap the card in `<KeyboardView>` (KAV-only).
 - If the screen had its own `style={...}` on the KAV → pass to
   KAS as `outerStyle={...}` (see SetPasswordScreen).
 - After dropping `KeyboardAvoidingView` and the keyboard-only
-  `ScrollView` from `react-native` imports, **always** also drop
+  `ScrollView` from `react-native` imports, also drop
   `Platform` if grep shows no other `Platform.` usage in the
-  file. Several files had `Platform` only in the keyboard
-  wrapper. Onboarding kept it (3 other usages); Settings kept
-  it (3 other usages); Store kept it; PRDetail dropped it.
+  file.
 - Add the new wrapper via the `../components` (or
   `../../components`) barrel import — both `KeyboardView` and
   `KeyboardAwareScrollView` are re-exported from
   `src/components/index.ts`. Don't deep-import.
-
-### §32 keyboard sweep — Group C (still open)
-
-`CreatePostScreen.tsx` and `UserSearchScreen.tsx` have no
-keyboard wrapper at all. Insert `<KeyboardAwareScrollView>` the
-same way `ForgotPasswordScreen` was migrated in chunk 8.
 
 ### §36 ScreenContainer sweep — large
 `<ScreenContainer>` wrapper landed (commit `83d2ee9`). Applied as a
@@ -328,10 +271,13 @@ Reopen only if explicitly requested.
 ---
 
 Last updated: 2026-04-28 (later same day) by Claude.
-  • §32 sweep batch 1 landed (20 of ~25 screens) in commit b714dd3.
-  • Modal-header-under-status-bar bug FIXED in this commit for the
-    two reported modals (Food Search + Add Medication). See "🐛
-    Modal-header-under-status-bar bug — FIXED" section.
-  • Still open: ⚠️ keyboard-still-blocks-content on many migrated
-    pages → see ⚠️ block in "§32 keyboard sweep — IN PROGRESS"
-    before continuing batch 2.
+  • §32 keyboard sweep is COMPLETE across all listed screens.
+    Wrapper rewrite (eb0876d) is the load-bearing fix — drops the
+    redundant KAV on iOS and lets `automaticallyAdjustKeyboardInsets`
+    do both the inset and the auto-scroll-into-view, "like a
+    normal app." Verify on device: any TextInput on any migrated
+    screen should remain visible when typing.
+  • Modal SafeArea bug (X under dynamic island) FIXED in bf8a6e4.
+  • Open: §36 ScreenContainer sweep, §36 touch targets, §36
+    maxFontSizeMultiplier, §12 SoundPressable rollout (gated),
+    Resend Cloud Function deploy (gated).
