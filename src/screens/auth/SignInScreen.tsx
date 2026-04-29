@@ -463,8 +463,8 @@ export function SignInScreen({ navigation }: any) {
             <Button title="Sign In" onPress={handleSignIn} loading={loading} fullWidth size="lg" style={{ marginTop: 6 }} />
           </View>
 
-          {/* Create Account */}
-          <View style={styles.footer}>
+          {/* Create Account — pinned to bottom */}
+          <View style={styles.createAccountRow}>
             <Text style={[styles.footerText, { color: colors.textTertiary }]}>New here? </Text>
             <SoundPressable onPress={() => navigation.navigate('Onboarding')}>
               <Text style={[styles.footerLink, { color: colors.gold }]}>Create Account</Text>
@@ -478,18 +478,18 @@ export function SignInScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  contentContainer: { flex: 1, paddingTop: 24, paddingHorizontal: 32, paddingBottom: 16, justifyContent: 'space-between' },
+  contentContainer: { flex: 1, paddingTop: 16, paddingHorizontal: 32, paddingBottom: 16, gap: 16 },
 
   // Logo
   logoSection: { alignItems: 'center' },
-  logo: { width: 96, height: 96, marginBottom: 4 },
+  logo: { width: 88, height: 88, marginBottom: 2 },
   tagline: { fontSize: 10, fontWeight: '600', letterSpacing: 3, marginTop: 2 },
 
   // Form
   formSection: { gap: 10 },
   welcomeBlock: { alignItems: 'center', gap: 2 },
-  heading: { fontSize: 26, fontWeight: '800', letterSpacing: -0.6, lineHeight: 30, textAlign: 'center' },
-  subheading: { fontSize: 14, fontWeight: '400', lineHeight: 18, textAlign: 'center' },
+  heading: { fontSize: 24, fontWeight: '800', letterSpacing: -0.6, lineHeight: 28, textAlign: 'center' },
+  subheading: { fontSize: 13, fontWeight: '400', lineHeight: 17, textAlign: 'center' },
 
   // Social buttons
   socialBtn: {
@@ -524,6 +524,7 @@ const styles = StyleSheet.create({
 
   // Footer
   footer: { flexDirection: 'row', justifyContent: 'center' },
+  createAccountRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 'auto' },
   footerText: { fontSize: 15 },
   footerLink: { fontSize: 15, fontWeight: '700' },
 
