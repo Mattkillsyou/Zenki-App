@@ -476,14 +476,6 @@ export function SignInScreen({ navigation }: any) {
               <Text style={[styles.footerLink, { color: colors.gold }]}>Create Account</Text>
             </SoundPressable>
           </View>
-
-          {/* Inquire about membership */}
-          <View style={styles.footer}>
-            <Text style={[styles.footerText, { color: colors.textTertiary }]}>Not a member? </Text>
-            <SoundPressable onPress={() => navigation.navigate('Contact')}>
-              <Text style={[styles.footerLink, { color: colors.gold }]}>Inquire</Text>
-            </SoundPressable>
-          </View>
         </View>
       </KeyboardAwareScrollView>
     </SafeAreaView>
@@ -492,16 +484,16 @@ export function SignInScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  contentContainer: { flexGrow: 1, justifyContent: 'space-evenly', paddingHorizontal: 32 },
+  contentContainer: { flexGrow: 1, paddingTop: 56, paddingHorizontal: 32, paddingBottom: 32, gap: 32 },
 
   // Logo
   logoSection: { alignItems: 'center' },
-  logo: { width: 160, height: 160, marginBottom: 8 },
+  logo: { width: 140, height: 140, marginBottom: 8 },
   tagline: { fontSize: 11, fontWeight: '600', letterSpacing: 4, marginTop: 4 },
 
   // Form
-  formSection: { gap: 10 },
-  welcomeBlock: { alignItems: 'center' },
+  formSection: { gap: 14 },
+  welcomeBlock: { alignItems: 'center', gap: 4 },
   heading: { fontSize: 32, fontWeight: '800', letterSpacing: -0.8, lineHeight: 36, textAlign: 'center' },
   subheading: { fontSize: 16, fontWeight: '400', lineHeight: 20, textAlign: 'center' },
 
@@ -528,7 +520,7 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 16 },
 
   // Forgot
-  forgotRow: { alignSelf: 'center', paddingVertical: 4 },
+  forgotRow: { alignSelf: 'center', paddingVertical: 8 },
   forgotText: { fontSize: 14, fontWeight: '600' },
 
   // Error banner
@@ -539,7 +531,7 @@ const styles = StyleSheet.create({
   errorBannerText: { fontSize: 14, fontWeight: '500', flex: 1, marginLeft: 8 },
 
   // Footer
-  footer: { flexDirection: 'row', justifyContent: 'center', paddingBottom: 12 },
+  footer: { flexDirection: 'row', justifyContent: 'center' },
   footerText: { fontSize: 15 },
   footerLink: { fontSize: 15, fontWeight: '700' },
 
