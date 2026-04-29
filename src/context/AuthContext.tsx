@@ -6,6 +6,7 @@ import { getMemberOverride, saveMemberOverride } from '../services/memberOverrid
 import { registerForPushNotifications, savePushTokenToFirestore } from '../services/pushNotifications';
 import {
   firebaseCreateAccount,
+  firebaseSignInWithPassword,
   firebaseSignOut,
   emailForMember,
 } from '../services/firebaseAuth';
@@ -116,8 +117,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (FIREBASE_CONFIGURED && password) {
       try {
         await firebaseCreateAccount(emailForMember(member), password, member);
-      } catch (e) {
-        console.warn('[AuthContext] Firebase signup failed — continuing local-only', e);
+      } catch (e: any) {
+        if (e?.code === 'auth/email-already-in-use') {
+          // A Firebase account with this email already exists (likely from an
+          // earlier signup attempt that succeeded server-side but didn't
+          // hydrate the local member record, or a Google/Apple OAuth signup
+          // under the same email). Sign IN to it instead — same password
+          // most of the time — so getCurrentIdToken() returns a real token
+          // and AI photo logging / Cloud Functions work.
+          try {
+            await firebaseSignInWithPassword(emailForMember(member), password);
+          } catch (signInErr) {
+            console.warn(
+              '[AuthContext] Email already in use AND sign-in fallback failed — continuing local-only. Cloud Functions (AI photo logging, account deletion) will be unavailable until the user resets their password and signs in.',
+              signInErr,
+            );
+          }
+        } else {
+          console.warn('[AuthContext] Firebase signup failed — continuing local-only', e);
+        }
       }
     }
 
