@@ -22,7 +22,6 @@ import { typography, spacing, borderRadius } from '../theme';
 import { BeltDisplay } from '../components';
 import { BELT_DISPLAY_COLORS } from '../data/members';
 import { useGamification } from '../context/GamificationContext';
-import { useSpinWheel } from '../context/SpinWheelContext';
 import { useWorkouts } from '../context/WorkoutContext';
 import { useGpsActivity } from '../context/GpsActivityContext';
 import { useHeartRate } from '../context/HeartRateContext';

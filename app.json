@@ -62,9 +62,9 @@
         }
       ],
       "expo-apple-authentication",
-      "expo-audio"
+      "expo-audio",
+      "expo-asset"
     ],
-    "newArchEnabled": false,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.zenkidojo.app",

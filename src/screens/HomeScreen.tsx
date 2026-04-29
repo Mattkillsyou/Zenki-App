@@ -60,8 +60,6 @@ import { useSenpai } from '../context/SenpaiContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 import { PHASE_LABELS, PHASE_COLORS, PHASE_ICONS } from '../types/cycle';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 function sessionTypeToClassType(s: string): 'jiu-jitsu' | 'muay-thai' | 'pilates' | 'open-mat' {
   const lc = s.toLowerCase();
   if (lc.includes('jiu') || lc.includes('bjj')) return 'jiu-jitsu';
@@ -323,9 +321,8 @@ function DashboardPager({
 }
 
 export function HomeScreen({ navigation }: any) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { user } = useAuth();
-  const insets = useSafeAreaInsets();
   const isEmployee = user?.isEmployee === true;
   const { state: gamState, levelInfo, dismissCelebration, recordAppOpen } = useGamification();
   const { state: senpaiState, triggerReaction: senpaiReact, shouldReact: senpaiShouldReact } = useSenpai();

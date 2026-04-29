@@ -14,7 +14,7 @@ const { height: SCREEN_H } = Dimensions.get('window');
  * Web-only effects use injected <style> tags. Native falls back to RN Animated.
  */
 export function ThemeOverlay() {
-  const { overlay, colors } = useTheme();
+  const { overlay } = useTheme();
 
   // No effects needed
   if (
