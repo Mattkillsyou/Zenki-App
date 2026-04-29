@@ -21,7 +21,10 @@ import {
   estimate1RM,
 } from '../data/exercises';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// Clamp chart width to MAX_CONTENT_WIDTH so charts don't overflow the
+// ScreenContainer cap on iPad (~700pt).
+const { width: WINDOW_WIDTH } = Dimensions.get('window');
+const SCREEN_WIDTH = Math.min(WINDOW_WIDTH, 700);
 
 function todayISO(): string {
   return new Date().toISOString().split('T')[0];

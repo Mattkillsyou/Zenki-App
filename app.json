@@ -68,7 +68,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.zenkidojo.app",
-      "buildNumber": "1",
+      "buildNumber": "22",
       "config": {
         "usesNonExemptEncryption": false
       },

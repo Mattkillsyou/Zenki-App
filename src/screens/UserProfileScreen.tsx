@@ -12,7 +12,9 @@ import { getUserPosts, Post } from '../services/firebasePosts';
 import { getCurrentUid } from '../services/firebaseAuth';
 import { ReportModal } from '../components/ReportModal';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
+// Clamp grid width to MAX_CONTENT_WIDTH so post tiles don't blow up on
+// iPad past the ScreenContainer cap (~700pt).
+const SCREEN_WIDTH = Math.min(Dimensions.get('window').width, 700);
 const GRID_SIZE = (SCREEN_WIDTH - spacing.lg * 2 - spacing.xs * 2) / 3;
 
 export function UserProfileScreen({ navigation, route }: any) {

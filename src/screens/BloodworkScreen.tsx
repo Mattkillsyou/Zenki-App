@@ -16,7 +16,10 @@ import { FadeInView, LineChart } from '../components';
 import { BloodworkReport, BiomarkerStatus } from '../types/bloodwork';
 import { lookupBiomarkerRef } from '../data/biomarkers';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// Clamp chart width to MAX_CONTENT_WIDTH so charts don't overflow the
+// ScreenContainer cap on iPad (~700pt).
+const { width: WINDOW_WIDTH } = Dimensions.get('window');
+const SCREEN_WIDTH = Math.min(WINDOW_WIDTH, 700);
 
 function statusColor(s: BiomarkerStatus, colors: any): string {
   switch (s) {

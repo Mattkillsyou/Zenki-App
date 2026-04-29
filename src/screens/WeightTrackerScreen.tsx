@@ -28,7 +28,10 @@ import { WeightGoal } from '../types/activity';
 type ChartRange = '7D' | '14D' | '30D' | 'TOTAL';
 const WEIGHT_GOAL_KEY = '@zenki_weight_goal';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+// Clamp chart width to MAX_CONTENT_WIDTH so charts don't overflow the
+// ScreenContainer cap on iPad (~700pt).
+const { width: WINDOW_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const SCREEN_WIDTH = Math.min(WINDOW_WIDTH, 700);
 
 // Reasonable adult weight bounds — protects the chart from typo/outlier entries
 // (e.g. a stray "22" lb log that breaks the y-axis scale).
