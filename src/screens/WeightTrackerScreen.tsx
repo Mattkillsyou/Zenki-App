@@ -278,53 +278,8 @@ export function WeightTrackerScreen({ navigation }: any) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Log form — primary action, top of scroll content */}
+          {/* Chart card — visualization first, per master prompt §9 */}
           <FadeInView>
-            <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.gold + '40' }]}>
-              <Text style={[styles.formLabel, { color: colors.textMuted }]}>LOG WEIGH-IN</Text>
-              <View style={styles.formRow}>
-                <TextInput
-                  style={[styles.formInput, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
-                  placeholder={`0.0`}
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="decimal-pad"
-                  value={weight}
-                  onChangeText={setWeight}
-                  returnKeyType="done"
-                  onSubmitEditing={handleSave}
-                />
-                <View style={[styles.unitToggle, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  {(['lb', 'kg'] as WeightUnit[]).map((u) => (
-                    <SoundPressable
-                      key={u}
-                      onPress={() => setUnit(u)}
-                      style={[
-                        styles.unitBtn,
-                        unit === u && { backgroundColor: colors.gold },
-                      ]}
-                    >
-                      <Text style={{
-                        color: unit === u ? '#000' : colors.textPrimary,
-                        fontWeight: '800',
-                        fontSize: 13,
-                      }}>{u}</Text>
-                    </SoundPressable>
-                  ))}
-                </View>
-                <SoundPressable
-                  onPress={handleSave}
-                  activeOpacity={0.85}
-                  style={[styles.formSaveBtn, { backgroundColor: colors.gold }]}
-                >
-                  <Ionicons name="add" size={18} color="#000" />
-                  <Text style={styles.formSaveText}>SAVE</Text>
-                </SoundPressable>
-              </View>
-            </View>
-          </FadeInView>
-
-          {/* Chart card */}
-          <FadeInView delay={40}>
             <View style={[styles.chartWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.chartHead}>
                 <View style={styles.legendRow}>
@@ -376,6 +331,56 @@ export function WeightTrackerScreen({ navigation }: any) {
                   </Text>
                 </View>
               )}
+            </View>
+          </FadeInView>
+
+          {/* Monthly calendar — gold dot on logged days, per master prompt §10 */}
+          <FadeInView delay={20}>
+            <WeightLogCalendar loggedDates={new Set(mine.map((w) => w.date))} />
+          </FadeInView>
+
+          {/* Log form — moved below visualization */}
+          <FadeInView delay={40}>
+            <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.gold + '40' }]}>
+              <Text style={[styles.formLabel, { color: colors.textMuted }]}>LOG WEIGH-IN</Text>
+              <View style={styles.formRow}>
+                <TextInput
+                  style={[styles.formInput, { backgroundColor: colors.background, color: colors.textPrimary, borderColor: colors.border }]}
+                  placeholder={`0.0`}
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="decimal-pad"
+                  value={weight}
+                  onChangeText={setWeight}
+                  returnKeyType="done"
+                  onSubmitEditing={handleSave}
+                />
+                <View style={[styles.unitToggle, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  {(['lb', 'kg'] as WeightUnit[]).map((u) => (
+                    <SoundPressable
+                      key={u}
+                      onPress={() => setUnit(u)}
+                      style={[
+                        styles.unitBtn,
+                        unit === u && { backgroundColor: colors.gold },
+                      ]}
+                    >
+                      <Text style={{
+                        color: unit === u ? '#000' : colors.textPrimary,
+                        fontWeight: '800',
+                        fontSize: 13,
+                      }}>{u}</Text>
+                    </SoundPressable>
+                  ))}
+                </View>
+                <SoundPressable
+                  onPress={handleSave}
+                  activeOpacity={0.85}
+                  style={[styles.formSaveBtn, { backgroundColor: colors.gold }]}
+                >
+                  <Ionicons name="add" size={18} color="#000" />
+                  <Text style={styles.formSaveText}>SAVE</Text>
+                </SoundPressable>
+              </View>
             </View>
           </FadeInView>
 
