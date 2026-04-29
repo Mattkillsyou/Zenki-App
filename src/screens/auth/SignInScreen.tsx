@@ -227,11 +227,13 @@ export function SignInScreen({ navigation }: any) {
 
     const input = username.toLowerCase().trim();
     const isEmailInput = input.includes('@');
+    console.log('[SignIn] attempt input=', JSON.stringify(input), 'isEmail=', isEmailInput);
 
     // 1. Try the seed CREDENTIALS map first (handles matt.b /
     //    mattbrowntheemail@gmail.com / apple / admin / reviewer / tim@zenkidojo.com).
     const seedCred = CREDENTIALS[input];
     let member = seedCred ? MEMBERS.find((m) => m.id === seedCred.memberId) ?? null : null;
+    console.log('[SignIn] tier1 seed:', member ? `hit member=${member.username} email=${member.email ?? '(none)'}` : 'miss');
 
     // 2. If no seed match, look up admin-created / self-signup members from the
     //    local merged registry. Match by username (when input has no '@') or
@@ -240,14 +242,16 @@ export function SignInScreen({ navigation }: any) {
     if (!member) {
       try {
         const merged = await getMergedMembers();
+        console.log('[SignIn] tier2 merged size=', merged.length, 'usernames=', merged.map((m) => m.username).join(','));
         member =
           merged.find((m) =>
             isEmailInput
               ? (m.email ?? '').toLowerCase() === input
               : (m.username ?? '').toLowerCase() === input,
           ) ?? null;
-      } catch {
-        /* offline / async storage error — fall through */
+        console.log('[SignIn] tier2 result:', member ? `hit member=${member.username} email=${member.email ?? '(none)'}` : 'miss');
+      } catch (e) {
+        console.warn('[SignIn] tier2 error', e);
       }
     }
 
@@ -258,6 +262,7 @@ export function SignInScreen({ navigation }: any) {
       : isEmailInput
         ? input
         : `${input}@zenkidojo.app`;
+    console.log('[SignIn] resolved email=', email, 'firebase=', FIREBASE_CONFIGURED);
 
     // When Firebase is unreachable we fall back to the pre-existing local password
     // path so dev / offline can still sign in. Production always goes through Firebase.
@@ -295,14 +300,19 @@ export function SignInScreen({ navigation }: any) {
       navigation.replace('Main');
     } catch (error: any) {
       const code = error?.code ?? error?.message ?? 'unknown';
+      console.log('[SignIn] error', code, error?.message ?? '', error);
       const userMessage =
         code === 'auth/too-many-requests'
           ? 'Too many attempts — take a breather and try again in a minute.'
           : code === 'auth/network-request-failed'
             ? "Couldn't connect — check your internet and try again."
-            : code === 'member-record-missing'
-              ? "Sign-in worked, but we couldn't find your member profile. Ask the dojo admin to confirm your account."
-              : "Hmm, that username or password doesn't look right.";
+            : code === 'auth/wrong-password'
+              ? "That password doesn't match this account. Try again or use Forgot password?"
+              : code === 'auth/user-not-found'
+                ? "No account with that username or email. Check the spelling or ask your admin."
+                : code === 'member-record-missing'
+                  ? "Sign-in worked, but we couldn't find your member profile. Ask the dojo admin to confirm your account."
+                  : "Hmm, that username or password doesn't look right.";
       setErrorMsg(userMessage);
     } finally {
       setLoading(false);
