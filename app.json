@@ -66,7 +66,7 @@
       "expo-asset"
     ],
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.zenkidojo.app",
       "buildNumber": "1",
       "config": {
