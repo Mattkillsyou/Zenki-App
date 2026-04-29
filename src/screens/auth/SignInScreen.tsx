@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
 
   // Logo
   logoSection: { alignItems: 'center' },
-  logo: { width: 88, height: 88, marginBottom: 2 },
+  logo: { width: 112, height: 112, marginBottom: 4 },
   tagline: { fontSize: 10, fontWeight: '600', letterSpacing: 3, marginTop: 2 },
 
   // Form
