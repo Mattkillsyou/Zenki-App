@@ -94,10 +94,15 @@ export async function firebaseSignInOrSeedAccount(
     const cred = await signInWithEmailAndPassword(auth, email, password);
     return { uid: cred.user.uid, isNewAccount: false };
   } catch (error: any) {
-    if (
-      error?.code === 'auth/user-not-found' ||
-      error?.code === 'auth/invalid-credential'
-    ) {
+    // Only auto-seed on auth/user-not-found. We used to also catch
+    // auth/invalid-credential here, but on Firebase v10+ with email
+    // enumeration protection that code is the unified "wrong password OR
+    // missing user" signal — blindly trying to createUserWithEmailAndPassword
+    // when the user IS registered (just with a different password) throws
+    // auth/email-already-in-use, which then masquerades as a generic sign-in
+    // failure. Letting the original error propagate gives the SignInScreen
+    // catch a chance to show a real "wrong password" message instead.
+    if (error?.code === 'auth/user-not-found') {
       // Seed the Firebase account on first sign-in
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await setDoc(doc(db, 'users', cred.user.uid), {

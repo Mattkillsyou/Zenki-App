@@ -307,13 +307,15 @@ export function SignInScreen({ navigation }: any) {
           ? 'Too many attempts — take a breather and try again in a minute.'
           : code === 'auth/network-request-failed'
             ? "Couldn't connect — check your internet and try again."
-            : code === 'auth/wrong-password'
-              ? "That password doesn't match this account. Try again or use Forgot password?"
+            : code === 'auth/wrong-password' || code === 'auth/invalid-credential'
+              ? 'That password doesn\'t match this account. Tap "Forgot password?" to reset it.'
               : code === 'auth/user-not-found'
                 ? "No account with that username or email. Check the spelling or ask your admin."
-                : code === 'member-record-missing'
-                  ? "Sign-in worked, but we couldn't find your member profile. Ask the dojo admin to confirm your account."
-                  : "Hmm, that username or password doesn't look right.";
+                : code === 'auth/email-already-in-use'
+                  ? 'An account already exists for this email — but the password you typed isn\'t the one Firebase has. Tap "Forgot password?" to reset.'
+                  : code === 'member-record-missing'
+                    ? "Sign-in worked, but we couldn't find your member profile. Ask the dojo admin to confirm your account."
+                    : "Hmm, that username or password doesn't look right.";
       setErrorMsg(userMessage);
     } finally {
       setLoading(false);
