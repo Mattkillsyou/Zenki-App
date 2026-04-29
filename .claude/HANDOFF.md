@@ -44,51 +44,57 @@
 
 ## Deferred (open work)
 
-### 🐛 BLOCKING BUG: modal headers under the dynamic island / battery
+### 🐛 Modal-header-under-status-bar bug — FIXED in this session
 
 **User QA 2026-04-28:** "I can't exit the Food Log or the medication
 screen. The headers need to move under the clock and the battery.
 They are too high."
 
-Confirmed by screenshots: on the Food Search modal (close X at
-top-left) and the Drug / Peptide search modal in the Medication
-Tracker (close X at top-left, Save at top-right), the header row
-renders at y=0 — the iOS clock, dynamic island, wifi, and battery
-icons sit directly on top of the X / Save buttons, making them
-unreachable. The "Save" label is also visually cut off behind the
-battery glyph on iPhone 17 Pro Max.
+**Root cause:** `react-native-safe-area-context`'s inset context
+does not propagate through React Native's `<Modal>`. The app has
+exactly one `<SafeAreaProvider>` at `App.tsx:189`, so any
+`<SafeAreaView edges={['top']}>` rendered inside a Modal returned
+zero insets — the header sat at y=0 directly under the dynamic
+island. The library docs confirm: "If you are using a Modal you
+need to wrap it with a SafeAreaProvider so that the safe area
+insets work inside the Modal."
 
-This is a `SafeAreaView` / `edges` bug, not a keyboard bug — the
-modal content is not respecting the top inset.
+**Fix applied** (this commit):
+- `src/components/FoodSearchModal.tsx` — added
+  `<SafeAreaProvider>` immediately inside `<Modal>` and around
+  the existing `<SafeAreaView edges={['top']}>`.
+- `src/screens/MedicationTrackerScreen.tsx` — same fix on the
+  Add/Edit Medication modal (~line 757).
+- Both files import `SafeAreaProvider` alongside `SafeAreaView`
+  from `react-native-safe-area-context`.
 
-Likely culprits to fix:
-- `src/components/FoodSearchModal.tsx` — used by
-  `MacroTrackerScreen.tsx`. The screenshot text "Search for a
-  food to log" matches this component's empty state. Almost
-  certainly the modal renders a custom backdrop `<View>` without
-  a `<SafeAreaView edges={['top']}>` wrapping its header.
-- The "Add Medication" / "SEARCH DRUG / PEPTIDE" modal inside
-  `src/screens/MedicationTrackerScreen.tsx` (the same modal
-  flagged for the §32 keyboard migration at line ~783–1103).
-  Same root cause expected.
+**Audit done; other modals not affected:**
+After fixing the two confirmed cases, I checked every other file
+that has a `<Modal>` containing a `<SafeAreaView>`:
+- `AdminMembersScreen` and `AdminScheduleScreen` — both use
+  `presentationStyle="pageSheet"`, which on iOS auto-pads below
+  the system status bar. No fix needed.
+- `ProfileScreen` (edit), `SettingsScreen` (password),
+  `AdminProductsScreen` (product edit) — centered-card popups
+  (`modalBackdrop` → centered `modalCard`). The X / close button
+  is on the card, not at y=0. No fix needed.
+- `WeightTrackerScreen` history — bottom-sheet; header sits
+  partway down the screen. No fix needed.
+- `MacroTrackerScreen` wizard, `HomeScreen` voucher,
+  `WeightTrackerScreen` calendar/goal — small centered fade
+  popups. No fix needed.
 
-Fix shape (do for each modal):
-1. Wrap the header row (the one with the X and the Save button)
-   in `<SafeAreaView edges={['top']}>` from
-   `react-native-safe-area-context`, OR add a `paddingTop` of the
-   top inset via `useSafeAreaInsets()` if the existing layout
-   needs the SafeAreaView at a deeper level.
-2. Confirm the X button now sits BELOW the dynamic island on
-   iPhone 17 Pro Max (~`top inset = 59pt`).
-3. Confirm the Save button text is fully visible — it's currently
-   getting clipped by the battery glyph on the right.
+**If a future bug report names another modal with this symptom**:
+the fix is the same 4-line additive change — add
+`<SafeAreaProvider>` inside `<Modal>`, wrap the existing
+`<SafeAreaView edges={['top']}>`. Risk is essentially zero
+because the provider only adds context; nothing existing breaks.
 
-Verify on iPhone 17 Pro Max sim before claiming done — the
-dynamic island makes these regressions invisible on older device
-profiles.
-
-This is more urgent than the §32 batch 2 work below: users
-literally cannot dismiss the modal.
+**Verify on device:** open the food log → Search foods button
+in MacroTracker; open the Medication tracker → Add medication
+button. On iPhone 17 Pro Max the X should now sit ~59pt below
+the dynamic island and the Save button should be fully visible
+to the left of the battery glyph.
 
 ### §32 keyboard sweep — IN PROGRESS (resume here)
 
@@ -321,12 +327,11 @@ Reopen only if explicitly requested.
 
 ---
 
-Last updated: 2026-04-28 (later same day) by Claude — §32 sweep
-batch 1 landed (20 of ~25 screens). User QA reports two issues
-that take priority over batch 2:
-  1. 🐛 BLOCKING: Food Search modal + Medication search modal
-     headers render under the iOS dynamic island / clock / battery
-     — users can't tap X or Save. See "🐛 BLOCKING BUG" section.
-  2. ⚠️ Keyboard still blocks content on many migrated pages — see
-     ⚠️ block in "§32 keyboard sweep — IN PROGRESS".
-Address #1 first, then re-verify #2 before doing more migrations.
+Last updated: 2026-04-28 (later same day) by Claude.
+  • §32 sweep batch 1 landed (20 of ~25 screens) in commit b714dd3.
+  • Modal-header-under-status-bar bug FIXED in this commit for the
+    two reported modals (Food Search + Add Medication). See "🐛
+    Modal-header-under-status-bar bug — FIXED" section.
+  • Still open: ⚠️ keyboard-still-blocks-content on many migrated
+    pages → see ⚠️ block in "§32 keyboard sweep — IN PROGRESS"
+    before continuing batch 2.

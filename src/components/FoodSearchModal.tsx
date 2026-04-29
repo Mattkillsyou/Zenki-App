@@ -10,7 +10,7 @@ import {
   Platform,
   KeyboardAvoidingView} from 'react-native';
 import { SoundPressable } from './SoundPressable';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
@@ -100,6 +100,7 @@ export function FoodSearchModal({ visible, onClose, onSelect, recentFoods = [], 
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen">
+      <SafeAreaProvider>
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           {/* Header */}
@@ -224,6 +225,7 @@ export function FoodSearchModal({ visible, onClose, onSelect, recentFoods = [], 
           )}
         </KeyboardAvoidingView>
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

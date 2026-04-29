@@ -4,7 +4,7 @@ import {
   Modal, Alert, Switch, ActivityIndicator, Platform,
   KeyboardAvoidingView} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
@@ -754,6 +754,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
       transparent
       onRequestClose={onClose}
     >
+      <SafeAreaProvider>
       <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
         <View style={styles.modalHeader}>
           <SoundPressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: colors.surface }]}>
@@ -1102,6 +1103,7 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }
