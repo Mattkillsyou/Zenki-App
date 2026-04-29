@@ -112,47 +112,68 @@ interface PermissionSet {
   write: string[];
 }
 
-function buildPermissions(): PermissionSet {
+/**
+ * The five user-facing categories the onboarding flow exposes. Each
+ * category bundles the underlying HealthKit permission constants we
+ * need for the Zenki feature it powers.
+ */
+export type HealthCategory = 'workouts' | 'heartRate' | 'weight' | 'nutrition' | 'activity';
+
+export const ALL_HEALTH_CATEGORIES: HealthCategory[] =
+  ['workouts', 'heartRate', 'weight', 'nutrition', 'activity'];
+
+function buildPermissions(categories: HealthCategory[] = ALL_HEALTH_CATEGORIES): PermissionSet {
   const HK = getAppleHealthKit();
   if (!HK) return { read: [], write: [] };
   const C = HK.Constants?.Permissions ?? {};
+  const set = new Set(categories);
+  const read: string[] = [];
+  const write: string[] = [];
+
+  if (set.has('workouts')) {
+    read.push(C.Workout, C.ActiveEnergyBurned, C.AppleExerciseTime);
+    write.push(C.Workout, C.ActiveEnergyBurned);
+  }
+  if (set.has('heartRate')) {
+    read.push(C.HeartRate, C.RestingHeartRate);
+    write.push(C.HeartRate);
+  }
+  if (set.has('weight')) {
+    read.push(C.Weight);
+    write.push(C.Weight);
+  }
+  if (set.has('nutrition')) {
+    read.push(C.EnergyConsumed, C.Protein, C.Carbohydrates, C.FatTotal);
+    write.push(C.EnergyConsumed, C.Protein, C.Carbohydrates, C.FatTotal);
+  }
+  if (set.has('activity')) {
+    read.push(C.Steps);
+  }
+
   return {
-    read: [
-      C.Steps,
-      C.ActiveEnergyBurned,
-      C.AppleExerciseTime,
-      C.HeartRate,
-      C.RestingHeartRate,
-      C.Weight,
-      C.Workout,
-      C.EnergyConsumed,
-      C.Protein,
-      C.Carbohydrates,
-      C.FatTotal,
-    ].filter(Boolean),
-    write: [
-      C.HeartRate,
-      C.Weight,
-      C.Workout,
-      C.ActiveEnergyBurned,
-      C.EnergyConsumed,
-      C.Protein,
-      C.Carbohydrates,
-      C.FatTotal,
-    ].filter(Boolean),
+    read: read.filter(Boolean),
+    write: write.filter(Boolean),
   };
 }
 
 let _initPromise: Promise<boolean> | null = null;
 
-/** Initialize HealthKit + request permissions. Idempotent. */
-export function initHealthKit(): Promise<boolean> {
+/**
+ * Initialize HealthKit + request permissions. Idempotent.
+ *
+ * `categories` lets onboarding restrict which permission groups to
+ * request. Defaults to the full set when called from runtime code
+ * (so things like context auto-init still work). iOS will show the
+ * native consent sheet listing only the requested categories — users
+ * can still toggle each one off inside that sheet.
+ */
+export function initHealthKit(categories: HealthCategory[] = ALL_HEALTH_CATEGORIES): Promise<boolean> {
   if (Platform.OS !== 'ios') return Promise.resolve(false);
   if (_initPromise) return _initPromise;
   const HK = getAppleHealthKit();
   if (!HK) return Promise.resolve(false);
 
-  const permissions = buildPermissions();
+  const permissions = buildPermissions(categories);
   if (permissions.read.length === 0 && permissions.write.length === 0) {
     return Promise.resolve(false);
   }

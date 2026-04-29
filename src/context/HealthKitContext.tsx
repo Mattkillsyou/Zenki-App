@@ -13,6 +13,7 @@ import {
   pullDailyTotals, pullLatestHeartRate, pullLatestWeight,
   mapActivityTypeToHK,
   HKDailyTotals,
+  HealthCategory,
 } from '../services/healthKit';
 
 const ENABLED_KEY = '@zenki_healthkit_enabled';
@@ -43,7 +44,7 @@ interface HealthKitContextValue {
   /** Pull-only refresh (called automatically on app foreground). */
   refreshFromHK: () => Promise<void>;
   /** Request permissions explicitly (e.g. from a Settings toggle). */
-  authorize: () => Promise<boolean>;
+  authorize: (categories?: HealthCategory[]) => Promise<boolean>;
 }
 
 const noopAsync = async () => {};
@@ -128,9 +129,9 @@ export function HealthKitProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ── Authorize on enable ──
-  const authorize = useCallback(async (): Promise<boolean> => {
+  const authorize = useCallback(async (categories?: HealthCategory[]): Promise<boolean> => {
     if (!available) return false;
-    const ok = await initHealthKit();
+    const ok = await initHealthKit(categories);
     setAuthorized(ok);
     return ok;
   }, [available]);

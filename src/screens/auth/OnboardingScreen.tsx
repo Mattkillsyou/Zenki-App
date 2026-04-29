@@ -14,6 +14,7 @@ import { useMotion } from '../../context/MotionContext';
 import { useAuth } from '../../context/AuthContext';
 import { useNutrition } from '../../context/NutritionContext';
 import { useHealthKit } from '../../context/HealthKitContext';
+import { HealthCategory, ALL_HEALTH_CATEGORIES } from '../../services/healthKit';
 import { typography, spacing, borderRadius } from '../../theme';
 import { BELT_ORDER, BELT_DISPLAY_COLORS, BELT_LABELS, BeltLevel, Member } from '../../data/members';
 import { suggestNickname } from '../../utils/nickname';
@@ -147,6 +148,18 @@ export function OnboardingScreen({ navigation, route }: any) {
   const [showPassword, setShowPassword] = useState(false);
   const [locationGranted, setLocationGranted] = useState(false);
   const [healthGranted, setHealthGranted] = useState(false);
+  // Per-category toggles — user can opt out of any subset before iOS asks.
+  // Default: all on (they get the maximum integration).
+  const [healthCategories, setHealthCategories] = useState<Record<HealthCategory, boolean>>({
+    workouts: true,
+    heartRate: true,
+    weight: true,
+    nutrition: true,
+    activity: true,
+  });
+  const toggleHealthCategory = (cat: HealthCategory) => {
+    setHealthCategories((prev) => ({ ...prev, [cat]: !prev[cat] }));
+  };
   const [notificationsGranted, setNotificationsGranted] = useState(false);
   const [cameraGranted, setCameraGranted] = useState(false);
   const [photoLibraryGranted, setPhotoLibraryGranted] = useState(false);
@@ -375,8 +388,18 @@ export function OnboardingScreen({ navigation, route }: any) {
       setHealthGranted(true);
       return;
     }
+    // Request only the categories the user opted into. iOS will show its
+    // own consent sheet listing those, where the user can still toggle
+    // each one individually.
+    const selected = ALL_HEALTH_CATEGORIES.filter((c) => healthCategories[c]);
+    if (selected.length === 0) {
+      // User unchecked everything — skip the iOS prompt and treat as
+      // declined, but mark the step done so they can move on.
+      setHealthGranted(true);
+      return;
+    }
     healthKit.setEnabled(true);
-    const ok = await healthKit.authorize();
+    const ok = await healthKit.authorize(selected);
     setHealthGranted(ok);
   };
 
@@ -1500,14 +1523,101 @@ export function OnboardingScreen({ navigation, route }: any) {
               onPress: requestLocationPermission,
             })}
 
-            {Platform.OS === 'ios' && renderPermRow({
-              slot: 'health',
-              icon: 'heart-outline', tint: '#FF2949',
-              title: 'Apple Health',
-              desc: 'Sync workouts, weight, nutrition, and heart rate both ways with Apple Health',
-              granted: healthGranted,
-              onPress: requestHealthPermission,
-            })}
+            {Platform.OS === 'ios' && (
+              <View
+                style={[
+                  styles.healthCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: healthGranted ? colors.success + '40' : colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.healthCardHeader}>
+                  <View style={[styles.permIcon, { backgroundColor: '#FF2949' + '20' }]}>
+                    <Ionicons name="heart-outline" size={20} color="#FF2949" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Apple Health</Text>
+                    <Text style={[styles.permDesc, { color: colors.textMuted }]}>
+                      Choose what to share — turn all on, or pick the categories you want
+                    </Text>
+                  </View>
+                  {healthGranted && (
+                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                  )}
+                </View>
+
+                {!healthGranted && (
+                  <>
+                    {([
+                      { key: 'workouts' as HealthCategory, label: 'Workouts', sub: 'Sessions + active calories' },
+                      { key: 'heartRate' as HealthCategory, label: 'Heart Rate', sub: 'Live BPM + resting heart rate' },
+                      { key: 'weight' as HealthCategory, label: 'Weight', sub: 'Weigh-ins both directions' },
+                      { key: 'nutrition' as HealthCategory, label: 'Nutrition', sub: 'Calories, protein, carbs, fat' },
+                      { key: 'activity' as HealthCategory, label: 'Activity', sub: 'Steps + active time' },
+                    ]).map((cat) => {
+                      const on = healthCategories[cat.key];
+                      return (
+                        <SoundPressable
+                          key={cat.key}
+                          onPress={() => toggleHealthCategory(cat.key)}
+                          style={[
+                            styles.healthCatRow,
+                            { borderColor: colors.border },
+                          ]}
+                          activeOpacity={0.7}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.healthCatLabel, { color: colors.textPrimary }]}>{cat.label}</Text>
+                            <Text style={[styles.healthCatSub, { color: colors.textMuted }]}>{cat.sub}</Text>
+                          </View>
+                          <View
+                            style={[
+                              styles.healthCatToggle,
+                              {
+                                backgroundColor: on ? colors.gold : colors.background,
+                                borderColor: on ? colors.gold : colors.border,
+                              },
+                            ]}
+                          >
+                            {on && <Ionicons name="checkmark" size={14} color="#000" />}
+                          </View>
+                        </SoundPressable>
+                      );
+                    })}
+
+                    <View style={styles.healthCardActions}>
+                      <SoundPressable
+                        onPress={() => setHealthCategories({
+                          workouts: true, heartRate: true, weight: true, nutrition: true, activity: true,
+                        })}
+                        style={[styles.healthAllBtn, { borderColor: colors.border }]}
+                      >
+                        <Text style={[styles.healthAllText, { color: colors.textSecondary }]}>Turn all on</Text>
+                      </SoundPressable>
+                      <SoundPressable
+                        onPress={() => guardedRequest('health', requestHealthPermission)}
+                        disabled={permRequesting !== null}
+                        style={[
+                          styles.healthConnectBtn,
+                          {
+                            backgroundColor: colors.gold,
+                            opacity: permRequesting !== null && permRequesting !== 'health' ? 0.5 : 1,
+                          },
+                        ]}
+                      >
+                        {permRequesting === 'health' ? (
+                          <ActivityIndicator size="small" color="#000" />
+                        ) : (
+                          <Text style={styles.healthConnectText}>Connect Apple Health</Text>
+                        )}
+                      </SoundPressable>
+                    </View>
+                  </>
+                )}
+              </View>
+            )}
 
             {renderPermRow({
               slot: 'camera',
@@ -1858,6 +1968,62 @@ const styles = StyleSheet.create({
   },
   permTitle: { fontSize: 14, fontWeight: '800' },
   permDesc: { fontSize: 11, lineHeight: 15, marginTop: 2 },
+
+  // Apple Health expanded card
+  healthCard: {
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 10,
+    width: '100%',
+    gap: 8,
+  },
+  healthCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  healthCatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 12,
+  },
+  healthCatLabel: { fontSize: 13, fontWeight: '700' },
+  healthCatSub: { fontSize: 11, lineHeight: 14, marginTop: 1 },
+  healthCatToggle: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  healthCardActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+  },
+  healthAllBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  healthAllText: { fontSize: 12, fontWeight: '700' },
+  healthConnectBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  healthConnectText: { fontSize: 13, fontWeight: '800', color: '#000' },
   permGrantAll: {
     flexDirection: 'row',
     alignItems: 'center',
