@@ -10,18 +10,25 @@ interface Props extends TouchableOpacityProps {
   silent?: boolean;
 }
 
+// Per master prompt §36: minimum 44×44pt touch target with
+// hitSlop={{top:8,bottom:8,left:8,right:8}}. Baking the default
+// here means every SoundPressable callsite (~800+) gets the
+// extended touch area for free; specific callsites can still
+// override `hitSlop` (or pass a tighter value to disable).
+const DEFAULT_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
+
 /**
  * Drop-in replacement for TouchableOpacity that plays a themed sound on press.
  * Uses the current screen's sound theme from SoundContext.
  */
-export function SoundPressable({ onPress, soundEvent = 'tap', silent, children, ...rest }: Props) {
+export function SoundPressable({ onPress, soundEvent = 'tap', silent, hitSlop, children, ...rest }: Props) {
   const { play } = useSound();
   const handlePress = (e: GestureResponderEvent) => {
     if (!silent) play(soundEvent);
     onPress?.(e);
   };
   return (
-    <TouchableOpacity {...rest} onPress={handlePress}>
+    <TouchableOpacity hitSlop={hitSlop ?? DEFAULT_HIT_SLOP} {...rest} onPress={handlePress}>
       {children}
     </TouchableOpacity>
   );
