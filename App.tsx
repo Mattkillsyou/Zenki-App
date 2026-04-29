@@ -2,7 +2,29 @@ import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Platform, StyleSheet } from 'react-native';
+import { View, Platform, StyleSheet, LogBox } from 'react-native';
+
+// Silence dev-mode redboxes that only surface on local sim builds.
+// All of these will NOT reproduce on signed TestFlight builds — the
+// underlying issues are entitlement / bridgeless quirks of unsigned
+// debug binaries, not real app bugs.
+LogBox.ignoreLogs([
+  // expo-notifications auto-registration tries to read the keychain at
+  // startup; keychain access groups only bind at code-sign time, so
+  // unsigned sim builds throw "Calling the 'getRegistrationInfoAsync'
+  // function has failed → Caused by: Keychain access failed: A
+  // required entitlement isn't present." (DevicePushTokenAutoRegistration.fx.js)
+  /\[expo-notifications\] Error reading persisted server registration info/,
+  /getRegistrationInfoAsync/,
+  // Companion bridgeless-mode gap in expo-notifications: the JS shim
+  // expects PushTokenManager.default.addListener but on RN 0.83's
+  // bridgeless / hybrid runtime the native module proxy lacks methods.
+  /PushTokenManager\.default\.addListener is not a function/,
+  // react-native-health@1.19.0 has the equivalent gap. The runtime
+  // guard at src/services/healthKit.ts catches subsequent calls, but
+  // the first rejection surfaces before the guard short-circuits.
+  /HK\.initHealthKit is not a function/,
+]);
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { MotionProvider } from './src/context/MotionContext';
 import { AuthProvider } from './src/context/AuthContext';
