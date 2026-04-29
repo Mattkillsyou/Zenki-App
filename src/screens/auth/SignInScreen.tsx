@@ -483,13 +483,13 @@ const styles = StyleSheet.create({
   // Logo
   logoSection: { alignItems: 'center' },
   logo: { width: 112, height: 112, marginBottom: 4 },
-  tagline: { fontSize: 10, fontWeight: '600', letterSpacing: 3, marginTop: 2 },
+  tagline: { fontSize: 12, fontWeight: '600', letterSpacing: 3, marginTop: 2 },
 
   // Form
   formSection: { gap: 10 },
   welcomeBlock: { alignItems: 'center', gap: 2 },
-  heading: { fontSize: 24, fontWeight: '800', letterSpacing: -0.6, lineHeight: 28, textAlign: 'center' },
-  subheading: { fontSize: 13, fontWeight: '400', lineHeight: 17, textAlign: 'center' },
+  heading: { fontSize: 32, fontWeight: '800', letterSpacing: -0.8, lineHeight: 36, textAlign: 'center' },
+  subheading: { fontSize: 16, fontWeight: '400', lineHeight: 20, textAlign: 'center' },
 
   // Social buttons
   socialBtn: {
