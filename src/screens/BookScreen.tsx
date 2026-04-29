@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { Button } from '../components';
+import { Button, ScreenContainer } from '../components';
 import { useAuth } from '../context/AuthContext';
 import { useAppointments } from '../context/AppointmentContext';
 import { useGamification } from '../context/GamificationContext';
@@ -203,7 +203,7 @@ export function BookScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <View style={{ flex: 1 }}>
+      <ScreenContainer>
         {/* Header */}
         <View style={styles.header}>
           <View>
@@ -407,7 +407,7 @@ export function BookScreen({ navigation }: any) {
             disabled={!selectedTime}
           />
         </View>
-      </View>
+      </ScreenContainer>
     </SafeAreaView>
   );
 }
