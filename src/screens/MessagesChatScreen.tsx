@@ -182,6 +182,9 @@ export function MessagesChatScreen({ navigation, route }: any) {
           keyExtractor={(m) => m.id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+          contentInsetAdjustmentBehavior="automatic"
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="paper-plane-outline" size={36} color={colors.textMuted} />

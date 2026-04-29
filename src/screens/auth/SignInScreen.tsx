@@ -41,7 +41,6 @@ export function SignInScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showInviteGate, setShowInviteGate] = useState(false);
-  const [inviteVerified, setInviteVerified] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
   const [checkingInvite, setCheckingInvite] = useState(true);
   const [focusedField, setFocusedField] = useState<string | null>(null);
@@ -193,18 +192,12 @@ export function SignInScreen({ navigation }: any) {
     }
   };
 
-  // Navigate to onboarding after the gate modal fully dismisses
-  useEffect(() => {
-    if (inviteVerified) {
-      navigation.replace('Onboarding');
-    }
-  }, [inviteVerified]);
-
   const handleVerifyInvite = async () => {
     if (inviteCode.toLowerCase().trim() === INVITE_CODE) {
       await AsyncStorage.setItem(INVITE_VERIFIED_KEY, 'true');
       setShowInviteGate(false);
-      setInviteVerified(true);
+      // Stay on SignIn after verification — user picks "Sign In"
+      // (existing account) or "Create Account" (new signup → Onboarding).
     } else {
       Alert.alert('Invalid Code', 'Please enter a valid invite code.');
     }
@@ -476,7 +469,15 @@ export function SignInScreen({ navigation }: any) {
             <Button title="Sign In" onPress={handleSignIn} loading={loading} fullWidth size="lg" style={{ marginTop: 6 }} />
           </View>
 
-          {/* Footer */}
+          {/* Create Account */}
+          <View style={styles.footer}>
+            <Text style={[styles.footerText, { color: colors.textTertiary }]}>New here? </Text>
+            <SoundPressable onPress={() => navigation.navigate('Onboarding')}>
+              <Text style={[styles.footerLink, { color: colors.gold }]}>Create Account</Text>
+            </SoundPressable>
+          </View>
+
+          {/* Inquire about membership */}
           <View style={styles.footer}>
             <Text style={[styles.footerText, { color: colors.textTertiary }]}>Not a member? </Text>
             <SoundPressable onPress={() => navigation.navigate('Contact')}>

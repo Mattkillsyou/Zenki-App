@@ -1660,6 +1660,8 @@ export function OnboardingScreen({ navigation, route }: any) {
           contentContainerStyle={styles.stepScrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+          contentInsetAdjustmentBehavior="automatic"
         >
           <Animated.View style={[styles.stepContainer, {
             opacity: fadeAnim,

@@ -153,6 +153,8 @@ export function MacroSetupScreen({ navigation }: any) {
           contentContainerStyle={{ paddingBottom: 140 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          automaticallyAdjustKeyboardInsets
+          contentInsetAdjustmentBehavior="automatic"
         >
           {/* Header */}
           <View style={styles.header}>
