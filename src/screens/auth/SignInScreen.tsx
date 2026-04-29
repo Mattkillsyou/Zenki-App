@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, KeyboardAvoidingView, Platform, Image, Alert, Modal, Animated, Easing, ScrollView } from 'react-native';
+  View, Text, StyleSheet, TextInput, Platform, Image, Alert, Modal, Animated, Easing } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Google from 'expo-auth-session/providers/google';
 import * as Crypto from 'expo-crypto';
@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { Button } from '../../components';
+import { Button, KeyboardAwareScrollView } from '../../components';
 import { MEMBERS, CREDENTIALS } from '../../data/members';
 import { spacing, borderRadius } from '../../theme';
 import { FIREBASE_CONFIGURED } from '../../config/firebase';
@@ -340,36 +340,27 @@ export function SignInScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Invite Gate */}
       <Modal visible={showInviteGate} animationType="fade">
-        <SafeAreaView style={[styles.gateContainer, { backgroundColor: colors.background }]}>
-          <View style={[styles.gateIconWrap, { backgroundColor: colors.goldMuted }]}>
-            <Ionicons name="shield-checkmark-outline" size={48} color={colors.gold} />
-          </View>
-          <Text style={[styles.gateTitle, { color: colors.textPrimary }]}>Members Only</Text>
-          <Text style={[styles.gateSubtitle, { color: colors.textSecondary }]}>Enter your invite code to continue</Text>
-          <TextInput
-            style={[styles.gateInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}
-            placeholder="Invite code"
-            placeholderTextColor={colors.textTertiary}
-            value={inviteCode}
-            onChangeText={setInviteCode}
-            autoCapitalize="none"
-          />
-          <Button title="Continue" onPress={handleVerifyInvite} fullWidth size="lg" />
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+          <KeyboardAwareScrollView contentContainerStyle={styles.gateContent}>
+            <View style={[styles.gateIconWrap, { backgroundColor: colors.goldMuted }]}>
+              <Ionicons name="shield-checkmark-outline" size={48} color={colors.gold} />
+            </View>
+            <Text style={[styles.gateTitle, { color: colors.textPrimary }]}>Members Only</Text>
+            <Text style={[styles.gateSubtitle, { color: colors.textSecondary }]}>Enter your invite code to continue</Text>
+            <TextInput
+              style={[styles.gateInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}
+              placeholder="Invite code"
+              placeholderTextColor={colors.textTertiary}
+              value={inviteCode}
+              onChangeText={setInviteCode}
+              autoCapitalize="none"
+            />
+            <Button title="Continue" onPress={handleVerifyInvite} fullWidth size="lg" />
+          </KeyboardAwareScrollView>
         </SafeAreaView>
       </Modal>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
-      >
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: 32 }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          automaticallyAdjustKeyboardInsets
-        >
+      <KeyboardAwareScrollView>
         <View style={styles.contentContainer}>
 
           {/* Logo */}
@@ -493,8 +484,7 @@ export function SignInScreen({ navigation }: any) {
             </SoundPressable>
           </View>
         </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
@@ -554,6 +544,7 @@ const styles = StyleSheet.create({
 
   // Gate
   gateContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl, gap: spacing.md + 4 },
+  gateContent: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl, gap: spacing.md + 4 },
   gateIconWrap: { width: 100, height: 100, borderRadius: borderRadius['2xl'], alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   gateTitle: { fontSize: 30, fontWeight: '700', letterSpacing: -0.3 },
   gateSubtitle: { fontSize: 16, textAlign: 'center', lineHeight: 24, marginBottom: 8 },

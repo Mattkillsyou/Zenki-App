@@ -4,10 +4,7 @@ import {
   Text,
   StyleSheet,
   Image,
-  ActivityIndicator,
-  ScrollView,
-  Platform,
-  KeyboardAvoidingView} from 'react-native';
+  ActivityIndicator} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView } from '../components';
+import { FadeInView, KeyboardAwareScrollView } from '../components';
 import { parseBloodwork, BloodworkExtraction } from '../services/aiVision';
 import { getCurrentIdToken } from '../services/firebaseAuth';
 import { AI_IMAGE_MAX_DIMENSION } from '../config/api';
@@ -177,19 +174,18 @@ export function BloodworkUploadScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <SoundPressable
-            onPress={() => navigation.goBack()}
-            style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          >
-            <Ionicons name="close" size={22} color={colors.textPrimary} />
-          </SoundPressable>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Upload labs</Text>
-          <View style={styles.backBtn} />
-        </View>
+      <View style={styles.header}>
+        <SoundPressable
+          onPress={() => navigation.goBack()}
+          style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        >
+          <Ionicons name="close" size={22} color={colors.textPrimary} />
+        </SoundPressable>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Upload labs</Text>
+        <View style={styles.backBtn} />
+      </View>
 
-        <ScrollView contentContainerStyle={{ paddingBottom: 120 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 120 }}>
           {phase.kind === 'idle' && (
             <FadeInView>
               <View style={[styles.intro, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -304,8 +300,7 @@ export function BloodworkUploadScreen({ navigation }: any) {
               </SoundPressable>
             </FadeInView>
           )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
 
       <HealthDataConsentModal
         visible={consentModalOpen}

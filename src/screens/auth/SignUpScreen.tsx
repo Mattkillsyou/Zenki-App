@@ -4,16 +4,13 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  ScrollView,
-  Alert,
-  KeyboardAvoidingView,
-  Platform} from 'react-native';
+  Alert} from 'react-native';
 import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../../theme';
-import { Button } from '../../components';
+import { Button, KeyboardAwareScrollView } from '../../components';
 
 export function SignUpScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -78,12 +75,7 @@ export function SignUpScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={64}
-      >
-        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView offset={64}>
         {/* Header */}
         <View style={styles.header}>
           <SoundPressable onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -163,8 +155,7 @@ export function SignUpScreen({ navigation }: any) {
         </View>
 
         <View style={{ height: spacing.xxl * 2 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
