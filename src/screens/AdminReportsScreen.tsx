@@ -29,7 +29,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView } from '../components';
+import { FadeInView, ScreenContainer } from '../components';
 import {
   listOpenReports,
   adminActionReport,
@@ -146,6 +146,7 @@ export function AdminReportsScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenContainer>
       {/* Header */}
       <View style={styles.header}>
         <SoundPressable
@@ -265,6 +266,7 @@ export function AdminReportsScreen({ navigation }: any) {
           )}
         </ScrollView>
       )}
+      </ScreenContainer>
     </SafeAreaView>
   );
 }

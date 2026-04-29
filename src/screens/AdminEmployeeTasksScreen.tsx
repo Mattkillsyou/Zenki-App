@@ -12,7 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useEmployeeTasks } from '../context/EmployeeTaskContext';
 import { MEMBERS } from '../data/members';
 import { spacing } from '../theme';
-import { KeyboardAwareScrollView } from '../components';
+import { KeyboardAwareScrollView, ScreenContainer } from '../components';
 
 type TaskMode = 'default' | 'assigned';
 
@@ -100,6 +100,7 @@ export function AdminEmployeeTasksScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenContainer>
       <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 80 }}>
           {/* Header */}
           <View style={styles.header}>
@@ -275,6 +276,7 @@ export function AdminEmployeeTasksScreen({ navigation }: any) {
             )}
           </View>
       </KeyboardAwareScrollView>
+      </ScreenContainer>
     </SafeAreaView>
   );
 }

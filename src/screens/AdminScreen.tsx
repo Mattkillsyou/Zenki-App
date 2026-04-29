@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAttendance } from '../context/AttendanceContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { FadeInView, PressableScale } from '../components';
+import { FadeInView, PressableScale, ScreenContainer } from '../components';
 import { MEMBERS } from '../data/members';
 import { useProducts } from '../context/ProductContext';
 import { countOpenReports } from '../services/firebaseModeration';
@@ -65,6 +65,7 @@ export function AdminScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenContainer>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
@@ -253,6 +254,7 @@ export function AdminScreen({ navigation }: any) {
 
         <View style={{ height: spacing.xxl * 2 }} />
       </ScrollView>
+      </ScreenContainer>
     </SafeAreaView>
   );
 }

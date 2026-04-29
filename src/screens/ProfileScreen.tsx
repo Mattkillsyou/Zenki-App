@@ -16,7 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { BeltDisplay, KeyboardAwareScrollView } from '../components';
+import { BeltDisplay, KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { BELT_DISPLAY_COLORS } from '../data/members';
 import { useGamification } from '../context/GamificationContext';
 import { useWorkouts } from '../context/WorkoutContext';
@@ -103,6 +103,7 @@ export function ProfileScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenContainer maxWidth="form">
       <KeyboardAwareScrollView offset={64} contentContainerStyle={styles.scroll}>
         {/* ── Profile header (avatar + name + badge) ── */}
         <View style={styles.header}>
@@ -320,6 +321,7 @@ export function ProfileScreen({ navigation }: any) {
 
         <View style={{ height: 24 }} />
       </KeyboardAwareScrollView>
+      </ScreenContainer>
 
       {/* ── Edit Profile Modal ── */}
       <Modal visible={editOpen} animationType="slide" transparent onRequestClose={() => setEditOpen(false)}>

@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
-import { FadeInView, KeyboardAwareScrollView } from '../components';
+import { FadeInView, KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { broadcastPushNotification, fetchAllPushTokens } from '../services/pushNotifications';
 import { spacing, borderRadius } from '../theme';
 
@@ -109,6 +109,7 @@ export function AdminBroadcastScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenContainer>
       <KeyboardAwareScrollView>
           {/* Header */}
           <View style={styles.header}>
@@ -224,6 +225,7 @@ export function AdminBroadcastScreen({ navigation }: any) {
 
           <View style={{ height: 120 }} />
       </KeyboardAwareScrollView>
+      </ScreenContainer>
     </SafeAreaView>
   );
 }

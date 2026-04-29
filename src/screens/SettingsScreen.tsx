@@ -11,7 +11,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { KeyboardAwareScrollView } from '../components';
+import { KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -353,6 +353,7 @@ export function SettingsScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenContainer maxWidth="form">
       <KeyboardAwareScrollView offset={64}>
         {/* Header */}
         <View style={styles.header}>
@@ -857,6 +858,7 @@ export function SettingsScreen({ navigation }: any) {
 
         <View style={{ height: spacing.xxl * 2 }} />
       </KeyboardAwareScrollView>
+      </ScreenContainer>
 
       {/* Password Change Modal (admin-only) */}
       <Modal visible={pwModalOpen} animationType="slide" transparent>

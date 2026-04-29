@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useProducts } from '../context/ProductContext';
-import { KeyboardAwareScrollView } from '../components';
+import { KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { CATEGORIES, ProductCategory } from '../data/products';
 import { spacing } from '../theme';
 import { uploadProductImage } from '../services/storage';
@@ -194,6 +194,7 @@ export function AdminProductsScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenContainer>
       <View style={styles.header}>
         <SoundPressable
           onPress={() => navigation.goBack()}
@@ -268,6 +269,7 @@ export function AdminProductsScreen({ navigation }: any) {
         )}
         <View style={{ height: 40 }} />
       </KeyboardAwareScrollView>
+      </ScreenContainer>
 
       <Modal visible={modalOpen} animationType="slide" transparent onRequestClose={() => setModalOpen(false)}>
         <SafeAreaView style={styles.modalBackdrop}>

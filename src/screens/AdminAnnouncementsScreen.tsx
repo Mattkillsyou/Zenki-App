@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAnnouncements, Announcement } from '../context/AnnouncementContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { Button, KeyboardAwareScrollView } from '../components';
+import { Button, KeyboardAwareScrollView, ScreenContainer } from '../components';
 
 export function AdminAnnouncementsScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -57,6 +57,7 @@ export function AdminAnnouncementsScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenContainer>
       {/* Header */}
       <View style={styles.header}>
         <SoundPressable onPress={() => navigation.goBack()} style={[styles.iconBtn, { backgroundColor: colors.surface }]}>
@@ -149,6 +150,7 @@ export function AdminAnnouncementsScreen({ navigation }: any) {
           </View>
         ))}
       </KeyboardAwareScrollView>
+      </ScreenContainer>
     </SafeAreaView>
   );
 }

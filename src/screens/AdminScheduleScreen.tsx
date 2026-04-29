@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { Button, KeyboardAwareScrollView } from '../components';
+import { Button, KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { showAlert, confirmAlert } from '../utils/alert';
 import { useSchedule, ScheduleClass, DayKey } from '../context/ScheduleContext';
 import { ClassType, DAYS } from '../data/schedule';
@@ -110,6 +110,7 @@ export function AdminScheduleScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenContainer>
       {/* Header */}
       <View style={styles.header}>
         <SoundPressable onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -184,6 +185,7 @@ export function AdminScheduleScreen({ navigation }: any) {
         )}
         <View style={{ height: spacing.xxl * 2 }} />
       </KeyboardAwareScrollView>
+      </ScreenContainer>
 
       {/* Add/Edit Modal */}
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">

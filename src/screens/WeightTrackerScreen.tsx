@@ -20,7 +20,7 @@ import { useNutrition } from '../context/NutritionContext';
 import { useSenpai } from '../context/SenpaiContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, LineChart, KeyboardAwareScrollView } from '../components';
+import { FadeInView, LineChart, KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { WeightUnit } from '../types/nutrition';
 import { computeTrendWeight, trendChange, kgToLbs } from '../utils/nutrition';
 import { WeightGoal } from '../types/activity';
@@ -250,6 +250,7 @@ export function WeightTrackerScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenContainer>
         {/* Header sits outside ScrollView so it stays visible */}
         <View style={styles.headerWrap}>
           <View style={styles.header}>
@@ -606,6 +607,7 @@ export function WeightTrackerScreen({ navigation }: any) {
             </Text>
           )}
         </KeyboardAwareScrollView>
+      </ScreenContainer>
 
       {/* History modal — full list with delete */}
       <Modal visible={historyOpen} transparent animationType="slide" onRequestClose={() => setHistoryOpen(false)}>

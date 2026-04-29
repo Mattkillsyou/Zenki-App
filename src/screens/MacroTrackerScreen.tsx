@@ -17,7 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, KeyboardAwareScrollView } from '../components';
+import { FadeInView, KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { FoodSearchModal } from '../components/FoodSearchModal';
 import { ReorderableSections, ReorderableItem } from '../components/ReorderableSections';
 import { MealType, MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from '../types/nutrition';
@@ -300,6 +300,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenContainer>
       <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 120 }}>
           {/* Header */}
           <View style={styles.header}>
@@ -843,6 +844,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
             })() : null}
           </FadeInView>
       </KeyboardAwareScrollView>
+      </ScreenContainer>
 
       {/* First-time macro setup wizard */}
       <Modal visible={wizardOpen} transparent animationType="fade" onRequestClose={handleWizardSkip}>

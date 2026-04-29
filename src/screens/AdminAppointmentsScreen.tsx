@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { ScreenContainer } from '../components';
 import { useTheme } from '../context/ThemeContext';
 import { useAppointments, Appointment, AppointmentStatus } from '../context/AppointmentContext';
 
@@ -37,6 +38,7 @@ export function AdminAppointmentsScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenContainer>
       <View style={styles.header}>
         <SoundPressable onPress={() => navigation.goBack()} style={[styles.iconBtn, { backgroundColor: colors.surface }]}>
           <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
@@ -112,6 +114,7 @@ export function AdminAppointmentsScreen({ navigation }: any) {
           </View>
         ))}
       </ScrollView>
+      </ScreenContainer>
     </SafeAreaView>
   );
 }

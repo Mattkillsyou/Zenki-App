@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { useWorkouts } from '../context/WorkoutContext';
 import { useGamification } from '../context/GamificationContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, KeyboardAwareScrollView } from '../components';
+import { FadeInView, KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { WORKOUT_FORMAT_LABEL, WodResult, WorkoutFormat } from '../types/workout';
 import {
   EXERCISES,
@@ -61,6 +61,7 @@ export function WorkoutScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenContainer>
       <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 120 }}>
           {/* Header */}
           <View style={styles.header}>
@@ -127,6 +128,7 @@ export function WorkoutScreen({ navigation }: any) {
             />
           )}
       </KeyboardAwareScrollView>
+      </ScreenContainer>
     </SafeAreaView>
   );
 }

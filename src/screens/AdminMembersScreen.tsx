@@ -3,17 +3,14 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TextInput,
-  Modal,
-  KeyboardAvoidingView,
-  Platform} from 'react-native';
+  Modal} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { Button, KeyboardAwareScrollView } from '../components';
+import { Button, KeyboardAwareScrollView, ScreenContainer } from '../components';
 import {
   MEMBERS,
   Member,
@@ -341,6 +338,7 @@ export function AdminMembersScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScreenContainer>
       {/* Header */}
       <View style={styles.header}>
         <SoundPressable onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -377,12 +375,7 @@ export function AdminMembersScreen({ navigation }: any) {
         </View>
       )}
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={64}
-      >
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView offset={64} contentContainerStyle={styles.list}>
         {members.map((member) => (
           <View key={member.id} style={[styles.memberCard, { backgroundColor: colors.surface }]}>
             <SoundPressable style={styles.memberMain} onPress={() => openEditModal(member)}>
@@ -430,8 +423,8 @@ export function AdminMembersScreen({ navigation }: any) {
           </View>
         ))}
         <View style={{ height: spacing.xxl * 2 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+      </ScreenContainer>
 
       {/* Add/Edit Modal */}
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
