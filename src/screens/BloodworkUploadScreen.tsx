@@ -18,7 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, KeyboardAwareScrollView } from '../components';
+import { FadeInView, KeyboardAwareScrollView, HealthKitBadge } from '../components';
 import { parseBloodwork, BloodworkExtraction } from '../services/aiVision';
 import { getCurrentIdToken } from '../services/firebaseAuth';
 import { AI_IMAGE_MAX_DIMENSION } from '../config/api';
@@ -186,6 +186,7 @@ export function BloodworkUploadScreen({ navigation }: any) {
       </View>
 
       <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+          <HealthKitBadge style={{ marginHorizontal: spacing.lg, marginBottom: spacing.md }} />
           {phase.kind === 'idle' && (
             <FadeInView>
               <View style={[styles.intro, { backgroundColor: colors.surface, borderColor: colors.border }]}>

@@ -17,7 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, KeyboardAwareScrollView, ScreenContainer } from '../components';
+import { FadeInView, KeyboardAwareScrollView, ScreenContainer, HealthKitBadge } from '../components';
 import { FoodSearchModal } from '../components/FoodSearchModal';
 import { ReorderableSections, ReorderableItem } from '../components/ReorderableSections';
 import { MealType, MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from '../types/nutrition';
@@ -318,6 +318,8 @@ export function MacroTrackerScreen({ navigation, route }: any) {
               <Ionicons name="options-outline" size={20} color={colors.textPrimary} />
             </SoundPressable>
           </View>
+
+          <HealthKitBadge style={{ marginHorizontal: spacing.lg, marginBottom: spacing.md }} />
 
           {/* Search + Scan + Photo — top action row */}
           <View style={styles.actionRow}>

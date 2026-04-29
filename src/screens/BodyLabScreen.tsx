@@ -8,7 +8,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing } from '../theme';
-import { FadeInView } from '../components';
+import { FadeInView, HealthKitBadge } from '../components';
 
 type Tab = 'dashboard' | 'dexa' | 'bloodwork' | 'info';
 
@@ -130,6 +130,7 @@ export function BodyLabScreen({ navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <HealthKitBadge style={{ marginBottom: spacing.md }} />
         {/* ── DASHBOARD TAB ── */}
         {tab === 'dashboard' && (
           <>

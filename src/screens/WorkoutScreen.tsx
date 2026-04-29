@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { useWorkouts } from '../context/WorkoutContext';
 import { useGamification } from '../context/GamificationContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, KeyboardAwareScrollView, ScreenContainer } from '../components';
+import { FadeInView, KeyboardAwareScrollView, ScreenContainer, HealthKitBadge } from '../components';
 import { WORKOUT_FORMAT_LABEL, WodResult, WorkoutFormat } from '../types/workout';
 import {
   EXERCISES,
@@ -74,6 +74,8 @@ export function WorkoutScreen({ navigation }: any) {
             <Text style={[styles.title, { color: colors.textPrimary }]}>Training</Text>
             <View style={styles.backBtn} />
           </View>
+
+          <HealthKitBadge style={{ marginHorizontal: spacing.lg, marginBottom: spacing.sm }} />
 
           {/* Tabs */}
           <View style={[styles.tabRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>

@@ -19,7 +19,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, KeyboardAwareScrollView } from '../components';
+import { FadeInView, KeyboardAwareScrollView, HealthKitBadge } from '../components';
 import { extractDexa, DexaExtraction } from '../services/aiVision';
 import { getCurrentIdToken } from '../services/firebaseAuth';
 import { AI_IMAGE_MAX_DIMENSION } from '../config/api';
@@ -195,6 +195,7 @@ export function DexaUploadScreen({ navigation }: any) {
       </View>
 
       <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+          <HealthKitBadge style={{ marginHorizontal: spacing.lg, marginBottom: spacing.md }} />
           {/* Idle */}
           {phase.kind === 'idle' && (
             <FadeInView>
