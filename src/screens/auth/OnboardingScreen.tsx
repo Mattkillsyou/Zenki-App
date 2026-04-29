@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TextInput, ScrollView,
-  Image, Animated, Dimensions, KeyboardAvoidingView, Platform, ActivityIndicator} from 'react-native';
+  Image, Animated, Dimensions, Platform, ActivityIndicator} from 'react-native';
+import { KeyboardView } from '../../components';
 import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -1617,7 +1618,7 @@ export function OnboardingScreen({ navigation, route }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardView>
         {/* Section label for the body-stats section */}
         {step >= BODY_SECTION_START && step <= BODY_SECTION_END && (
           <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
@@ -1730,7 +1731,7 @@ export function OnboardingScreen({ navigation, route }: any) {
             </Text>
           </SoundPressable>
         )}
-      </KeyboardAvoidingView>
+      </KeyboardView>
     </SafeAreaView>
   );
 }

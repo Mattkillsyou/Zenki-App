@@ -4,17 +4,14 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  ScrollView,
   Alert,
-  Linking,
-  KeyboardAvoidingView,
-  Platform} from 'react-native';
+  Linking} from 'react-native';
 import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../../theme';
-import { Button } from '../../components';
+import { Button, KeyboardAwareScrollView } from '../../components';
 
 export function ContactScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -45,12 +42,7 @@ export function ContactScreen({ navigation }: any) {
         </SoundPressable>
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={64}
-      >
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView offset={64} contentContainerStyle={styles.scrollContent}>
         {sent ? (
           <View style={styles.successState}>
             <View style={[styles.successIcon, { backgroundColor: colors.goldMuted }]}>
@@ -182,8 +174,7 @@ export function ContactScreen({ navigation }: any) {
         )}
 
         <View style={{ height: spacing.xxl * 2 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

@@ -3,11 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TextInput,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,7 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { useWorkouts } from '../context/WorkoutContext';
 import { useGamification } from '../context/GamificationContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView } from '../components';
+import { FadeInView, KeyboardAwareScrollView } from '../components';
 import { WORKOUT_FORMAT_LABEL, WodResult, WorkoutFormat } from '../types/workout';
 import {
   EXERCISES,
@@ -64,8 +61,7 @@ export function WorkoutScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 120 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 120 }}>
           {/* Header */}
           <View style={styles.header}>
             <SoundPressable
@@ -130,8 +126,7 @@ export function WorkoutScreen({ navigation }: any) {
               weekStreak={gamState.weekStreak || 0}
             />
           )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

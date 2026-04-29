@@ -3,11 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TextInput,
-  Alert,
-  KeyboardAvoidingView,
-  Platform} from 'react-native';
+  Alert} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useEmployeeTasks } from '../context/EmployeeTaskContext';
 import { MEMBERS } from '../data/members';
 import { spacing } from '../theme';
+import { KeyboardAwareScrollView } from '../components';
 
 type TaskMode = 'default' | 'assigned';
 
@@ -102,8 +100,7 @@ export function AdminEmployeeTasksScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 80 }} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 80 }}>
           {/* Header */}
           <View style={styles.header}>
             <SoundPressable
@@ -277,8 +274,7 @@ export function AdminEmployeeTasksScreen({ navigation }: any) {
                 })
             )}
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

@@ -3,16 +3,15 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Switch,
   Linking,
   Modal,
   TextInput,
   Alert,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { KeyboardAwareScrollView } from '../components';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -354,12 +353,7 @@ export function SettingsScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={64}
-      >
-        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView offset={64}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButtonStyled, { backgroundColor: colors.surface, borderColor: colors.border, width: 44, height: 44, borderRadius: 22, borderWidth: 1.5 }]}>
@@ -862,8 +856,7 @@ export function SettingsScreen({ navigation }: any) {
         </Text>
 
         <View style={{ height: spacing.xxl * 2 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
 
       {/* Password Change Modal (admin-only) */}
       <Modal visible={pwModalOpen} animationType="slide" transparent>

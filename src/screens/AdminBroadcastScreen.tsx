@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform, ActivityIndicator} from 'react-native';
+  View, Text, StyleSheet, TextInput, Alert, ActivityIndicator} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
-import { FadeInView } from '../components';
+import { FadeInView, KeyboardAwareScrollView } from '../components';
 import { broadcastPushNotification, fetchAllPushTokens } from '../services/pushNotifications';
 import { spacing, borderRadius } from '../theme';
 
@@ -109,8 +109,7 @@ export function AdminBroadcastScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView>
           {/* Header */}
           <View style={styles.header}>
             <SoundPressable
@@ -224,8 +223,7 @@ export function AdminBroadcastScreen({ navigation }: any) {
           </FadeInView>
 
           <View style={{ height: 120 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

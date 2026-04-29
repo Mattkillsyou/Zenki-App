@@ -3,11 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TextInput,
-  Alert,
-  KeyboardAvoidingView,
-  Platform} from 'react-native';
+  Alert} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useEmployeeTasks } from '../context/EmployeeTaskContext';
 import { spacing } from '../theme';
-import { FadeInView } from '../components';
+import { FadeInView, KeyboardAwareScrollView } from '../components';
 
 export function EmployeeChecklistScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -63,8 +60,7 @@ export function EmployeeChecklistScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 120 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 120 }}>
           {/* Header */}
           <View style={styles.header}>
             <SoundPressable
@@ -222,8 +218,7 @@ export function EmployeeChecklistScreen({ navigation }: any) {
               )}
             </View>
           </FadeInView>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

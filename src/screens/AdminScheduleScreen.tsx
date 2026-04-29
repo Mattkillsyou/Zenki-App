@@ -5,15 +5,13 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
-  Modal,
-  KeyboardAvoidingView,
-  Platform} from 'react-native';
+  Modal} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { Button } from '../components';
+import { Button, KeyboardAwareScrollView } from '../components';
 import { showAlert, confirmAlert } from '../utils/alert';
 import { useSchedule, ScheduleClass, DayKey } from '../context/ScheduleContext';
 import { ClassType, DAYS } from '../data/schedule';
@@ -146,12 +144,7 @@ export function AdminScheduleScreen({ navigation }: any) {
       </View>
 
       {/* Classes List */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={64}
-      >
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView offset={64} contentContainerStyle={styles.list}>
         {dayClasses.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="calendar-outline" size={48} color={colors.textMuted} />
@@ -190,8 +183,7 @@ export function AdminScheduleScreen({ navigation }: any) {
           ))
         )}
         <View style={{ height: spacing.xxl * 2 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
 
       {/* Add/Edit Modal */}
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">

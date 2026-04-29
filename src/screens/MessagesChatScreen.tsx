@@ -6,9 +6,8 @@ import {
   FlatList,
   TextInput,
   Image,
-  KeyboardAvoidingView,
-  Platform,
   Alert} from 'react-native';
+import { KeyboardView } from '../components';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -137,10 +136,7 @@ export function MessagesChatScreen({ navigation, route }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
+      <KeyboardView>
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <SoundPressable onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
@@ -225,7 +221,7 @@ export function MessagesChatScreen({ navigation, route }: any) {
           </SoundPressable>
         </View>
         )}
-      </KeyboardAvoidingView>
+      </KeyboardView>
     </SafeAreaView>
   );
 }

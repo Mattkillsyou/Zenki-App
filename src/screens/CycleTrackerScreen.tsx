@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TextInput,
-  Alert, Switch, KeyboardAvoidingView, Platform} from 'react-native';
+  View, Text, StyleSheet, TextInput,
+  Alert, Switch} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,7 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useCycleTracker } from '../context/CycleTrackerContext';
 import { spacing } from '../theme';
-import { FadeInView } from '../components';
+import { FadeInView, KeyboardAwareScrollView } from '../components';
 import {
   CycleSymptom, FlowIntensity, SYMPTOM_LABELS, SYMPTOM_ICONS,
   PHASE_LABELS, PHASE_COLORS, PHASE_ICONS, PHASE_RECOMMENDATIONS,
@@ -101,12 +101,7 @@ export function CycleTrackerScreen({ navigation }: any) {
         })}
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={64}
-      >
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView offset={64} contentContainerStyle={styles.scroll}>
         {/* ── TRACK TAB ── */}
         {tab === 'track' && (
           <>
@@ -349,8 +344,7 @@ export function CycleTrackerScreen({ navigation }: any) {
         )}
 
         <View style={{ height: 40 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

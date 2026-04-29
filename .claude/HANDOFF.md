@@ -25,7 +25,8 @@
 | 6 | 19 / 20 / 21 / 22 / 23 / 31 | `6a92a15` | ✅ done |
 | 7 | 9 / 10 | `ce3804f` | ✅ done |
 | 8 | 27 / 32 / 33 / 34 / 35 / 36 / 37 | `83d2ee9` | ⚠️ partial — see "Deferred" below |
-| 9 | 41 final verification | this commit | ⚠️ partial — see "Deferred" below |
+| 9 | 41 final verification | `a93757e` | ⚠️ partial — see "Deferred" below |
+| 9.1 | §32 sweep batch 1 | (this commit) | ⚠️ 20 of ~25 screens migrated; 4 left — Medication modal, Profile, WeightTracker, CreatePost+UserSearch |
 
 ## Significant follow-up commits (out of chunk order)
 
@@ -43,19 +44,93 @@
 
 ## Deferred (open work)
 
-### §32 keyboard sweep — large
-After landing the `KeyboardAwareScrollView` wrapper (commit `89cc791`)
-and migrating `ForgotPasswordScreen` + `AdminMembersScreen` modal,
-~25 more screens need the same swap. Each is a 2–4 line diff:
+### §32 keyboard sweep — IN PROGRESS (resume here)
 
-- Group B (light fix — replace existing KAV+ScrollView with
-  `<KeyboardAwareScrollView>`): AdminAnnouncements, AdminBroadcast,
-  AdminEmployeeTasks, AdminProducts, AdminSchedule, Contact,
-  ContactSupport, CycleTracker, DexaUpload, EmployeeChecklist,
-  MacroSetup, MacroTracker (modal), Medication (modal),
-  MessagesChat, Onboarding, PRDetail, Profile (modal), SetPassword,
-  Settings, Store, UserProfile, WeightTracker (modal), Workout
-- Group C (full wrap — no KAV at all): CreatePost, UserSearch
+**Done so far** (committed in this session, on top of `83d2ee9` chunk
+8 / `a93757e` chunk 9):
+
+- All 19 Group B "light fix" plain screens migrated to either
+  `<KeyboardAwareScrollView>` (KAV+ScrollView combined) or
+  `<KeyboardView>` (KAV-only, when there's a sticky footer outside
+  the inner ScrollView, or a FlatList): AdminAnnouncements,
+  AdminBroadcast, AdminEmployeeTasks, AdminProducts (outer only;
+  inner edit-modal `<ScrollView style={{ flexGrow: 0 }}>` left
+  alone — see "modal subset note" below), AdminSchedule (outer
+  only; inner Add/Edit modal `ScrollView` left alone), Contact,
+  ContactSupport (Header pulled outside KAS so it stays fixed),
+  CycleTracker, DexaUpload (Header pulled outside), EmployeeChecklist,
+  MacroSetup (`KeyboardView` + inner ScrollView preserved because
+  of the sticky `<View style={styles.footer}>` Continue/Save
+  button), MessagesChat (`KeyboardView` because content is a
+  FlatList, not ScrollView), Onboarding (`KeyboardView` for the
+  same sticky-footer reason — Back/Next nav row), PRDetail,
+  SetPassword (used `outerStyle={styles.inner}` to preserve the
+  original inner-style placement), Settings, Store (only the cart
+  branch of the conditional render — outer ScrollView pager and
+  other ScrollViews kept), UserProfile, Workout.
+- Outer KAV+ScrollView for **MacroTracker** also migrated to
+  `<KeyboardAwareScrollView>` (the outer wraps real form
+  TextInputs at line ~689, so it counts as a Group B light fix
+  even though the handoff tagged it "(modal)").
+
+**Not yet done** — pick up here:
+
+- `Medication` modal at `MedicationTrackerScreen.tsx:783-1103` —
+  has a clear KAV+ScrollView in a slide modal. Migrate that
+  modal's wrapper to `<KeyboardAwareScrollView>`. The screen's
+  outer `<ScrollView>` at line ~239 is a plain list scroll (no
+  KAV) and does NOT need migration.
+- `Profile` outer KAV+ScrollView at `ProfileScreen.tsx:109-335` —
+  migrate same as the others (outer wraps real form TextInputs).
+- `WeightTracker` outer KAV+ScrollView at
+  `WeightTrackerScreen.tsx:255-617` — migrate same.
+- Group C full wrap — no KAV at all — `CreatePostScreen.tsx`,
+  `UserSearchScreen.tsx`. Insert `<KeyboardAwareScrollView>` per
+  the `89cc791` ForgotPasswordScreen pattern. Both already use
+  `SoundPressable`, so no §12 risk applies.
+
+**Modal subset note:** The handoff originally tagged MacroTracker,
+Medication, Profile, WeightTracker as "(modal)", implying the
+keyboard problem lived in a modal-internal `ScrollView` (mirroring
+chunk 8's AdminMembers fix). On inspection only Medication
+matches that shape — the others have their main keyboard pressure
+on the OUTER screen's KAV+ScrollView, which is what got migrated.
+The popup wizard / goals / set-goal modals on MacroTracker,
+Profile, WeightTracker are small centered cards (not slide
+sheets) with 4 TextInputs each; their iOS auto-keyboard-inset
+handling is generally fine and they were NOT touched. If a
+QA pass shows the SAVE button getting hidden behind the keyboard
+on those popups, wrap the card in `<KeyboardView>` (KAV-only).
+
+**Pattern reminders** (so you don't re-derive them):
+- KAV had `behavior={Platform.OS === 'ios' ? 'padding' : undefined}`
+  → KAS bakes that in, drop the prop.
+- KAV had `keyboardVerticalOffset={64}` → use `offset={64}` on
+  KAS (not `keyboardVerticalOffset`).
+- ScrollView had `showsVerticalScrollIndicator={false}` and
+  `keyboardShouldPersistTaps="handled"` → both baked into KAS,
+  drop them.
+- ScrollView's `contentContainerStyle={...}` → pass through to
+  KAS as `contentContainerStyle={...}` (KAS already adds
+  `flexGrow:1` + `paddingBottom:32` and merges).
+- If the screen had its own `style={...}` on the KAV → pass to
+  KAS as `outerStyle={...}` (see SetPasswordScreen).
+- After dropping `KeyboardAvoidingView` and the keyboard-only
+  `ScrollView` from `react-native` imports, **always** also drop
+  `Platform` if grep shows no other `Platform.` usage in the
+  file. Several files had `Platform` only in the keyboard
+  wrapper. Onboarding kept it (3 other usages); Settings kept
+  it (3 other usages); Store kept it; PRDetail dropped it.
+- Add the new wrapper via the `../components` (or
+  `../../components`) barrel import — both `KeyboardView` and
+  `KeyboardAwareScrollView` are re-exported from
+  `src/components/index.ts`. Don't deep-import.
+
+### §32 keyboard sweep — Group C (still open)
+
+`CreatePostScreen.tsx` and `UserSearchScreen.tsx` have no
+keyboard wrapper at all. Insert `<KeyboardAwareScrollView>` the
+same way `ForgotPasswordScreen` was migrated in chunk 8.
 
 ### §36 ScreenContainer sweep — large
 `<ScreenContainer>` wrapper landed (commit `83d2ee9`). Applied as a
@@ -74,10 +149,14 @@ Apply `maxFontSizeMultiplier={1.3}` on critical text (some screens
 already done, sweep needed).
 
 ### §12 SoundPressable rollout — large
-~164 `TouchableOpacity` + ~200 `Pressable` across many files. Each
-callsite needs case-by-case review for "already self-sounded"
-exclusions. Risky to do as one mechanical sweep — defer until audio
-deliverability is verified end-to-end on TestFlight.
+Verified 2026-04-28: actual counts are **167** `TouchableOpacity`
++ **54** `Pressable` (non-SoundPressable) = 221 callsites, vs
+the prior "164+200=364" estimate. `SoundPressable` itself has
+already landed at 818 callsites, so the rollout is mostly done.
+Each remaining callsite still needs case-by-case review for
+"already self-sounded" exclusions. Risky to do as one mechanical
+sweep — defer until audio deliverability is verified end-to-end
+on TestFlight.
 
 ### Resend password-reset email setup
 Cloud Function code is committed (`8f466e1`) but not deployed. To
@@ -93,14 +172,15 @@ firebase deploy --only functions:sendPasswordReset
 Until deployed, the client falls back to Firebase's default
 spam-flagged sender (the existing pre-Resend behavior). Production
 flip from `onboarding@resend.dev` to a verified domain is a
-one-line edit in `functions/src/sendPasswordReset.ts:38` after DKIM
-setup.
+one-line edit in `functions/src/sendPasswordReset.ts:42` after DKIM
+setup. (Note: prior handoff said line 38 but the actual `from:`
+is at line 42.)
 
-### §12 / §32 / §36 unused-imports cleanup
-21 `noUnusedLocals` warnings remain. Each is a small per-file
-removal but most are stateful (useState that's never destructured-
-read, refs, local functions that may be referenced via JSX). Need
-careful per-callsite review.
+### §12 / §32 / §36 unused-imports cleanup — DONE / obsolete
+Re-checked 2026-04-28: `npx tsc --noEmit | grep "is declared but"`
+returns **0**. The 21-warning estimate from the prior handoff is
+no longer accurate — chunk 9 final verification cleaned this up.
+Drop this item.
 
 ### `@expo/fingerprint` duplicate
 expo-doctor flags the duplicate from
@@ -151,4 +231,6 @@ Reopen only if explicitly requested.
 
 ---
 
-Last updated: 2026-04-28 by Claude (Mac session, end of chunk 9 / context-limited).
+Last updated: 2026-04-28 (later same day) by Claude — §32 sweep
+batch 1 landed (20 of ~25 screens). Context-limited; resume per the
+"§32 keyboard sweep — IN PROGRESS" section above.

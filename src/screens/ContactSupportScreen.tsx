@@ -3,18 +3,16 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TextInput,
   Alert,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform} from 'react-native';
+  ActivityIndicator} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { spacing } from '../theme';
+import { KeyboardAwareScrollView } from '../components';
 import { submitSupportMessage, flushSupportQueue, SupportCategory } from '../services/supportMessages';
 
 const CATEGORIES: { value: SupportCategory; label: string; icon: keyof typeof import('@expo/vector-icons').Ionicons.glyphMap; color: string }[] = [
@@ -118,27 +116,19 @@ export function ContactSupportScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <SoundPressable
-            onPress={() => navigation.goBack()}
-            style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          >
-            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-          </SoundPressable>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Contact IT</Text>
-          <View style={{ width: 36 }} />
-        </View>
-
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+      {/* Header */}
+      <View style={styles.header}>
+        <SoundPressable
+          onPress={() => navigation.goBack()}
+          style={[styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
         >
+          <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+        </SoundPressable>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Contact IT</Text>
+        <View style={{ width: 36 }} />
+      </View>
+
+      <KeyboardAwareScrollView contentContainerStyle={styles.scroll}>
           <Text style={[styles.intro, { color: colors.textSecondary }]}>
             Report a bug, share an idea, or ask us anything. Your message is sent
             directly to the Zenki IT team. We get an instant alert.
@@ -230,8 +220,7 @@ export function ContactSupportScreen({ navigation }: any) {
               </>
             )}
           </SoundPressable>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

@@ -3,11 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TextInput,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Dimensions} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,7 +13,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useWorkouts } from '../context/WorkoutContext';
 import { spacing } from '../theme';
-import { FadeInView, LineChart } from '../components';
+import { FadeInView, LineChart, KeyboardAwareScrollView } from '../components';
 import {
   EXERCISES_BY_KEY,
   formatPRValue,
@@ -132,8 +129,7 @@ export function PRDetailScreen({ navigation, route }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 120 }} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 120 }}>
           {/* Header */}
           <View style={styles.header}>
             <SoundPressable
@@ -321,8 +317,7 @@ export function PRDetailScreen({ navigation, route }: any) {
               ))
             )}
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

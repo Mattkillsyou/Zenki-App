@@ -10,9 +10,8 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
+import { KeyboardAwareScrollView } from '../components';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -255,12 +254,7 @@ export function StoreScreen({ navigation }: any) {
 
       {showCart ? (
         /* Cart View */
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={{ flex: 1 }}
-          keyboardVerticalOffset={64}
-        >
-        <ScrollView contentContainerStyle={styles.productList} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <KeyboardAwareScrollView offset={64} contentContainerStyle={styles.productList}>
           {cart.length === 0 ? (
             <View style={styles.emptyCart}>
               <Ionicons name="bag-outline" size={48} color={colors.textMuted} />
@@ -381,8 +375,7 @@ export function StoreScreen({ navigation }: any) {
               </TouchableOpacity>
             </>
           )}
-        </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
       ) : (
         /* Products — paginated: 4 products per page, horizontal swipe */
         <View

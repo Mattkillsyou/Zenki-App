@@ -4,15 +4,13 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  Alert,
-  KeyboardAvoidingView,
-  Platform} from 'react-native';
+  Alert} from 'react-native';
 import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../../theme';
-import { Button } from '../../components';
+import { Button, KeyboardAwareScrollView } from '../../components';
 import { useAuth } from '../../context/AuthContext';
 import { MEMBERS, CREDENTIALS } from '../../data/members';
 import { FIREBASE_CONFIGURED } from '../../config/firebase';
@@ -98,10 +96,7 @@ export function SetPasswordScreen({ navigation, route }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.inner}
-      >
+      <KeyboardAwareScrollView outerStyle={styles.inner}>
         <View style={styles.header}>
           <SoundPressable onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
@@ -169,7 +164,7 @@ export function SetPasswordScreen({ navigation, route }: any) {
             style={{ marginTop: spacing.md }}
           />
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

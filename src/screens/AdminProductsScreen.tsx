@@ -8,9 +8,7 @@ import {
   Modal,
   Alert,
   Image,
-  Switch,
-  KeyboardAvoidingView,
-  Platform} from 'react-native';
+  Switch} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useProducts } from '../context/ProductContext';
+import { KeyboardAwareScrollView } from '../components';
 import { CATEGORIES, ProductCategory } from '../data/products';
 import { spacing } from '../theme';
 import { uploadProductImage } from '../services/storage';
@@ -219,12 +218,7 @@ export function AdminProductsScreen({ navigation }: any) {
         </Text>
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={64}
-      >
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView offset={64} contentContainerStyle={styles.scroll}>
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
           BUILT-IN · {builtInCount} products (read-only)
         </Text>
@@ -273,8 +267,7 @@ export function AdminProductsScreen({ navigation }: any) {
           ))
         )}
         <View style={{ height: 40 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
 
       <Modal visible={modalOpen} animationType="slide" transparent onRequestClose={() => setModalOpen(false)}>
         <SafeAreaView style={styles.modalBackdrop}>

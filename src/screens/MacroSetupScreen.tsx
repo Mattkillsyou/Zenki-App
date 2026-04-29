@@ -5,9 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
-  Alert,
-  KeyboardAvoidingView,
-  Platform} from 'react-native';
+  Alert} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +13,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView } from '../components';
+import { FadeInView, KeyboardView } from '../components';
 import {
   Sex,
   ActivityLevel,
@@ -150,7 +148,7 @@ export function MacroSetupScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardView>
         <ScrollView
           contentContainerStyle={{ paddingBottom: 140 }}
           keyboardShouldPersistTaps="handled"
@@ -438,7 +436,7 @@ export function MacroSetupScreen({ navigation }: any) {
             </SoundPressable>
           )}
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardView>
     </SafeAreaView>
   );
 }

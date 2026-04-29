@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Alert } from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAnnouncements, Announcement } from '../context/AnnouncementContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { Button } from '../components';
+import { Button, KeyboardAwareScrollView } from '../components';
 
 export function AdminAnnouncementsScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -68,12 +68,7 @@ export function AdminAnnouncementsScreen({ navigation }: any) {
         </SoundPressable>
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={64}
-      >
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView offset={64} contentContainerStyle={styles.scroll}>
         {/* Editor */}
         {editingId && (
           <View style={[styles.editorCard, { backgroundColor: colors.surface }]}>
@@ -153,8 +148,7 @@ export function AdminAnnouncementsScreen({ navigation }: any) {
             </Text>
           </View>
         ))}
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
