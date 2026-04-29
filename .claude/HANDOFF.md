@@ -46,6 +46,50 @@
 
 ### §32 keyboard sweep — IN PROGRESS (resume here)
 
+> ⚠️ **User QA feedback (2026-04-28, after batch 1):** "The keyboard
+> is blocking a lot of pages still." So batch 1's
+> `KeyboardAwareScrollView` / `KeyboardView` migration is NOT fully
+> sufficient on real device. Before continuing batch 2, the next
+> session should:
+>
+> 1. Reproduce on TestFlight / sim and capture which specific
+>    screens are still broken — don't assume it's only the screens
+>    not yet migrated. The wrapper's
+>    `automaticallyAdjustKeyboardInsets` + `behavior="padding"`
+>    pair may not be enough on RN 0.83 / iOS 18+, or the screens
+>    may need a non-zero `offset={...}` because of the SafeAreaView
+>    + Header height that batch 1 didn't apply.
+> 2. Suspects to check first: screens where the migration replaced
+>    `keyboardVerticalOffset={64}` with `offset={64}` correctly
+>    (Settings, AdminProducts, AdminSchedule, Contact, CycleTracker,
+>    Store cart, UserProfile) vs. screens where I dropped the
+>    offset entirely (everything else) — the dropped-offset screens
+>    have a default `offset={0}` and may need the header height
+>    added back.
+> 3. The popup wizard / goal modals on MacroTracker, Profile,
+>    WeightTracker were intentionally NOT touched in batch 1 (small
+>    centered cards, 4 TextInputs each). If "blocking a lot of
+>    pages" includes these, wrap each card in `<KeyboardView>`
+>    (KAV-only) or use `KeyboardAvoidingView behavior="padding"`
+>    around the card.
+> 4. Modal-form screens that batch 1 left alone where the keyboard
+>    issue is likely real:
+>    - `AdminProductsScreen.tsx:284` — inner edit-modal SV with
+>      `flexGrow:0` constraint; SAVE button can hide
+>    - `AdminScheduleScreen.tsx:208` — inner Add/Edit class modal
+>      with TextInputs
+>    - `WeightTrackerScreen.tsx:690` — goal modal with TextInputs
+>    - `MacroTrackerScreen.tsx:852` (wizard) and `:951` (goals)
+> 5. Verify the wrapper itself is correct — re-read
+>    `src/components/KeyboardView.tsx` and confirm KAS is actually
+>    rendering KAV with the right `behavior` for the platform.
+>    Consider whether `keyboardVerticalOffset` should default to a
+>    non-zero value (e.g. header height) instead of 0.
+>
+> Don't keep migrating more screens until the *already-migrated*
+> ones are confirmed working. Otherwise batch 2 inherits the same
+> bug.
+
 **Done so far** (committed in this session, on top of `83d2ee9` chunk
 8 / `a93757e` chunk 9):
 
@@ -232,5 +276,6 @@ Reopen only if explicitly requested.
 ---
 
 Last updated: 2026-04-28 (later same day) by Claude — §32 sweep
-batch 1 landed (20 of ~25 screens). Context-limited; resume per the
-"§32 keyboard sweep — IN PROGRESS" section above.
+batch 1 landed (20 of ~25 screens). User QA reports keyboard still
+blocks content on many pages → see ⚠️ block at top of "§32 keyboard
+sweep — IN PROGRESS" before continuing batch 2.
