@@ -35,6 +35,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { spacing, borderRadius } from '../theme';
 import { AnimatedLogo, FadeInView, TimeClock, PointsBadge, CelebrationModal } from '../components';
+import { SoundPressable } from '../components/SoundPressable';
 import { ReorderableSections, ReorderableItem } from '../components/ReorderableSections';
 import { SpinWheelModal } from '../components/SpinWheelModal';
 import { CoachmarkTutorial, CoachmarkStep, shouldShowCoachmarks } from '../components/CoachmarkTutorial';
@@ -151,9 +152,10 @@ function EmployeeChecklistCard({ navigation, memberId }: { navigation: any; memb
         {tasks.length > 0 && (
           <View style={{ marginTop: 10, gap: 6 }}>
             {tasks.map((t) => (
-              <TouchableOpacity
+              <SoundPressable
                 key={t.id}
                 onPress={() => toggleComplete(t.id, memberId)}
+                soundEvent="success"
                 activeOpacity={0.85}
                 style={{
                   flexDirection: 'row',
@@ -202,7 +204,7 @@ function EmployeeChecklistCard({ navigation, memberId }: { navigation: any; memb
                     </Text>
                   ) : null}
                 </View>
-              </TouchableOpacity>
+              </SoundPressable>
             ))}
           </View>
         )}

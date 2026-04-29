@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Image} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -53,6 +54,14 @@ export function CommunityScreen({ navigation }: any) {
   useEffect(() => {
     loadFeed();
   }, [loadFeed]);
+
+  // Reload the feed every time the screen regains focus. Without this, posts
+  // created in CreatePostScreen don't appear when the user navigates back.
+  useFocusEffect(
+    useCallback(() => {
+      loadFeed();
+    }, [loadFeed]),
+  );
 
   const handleRefresh = () => {
     setRefreshing(true);

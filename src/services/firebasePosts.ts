@@ -78,6 +78,27 @@ export async function getFeed(maxPosts = 50): Promise<Post[]> {
 
   const followingSnap = await getDocs(collection(db, 'following', uid, 'follows'));
   const followedIds = followingSnap.docs.map((d) => d.id);
+
+  // If the user follows nobody, querying only their own posts gives an empty
+  // feed for new accounts — bad first impression. Fall back to "all recent
+  // posts" so the feed is populated and the user has something to scroll
+  // through right away. Once they follow someone, the followed-only query
+  // takes over.
+  if (followedIds.length === 0) {
+    const q = query(
+      collection(db, 'posts'),
+      orderBy('createdAt', 'desc'),
+      limit(maxPosts),
+    );
+    const snap = await getDocs(q);
+    const out: Post[] = [];
+    for (const d of snap.docs) {
+      const liked = await isLiked(d.id);
+      out.push({ id: d.id, ...d.data(), liked } as Post);
+    }
+    return out;
+  }
+
   followedIds.push(uid);
 
   const batches: string[][] = [];

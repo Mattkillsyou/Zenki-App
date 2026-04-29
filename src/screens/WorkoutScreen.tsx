@@ -837,7 +837,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    width: 100,
+    // Was a hardcoded width: 100. minWidth keeps the label area from
+    // shrinking below readable on phones, but lets it grow on iPad so the
+    // group name doesn't get truncated when the parent row is wider.
+    minWidth: 100,
   },
   volumeGroupName: {
     fontSize: 9,
@@ -857,7 +860,9 @@ const styles = StyleSheet.create({
   volumeValue: {
     fontSize: 9,
     fontWeight: '700',
-    width: 60,
+    // Was width: 60 (pixel). minWidth lets the value column expand on iPad
+    // for big numbers without clipping; right-alignment is preserved.
+    minWidth: 60,
     textAlign: 'right',
   },
 
