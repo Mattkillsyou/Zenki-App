@@ -44,6 +44,52 @@
 
 ## Deferred (open work)
 
+### 🐛 BLOCKING BUG: modal headers under the dynamic island / battery
+
+**User QA 2026-04-28:** "I can't exit the Food Log or the medication
+screen. The headers need to move under the clock and the battery.
+They are too high."
+
+Confirmed by screenshots: on the Food Search modal (close X at
+top-left) and the Drug / Peptide search modal in the Medication
+Tracker (close X at top-left, Save at top-right), the header row
+renders at y=0 — the iOS clock, dynamic island, wifi, and battery
+icons sit directly on top of the X / Save buttons, making them
+unreachable. The "Save" label is also visually cut off behind the
+battery glyph on iPhone 17 Pro Max.
+
+This is a `SafeAreaView` / `edges` bug, not a keyboard bug — the
+modal content is not respecting the top inset.
+
+Likely culprits to fix:
+- `src/components/FoodSearchModal.tsx` — used by
+  `MacroTrackerScreen.tsx`. The screenshot text "Search for a
+  food to log" matches this component's empty state. Almost
+  certainly the modal renders a custom backdrop `<View>` without
+  a `<SafeAreaView edges={['top']}>` wrapping its header.
+- The "Add Medication" / "SEARCH DRUG / PEPTIDE" modal inside
+  `src/screens/MedicationTrackerScreen.tsx` (the same modal
+  flagged for the §32 keyboard migration at line ~783–1103).
+  Same root cause expected.
+
+Fix shape (do for each modal):
+1. Wrap the header row (the one with the X and the Save button)
+   in `<SafeAreaView edges={['top']}>` from
+   `react-native-safe-area-context`, OR add a `paddingTop` of the
+   top inset via `useSafeAreaInsets()` if the existing layout
+   needs the SafeAreaView at a deeper level.
+2. Confirm the X button now sits BELOW the dynamic island on
+   iPhone 17 Pro Max (~`top inset = 59pt`).
+3. Confirm the Save button text is fully visible — it's currently
+   getting clipped by the battery glyph on the right.
+
+Verify on iPhone 17 Pro Max sim before claiming done — the
+dynamic island makes these regressions invisible on older device
+profiles.
+
+This is more urgent than the §32 batch 2 work below: users
+literally cannot dismiss the modal.
+
 ### §32 keyboard sweep — IN PROGRESS (resume here)
 
 > ⚠️ **User QA feedback (2026-04-28, after batch 1):** "The keyboard
@@ -276,6 +322,11 @@ Reopen only if explicitly requested.
 ---
 
 Last updated: 2026-04-28 (later same day) by Claude — §32 sweep
-batch 1 landed (20 of ~25 screens). User QA reports keyboard still
-blocks content on many pages → see ⚠️ block at top of "§32 keyboard
-sweep — IN PROGRESS" before continuing batch 2.
+batch 1 landed (20 of ~25 screens). User QA reports two issues
+that take priority over batch 2:
+  1. 🐛 BLOCKING: Food Search modal + Medication search modal
+     headers render under the iOS dynamic island / clock / battery
+     — users can't tap X or Save. See "🐛 BLOCKING BUG" section.
+  2. ⚠️ Keyboard still blocks content on many migrated pages — see
+     ⚠️ block in "§32 keyboard sweep — IN PROGRESS".
+Address #1 first, then re-verify #2 before doing more migrations.
