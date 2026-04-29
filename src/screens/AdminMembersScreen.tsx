@@ -195,9 +195,19 @@ export function AdminMembersScreen({ navigation }: any) {
 
     setSaving(true);
     try {
+      // Trim text fields so we never persist trailing whitespace — that broke
+      // sign-in lookups for usernames like "mbrown " (with trailing space)
+      // because the input was matched against "mbrown" (no space).
+      const trimmedForm = {
+        ...form,
+        firstName: (form.firstName ?? '').trim(),
+        lastName: (form.lastName ?? '').trim(),
+        username: (form.username ?? '').trim(),
+        email: (form.email ?? '').trim(),
+      };
       const base: Member = editingMember
-        ? { ...editingMember, ...form }
-        : { ...form, id: Date.now().toString() };
+        ? { ...editingMember, ...trimmedForm }
+        : { ...trimmedForm, id: Date.now().toString() };
 
       // If admin set an initial password for a new member, provision the
       // Firebase Auth account in a sibling app so the admin stays signed in,

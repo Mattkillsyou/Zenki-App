@@ -238,7 +238,8 @@ export function SignInScreen({ navigation }: any) {
     // 2. If no seed match, look up admin-created / self-signup members from the
     //    local merged registry. Match by username (when input has no '@') or
     //    email (when input has '@'). This is what makes "mbrown" work for an
-    //    admin-created member with username 'mbrown'.
+    //    admin-created member with username 'mbrown'. Trim both sides because
+    //    admin-form input has historically been saved with trailing whitespace.
     if (!member) {
       try {
         const merged = await getMergedMembers();
@@ -246,8 +247,8 @@ export function SignInScreen({ navigation }: any) {
         member =
           merged.find((m) =>
             isEmailInput
-              ? (m.email ?? '').toLowerCase() === input
-              : (m.username ?? '').toLowerCase() === input,
+              ? (m.email ?? '').trim().toLowerCase() === input
+              : (m.username ?? '').trim().toLowerCase() === input,
           ) ?? null;
         console.log('[SignIn] tier2 result:', member ? `hit member=${member.username} email=${member.email ?? '(none)'}` : 'miss');
       } catch (e) {

@@ -15,9 +15,16 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { Member } from '../data/members';
 import { generateId } from '../utils/generateId';
 
-/** Stable email for a member — uses their real email or a fallback. */
+/**
+ * Stable email for a member — uses their real email or a fallback.
+ * Trims whitespace because admin-form data has historically been saved with
+ * trailing spaces, and Firebase Auth rejects emails containing whitespace.
+ */
 export function emailForMember(member: Pick<Member, 'email' | 'username'>): string {
-  return member.email || `${member.username}@zenkidojo.app`;
+  const email = (member.email ?? '').trim();
+  if (email) return email;
+  const username = (member.username ?? '').trim();
+  return `${username}@zenkidojo.app`;
 }
 
 export interface SignInResult {
