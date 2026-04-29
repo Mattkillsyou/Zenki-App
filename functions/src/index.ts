@@ -27,6 +27,9 @@ export { deleteAccount } from './deleteAccount';
 // Re-export the admin moderation endpoint.
 export { adminActionReport } from './adminActionReport';
 
+// Re-export the Zenki-branded password-reset email endpoint (Resend).
+export { sendPasswordReset } from './sendPasswordReset';
+
 // ─────────────────────────────────────────────
 // Setup
 // ─────────────────────────────────────────────

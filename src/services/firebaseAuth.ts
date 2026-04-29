@@ -130,11 +130,47 @@ export async function firebaseSignOut(): Promise<void> {
   }
 }
 
-/** Send a "reset password" email through Firebase. Throws on failure. */
+/**
+ * Send a "reset password" email.
+ *
+ * Primary path: our `sendPasswordReset` Cloud Function, which mints the reset
+ * link via Admin SDK and delivers a Zenki-branded email through Resend (no
+ * Gmail spam-flag, professional sender). The Resend API key lives server-side
+ * as a Firebase Secret; the client never sees it.
+ *
+ * Fallback path: Firebase's built-in `sendPasswordResetEmail`. Only fires if
+ * the Cloud Function call fails at the network layer (function not deployed,
+ * outage, no internet) — degraded delivery (the spammy default sender) beats
+ * no email at all.
+ *
+ * Throws only on the fallback failing too, or if Firebase isn't configured.
+ */
 export async function firebaseSendPasswordReset(email: string): Promise<void> {
   if (!FIREBASE_CONFIGURED || !auth) {
     throw new Error('firebase-unavailable');
   }
+
+  // Try the Cloud Function first.
+  try {
+    const { AI_FUNCTION_BASE_URL } = await import('../config/api');
+    const res = await fetch(`${AI_FUNCTION_BASE_URL}/sendPasswordReset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (res.ok) {
+      // Function is anti-enumeration: 200 always, even for unknown emails.
+      // We rely on that to avoid disclosing which addresses are registered.
+      return;
+    }
+    // Non-2xx = real outage (Resend down, function errored). Fall through.
+    console.warn('[Auth] sendPasswordReset Cloud Function returned', res.status, '— falling back to default sender');
+  } catch (err) {
+    console.warn('[Auth] sendPasswordReset Cloud Function failed; falling back to default sender:', err);
+  }
+
+  // Fallback to Firebase's built-in (the Gmail-spam-flagged one). Better
+  // degraded delivery than nothing.
   await sendPasswordResetEmail(auth, email);
 }
 
