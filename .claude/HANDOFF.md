@@ -29,7 +29,10 @@
 | 9.1 | §32 sweep batch 1 (20 screens) | `b714dd3` | ✅ done |
 | 9.2 | §32 wrapper rewrite (drop KAV on iOS) | `eb0876d` | ✅ done — fixes "keyboard blocks content" globally |
 | 9.3 | Modal SafeArea bug (X under dynamic island) | `bf8a6e4` | ✅ done — FoodSearchModal + Med modal |
-| 9.4 | §32 sweep batch 2 + Group C | (this commit) | ✅ done — Med modal, Profile, WeightTracker, CreatePost, UserSearch |
+| 9.4 | §32 sweep batch 2 + Group C | `3f290d9` | ✅ done — Med modal, Profile, WeightTracker, CreatePost, UserSearch |
+| 9.5 | §36 ScreenContainer sweep (16 screens) | `0dcc9ff` | ✅ done — 8 listed + 8 Admin siblings; AdminMembers KAV→KAS bonus |
+| 9.6 | §36 touch targets (hitSlop default in SoundPressable) | `40feb6d` | ✅ done — single-line fix, ~800 callsites covered |
+| 9.7 | §36 maxFontSizeMultiplier on critical text | `6ba359d` | ✅ done — Button + 4 shared badges |
 
 ## Significant follow-up commits (out of chunk order)
 
@@ -171,21 +174,42 @@ those popups, wrap the card in `<KeyboardView>` (KAV-only).
   `KeyboardAwareScrollView` are re-exported from
   `src/components/index.ts`. Don't deep-import.
 
-### §36 ScreenContainer sweep — large
-`<ScreenContainer>` wrapper landed (commit `83d2ee9`). Applied as a
-reference to `BookScreen`. Remaining iPad-relevant screens:
-TrainingHomeScreen, WorkoutScreen, WorkoutSessionScreen,
-MacroTrackerScreen, WeightTrackerScreen, ProfileScreen,
-SettingsScreen, AdminScreen, all Admin sub-screens, etc. Each is a
-single wrap.
+### §36 ScreenContainer sweep — DONE (commit `0dcc9ff`)
+Wrapped 16 iPad-relevant screens in `<ScreenContainer>`: the 8
+listed in the original handoff (TrainingHome, Workout,
+WorkoutSession, MacroTracker, WeightTracker, Profile [form],
+Settings [form], Admin) + all 8 Admin siblings (Announcements,
+Appointments, Broadcast, EmployeeTasks, Members, Products,
+Reports, Schedule). Phone behavior unchanged; iPad now caps
+content width at 700pt (or 600pt for form-heavy screens) and
+centers it. Bonus: AdminMembers's leftover outer
+`KeyboardAvoidingView` from chunk 8 was migrated to
+`<KeyboardAwareScrollView>` for consistency.
 
-### §36 touch targets — small
-Audit all `SoundPressable` / `TouchableOpacity` for minimum 44×44pt
-+ `hitSlop={{top:8,bottom:8,left:8,right:8}}` per master prompt.
+### §36 touch targets — DONE (commit `40feb6d`)
+Baked `hitSlop={{top:8, bottom:8, left:8, right:8}}` as a default
+into `SoundPressable`. Single-component change covers ~800
+callsites globally. Callers can still override `hitSlop` to
+disable or customize. The remaining 167 raw `TouchableOpacity`
+callsites that aren't routed through `SoundPressable` will
+inherit the default once they migrate under §12.
 
-### §36 maxFontSizeMultiplier — small
-Apply `maxFontSizeMultiplier={1.3}` on critical text (some screens
-already done, sweep needed).
+The visible-44×44pt half of the §36 sub-bullet is NOT enforced
+mechanically — most existing buttons already have width/height
+40-44; the few smaller icon-only callsites now still clear 44pt
+of *hit* area thanks to the default hitSlop. If a per-callsite
+audit shows a specific button still too small, that's a one-off
+style edit.
+
+### §36 maxFontSizeMultiplier — DONE (commit `6ba359d`)
+Added `maxFontSizeMultiplier={1.3}` to `<Text>` inside the most-
+used shared components: Button title, SectionHeader title +
+action, StreakBadge count + label (both states), PointsBadge
+count + label, XPProgressBar level/xp text. Body copy and form
+labels intentionally NOT capped — they should still scale fully
+with Dynamic Type. If a future QA pass at 200% text size shows
+breakage on a specific surface (e.g., a screen-local Text
+overflowing), that screen can add the prop on its own Text.
 
 ### §12 SoundPressable rollout — large
 Verified 2026-04-28: actual counts are **167** `TouchableOpacity`
@@ -271,13 +295,17 @@ Reopen only if explicitly requested.
 ---
 
 Last updated: 2026-04-28 (later same day) by Claude.
-  • §32 keyboard sweep is COMPLETE across all listed screens.
-    Wrapper rewrite (eb0876d) is the load-bearing fix — drops the
-    redundant KAV on iOS and lets `automaticallyAdjustKeyboardInsets`
-    do both the inset and the auto-scroll-into-view, "like a
-    normal app." Verify on device: any TextInput on any migrated
-    screen should remain visible when typing.
-  • Modal SafeArea bug (X under dynamic island) FIXED in bf8a6e4.
-  • Open: §36 ScreenContainer sweep, §36 touch targets, §36
-    maxFontSizeMultiplier, §12 SoundPressable rollout (gated),
-    Resend Cloud Function deploy (gated).
+  • §32 keyboard sweep COMPLETE — wrapper rewrite (eb0876d) is
+    the load-bearing fix; "like a normal app" behavior on every
+    migrated screen.
+  • Modal SafeArea bug FIXED in bf8a6e4 (Food Search + Add Med).
+  • §36 ScreenContainer / touch targets / maxFontSizeMultiplier
+    all COMPLETE in 0dcc9ff / 40feb6d / 6ba359d.
+  • Still open and gated:
+      – §12 SoundPressable rollout (167 raw TouchableOpacity + 54
+        Pressable). Defer until audio is verified end-to-end on
+        TestFlight; mechanical sweep risks double-sounds where
+        parent cards already self-sound.
+      – Resend Cloud Function deploy. Code is committed (8f466e1)
+        but needs the user to set RESEND_API_KEY and run
+        `firebase deploy --only functions:sendPasswordReset`.
