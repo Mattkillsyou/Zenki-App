@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../../theme';
-import { Button } from '../../components';
+import { Button, KeyboardAwareScrollView } from '../../components';
 import { FIREBASE_CONFIGURED } from '../../config/firebase';
 import { firebaseSendPasswordReset } from '../../services/firebaseAuth';
 
@@ -60,7 +60,7 @@ export function ForgotPasswordScreen({ navigation }: any) {
         </SoundPressable>
       </View>
 
-      <View style={styles.content}>
+      <KeyboardAwareScrollView contentContainerStyle={styles.content}>
         {sent ? (
           <View style={styles.successState}>
             <View style={[styles.successIcon, { backgroundColor: colors.goldMuted }]}>
@@ -108,7 +108,7 @@ export function ForgotPasswordScreen({ navigation }: any) {
             />
           </>
         )}
-      </View>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
@@ -129,8 +129,10 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: spacing.lg,
-    flex: 1,
-    justifyContent: 'center',
+    // No flex/justifyContent here — the wrapping KeyboardAwareScrollView
+    // handles flexGrow:1 + paddingBottom for keyboard safety. Centered look
+    // comes from the natural top-margin spacing in the form.
+    paddingTop: spacing.xl,
   },
   heading: {
     ...typography.sectionTitle,

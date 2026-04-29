@@ -19,3 +19,4 @@ export { SoundPressable } from './SoundPressable';
 export { Skeleton } from './Skeleton';
 export { EmptyState } from './EmptyState';
 export { ErrorBoundary } from './ErrorBoundary';
+export { KeyboardView, KeyboardAwareScrollView } from './KeyboardView';

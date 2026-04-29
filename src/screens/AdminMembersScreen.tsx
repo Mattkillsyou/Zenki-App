@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { Button } from '../components';
+import { Button, KeyboardAwareScrollView } from '../components';
 import {
   MEMBERS,
   Member,
@@ -445,7 +445,7 @@ export function AdminMembersScreen({ navigation }: any) {
             </Text>
             <View style={{ width: 60 }} />
           </View>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalContent}>
+          <KeyboardAwareScrollView contentContainerStyle={styles.modalContent}>
             {renderFormField('FIRST NAME', form.firstName, 'firstName', { autoCapitalize: 'words' })}
             {renderFormField('LAST NAME', form.lastName, 'lastName', { autoCapitalize: 'words' })}
             {renderFormField('USERNAME', form.username, 'username')}
@@ -579,7 +579,7 @@ export function AdminMembersScreen({ navigation }: any) {
               style={{ marginTop: spacing.lg }}
             />
             <View style={{ height: spacing.xxl * 2 }} />
-          </ScrollView>
+          </KeyboardAwareScrollView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
