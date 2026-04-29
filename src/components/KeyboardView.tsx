@@ -5,7 +5,6 @@ import {
   ScrollView,
   ScrollViewProps,
   StyleProp,
-  View,
   ViewStyle,
 } from 'react-native';
 
@@ -59,21 +58,27 @@ interface KeyboardAwareScrollViewProps
  * One-stop "keyboard-safe scrollable screen" wrapper used by sign-in,
  * onboarding, admin forms, and any other TextInput-heavy surface.
  *
- * On iOS (14+) this relies on the ScrollView's native
- * `automaticallyAdjustKeyboardInsets` — that single prop handles BOTH
- * (a) adding bottom contentInset equal to the keyboard height so the
- * keyboard doesn't cover content, AND (b) auto-scrolling the focused
- * TextInput above the keyboard. We deliberately do NOT wrap in
- * `KeyboardAvoidingView` on iOS because behavior="padding" + the
- * native inset adjustment double-apply, which not only wastes space
- * but also breaks the auto-scroll-to-focused-field. This is the
- * pattern Apple's own apps use (Notes, Messages, Mail).
+ * Composes two mechanisms that work together (NOT against each other):
  *
- * On Android, native keyboard handling via windowSoftInputMode
- * (typically `adjustResize`) shrinks the screen when the keyboard
- * appears, so we wrap in KeyboardAvoidingView with behavior="height"
- * as a belt-and-suspenders for screens that don't get the system's
- * adjustment for any reason.
+ *   1. <KeyboardAvoidingView behavior="padding"> on iOS / "height" on
+ *      Android — when the keyboard appears, this shrinks the wrapper's
+ *      bottom edge so its content frame stops just above the keyboard.
+ *      For short centered forms (an icon, a label, a TextInput, a
+ *      submit button stacked together with `justifyContent: 'center'`),
+ *      this is what keeps the SUBMIT BUTTON visible — the button rises
+ *      with the rest of the cluster instead of being clipped at the
+ *      bottom.
+ *
+ *   2. ScrollView's `automaticallyAdjustKeyboardInsets` — once KAV has
+ *      shifted the ScrollView frame above the keyboard, this prop
+ *      handles auto-scrolling the focused TextInput into view INSIDE
+ *      the (now-shifted) ScrollView. Necessary for tall forms where
+ *      the field is near the bottom of a long list.
+ *
+ * They don't double-apply because KAV's shrink-from-bottom moves the
+ * ScrollView's frame so its visible bottom is at or above the keyboard
+ * top. Auto-inset then sees zero (or minimal) keyboard overlap with the
+ * shifted frame and adds zero (or minimal) contentInset.
  *
  * Per master prompt §32. Reference call site: SignInScreen.
  */
@@ -84,32 +89,23 @@ export function KeyboardAwareScrollView({
   contentContainerStyle,
   ...rest
 }: KeyboardAwareScrollViewProps) {
-  const scrollView = (
-    <ScrollView
-      contentContainerStyle={[{ flexGrow: 1, paddingBottom: 32 }, contentContainerStyle]}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="on-drag"
-      // iOS 14+: native bottom-inset adjustment + auto-scroll the focused
-      // TextInput above the keyboard. No-op on Android.
-      automaticallyAdjustKeyboardInsets
-      contentInsetAdjustmentBehavior="automatic"
-      {...rest}
-    >
-      {children}
-    </ScrollView>
-  );
-  if (Platform.OS === 'ios') {
-    // No KeyboardAvoidingView on iOS — see header docblock.
-    return <View style={[{ flex: 1 }, outerStyle]}>{scrollView}</View>;
-  }
   return (
     <KeyboardAvoidingView
-      behavior="height"
-      keyboardVerticalOffset={Math.max(offset, 24)}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? offset : Math.max(offset, 24)}
       style={[{ flex: 1 }, outerStyle]}
     >
-      {scrollView}
+      <ScrollView
+        contentContainerStyle={[{ flexGrow: 1, paddingBottom: 32 }, contentContainerStyle]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
+        contentInsetAdjustmentBehavior="automatic"
+        {...rest}
+      >
+        {children}
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }

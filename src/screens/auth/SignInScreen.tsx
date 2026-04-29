@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { Button, KeyboardAwareScrollView } from '../../components';
+import { Button, KeyboardAwareScrollView, KeyboardView } from '../../components';
 import { MEMBERS, CREDENTIALS } from '../../data/members';
 import { spacing, borderRadius } from '../../theme';
 import { FIREBASE_CONFIGURED } from '../../config/firebase';
@@ -334,7 +334,7 @@ export function SignInScreen({ navigation }: any) {
       {/* Invite Gate */}
       <Modal visible={showInviteGate} animationType="fade">
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-          <KeyboardAwareScrollView contentContainerStyle={styles.gateContent}>
+          <KeyboardView style={styles.gateContainer}>
             <View style={[styles.gateIconWrap, { backgroundColor: colors.goldMuted }]}>
               <Ionicons name="shield-checkmark-outline" size={48} color={colors.gold} />
             </View>
@@ -349,7 +349,7 @@ export function SignInScreen({ navigation }: any) {
               autoCapitalize="none"
             />
             <Button title="Continue" onPress={handleVerifyInvite} fullWidth size="lg" />
-          </KeyboardAwareScrollView>
+          </KeyboardView>
         </SafeAreaView>
       </Modal>
 
