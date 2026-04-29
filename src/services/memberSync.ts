@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   setDoc,
   deleteDoc,
   getDocs,
@@ -10,7 +11,7 @@ import {
   writeBatch,
   Unsubscribe,
 } from 'firebase/firestore';
-import { db, FIREBASE_CONFIGURED } from '../config/firebase';
+import { auth, db, FIREBASE_CONFIGURED } from '../config/firebase';
 import { Member } from '../data/members';
 
 // ─────────────────────────────────────────────────
@@ -105,6 +106,33 @@ export async function deleteMemberFromFirestore(memberId: string): Promise<boole
   } catch (err) {
     console.warn('[Members Firestore] Delete failed:', err);
     return false;
+  }
+}
+
+/**
+ * Resolve the currently signed-in Firebase user to their full Member record
+ * by reading /users/{uid} → memberId → /members/{memberId}. Returns null if
+ * Firebase isn't configured, no user is signed in, or either Firestore doc
+ * is missing.
+ *
+ * Used by the sign-in flow to hydrate the local Member after a successful
+ * firebaseSignInWithPassword for admin-created (custom) accounts where the
+ * username isn't in the seed CREDENTIALS map.
+ */
+export async function fetchMemberByCurrentUid(): Promise<Member | null> {
+  if (!FIREBASE_CONFIGURED || !auth?.currentUser || !db) return null;
+  const uid = auth.currentUser.uid;
+  try {
+    const userSnap = await getDoc(doc(db, 'users', uid));
+    if (!userSnap.exists()) return null;
+    const memberId = (userSnap.data() as { memberId?: string })?.memberId;
+    if (!memberId) return null;
+    const memberSnap = await getDoc(doc(db, 'members', memberId));
+    if (!memberSnap.exists()) return null;
+    return memberSnap.data() as Member;
+  } catch (err) {
+    console.warn('[Members Firestore] fetchMemberByCurrentUid failed:', err);
+    return null;
   }
 }
 

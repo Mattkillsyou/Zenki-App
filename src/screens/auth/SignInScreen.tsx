@@ -21,8 +21,11 @@ import {
   firebaseSignInOrSeedAccount,
   firebaseSignInWithApple,
   firebaseSignInWithGoogle,
+  firebaseSignOut,
   emailForMember,
 } from '../../services/firebaseAuth';
+import { fetchMemberByCurrentUid } from '../../services/memberSync';
+import { getMergedMembers } from '../../services/memberOverrides';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -210,7 +213,7 @@ export function SignInScreen({ navigation }: any) {
   const handleSignIn = async () => {
     setErrorMsg(null);
     if (!username || !password) {
-      setErrorMsg('Please enter your username and password.');
+      setErrorMsg('Please enter your username or email and your password.');
       return;
     }
     setLoading(true);
@@ -222,11 +225,39 @@ export function SignInScreen({ navigation }: any) {
       return;
     }
 
-    const cred = CREDENTIALS[username.toLowerCase()];
-    const member = cred ? MEMBERS.find((m) => m.id === cred.memberId) : null;
+    const input = username.toLowerCase().trim();
+    const isEmailInput = input.includes('@');
 
-    // Custom member (non-hardcoded user) — try Firebase directly via username@domain
-    const email = member ? emailForMember(member) : `${username.toLowerCase()}@zenkidojo.app`;
+    // 1. Try the seed CREDENTIALS map first (handles matt.b /
+    //    mattbrowntheemail@gmail.com / apple / admin / reviewer / tim@zenkidojo.com).
+    const seedCred = CREDENTIALS[input];
+    let member = seedCred ? MEMBERS.find((m) => m.id === seedCred.memberId) ?? null : null;
+
+    // 2. If no seed match, look up admin-created / self-signup members from the
+    //    local merged registry. Match by username (when input has no '@') or
+    //    email (when input has '@'). This is what makes "mbrown" work for an
+    //    admin-created member with username 'mbrown'.
+    if (!member) {
+      try {
+        const merged = await getMergedMembers();
+        member =
+          merged.find((m) =>
+            isEmailInput
+              ? (m.email ?? '').toLowerCase() === input
+              : (m.username ?? '').toLowerCase() === input,
+          ) ?? null;
+      } catch {
+        /* offline / async storage error — fall through */
+      }
+    }
+
+    // Resolve the email Firebase Auth uses. Priority:
+    //   real member.email > input-when-it's-an-email > synthesized username@zenkidojo.app
+    const email = member
+      ? emailForMember(member)
+      : isEmailInput
+        ? input
+        : `${input}@zenkidojo.app`;
 
     // When Firebase is unreachable we fall back to the pre-existing local password
     // path so dev / offline can still sign in. Production always goes through Firebase.
@@ -237,21 +268,31 @@ export function SignInScreen({ navigation }: any) {
 
     try {
       if (member) {
-        // Seeded test accounts: auto-create Firebase record on first correct password
+        // Member exists locally — auto-create or sign in to the matching
+        // Firebase Auth account on first correct password.
         const { isNewAccount } = await firebaseSignInOrSeedAccount(email, password, member);
         if (isNewAccount) {
-          console.log('[SignIn] Seeded Firebase account for', username);
+          console.log('[SignIn] Seeded Firebase account for', input);
         }
         await auth.signIn(member);
         navigation.replace('Main');
-      } else {
-        // Unknown username — pure Firebase sign-in attempt
-        await firebaseSignInWithPassword(email, password);
-        // We have no Member record client-side for custom accounts yet — the
-        // onboarding flow is the authoritative creation path. Until we wire
-        // Firestore → Member hydration, fall through to invalid-credentials.
-        throw new Error('custom-accounts-need-onboarding');
+        return;
       }
+
+      // No local member match — sign in via Firebase, then hydrate the Member
+      // from /users/{uid} → /members/{memberId} in Firestore. This is the path
+      // for admin-created users whose member record exists in Firestore but
+      // hasn't been mirrored to local AsyncStorage on this device yet.
+      await firebaseSignInWithPassword(email, password);
+      const hydrated = await fetchMemberByCurrentUid();
+      if (!hydrated) {
+        // Auth succeeded but no member doc found — sign back out so we don't
+        // leave a half-signed-in state, and surface a useful message.
+        await firebaseSignOut().catch(() => {});
+        throw new Error('member-record-missing');
+      }
+      await auth.signIn(hydrated);
+      navigation.replace('Main');
     } catch (error: any) {
       const code = error?.code ?? error?.message ?? 'unknown';
       const userMessage =
@@ -259,7 +300,9 @@ export function SignInScreen({ navigation }: any) {
           ? 'Too many attempts — take a breather and try again in a minute.'
           : code === 'auth/network-request-failed'
             ? "Couldn't connect — check your internet and try again."
-            : "Hmm, that username or password doesn't look right.";
+            : code === 'member-record-missing'
+              ? "Sign-in worked, but we couldn't find your member profile. Ask the dojo admin to confirm your account."
+              : "Hmm, that username or password doesn't look right.";
       setErrorMsg(userMessage);
     } finally {
       setLoading(false);
@@ -359,9 +402,9 @@ export function SignInScreen({ navigation }: any) {
               <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
             </View>
 
-            {/* Username */}
+            {/* Username or Email */}
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Username</Text>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Username or Email</Text>
               <View style={[
                 styles.inputWrap,
                 {
@@ -372,7 +415,7 @@ export function SignInScreen({ navigation }: any) {
                 <Ionicons name="person-outline" size={20} color={colors.textTertiary} />
                 <TextInput
                   style={[styles.input, { color: colors.textPrimary }]}
-                  placeholder="Enter your username"
+                  placeholder="Username or email"
                   placeholderTextColor={colors.textTertiary}
                   value={username}
                   onChangeText={setUsername}
