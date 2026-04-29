@@ -353,7 +353,7 @@ export function SignInScreen({ navigation }: any) {
         </SafeAreaView>
       </Modal>
 
-      <KeyboardAwareScrollView>
+      <KeyboardView>
         <View style={styles.contentContainer}>
 
           {/* Logo */}
@@ -404,55 +404,49 @@ export function SignInScreen({ navigation }: any) {
             </View>
 
             {/* Username or Email */}
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Username or Email</Text>
-              <View style={[
-                styles.inputWrap,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: focusedField === 'username' ? colors.gold : 'transparent',
-                }
-              ]}>
-                <Ionicons name="person-outline" size={20} color={colors.textTertiary} />
-                <TextInput
-                  style={[styles.input, { color: colors.textPrimary }]}
-                  placeholder="Username or email"
-                  placeholderTextColor={colors.textTertiary}
-                  value={username}
-                  onChangeText={setUsername}
-                  onFocus={() => setFocusedField('username')}
-                  onBlur={() => setFocusedField(null)}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
+            <View style={[
+              styles.inputWrap,
+              {
+                backgroundColor: colors.surface,
+                borderColor: focusedField === 'username' ? colors.gold : 'transparent',
+              }
+            ]}>
+              <Ionicons name="person-outline" size={20} color={colors.textTertiary} />
+              <TextInput
+                style={[styles.input, { color: colors.textPrimary }]}
+                placeholder="Username or email"
+                placeholderTextColor={colors.textTertiary}
+                value={username}
+                onChangeText={setUsername}
+                onFocus={() => setFocusedField('username')}
+                onBlur={() => setFocusedField(null)}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
             </View>
 
             {/* Password */}
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Password</Text>
-              <View style={[
-                styles.inputWrap,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: focusedField === 'password' ? colors.gold : 'transparent',
-                }
-              ]}>
-                <Ionicons name="lock-closed-outline" size={20} color={colors.textTertiary} />
-                <TextInput
-                  style={[styles.input, { color: colors.textPrimary, flex: 1 }]}
-                  placeholder="Enter password"
-                  placeholderTextColor={colors.textTertiary}
-                  value={password}
-                  onChangeText={setPassword}
-                  onFocus={() => setFocusedField('password')}
-                  onBlur={() => setFocusedField(null)}
-                  secureTextEntry={!showPassword}
-                />
-                <SoundPressable onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                  <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textTertiary} />
-                </SoundPressable>
-              </View>
+            <View style={[
+              styles.inputWrap,
+              {
+                backgroundColor: colors.surface,
+                borderColor: focusedField === 'password' ? colors.gold : 'transparent',
+              }
+            ]}>
+              <Ionicons name="lock-closed-outline" size={20} color={colors.textTertiary} />
+              <TextInput
+                style={[styles.input, { color: colors.textPrimary, flex: 1 }]}
+                placeholder="Password"
+                placeholderTextColor={colors.textTertiary}
+                value={password}
+                onChangeText={setPassword}
+                onFocus={() => setFocusedField('password')}
+                onBlur={() => setFocusedField(null)}
+                secureTextEntry={!showPassword}
+              />
+              <SoundPressable onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.textTertiary} />
+              </SoundPressable>
             </View>
 
             <SoundPressable onPress={() => navigation.navigate('ForgotPassword')} style={styles.forgotRow}>
@@ -477,30 +471,30 @@ export function SignInScreen({ navigation }: any) {
             </SoundPressable>
           </View>
         </View>
-      </KeyboardAwareScrollView>
+      </KeyboardView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  contentContainer: { flexGrow: 1, paddingTop: 56, paddingHorizontal: 32, paddingBottom: 32, gap: 32 },
+  contentContainer: { flex: 1, paddingTop: 24, paddingHorizontal: 32, paddingBottom: 16, justifyContent: 'space-between' },
 
   // Logo
   logoSection: { alignItems: 'center' },
-  logo: { width: 140, height: 140, marginBottom: 8 },
-  tagline: { fontSize: 11, fontWeight: '600', letterSpacing: 4, marginTop: 4 },
+  logo: { width: 96, height: 96, marginBottom: 4 },
+  tagline: { fontSize: 10, fontWeight: '600', letterSpacing: 3, marginTop: 2 },
 
   // Form
-  formSection: { gap: 14 },
-  welcomeBlock: { alignItems: 'center', gap: 4 },
-  heading: { fontSize: 32, fontWeight: '800', letterSpacing: -0.8, lineHeight: 36, textAlign: 'center' },
-  subheading: { fontSize: 16, fontWeight: '400', lineHeight: 20, textAlign: 'center' },
+  formSection: { gap: 10 },
+  welcomeBlock: { alignItems: 'center', gap: 2 },
+  heading: { fontSize: 26, fontWeight: '800', letterSpacing: -0.6, lineHeight: 30, textAlign: 'center' },
+  subheading: { fontSize: 14, fontWeight: '400', lineHeight: 18, textAlign: 'center' },
 
   // Social buttons
   socialBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 10, paddingVertical: 12, borderRadius: 14,
+    gap: 10, paddingVertical: 11, borderRadius: 14,
   },
   socialBtnText: { fontSize: 15, fontWeight: '600', color: '#333' },
 
@@ -510,18 +504,16 @@ const styles = StyleSheet.create({
   dividerText: { fontSize: 12, fontWeight: '500' },
 
   // Fields
-  fieldGroup: { gap: 6 },
-  fieldLabel: { fontSize: 13, fontWeight: '600', marginBottom: 2, textAlign: 'center' },
   inputWrap: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12,
+    borderRadius: 14, paddingHorizontal: 16, paddingVertical: 11,
     borderWidth: 1.5,
   },
   input: { flex: 1, fontSize: 16 },
 
   // Forgot
-  forgotRow: { alignSelf: 'center', paddingVertical: 8 },
-  forgotText: { fontSize: 14, fontWeight: '600' },
+  forgotRow: { alignSelf: 'center', paddingVertical: 4 },
+  forgotText: { fontSize: 13, fontWeight: '600' },
 
   // Error banner
   errorBanner: {
