@@ -63,7 +63,7 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={textColor} size="small" />
       ) : (
-        <Text style={[styles.text, styles[`${size}Text` as keyof typeof styles] as any, { color: textColor }]}>{title}</Text>
+        <Text maxFontSizeMultiplier={1.3} style={[styles.text, styles[`${size}Text` as keyof typeof styles] as any, { color: textColor }]}>{title}</Text>
       )}
     </SoundPressable>
   );

@@ -49,6 +49,7 @@ export function PointsBadge({ points, compact, onPress }: PointsBadgeProps) {
         />
       </Animated.View>
       <Text
+        maxFontSizeMultiplier={1.3}
         style={[
           compact ? styles.compactCount : styles.count,
           { color: hasPoints ? colors.gold : colors.textMuted },
@@ -57,7 +58,7 @@ export function PointsBadge({ points, compact, onPress }: PointsBadgeProps) {
         {formatCount(points)}
       </Text>
       {!compact && (
-        <Text style={[styles.label, { color: hasPoints ? colors.textSecondary : colors.textMuted }]}>
+        <Text maxFontSizeMultiplier={1.3} style={[styles.label, { color: hasPoints ? colors.textSecondary : colors.textMuted }]}>
           diamonds
         </Text>
       )}

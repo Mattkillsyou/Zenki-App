@@ -37,8 +37,8 @@ export function StreakBadge({ streak, compact }: StreakBadgeProps) {
     return (
       <View style={[compact ? styles.compactContainer : styles.container, { backgroundColor: colors.surface }]}>
         <Ionicons name="flame-outline" size={compact ? 20 : 28} color={colors.textMuted} />
-        <Text style={[compact ? styles.compactCount : styles.count, { color: colors.textMuted }]}>0</Text>
-        {!compact && <Text style={[styles.label, { color: colors.textMuted }]}>day streak</Text>}
+        <Text maxFontSizeMultiplier={1.3} style={[compact ? styles.compactCount : styles.count, { color: colors.textMuted }]}>0</Text>
+        {!compact && <Text maxFontSizeMultiplier={1.3} style={[styles.label, { color: colors.textMuted }]}>day streak</Text>}
       </View>
     );
   }
@@ -52,11 +52,11 @@ export function StreakBadge({ streak, compact }: StreakBadgeProps) {
           <Ionicons name="flame" size={compact ? 22 : 32} color={flameColor} />
         </Animated.View>
       </Animated.View>
-      <Text style={[compact ? styles.compactCount : styles.count, { color: flameColor }]}>
+      <Text maxFontSizeMultiplier={1.3} style={[compact ? styles.compactCount : styles.count, { color: flameColor }]}>
         {formatCount(streak)}
       </Text>
       {!compact && (
-        <Text style={[styles.label, { color: colors.textSecondary }]}>
+        <Text maxFontSizeMultiplier={1.3} style={[styles.label, { color: colors.textSecondary }]}>
           day streak
         </Text>
       )}

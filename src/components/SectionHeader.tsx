@@ -15,10 +15,10 @@ export function SectionHeader({ title, actionLabel, onAction }: SectionHeaderPro
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
+      <Text maxFontSizeMultiplier={1.3} style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
       {actionLabel && onAction && (
         <SoundPressable onPress={onAction}>
-          <Text style={[styles.action, { color: colors.gold }]}>{actionLabel}</Text>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.action, { color: colors.gold }]}>{actionLabel}</Text>
         </SoundPressable>
       )}
     </View>

@@ -42,15 +42,15 @@ export function XPProgressBar({ level, currentXP, nextLevelXP, progress, totalXP
       <View style={styles.topRow}>
         <View style={styles.levelBadge}>
           <View style={[styles.levelCircle, { backgroundColor: colors.gold, borderColor: colors.gold }]}>
-            <Text style={styles.levelNumber}>{level}</Text>
+            <Text maxFontSizeMultiplier={1.3} style={styles.levelNumber}>{level}</Text>
           </View>
-          <Text style={[styles.levelLabel, { color: colors.textSecondary }]}>Level</Text>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.levelLabel, { color: colors.textSecondary }]}>Level</Text>
         </View>
         <View style={styles.xpInfo}>
-          <Text style={[styles.xpText, { color: colors.gold }]}>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.xpText, { color: colors.gold }]}>
             {currentXP} / {nextLevelXP} XP
           </Text>
-          <Text style={[styles.totalXP, { color: colors.textMuted }]}>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.totalXP, { color: colors.textMuted }]}>
             {totalXP} total XP
           </Text>
         </View>
