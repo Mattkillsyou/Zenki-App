@@ -10,7 +10,7 @@ import {
   firebaseSignOut,
   emailForMember,
 } from '../services/firebaseAuth';
-import { FIREBASE_CONFIGURED } from '../config/firebase';
+import { FIREBASE_CONFIGURED, auth } from '../config/firebase';
 import { seedReviewerDataIfNeeded } from '../utils/seedReviewerData';
 
 const STORAGE_KEY = '@zenki_current_user';
@@ -113,10 +113,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const createAccount = useCallback(async (member: Member, password?: string) => {
     // Provision Firebase Auth first when possible — so failures surface before
-    // the local state is mutated.
+    // the local state is mutated. Capture the uid so we can stamp it on the
+    // member record; the firestore.rules use it to authorize the user to
+    // create their own /members doc (firebaseUid == request.auth.uid).
+    let firebaseUid: string | undefined;
     if (FIREBASE_CONFIGURED && password) {
       try {
-        await firebaseCreateAccount(emailForMember(member), password, member);
+        firebaseUid = await firebaseCreateAccount(emailForMember(member), password, member);
       } catch (e: any) {
         if (e?.code === 'auth/email-already-in-use') {
           // A Firebase account with this email already exists (likely from an
@@ -127,6 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // and AI photo logging / Cloud Functions work.
           try {
             await firebaseSignInWithPassword(emailForMember(member), password);
+            firebaseUid = auth?.currentUser?.uid;
           } catch (signInErr) {
             console.warn(
               '[AuthContext] Email already in use AND sign-in fallback failed — continuing local-only. Cloud Functions (AI photo logging, account deletion) will be unavailable until the user resets their password and signs in.',
@@ -139,19 +143,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    await AsyncStorage.setItem(CUSTOM_MEMBER_KEY, JSON.stringify(member));
-    await AsyncStorage.setItem(STORAGE_KEY, member.id);
-    setUser(member);
+    // Stamp the firebaseUid onto the member so /members rules can authorize
+    // the self-create. Without this, pushMemberToFirestore is silently denied
+    // and the new member never appears in the admin panel.
+    const memberWithUid: Member = firebaseUid ? { ...member, firebaseUid } : member;
+
+    await AsyncStorage.setItem(CUSTOM_MEMBER_KEY, JSON.stringify(memberWithUid));
+    await AsyncStorage.setItem(STORAGE_KEY, memberWithUid.id);
+    setUser(memberWithUid);
 
     // Sync to Sheets + Firestore members doc (fire-and-forget)
-    pushMemberToSheets(member);
-    pushMemberToFirestore(member);
+    pushMemberToSheets(memberWithUid);
+    pushMemberToFirestore(memberWithUid);
 
     // Register for push notifications + save token
     registerForPushNotifications().then((token) => {
       if (token) {
-        savePushTokenToFirestore(member.id, token);
-        const updatedMember = { ...member, pushToken: token };
+        savePushTokenToFirestore(memberWithUid.id, token);
+        const updatedMember = { ...memberWithUid, pushToken: token };
         AsyncStorage.setItem(CUSTOM_MEMBER_KEY, JSON.stringify(updatedMember)).catch(() => {});
       }
     });

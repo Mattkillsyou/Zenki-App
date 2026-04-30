@@ -34,12 +34,26 @@ service cloud.firestore {
 
     // Members collection — keyed by the app's local member id (not the
     // Firebase Auth uid). Anyone signed in can read for community / admin
-    // browsing. Admins write from AdminMembersScreen (role flips, belt
-    // promotions, etc.); members keep ownership of their own /users/{uid}
-    // doc above for self-edits.
+    // browsing.
+    //
+    // Create: a signed-in user can create their OWN member doc as long as
+    // the doc's firebaseUid matches their auth uid. This unblocks the
+    // self-signup flow (Onboarding → createAccount) so new users actually
+    // appear in the admin panel. Without it, only the seed members written
+    // via admin-side backfill ever show up.
+    //
+    // Update / delete: admins always; otherwise the member can update their
+    // own doc (firebaseUid match) for self-edits like avatar / bio.
     match /members/{memberId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow create: if isAdmin()
+                    || (isSignedIn()
+                        && request.resource.data.firebaseUid == request.auth.uid);
+      allow update: if isAdmin()
+                    || (isSignedIn()
+                        && resource.data.firebaseUid == request.auth.uid
+                        && request.resource.data.firebaseUid == request.auth.uid);
+      allow delete: if isAdmin();
     }
 
     // Posts — any signed-in user can read.

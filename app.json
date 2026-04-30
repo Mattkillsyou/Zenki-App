@@ -150,7 +150,8 @@
     "extra": {
       "eas": {
         "projectId": "5ece9429-9575-4d43-9417-dba1d8313855"
-      }
+      },
+      "GOOGLE_CLIENT_ID": "277160279219-8fjejem0ols7tstu26sf4o42b5vf3rks.apps.googleusercontent.com"
     },
     "owner": "mattbrowntheemail"
   }
