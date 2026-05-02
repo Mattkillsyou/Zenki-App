@@ -392,8 +392,8 @@ export function SettingsScreen({ navigation }: any) {
                   styles.themeCard,
                   {
                     backgroundColor: colors.surface,
-                    borderColor: isActive ? colors.accent : colors.border,
-                    borderWidth: isActive ? 2 : 1,
+                    borderColor: isActive ? colors.accent : 'transparent',
+                    borderWidth: 2,
                   },
                 ]}
                 onPress={() => { play('navigate'); setMode(t.id as ThemeMode); }}
@@ -685,7 +685,7 @@ export function SettingsScreen({ navigation }: any) {
                           styles.senpaiSegment,
                           {
                             backgroundColor: active ? '#FF2E51' : colors.surfaceSecondary,
-                            borderColor: active ? '#FF2E51' : colors.border,
+                            borderColor: active ? '#FF2E51' : 'transparent',
                           },
                         ]}
                       >
@@ -719,7 +719,7 @@ export function SettingsScreen({ navigation }: any) {
                           styles.senpaiSegment,
                           {
                             backgroundColor: active ? '#FF2E51' : colors.surfaceSecondary,
-                            borderColor: active ? '#FF2E51' : colors.border,
+                            borderColor: active ? '#FF2E51' : 'transparent',
                           },
                         ]}
                       >
@@ -829,13 +829,13 @@ export function SettingsScreen({ navigation }: any) {
         {renderSectionHeader('ABOUT')}
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
           {renderNavRow('information-circle-outline', 'About Zenki Dojo', () =>
-            Linking.openURL('http://www.zenkidojo.com')
+            Linking.openURL('https://www.zenkidojo.com')
           )}
           {renderNavRow('document-text-outline', 'Terms of Service', () =>
-            Linking.openURL('http://www.zenkidojo.com/terms')
+            Linking.openURL('https://www.zenkidojo.com/terms')
           )}
           {renderNavRow('shield-outline', 'Privacy Policy', () =>
-            Linking.openURL('http://www.zenkidojo.com/privacy')
+            Linking.openURL('https://www.zenkidojo.com/privacy')
           )}
         </View>
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, marginTop: spacing.sm, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
