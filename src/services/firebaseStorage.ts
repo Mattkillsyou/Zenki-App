@@ -12,7 +12,9 @@ export async function uploadMedia(uri: string, type: 'photo' | 'video'): Promise
   if (!uid) throw new Error('Not authenticated');
 
   const ext = type === 'photo' ? 'jpg' : 'mp4';
-  const filename = `posts/${uid}/${Date.now()}.${ext}`;
+  // Path must live under `users/{uid}/` to satisfy storage.rules — the
+  // top-level `posts/` namespace is default-deny.
+  const filename = `users/${uid}/posts/${Date.now()}.${ext}`;
   const storageRef = ref(storage, filename);
 
   const response = await fetch(uri);

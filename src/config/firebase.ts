@@ -1,9 +1,38 @@
 import { initializeApp, FirebaseApp } from 'firebase/app';
-import { getAuth, initializeAuth, Auth } from 'firebase/auth';
+import { getAuth, initializeAuth, Auth, Persistence } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// ─────────────────────────────────────────────────
+// React Native AsyncStorage persistence shim
+//
+// Firebase JS SDK 12+ removed `getReactNativePersistence` from the public
+// `firebase/auth` exports (only browser/inMemory/indexedDB persistence
+// remain). Without RN persistence, every app launch starts unauthenticated:
+// accounts and posts appear to "not stick" because `getCurrentUid()` is
+// null on relaunch. This shim implements the same internal Persistence
+// contract the removed function used.
+// ─────────────────────────────────────────────────
+function asyncStoragePersistence(): Persistence {
+  return {
+    type: 'LOCAL',
+    async _isAvailable() { return true; },
+    async _set(key: string, value: unknown) {
+      await AsyncStorage.setItem(key, JSON.stringify(value));
+    },
+    async _get<T>(key: string): Promise<T | null> {
+      const raw = await AsyncStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as T) : null;
+    },
+    async _remove(key: string) {
+      await AsyncStorage.removeItem(key);
+    },
+    _addListener() {},
+    _removeListener() {},
+  } as unknown as Persistence;
+}
 
 // ─────────────────────────────────────────────────
 // Firebase Configuration
@@ -43,15 +72,8 @@ if (FIREBASE_CONFIGURED) {
     if (Platform.OS === 'web') {
       auth = getAuth(app);
     } else {
-      // `getReactNativePersistence` is only exported from the RN entry of
-      // `firebase/auth`; the web bundler doesn't see it, so we require() it
-      // dynamically to avoid unresolved-symbol errors in the web build.
-      // Metro's "react-native" package export resolves this to the RN-specific
-      // build of @firebase/auth at bundle time on iOS/Android.
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { getReactNativePersistence } = require('firebase/auth');
       auth = initializeAuth(app, {
-        persistence: getReactNativePersistence(AsyncStorage),
+        persistence: asyncStoragePersistence(),
       });
     }
 
