@@ -30,6 +30,14 @@ export { adminActionReport } from './adminActionReport';
 // Re-export the Zenki-branded password-reset email endpoint (Resend).
 export { sendPasswordReset } from './sendPasswordReset';
 
+// DEBUG ONLY — temporary triage endpoint, remove after the post pipeline is
+// confirmed end-to-end on TestFlight.
+export { diagPostsCount } from './diagPostsCount';
+
+// Senpai AI chat endpoint — Daria-meets-DDLC chibi mascot powered by Haiku 4.5.
+// See SENPAI_AI_CHAT_PROMPT.md for design + persona reference.
+export { senpaiChat } from './senpaiChat';
+
 // ─────────────────────────────────────────────
 // Setup
 // ─────────────────────────────────────────────

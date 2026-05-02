@@ -7,12 +7,13 @@
 
 import * as admin from 'firebase-admin';
 
-type Endpoint = 'recognizeFood' | 'extractDexa' | 'parseBloodwork';
+type Endpoint = 'recognizeFood' | 'extractDexa' | 'parseBloodwork' | 'senpaiChat';
 
 const LIMITS: Record<Endpoint, number> = {
   recognizeFood: 30,  // up to 30 food photos/day
   extractDexa: 3,     // 3 DEXA uploads/day (usually 1)
   parseBloodwork: 5,  // 5 bloodwork uploads/day
+  senpaiChat: 50,     // 50 chat turns/day with Senpai (~$0.05/user/day worst case on Haiku)
 };
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
