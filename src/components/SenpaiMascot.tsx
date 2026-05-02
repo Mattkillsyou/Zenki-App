@@ -12,6 +12,16 @@ const { width: SW, height: SH } = Dimensions.get('window');
 const POS_KEY = '@zenki_senpai_pos';
 const MASCOT_SIZE = 140;
 
+// Default position is bottom: 110, right: 16. basePos.x>0 = drag right,
+// basePos.y>0 = drag down. Clamp so at least VISIBLE_MARGIN of the mascot
+// stays on screen — otherwise a fast drag flings her past the edge and
+// the persisted offscreen position keeps her invisible across launches.
+const VISIBLE_MARGIN = 40;
+const clampPos = (x: number, y: number) => ({
+  x: Math.max(VISIBLE_MARGIN + 16 - SW, Math.min(MASCOT_SIZE - VISIBLE_MARGIN + 16, x)),
+  y: Math.max(VISIBLE_MARGIN + 110 - SH, Math.min(MASCOT_SIZE - VISIBLE_MARGIN + 110, y)),
+});
+
 /* ─── Animation asset map ────────────────────────────────────────────────── */
 
 const ANIM_ASSETS: Record<string, any> = {
@@ -43,6 +53,11 @@ export function SenpaiMascot() {
   // Position state
   const [basePos, setBasePos] = useState({ x: 0, y: 0 });
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  // PanResponder is built in a useRef and captures basePos by closure on
+  // first render; read through this ref instead so each drag accumulates
+  // onto the *current* basePos rather than replacing it.
+  const basePosRef = useRef(basePos);
+  basePosRef.current = basePos;
 
   // Drag trail — 3 colored dots trailing behind the mascot during drag
   const trailPositions = useRef([
@@ -63,7 +78,7 @@ export function SenpaiMascot() {
       if (raw) {
         try {
           const { x, y } = JSON.parse(raw);
-          setBasePos({ x, y });
+          setBasePos(clampPos(x, y));
         } catch {}
       }
     });
@@ -131,11 +146,15 @@ export function SenpaiMascot() {
       },
       onPanResponderRelease: () => {
         pan.flattenOffset();
-        const x = (pan.x as any)._value;
-        const y = (pan.y as any)._value;
-        setBasePos({ x, y });
+        const dx = (pan.x as any)._value;
+        const dy = (pan.y as any)._value;
+        // pan.x/y after flattenOffset is just THIS drag's gesture delta
+        // (offset was reset to 0 on grant). Accumulate onto current basePos
+        // and clamp so a fast/long fling can't put her past the screen edge.
+        const next = clampPos(basePosRef.current.x + dx, basePosRef.current.y + dy);
+        setBasePos(next);
         pan.setValue({ x: 0, y: 0 });
-        AsyncStorage.setItem(POS_KEY, JSON.stringify({ x, y }));
+        AsyncStorage.setItem(POS_KEY, JSON.stringify(next));
         // Fade trail out
         Animated.parallel(
           trailOpacities.map((o) => Animated.timing(o, { toValue: 0, duration: 200, useNativeDriver: true })),
