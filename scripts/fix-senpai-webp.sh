@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
-# Re-pack senpai_*.webp animations so frame 1 has a transparent background.
+# Re-pack senpai_*.webp animations to fix two bugs in the source assets:
 #
-# Why this exists: the senpai chibi animations were authored with a black
-# backdrop and exported as animated WebP where frame 1 is a fully opaque
-# 640x640 lossy VP8 (no ALPH chunk). Subsequent frames have alpha and use
-# dispose=none + blend=yes, which means the opaque black plate from frame 1
-# persists behind the character forever — the user sees a black box around
-# the mascot.
+# 1. Frame 1 was a fully opaque 640x640 lossy VP8 (no ALPH chunk) — an
+#    opaque black plate that persisted behind the character because the
+#    next frames used dispose=none. Fix: chromakey black -> transparent
+#    on frame 1 and re-encode with alpha.
 #
-# This script is idempotent: it checks whether frame 1 already has alpha and
-# skips files that have already been fixed. Run it any time you drop new
-# animations into src/assets/senpai/.
+# 2. Every frame used dispose=none, so each frame's character (and its
+#    dark anti-aliased fringe from being authored against black) stayed
+#    on the canvas as the chibi shifted position between frames. The
+#    accumulated fringes formed a visible "black box / trail" around the
+#    mascot. Fix: force dispose=background on every frame so the canvas
+#    is cleared between frames and only the current frame is visible.
+#
+# The script is idempotent — it re-checks frame 1's alpha AND dispose
+# method and skips files that already have both correct. Run it any
+# time you drop new animations into src/assets/senpai/.
 #
 # Requires: webpmux, dwebp, cwebp, magick (ImageMagick 7).
 
@@ -28,20 +33,24 @@ done
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
-frame1_has_alpha() {
-  # webpmux -info prints "alpha" column as "yes" or "no" for each frame
+already_fixed() {
+  # webpmux -info per-frame columns split on whitespace are:
+  # 1=idx 2=width 3=height 4=alpha 5=xoff 6=yoff 7=duration 8=dispose
+  # 9=blend 10=image_size 11=compression. We need frame 1's alpha=yes
+  # AND dispose=background.
   webpmux -info "$1" 2>/dev/null \
-    | awk '/^[[:space:]]+1:/ { print $4; exit }'
+    | awk '/^[[:space:]]+1:/ {
+        if ($4 == "yes" && $8 == "background") print "yes"; else print "no"
+        exit
+      }'
 }
 
 fix_one() {
   local src="$1"
   local name; name="$(basename "$src" .webp)"
 
-  local alpha_status
-  alpha_status="$(frame1_has_alpha "$src" || true)"
-  if [ "$alpha_status" = "yes" ]; then
-    echo "skip $name (frame 1 already has alpha)"
+  if [ "$(already_fixed "$src" || true)" = "yes" ]; then
+    echo "skip $name (frame 1 alpha + dispose already correct)"
     return 0
   fi
 
@@ -76,11 +85,14 @@ fix_one() {
       cwebp -lossless -alpha_q 100 "$png_out" -o "$frame_webp" >/dev/null 2>&1
     fi
 
-    local d_flag b_flag
-    case "$dispose" in background) d_flag=1 ;; *) d_flag=0 ;; esac
-    case "$blend"   in yes)        b_flag="+b" ;; *) b_flag="-b" ;; esac
+    # Force dispose=background on every frame to wipe the previous
+    # frame's character (and its dark anti-aliased fringe) before the
+    # next is drawn — otherwise the chibi leaves a black trail as she
+    # shifts position between frames. Preserve the original blend mode.
+    local b_flag
+    case "$blend" in yes) b_flag="+b" ;; *) b_flag="-b" ;; esac
 
-    args+=( -frame "$frame_webp" "+${dur}+${xoff}+${yoff}+${d_flag}${b_flag}" )
+    args+=( -frame "$frame_webp" "+${dur}+${xoff}+${yoff}+1${b_flag}" )
   done < "$fdir/frames.csv"
 
   local out="$fdir/${name}.webp"

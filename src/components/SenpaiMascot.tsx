@@ -73,13 +73,13 @@ export function SenpaiMascot() {
   const trailBufRef = useRef<{ x: number; y: number; t: number }[]>([]);
   const lastSnapRef = useRef(0);
 
-  // One-time cache invalidation: senpai_*.webp had frame 1 alpha repacked
-  // (commit 0b1afe3) but expo-image's disk cache holds the old black-box
-  // frames keyed by asset URI. Bump the version constant when assets change
-  // again to wipe stale decoded images on next launch.
+  // One-time cache invalidation: senpai_*.webp asset content has changed
+  // (frame 1 alpha + dispose=background on every frame). expo-image keys
+  // its disk cache by asset URI, so file content changes don't bust it on
+  // their own. Bump VERSION any time the senpai assets change.
   useEffect(() => {
     const KEY = '@senpai_asset_cache_v';
-    const VERSION = '2';
+    const VERSION = '3';
     AsyncStorage.getItem(KEY).then((v) => {
       if (v !== VERSION) {
         Image.clearMemoryCache();
