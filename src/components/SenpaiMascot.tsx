@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSenpai } from '../context/SenpaiContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 import { useTheme } from '../context/ThemeContext';
+import { SenpaiChatModal } from './SenpaiChatModal';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const POS_KEY = '@zenki_senpai_pos';
@@ -49,6 +50,7 @@ export function SenpaiMascot() {
   const { colors } = useTheme();
   const [hidden, setHidden] = useState(false);
   const [showClose, setShowClose] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   // Position state
   const [basePos, setBasePos] = useState({ x: 0, y: 0 });
@@ -223,6 +225,12 @@ export function SenpaiMascot() {
   }, [state.mascotMood, state.enabled]);
 
   const handleTap = () => {
+    // SECRET LAB: when chat is enabled, tap opens the AI chat modal instead
+    // of firing a one-shot reaction. Long-press still shows the close button.
+    if (state.chatEnabled) {
+      setChatOpen(true);
+      return;
+    }
     triggerReaction('cheering', randomDialogue('mascotTap'), 2500);
   };
 
@@ -238,71 +246,76 @@ export function SenpaiMascot() {
   const animSource = ANIM_ASSETS[mood] ?? ANIM_ASSETS.idle;
 
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          bottom: 110 - basePos.y,
-          right: 16 - basePos.x,
-          transform: [
-            { translateX: pan.x },
-            { translateY: pan.y },
-            { translateY: bounce },
-          ],
-          opacity,
-        },
-      ]}
-      {...panResponder.panHandlers}
-    >
-      {/* Drag trail dots (pink → blue → purple) */}
-      {[
-        { idx: 0, color: '#FF2E51' },
-        { idx: 1, color: '#5158FF' },
-        { idx: 2, color: '#D260FF' },
-      ].map(({ idx, color }) => (
-        <Animated.View
-          key={idx}
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            width: 8,
-            height: 8,
-            borderRadius: 4,
-            backgroundColor: color,
-            left: MASCOT_SIZE / 2 - 4,
-            top: MASCOT_SIZE / 2 - 4,
-            opacity: trailOpacities[idx],
+    <>
+      <Animated.View
+        style={[
+          styles.container,
+          {
+            bottom: 110 - basePos.y,
+            right: 16 - basePos.x,
             transform: [
-              { translateX: trailPositions[idx].x },
-              { translateY: trailPositions[idx].y },
+              { translateX: pan.x },
+              { translateY: pan.y },
+              { translateY: bounce },
             ],
-          }}
-        />
-      ))}
+            opacity,
+          },
+        ]}
+        {...panResponder.panHandlers}
+      >
+        {/* Drag trail dots (pink → blue → purple) */}
+        {[
+          { idx: 0, color: '#FF2E51' },
+          { idx: 1, color: '#5158FF' },
+          { idx: 2, color: '#D260FF' },
+        ].map(({ idx, color }) => (
+          <Animated.View
+            key={idx}
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: color,
+              left: MASCOT_SIZE / 2 - 4,
+              top: MASCOT_SIZE / 2 - 4,
+              opacity: trailOpacities[idx],
+              transform: [
+                { translateX: trailPositions[idx].x },
+                { translateY: trailPositions[idx].y },
+              ],
+            }}
+          />
+        ))}
 
-      {/* Speech bubble */}
-      {state.lastReaction && (
-        <SpeechBubble text={state.lastReaction} colors={colors} />
-      )}
+        {/* Speech bubble */}
+        {state.lastReaction && (
+          <SpeechBubble text={state.lastReaction} colors={colors} />
+        )}
 
-      {/* Animated mascot */}
-      <Pressable onPress={handleTap} onLongPress={handleLongPress}>
-        <Image
-          source={animSource}
-          style={styles.mascotImage}
-          contentFit="contain"
-          autoplay
-          cachePolicy="memory-disk"
-        />
-      </Pressable>
+        {/* Animated mascot */}
+        <Pressable onPress={handleTap} onLongPress={handleLongPress}>
+          <Image
+            source={animSource}
+            style={styles.mascotImage}
+            contentFit="contain"
+            autoplay
+            cachePolicy="memory-disk"
+          />
+        </Pressable>
 
-      {/* Close button (on long press) */}
-      {showClose && (
-        <SoundPressable style={styles.closeBtn} onPress={() => setHidden(true)}>
-          <Text style={styles.closeBtnText}>x</Text>
-        </SoundPressable>
-      )}
-    </Animated.View>
+        {/* Close button (on long press) */}
+        {showClose && (
+          <SoundPressable style={styles.closeBtn} onPress={() => setHidden(true)}>
+            <Text style={styles.closeBtnText}>x</Text>
+          </SoundPressable>
+        )}
+      </Animated.View>
+
+      {/* AI chat modal — portal-rendered. Opens via tap when chatEnabled. */}
+      <SenpaiChatModal visible={chatOpen} onClose={() => setChatOpen(false)} />
+    </>
   );
 }
 

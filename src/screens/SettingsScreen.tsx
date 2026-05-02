@@ -176,6 +176,7 @@ export function SettingsScreen({ navigation }: any) {
     setSparkleIntensity: setSenpaiSparkle,
     setAmbientEffects: setSenpaiAmbientEffects,
     clearMemoryLog: clearSenpaiMemory,
+    setChatEnabled: setSenpaiChatEnabled,
   } = useSenpai();
   const [pushEnabled, setPushEnabled] = useState(true);
   const [classReminders, setClassReminders] = useState(true);
@@ -743,6 +744,24 @@ export function SettingsScreen({ navigation }: any) {
                 <Switch
                   value={senpaiState.ambientEffects}
                   onValueChange={(val) => setSenpaiAmbientEffects(val)}
+                  trackColor={{ false: colors.surfaceSecondary, true: '#FF2E51' }}
+                  thumbColor={colors.background}
+                />
+              </View>
+
+              {/* Chat with Senpai (AI chat \u2014 Phase 2 of SENPAI_AI_CHAT_PROMPT.md) */}
+              <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
+                <View style={styles.settingInfo}>
+                  <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Chat with Senpai</Text>
+                  <Text style={[styles.settingDesc, { color: colors.textMuted }]}>
+                    {senpaiState.chatEnabled
+                      ? 'Tap the mascot to chat \u00B7 she is too tired to be excited about it'
+                      : 'Talk to her. She has opinions. Most of them are tired.'}
+                  </Text>
+                </View>
+                <Switch
+                  value={senpaiState.chatEnabled}
+                  onValueChange={(val) => setSenpaiChatEnabled(val)}
                   trackColor={{ false: colors.surfaceSecondary, true: '#FF2E51' }}
                   thumbColor={colors.background}
                 />

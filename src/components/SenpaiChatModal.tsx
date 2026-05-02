@@ -1,0 +1,341 @@
+/**
+ * SenpaiChatModal — full-screen chat with the Senpai mascot.
+ *
+ * Phase 2 of the Senpai AI chat feature. See SENPAI_AI_CHAT_PROMPT.md for
+ * the design + persona reference. Hidden behind the SECRET LAB chat flag
+ * in Settings; opened by tapping the floating mascot when that flag is on.
+ *
+ * Behavior:
+ *   - First open shows a one-time disclaimer (AsyncStorage gate).
+ *   - Thread is an inverted FlatList — newest at the bottom, KeyboardAvoidingView
+ *     keeps the input above the keyboard.
+ *   - User bubbles right-aligned, Senpai bubbles left-aligned with a small
+ *     mood label so the bit lands.
+ *   - "Clear chat" wipes both local state and AsyncStorage history.
+ */
+
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+
+import { useTheme } from '../context/ThemeContext';
+import { useSenpaiChat, type ChatThreadMessage } from '../hooks/useSenpaiChat';
+
+const DISCLAIMER_KEY = '@senpai_chat_disclaimer_v1';
+
+interface Props {
+  visible: boolean;
+  onClose: () => void;
+}
+
+export function SenpaiChatModal({ visible, onClose }: Props) {
+  const { colors } = useTheme();
+  const { messages, loading, error, send, clear } = useSenpaiChat();
+  const [draft, setDraft] = useState('');
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
+
+  // Disclaimer gate — show on first open until accepted
+  useEffect(() => {
+    if (!visible) return;
+    AsyncStorage.getItem(DISCLAIMER_KEY).then((v) => {
+      if (v !== 'accepted') setShowDisclaimer(true);
+    });
+  }, [visible]);
+
+  const handleAcceptDisclaimer = () => {
+    AsyncStorage.setItem(DISCLAIMER_KEY, 'accepted').catch(() => {});
+    setShowDisclaimer(false);
+  };
+
+  const handleSend = () => {
+    const text = draft.trim();
+    if (!text || loading) return;
+    setDraft('');
+    send(text);
+  };
+
+  const handleClear = () => {
+    Alert.alert('Clear chat?', "This wipes the conversation. Senpai won't remember.", [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Clear', style: 'destructive', onPress: () => clear() },
+    ]);
+  };
+
+  // Inverted FlatList — newest first in the data, renders at the bottom
+  const inverted = useMemo(() => [...messages].reverse(), [messages]);
+
+  const renderMessage = ({ item }: { item: ChatThreadMessage }) => (
+    <ChatBubble message={item} colors={colors} />
+  );
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <Pressable onPress={onClose} hitSlop={12} style={styles.headerBtn}>
+            <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
+          </Pressable>
+          <View style={styles.headerTitleWrap}>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Senpai</Text>
+            <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>
+              {loading ? 'thinking...' : 'always tired'}
+            </Text>
+          </View>
+          <Pressable onPress={handleClear} hitSlop={12} style={styles.headerBtn}>
+            <Ionicons name="trash-outline" size={22} color={colors.textMuted} />
+          </Pressable>
+        </View>
+
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          {/* Thread */}
+          {messages.length === 0 ? (
+            <View style={styles.emptyWrap}>
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>...hi.</Text>
+              <Text style={[styles.emptyBody, { color: colors.textMuted }]}>
+                You opened the chat. Now what.
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={inverted}
+              keyExtractor={(m) => m.id}
+              renderItem={renderMessage}
+              inverted
+              contentContainerStyle={styles.threadContent}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+            />
+          )}
+
+          {/* Error toast */}
+          {error && (
+            <View style={[styles.errorBar, { backgroundColor: colors.error + '20', borderColor: colors.error }]}>
+              <Text style={[styles.errorText, { color: colors.error }]}>{error.message}</Text>
+            </View>
+          )}
+
+          {/* Input row */}
+          <View style={[styles.inputRow, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="say something..."
+              placeholderTextColor={colors.textMuted}
+              style={[
+                styles.input,
+                {
+                  color: colors.textPrimary,
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                },
+              ]}
+              multiline
+              maxLength={1000}
+              editable={!loading}
+              returnKeyType="send"
+              onSubmitEditing={handleSend}
+              blurOnSubmit
+            />
+            <Pressable
+              onPress={handleSend}
+              disabled={loading || draft.trim().length === 0}
+              style={[
+                styles.sendBtn,
+                {
+                  backgroundColor:
+                    loading || draft.trim().length === 0 ? colors.surfaceSecondary : colors.gold,
+                },
+              ]}
+            >
+              <Ionicons
+                name="arrow-up"
+                size={20}
+                color={loading || draft.trim().length === 0 ? colors.textMuted : '#000'}
+              />
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+
+        {/* Disclaimer overlay (first open only) */}
+        {showDisclaimer && (
+          <View style={styles.disclaimerOverlay}>
+            <View style={[styles.disclaimerCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.disclaimerTitle, { color: colors.textPrimary }]}>
+                Heads up.
+              </Text>
+              <Text style={[styles.disclaimerBody, { color: colors.textSecondary }]}>
+                Senpai is a chibi mascot powered by an AI. She's not a doctor, therapist, or
+                dietitian. For medical, dietary, or mental-health advice, please talk to a real
+                professional.
+              </Text>
+              <Pressable
+                onPress={handleAcceptDisclaimer}
+                style={[styles.disclaimerBtn, { backgroundColor: colors.gold }]}
+              >
+                <Text style={[styles.disclaimerBtnText, { color: '#000' }]}>got it</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+/* ─── ChatBubble ─────────────────────────────────────────────────────── */
+
+function ChatBubble({ message, colors }: { message: ChatThreadMessage; colors: any }) {
+  const isUser = message.role === 'user';
+  return (
+    <View style={[styles.bubbleRow, { justifyContent: isUser ? 'flex-end' : 'flex-start' }]}>
+      <View
+        style={[
+          styles.bubble,
+          isUser
+            ? { backgroundColor: colors.gold, borderColor: colors.gold }
+            : { backgroundColor: colors.surface, borderColor: colors.border },
+          message.error && { borderColor: colors.error },
+        ]}
+      >
+        {!isUser && message.mood && !message.pending && (
+          <Text style={[styles.moodTag, { color: colors.textMuted }]}>{message.mood}</Text>
+        )}
+        <Text
+          style={[
+            styles.bubbleText,
+            { color: isUser ? '#000' : colors.textPrimary },
+            message.pending && { color: colors.textMuted, fontStyle: 'italic' },
+          ]}
+        >
+          {message.pending ? '...' : message.content}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/* ─── Styles ─────────────────────────────────────────────────────────── */
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleWrap: { flex: 1, alignItems: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '700' },
+  headerSubtitle: { fontSize: 11, marginTop: 1 },
+
+  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  emptyTitle: { fontSize: 28, fontWeight: '700', marginBottom: 6 },
+  emptyBody: { fontSize: 14, textAlign: 'center' },
+
+  threadContent: { paddingHorizontal: 12, paddingVertical: 16 },
+
+  bubbleRow: {
+    flexDirection: 'row',
+    marginVertical: 4,
+  },
+  bubble: {
+    maxWidth: '78%',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  moodTag: {
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  bubbleText: { fontSize: 15, lineHeight: 20 },
+
+  errorBar: {
+    marginHorizontal: 12,
+    marginBottom: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  errorText: { fontSize: 13 },
+
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  input: {
+    flex: 1,
+    minHeight: 40,
+    maxHeight: 120,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+  },
+  sendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  disclaimerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  disclaimerCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 360,
+  },
+  disclaimerTitle: { fontSize: 22, fontWeight: '800', marginBottom: 10 },
+  disclaimerBody: { fontSize: 14, lineHeight: 20, marginBottom: 18 },
+  disclaimerBtn: {
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  disclaimerBtnText: { fontSize: 15, fontWeight: '700' },
+});

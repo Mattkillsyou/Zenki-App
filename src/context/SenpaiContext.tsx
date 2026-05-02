@@ -8,6 +8,7 @@ const SPARKLE_KEY = '@zenki_senpai_sparkle';
 const MEMORY_KEY = '@zenki_senpai_memory';
 const OUTFIT_KEY = '@zenki_senpai_outfit';
 const AMBIENT_KEY = '@zenki_senpai_ambient';
+const CHAT_ENABLED_KEY = '@zenki_senpai_chat_enabled';
 
 const MEMORY_CAP = 100;
 
@@ -42,6 +43,9 @@ interface SenpaiState {
   transformationPlayed: boolean;
   ambientEffects: boolean;
   activeImpact: ImpactType | null;
+  /** SECRET LAB flag: when on, tapping the floating mascot opens the AI chat
+   *  modal instead of triggering a one-shot reaction. */
+  chatEnabled: boolean;
 }
 
 interface SenpaiContextValue {
@@ -58,6 +62,7 @@ interface SenpaiContextValue {
   setAmbientEffects: (on: boolean) => void;
   triggerImpact: (type: ImpactType) => void;
   clearImpact: () => void;
+  setChatEnabled: (on: boolean) => void;
 }
 
 const defaultState: SenpaiState = {
@@ -73,6 +78,7 @@ const defaultState: SenpaiState = {
   transformationPlayed: false,
   ambientEffects: true,
   activeImpact: null,
+  chatEnabled: false,
 };
 
 const SenpaiContext = createContext<SenpaiContextValue>({
@@ -89,6 +95,7 @@ const SenpaiContext = createContext<SenpaiContextValue>({
   setAmbientEffects: () => {},
   triggerImpact: () => {},
   clearImpact: () => {},
+  setChatEnabled: () => {},
 });
 
 export function SenpaiProvider({ children }: { children: React.ReactNode }) {
@@ -100,13 +107,14 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const [enabledRaw, volumeRaw, sparkleRaw, memoryRaw, outfitRaw, ambientRaw] = await Promise.all([
+        const [enabledRaw, volumeRaw, sparkleRaw, memoryRaw, outfitRaw, ambientRaw, chatEnabledRaw] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEY),
           AsyncStorage.getItem(VOLUME_KEY),
           AsyncStorage.getItem(SPARKLE_KEY),
           AsyncStorage.getItem(MEMORY_KEY),
           AsyncStorage.getItem(OUTFIT_KEY),
           AsyncStorage.getItem(AMBIENT_KEY),
+          AsyncStorage.getItem(CHAT_ENABLED_KEY),
         ]);
         const volume: SenpaiVolume =
           volumeRaw === 'low' || volumeRaw === 'med' || volumeRaw === 'high' ? volumeRaw : 'high';
@@ -130,6 +138,7 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
           memoryLog,
           outfitId,
           ambientEffects,
+          chatEnabled: chatEnabledRaw === 'true',
         }));
       } catch { /* ignore storage errors */ }
     })();
@@ -222,6 +231,11 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
     setState((s) => (s.activeImpact === null ? s : { ...s, activeImpact: null }));
   }, []);
 
+  const setChatEnabled = useCallback((on: boolean) => {
+    setState((s) => ({ ...s, chatEnabled: on }));
+    AsyncStorage.setItem(CHAT_ENABLED_KEY, String(on)).catch(() => {});
+  }, []);
+
   useEffect(() => {
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, []);
@@ -241,6 +255,7 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
       setAmbientEffects,
       triggerImpact,
       clearImpact,
+      setChatEnabled,
     }}>
       {children}
     </SenpaiContext.Provider>
