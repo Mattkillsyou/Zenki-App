@@ -10,9 +10,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { sendSenpaiChat, type ChatTurn, type SenpaiChatError } from '../services/senpaiChat';
+import {
+  sendSenpaiChat,
+  type ChatTurn,
+  type SenpaiChatError,
+  type SenpaiUserContext,
+} from '../services/senpaiChat';
 import { getCurrentIdToken } from '../services/firebaseAuth';
 import { useSenpai, type MascotMood } from '../context/SenpaiContext';
+import { useGamification } from '../context/GamificationContext';
+import { useWorkouts } from '../context/WorkoutContext';
+import { useAuth } from '../context/AuthContext';
 
 const HISTORY_KEY = '@senpai_chat_history';
 const MAX_PERSISTED_TURNS = 50;
@@ -29,8 +37,24 @@ export interface ChatThreadMessage {
 let nextId = 0;
 const makeId = () => `msg_${Date.now()}_${nextId++}`;
 
+/**
+ * Compute days between today and the most recent workout date, or undefined
+ * if no workouts exist. Date strings are YYYY-MM-DD per WorkoutLog.date.
+ */
+function daysSinceMostRecent(latestDate: string | undefined): number | undefined {
+  if (!latestDate) return undefined;
+  const then = new Date(latestDate);
+  if (Number.isNaN(then.getTime())) return undefined;
+  const now = new Date();
+  const ms = now.getTime() - then.getTime();
+  return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+}
+
 export function useSenpaiChat() {
   const { triggerReaction } = useSenpai();
+  const { state: gamState } = useGamification();
+  const { myLogs } = useWorkouts();
+  const { user } = useAuth();
   const [messages, setMessages] = useState<ChatThreadMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<SenpaiChatError | null>(null);
@@ -90,8 +114,32 @@ export function useSenpaiChat() {
 
       setLoading(true);
       try {
+        // Gather a fresh snapshot of the user's fitness state at send time.
+        // The model only sees this via the `get_user_stats` tool, so it
+        // stays out of the prompt cache prefix. See SENPAI_AI_CHAT_PROMPT.md
+        // Phase 3 for design notes.
+        const userId = user?.id;
+        const recentLogs = userId ? myLogs(userId).slice(0, 5) : [];
+        const badgeCount = gamState.achievements.filter((a) => a.unlocked).length;
+
+        const userContext: SenpaiUserContext = {
+          level: gamState.level,
+          streakDays: gamState.streak,
+          longestStreakDays: gamState.longestStreak,
+          totalSessions: gamState.totalSessions,
+          badgeCount,
+          flames: gamState.flames,
+          daysSinceLastWorkout: daysSinceMostRecent(recentLogs[0]?.date),
+          recentWorkouts: recentLogs.map((l) => ({
+            date: l.date,
+            title: l.title,
+            format: l.format,
+            result: l.result,
+          })),
+        };
+
         const token = await getCurrentIdToken();
-        const result = await sendSenpaiChat(apiMessages, token ?? undefined);
+        const result = await sendSenpaiChat(apiMessages, userContext, token ?? undefined);
 
         if (!result.ok) {
           setError(result.error);
@@ -124,7 +172,7 @@ export function useSenpaiChat() {
         setLoading(false);
       }
     },
-    [loading, triggerReaction],
+    [loading, triggerReaction, gamState, myLogs, user],
   );
 
   const clear = useCallback(async () => {

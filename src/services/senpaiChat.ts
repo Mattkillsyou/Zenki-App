@@ -5,8 +5,12 @@
  *   POST {AI_FUNCTION_BASE_URL}/senpaiChat
  *   Headers:   Authorization: Bearer <firebase-id-token>
  *              Content-Type:  application/json
- *   Body:      { messages: [{role, content}, ...] }
+ *   Body:      { messages: [{role, content}, ...], userContext?: {...} }
  *   Response:  { text: string, mood: MascotMood, usage: {...} }
+ *
+ * userContext is the user's fitness state snapshot — the model only sees
+ * it via the `get_user_stats` tool, so it stays out of the prompt cache
+ * prefix. Phase 3 of the AI chat feature.
  *
  * The function source lives in `functions/src/senpaiChat.ts`.
  * Persona + design notes: `SENPAI_AI_CHAT_PROMPT.md` at project root.
@@ -18,6 +22,22 @@ import type { MascotMood } from '../context/SenpaiContext';
 export interface ChatTurn {
   role: 'user' | 'assistant';
   content: string;
+}
+
+export interface SenpaiUserContext {
+  level?: number;
+  streakDays?: number;
+  longestStreakDays?: number;
+  totalSessions?: number;
+  badgeCount?: number;
+  flames?: number;
+  daysSinceLastWorkout?: number;
+  recentWorkouts?: Array<{
+    date: string;
+    title: string;
+    format?: string;
+    result?: string;
+  }>;
 }
 
 export interface SenpaiChatReply {
@@ -42,6 +62,7 @@ export type SenpaiChatResult =
 
 export async function sendSenpaiChat(
   messages: ChatTurn[],
+  userContext?: SenpaiUserContext,
   idToken?: string,
 ): Promise<SenpaiChatResult> {
   try {
@@ -51,7 +72,7 @@ export async function sendSenpaiChat(
     const res = await fetch(`${AI_FUNCTION_BASE_URL}/senpaiChat`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ messages, userContext }),
     });
 
     if (res.status === 401 || res.status === 403) {

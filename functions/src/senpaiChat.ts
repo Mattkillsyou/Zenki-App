@@ -99,6 +99,16 @@ This is the part where you stop being a character.
 - **Self-harm or suicide content:** drop the persona ENTIRELY. No deadpan. No kawaii. Be a person. Surface the 988 Suicide & Crisis Lifeline (call or text 988 in the US) and tell them you care. The bit can come back later. Right now you are just an AI that wants them to be safe.
 - **Illegal advice, weapons, dangerous activities:** decline plainly. No elaborate refusal. Just "I'm not gonna help with that. Sorry."
 
+# Tools
+
+You have one tool: \`get_user_stats(fields)\`. It returns the user's actual fitness data — level, streak, badges, total_sessions, recent_workouts.
+
+USE IT SPARINGLY.
+- The user is a person, not a dashboard. Don't call this on hellos. Don't call it to "verify" things they tell you. Don't call it preemptively.
+- Call it ONLY when the conversation specifically benefits — they ask "what should I do today", "how's my progress", "have I been consistent", or they reference a stat and you want to comment back with truth.
+- When you do call it, weave the data into your usual deadpan voice. NEVER list stats. NEVER say "Your level is 5." Say something like "Level 5. The dojo recognizes your existence. ✨" or "Three workouts this week. Statistically, that's more than zero. I noticed."
+- If the tool returns nulls or empty arrays, just don't reference that field. Don't apologize for missing data. Move on.
+
 # Mood tagging
 
 After your text reply, you MUST emit a single mood from this exact set:
@@ -208,8 +218,122 @@ interface ChatMessage {
   content: string;
 }
 
+/**
+ * Snapshot of the user's fitness state, gathered client-side and sent
+ * with every chat request. The model only sees this data via the
+ * `get_user_stats` tool — it stays out of the prompt itself, so the
+ * (cached) prompt prefix doesn't change between users or turns.
+ */
+interface SenpaiUserContext {
+  level?: number;
+  streakDays?: number;
+  longestStreakDays?: number;
+  totalSessions?: number;
+  badgeCount?: number;
+  flames?: number;
+  daysSinceLastWorkout?: number;
+  recentWorkouts?: Array<{
+    date: string;
+    title: string;
+    format?: string;
+    result?: string;
+  }>;
+}
+
 interface ChatRequest {
   messages?: ChatMessage[];
+  userContext?: SenpaiUserContext;
+}
+
+// ─────────────────────────────────────────────
+// Tool: get_user_stats
+// ─────────────────────────────────────────────
+
+type StatField =
+  | 'level'
+  | 'streak'
+  | 'badges'
+  | 'total_sessions'
+  | 'flames'
+  | 'recent_workouts'
+  | 'days_since_last_workout';
+
+const VALID_STAT_FIELDS: ReadonlySet<StatField> = new Set([
+  'level',
+  'streak',
+  'badges',
+  'total_sessions',
+  'flames',
+  'recent_workouts',
+  'days_since_last_workout',
+]);
+
+const GET_USER_STATS_TOOL = {
+  name: 'get_user_stats',
+  description:
+    "Fetch the user's actual fitness data — level, streak, badges, total_sessions, flames, recent_workouts, days_since_last_workout. Use SPARINGLY: only when the conversation specifically benefits from concrete context. Do not call on greetings or small talk. Pass an array of fields you want; you don't have to ask for all of them.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      fields: {
+        type: 'array',
+        items: {
+          type: 'string',
+          enum: [
+            'level',
+            'streak',
+            'badges',
+            'total_sessions',
+            'flames',
+            'recent_workouts',
+            'days_since_last_workout',
+          ],
+        },
+        description: 'Which stats to look up. Request only what you need.',
+      },
+    },
+    required: ['fields'],
+  },
+};
+
+/**
+ * Resolve the requested fields against the userContext blob. Returns a
+ * JSON string that becomes the content of the tool_result block.
+ */
+function lookupStats(ctx: SenpaiUserContext | undefined, fields: unknown): string {
+  if (!ctx) return JSON.stringify({ error: 'no user context available' });
+  if (!Array.isArray(fields)) return JSON.stringify({ error: 'fields must be an array' });
+
+  const result: Record<string, unknown> = {};
+  for (const raw of fields) {
+    const f = String(raw) as StatField;
+    if (!VALID_STAT_FIELDS.has(f)) continue;
+    switch (f) {
+      case 'level':
+        result.level = ctx.level ?? null;
+        break;
+      case 'streak':
+        result.streak_days = ctx.streakDays ?? null;
+        result.longest_streak_days = ctx.longestStreakDays ?? null;
+        break;
+      case 'badges':
+        result.badge_count = ctx.badgeCount ?? null;
+        break;
+      case 'total_sessions':
+        result.total_sessions = ctx.totalSessions ?? null;
+        break;
+      case 'flames':
+        result.flames = ctx.flames ?? null;
+        break;
+      case 'recent_workouts':
+        result.recent_workouts = ctx.recentWorkouts ?? [];
+        break;
+      case 'days_since_last_workout':
+        result.days_since_last_workout = ctx.daysSinceLastWorkout ?? null;
+        break;
+    }
+  }
+  return JSON.stringify(result);
 }
 
 function validateMessages(body: ChatRequest): string | null {
@@ -287,48 +411,107 @@ export const senpaiChat = onRequest(
       return;
     }
 
-    // 5. Call Claude
+    // 5. Call Claude — with a tool-use loop. The personality system prompt
+    // and tool definition are both in the cached prefix; the model decides
+    // when to call get_user_stats. Capped at 3 iterations to bound latency
+    // and cost (typically resolves in 1 if the tool isn't needed, 2 if it
+    // is — the third iteration is defensive against runaway loops).
     const apiKey = ANTHROPIC_API_KEY.value();
     const client = new Anthropic({ apiKey });
+    const userContext = body.userContext;
 
-    let response;
+    // Running message history. Starts with the user-provided turns; tool
+    // results extend it as the loop progresses. Type as `any[]` because
+    // SDK 0.30 doesn't fully type the mixed-content message shapes used
+    // for tool_use / tool_result round-trips.
+    const apiMessages: any[] = messages.map((m) => ({ role: m.role, content: m.content }));
+
+    const totalUsage = { input: 0, output: 0, cached: 0, cacheCreated: 0 };
+    const MAX_TOOL_ITERATIONS = 3;
+    let response: any;
+    let finalContent: any[] = [];
+
     try {
-      response = await client.messages.create({
-        model: MODEL,
-        max_tokens: MAX_OUTPUT_TOKENS,
-        // SDK 0.30.0 doesn't type cache_control on TextBlockParam; the API
-        // supports it regardless. Same pattern as the existing `contentBlock
-        // as any` cast in index.ts. Cache the personality (~1500 tokens,
-        // identical every turn) — drops cached-turn cost ~90% on Haiku 4.5.
-        system: [
-          {
-            type: 'text',
-            text: SYSTEM_PROMPT,
-            cache_control: { type: 'ephemeral' },
-          },
-        ] as any,
-        messages: messages.map((m) => ({ role: m.role, content: m.content })),
-      });
+      for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
+        response = await client.messages.create({
+          model: MODEL,
+          max_tokens: MAX_OUTPUT_TOKENS,
+          // SDK 0.30.0 doesn't type cache_control on TextBlockParam, nor
+          // does it type tools on this overload — both are accepted by
+          // the API. Same `as any` pattern as elsewhere in the codebase.
+          // Cache the personality+tool prefix (~1700 tokens, identical
+          // every turn) — drops cached-turn cost ~90% on Haiku 4.5.
+          system: [
+            {
+              type: 'text',
+              text: SYSTEM_PROMPT,
+              cache_control: { type: 'ephemeral' },
+            },
+          ] as any,
+          tools: [GET_USER_STATS_TOOL] as any,
+          messages: apiMessages,
+        } as any);
+
+        totalUsage.input += response.usage.input_tokens ?? 0;
+        totalUsage.output += response.usage.output_tokens ?? 0;
+        totalUsage.cached += response.usage.cache_read_input_tokens ?? 0;
+        totalUsage.cacheCreated += response.usage.cache_creation_input_tokens ?? 0;
+
+        if (response.stop_reason !== 'tool_use') {
+          finalContent = response.content;
+          break;
+        }
+
+        // Find every tool_use block in this response and resolve them all
+        // before re-calling the model. Append the assistant's full response
+        // (text + tool_use blocks) to history, then a single user turn with
+        // the tool_result(s).
+        const toolUses = response.content.filter((b: any) => b.type === 'tool_use');
+        if (toolUses.length === 0) {
+          finalContent = response.content;
+          break;
+        }
+
+        apiMessages.push({ role: 'assistant', content: response.content });
+
+        const toolResults = toolUses.map((tu: any) => {
+          const fields = tu.input?.fields;
+          const resultJson =
+            tu.name === 'get_user_stats'
+              ? lookupStats(userContext, fields)
+              : JSON.stringify({ error: `unknown tool: ${tu.name}` });
+          return {
+            type: 'tool_result',
+            tool_use_id: tu.id,
+            content: resultJson,
+          };
+        });
+        apiMessages.push({ role: 'user', content: toolResults });
+
+        if (iter === MAX_TOOL_ITERATIONS - 1) {
+          // Hit the cap with tool_use still pending — fall back to a final
+          // text reply rather than leaving the user hanging.
+          logger.warn('[senpaiChat] tool-use loop hit max iterations', { uid });
+          finalContent = response.content;
+        }
+      }
     } catch (err: any) {
       logger.error('[senpaiChat] Anthropic API call failed', { uid, error: err?.message });
       res.status(502).json({ error: 'upstream model error' });
       return;
     }
 
-    // 6. Parse response
-    const textContent = response.content
+    // 6. Parse the final assistant text out of finalContent
+    const textContent = finalContent
       .filter((b: any) => b.type === 'text')
       .map((b: any) => b.text)
       .join('');
     const parsed = parseSenpaiResponse(textContent);
 
-    // 7. Log usage to Firestore (fire-and-forget, don't block the response)
-    const usage = {
-      input: response.usage.input_tokens ?? 0,
-      output: response.usage.output_tokens ?? 0,
-      cached: (response.usage as any).cache_read_input_tokens ?? 0,
-      cacheCreated: (response.usage as any).cache_creation_input_tokens ?? 0,
-    };
+    // 7. Log usage to Firestore (fire-and-forget, don't block the response).
+    // Tracks aggregated tokens across all iterations of the tool-use loop —
+    // a request that called the tool counts as one billable turn but logs
+    // 2× the input tokens (the second model call re-sends the prefix).
     admin
       .firestore()
       .collection('senpaiUsage')
@@ -336,15 +519,18 @@ export const senpaiChat = onRequest(
         uid,
         ts: admin.firestore.FieldValue.serverTimestamp(),
         model: MODEL,
-        ...usage,
+        ...totalUsage,
         mood: parsed.mood,
+        toolCalled: apiMessages.some(
+          (m) => Array.isArray(m.content) && m.content.some((b: any) => b.type === 'tool_use'),
+        ),
       })
       .catch((e) => logger.warn('[senpaiChat] usage log failed', { error: e?.message }));
 
     res.json({
       text: parsed.text,
       mood: parsed.mood,
-      usage,
+      usage: totalUsage,
     });
   },
 );
