@@ -72,16 +72,18 @@ function CleanActivityTrackerScreen({ navigation }: any) {
 
   // Get user's real location on mount
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          setInitialLat(loc.coords.latitude);
-          setInitialLng(loc.coords.longitude);
-        }
+        if (cancelled || status !== 'granted') return;
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (cancelled) return;
+        setInitialLat(loc.coords.latitude);
+        setInitialLng(loc.coords.longitude);
       } catch {}
     })();
+    return () => { cancelled = true; };
   }, []);
 
   // Accumulate route while tracking
@@ -128,21 +130,20 @@ function CleanActivityTrackerScreen({ navigation }: any) {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Map background — extends up under the simulated Dynamic Island on
-          web so the dark map reads as a single full-bleed surface instead of
-          sitting below a white notch bar. The phone frame's overflow: hidden
-          clips the bleed at the top edge. */}
-      {Platform.OS === 'web' && (
-        <View style={[styles.mapLayer, styles.mapLayerWebBleed]}>
-          <ActivityMap
-            routeCoords={routeCoords}
-            userLat={userLat}
-            userLng={userLng}
-            tileFilter={colors.mapTileFilter}
-            accentColor={colors.mapRouteColor || colors.gold}
-          />
-        </View>
-      )}
+      {/* Map background — full-bleed under the header. Web uses a Leaflet
+          map; iOS uses Apple Maps via expo-maps. The web variant adds a
+          negative-top "bleed" so the dark map reads as a single surface
+          under the simulated Dynamic Island; the native variant doesn't
+          need that since the real Dynamic Island handles its own area. */}
+      <View style={[styles.mapLayer, Platform.OS === 'web' && styles.mapLayerWebBleed]}>
+        <ActivityMap
+          routeCoords={routeCoords}
+          userLat={userLat}
+          userLng={userLng}
+          tileFilter={colors.mapTileFilter}
+          accentColor={colors.mapRouteColor || colors.gold}
+        />
+      </View>
 
       {/* Header */}
       <SafeAreaView edges={['top']} style={styles.headerWrap}>
@@ -162,7 +163,10 @@ function CleanActivityTrackerScreen({ navigation }: any) {
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </Pressable>
           <Text style={[styles.title, { color: colors.textPrimary }]}>GPS Tracker</Text>
-          <View style={styles.iconBtn} />
+          {/* Layout spacer to keep the title centered. Intentionally
+              transparent and non-interactive — the prior `iconBtn` style
+              made it look like an unresponsive button (BUG-006). */}
+          <View style={{ width: 40, height: 40 }} />
         </View>
 
         {/* Tab bar */}

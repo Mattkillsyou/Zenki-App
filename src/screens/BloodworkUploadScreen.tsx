@@ -4,7 +4,10 @@ import {
   Text,
   StyleSheet,
   Image,
-  ActivityIndicator} from 'react-native';
+  ActivityIndicator,
+  Alert,
+  Linking,
+} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -54,6 +57,10 @@ export function BloodworkUploadScreen({ navigation }: any) {
 
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
 
+  // Guard against double-tap: expo-document-picker / expo-image-picker
+  // throw "concurrent picking in progress" if launched twice in flight.
+  const [isPicking, setIsPicking] = useState(false);
+
   // Health-data consent gate — show the modal exactly once per device
   const [consentModalOpen, setConsentModalOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<null | 'image' | 'pdf'>(null);
@@ -79,36 +86,61 @@ export function BloodworkUploadScreen({ navigation }: any) {
   }
 
   async function pickImage() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
-    const r = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.9,
-      allowsEditing: false,
-    });
-    if (!r.canceled && r.assets[0]) {
-      const m = await ImageManipulator.manipulateAsync(
-        r.assets[0].uri,
-        [{ resize: { width: AI_IMAGE_MAX_DIMENSION } }],
-        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG, base64: true },
-      );
-      if (!m.base64) {
-        setPhase({ kind: 'error', message: 'Could not read image.' });
+    if (isPicking) return;
+    setIsPicking(true);
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        // iOS won't re-prompt once denied — surface the path to Settings so
+        // the button doesn't appear silently unresponsive.
+        Alert.alert(
+          'Photo access needed',
+          'Zenki needs access to your photos to upload a lab report. Open Settings to enable it.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ],
+        );
         return;
       }
-      setPhase({ kind: 'staged', uri: m.uri, base64: m.base64, mimeType: 'image/jpeg', isPdf: false });
+      const r = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.9,
+        allowsEditing: false,
+      });
+      if (!r.canceled && r.assets[0]) {
+        const m = await ImageManipulator.manipulateAsync(
+          r.assets[0].uri,
+          [{ resize: { width: AI_IMAGE_MAX_DIMENSION } }],
+          { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+        );
+        if (!m.base64) {
+          setPhase({ kind: 'error', message: 'Could not read image.' });
+          return;
+        }
+        setPhase({ kind: 'staged', uri: m.uri, base64: m.base64, mimeType: 'image/jpeg', isPdf: false });
+      }
+    } catch (err: any) {
+      Alert.alert('Could not open picker', err?.message || 'Please try again.');
+    } finally {
+      setIsPicking(false);
     }
   }
 
   async function pickPdf() {
-    const r = await DocumentPicker.getDocumentAsync({
-      type: 'application/pdf',
-      copyToCacheDirectory: true,
-    });
-    if (r.canceled) return;
+    if (isPicking) return;
+    setIsPicking(true);
     try {
+      const r = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
+      });
+      if (r.canceled) return;
       const asset = r.assets?.[0];
-      if (!asset) return;
+      if (!asset) {
+        Alert.alert('No file chosen', 'Pick a PDF to continue.');
+        return;
+      }
       const base64 = await FileSystem.readAsStringAsync(asset.uri, {
         encoding: 'base64',
       });
@@ -119,7 +151,10 @@ export function BloodworkUploadScreen({ navigation }: any) {
       }
       setPhase({ kind: 'staged', uri: asset.uri, base64, mimeType: 'application/pdf', isPdf: true });
     } catch (e: any) {
+      Alert.alert('Could not open PDF picker', e?.message ?? 'Please try again.');
       setPhase({ kind: 'error', message: e?.message ?? 'Could not read PDF.' });
+    } finally {
+      setIsPicking(false);
     }
   }
 

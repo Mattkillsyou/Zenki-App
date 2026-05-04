@@ -5,7 +5,10 @@ import {
   StyleSheet,
   TextInput,
   Image,
-  ActivityIndicator} from 'react-native';
+  ActivityIndicator,
+  Alert,
+  Linking,
+} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,6 +48,10 @@ export function DexaUploadScreen({ navigation }: any) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [editing, setEditing] = useState<Partial<DexaExtraction> & { notes?: string }>({});
 
+  // Guard against double-tap: expo-document-picker / expo-image-picker
+  // throw "concurrent picking in progress" if launched twice in flight.
+  const [isPicking, setIsPicking] = useState(false);
+
   // Health-data consent gate — show the modal exactly once per device
   const [consentModalOpen, setConsentModalOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<null | 'image' | 'pdf'>(null);
@@ -70,14 +77,29 @@ export function DexaUploadScreen({ navigation }: any) {
   }
 
   async function pickImage() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
-    const r = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.9,
-      allowsEditing: false,
-    });
-    if (!r.canceled && r.assets[0]) {
+    if (isPicking) return;
+    setIsPicking(true);
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        // iOS won't re-prompt once denied — surface a helpful message and a
+        // jump to Settings so users aren't staring at an unresponsive button.
+        Alert.alert(
+          'Photo access needed',
+          'Zenki needs access to your photos to upload a DEXA scan. Open Settings to enable it.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ],
+        );
+        return;
+      }
+      const r = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.9,
+        allowsEditing: false,
+      });
+      if (r.canceled || !r.assets[0]) return;
       const manipulated = await ImageManipulator.manipulateAsync(
         r.assets[0].uri,
         [{ resize: { width: AI_IMAGE_MAX_DIMENSION } }],
@@ -94,18 +116,27 @@ export function DexaUploadScreen({ navigation }: any) {
         mimeType: 'image/jpeg',
         isPdf: false,
       });
+    } catch (err: any) {
+      Alert.alert('Could not open picker', err?.message || 'Please try again.');
+    } finally {
+      setIsPicking(false);
     }
   }
 
   async function pickPdf() {
-    const r = await DocumentPicker.getDocumentAsync({
-      type: 'application/pdf',
-      copyToCacheDirectory: true,
-    });
-    if (r.canceled) return;
+    if (isPicking) return;
+    setIsPicking(true);
     try {
+      const r = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
+      });
+      if (r.canceled) return;
       const asset = r.assets?.[0];
-      if (!asset) return;
+      if (!asset) {
+        Alert.alert('No file chosen', 'Pick a PDF to continue.');
+        return;
+      }
       const base64 = await FileSystem.readAsStringAsync(asset.uri, {
         encoding: 'base64',
       });
@@ -123,7 +154,11 @@ export function DexaUploadScreen({ navigation }: any) {
         isPdf: true,
       });
     } catch (e: any) {
+      // Surface failures explicitly so the button never feels broken.
+      Alert.alert('Could not open PDF picker', e?.message ?? 'Please try again.');
       setPhase({ kind: 'error', message: e?.message ?? 'Could not read PDF.' });
+    } finally {
+      setIsPicking(false);
     }
   }
 
