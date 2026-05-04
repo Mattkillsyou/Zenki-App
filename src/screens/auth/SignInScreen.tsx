@@ -189,19 +189,28 @@ export function SignInScreen({ navigation }: any) {
     } catch (err: any) {
       // User canceling the prompt is not a real error — silence it.
       if (err?.code === 'ERR_REQUEST_CANCELED') return;
-      // Specific Apple SDK errors. ERR_REQUEST_FAILED commonly indicates the
-      // simulator isn't signed into an Apple ID, ERR_INVALID_RESPONSE means
-      // Apple returned no usable identity token (often a bundle-id /
-      // entitlement mismatch), ERR_AUTHORIZATION_REQUEST_FAILED is generic.
+      console.warn('[SignIn] Apple sign-in error', err?.code, err?.message, err);
       const code = err?.code ?? '';
+      // Distinguish three failure surfaces:
+      //   ERR_*               Apple SDK (expo-apple-authentication) errors
+      //   auth/*              Firebase Auth errors after token exchange
+      //   anything else       network / unexpected
       const friendly =
         code === 'ERR_REQUEST_FAILED'
-          ? "Apple couldn't process the request. On the simulator this usually means it isn't signed into an Apple ID — Settings → Sign in to your iPhone."
+          ? "Apple couldn't process the request. If you're on the simulator it's usually because it isn't signed into an Apple ID — Settings → Sign in. On a real device, check that the Apple ID is healthy."
           : code === 'ERR_INVALID_RESPONSE'
-            ? "Apple returned an empty identity token. This typically means the build isn't signed for the right bundle ID."
-            : err?.message
-              ? `Apple sign-in didn't go through — ${err.message}`
-              : "Apple sign-in didn't go through — try email + password instead.";
+            ? "Apple returned an empty identity token. The build's bundle ID may not match the one configured for Sign in with Apple in the Apple Developer portal."
+            : code === 'auth/operation-not-allowed'
+              ? "Apple sign-in isn't enabled on the server. Firebase Console → Authentication → Sign-in method → Apple → Enable, then add the Service ID + Key from the Apple Developer portal."
+              : code === 'auth/invalid-credential'
+                ? "Apple returned a token Firebase couldn't verify. This usually means the Service ID, Team ID, or Key ID configured in Firebase doesn't match the bundle's Sign-in-with-Apple settings."
+                : code === 'auth/account-exists-with-different-credential'
+                  ? "An account with this email already exists, signed up via email + password (or Google). Sign in that way instead, then link Apple from Settings."
+                  : code === 'auth/network-request-failed'
+                    ? "Couldn't reach Firebase — check your internet and try again."
+                    : err?.message
+                      ? `Apple sign-in didn't go through — ${err.message}`
+                      : "Apple sign-in didn't go through — try email + password instead.";
       setErrorMsg(friendly);
     } finally {
       setLoading(false);
