@@ -25,8 +25,8 @@ const Tab = createBottomTabNavigator();
 const TAB_ICONS: Record<string, { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap }> = {
   Home: { active: 'home', inactive: 'home-outline' },
   Schedule: { active: 'calendar', inactive: 'calendar-outline' },
-  Community: { active: 'people', inactive: 'people-outline' },
-  Book: { active: 'add-circle', inactive: 'add-circle-outline' },
+  Community: { active: 'add-circle', inactive: 'add-circle-outline' },
+  Book: { active: 'people', inactive: 'people-outline' },
   Hydration: { active: 'water', inactive: 'water-outline' },
   Store: { active: 'bag', inactive: 'bag-outline' },
   Tasks: { active: 'checkbox', inactive: 'checkbox-outline' },
@@ -84,8 +84,8 @@ export function TabNavigator() {
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Schedule" component={ScheduleScreen} />
-      <Tab.Screen name="Community" component={CommunityScreen} />
       <Tab.Screen name="Book" component={BookScreen} />
+      <Tab.Screen name="Community" component={CommunityScreen} />
       {!isEmployee && <Tab.Screen name="Hydration" component={DrinkScreen} />}
       {!isEmployee && <Tab.Screen name="Store" component={StoreScreen} />}
       {isEmployee && <Tab.Screen name="Tasks" component={EmployeeChecklistScreen} />}

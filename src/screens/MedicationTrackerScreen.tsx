@@ -20,6 +20,7 @@ import {
   formatTimeLabel, nextInjectionSite,
 } from '../types/medication';
 import { searchMedications, getPopularResults } from '../services/drugSearch';
+import { WeekCalendar } from '../components/WeekCalendar';
 
 // ─────────────────────────────────────────────────
 // Helpers
@@ -243,57 +244,26 @@ export function MedicationTrackerScreen({ navigation }: any) {
           <>
             {/* Calendar strip */}
             <FadeInView>
-              <View style={[styles.calCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={styles.calNav}>
-                  <SoundPressable onPress={handlePrevWeek} style={styles.calNavBtn}>
-                    <Ionicons name="chevron-back" size={18} color={colors.textPrimary} />
-                  </SoundPressable>
-                  <Text style={[styles.calTitle, { color: colors.textPrimary }]}>
-                    {weekRangeLabel(weekStart)}
-                  </Text>
-                  <SoundPressable onPress={handleNextWeek} style={styles.calNavBtn}>
-                    <Ionicons name="chevron-forward" size={18} color={colors.textPrimary} />
-                  </SoundPressable>
-                </View>
-                <View style={styles.weekRow}>
-                  {calendarDays.map((d) => {
-                    const isSelected = d.date === selectedDate;
-                    const isToday = d.date === todayIso();
-                    const dotColor =
+              <WeekCalendar
+                weekStart={weekStart}
+                selectedDate={selectedDate}
+                days={calendarDays.map((d) => {
+                  const past = new Date(d.date) < new Date(todayIso());
+                  return {
+                    date: d.date,
+                    dotColor:
                       d.totalDoses === 0 ? colors.borderSubtle :
                       d.completionRate >= 1 ? colors.gold :
                       d.completionRate >= 0.5 ? colors.warning :
                       d.completionRate > 0 ? colors.warning :
-                      isToday || new Date(d.date) < new Date(todayIso()) ? colors.error :
-                      colors.textMuted;
-                    return (
-                      <SoundPressable
-                        key={d.date}
-                        style={[
-                          styles.dayCol,
-                          isSelected && {
-                            backgroundColor: colors.gold + '20',
-                            borderColor: colors.gold,
-                            borderWidth: 1.5,
-                          },
-                        ]}
-                        onPress={() => setSelectedDate(d.date)}
-                      >
-                        <Text style={[styles.dayLabel, { color: colors.textMuted }]}>
-                          {dayLabel(d.date)}
-                        </Text>
-                        <Text style={[
-                          styles.dayNum,
-                          { color: isToday ? colors.gold : colors.textPrimary },
-                        ]}>
-                          {dayNumber(d.date)}
-                        </Text>
-                        <View style={[styles.dayDot, { backgroundColor: dotColor }]} />
-                      </SoundPressable>
-                    );
-                  })}
-                </View>
-              </View>
+                      past ? colors.error :
+                      colors.textMuted,
+                  };
+                })}
+                onSelectDate={setSelectedDate}
+                onPrev={handlePrevWeek}
+                onNext={handleNextWeek}
+              />
             </FadeInView>
 
             {/* Daily schedule */}
@@ -619,19 +589,23 @@ function AddEditMedicationModal({ visible, onClose, editing }: AddEditModalProps
       else setSearchResults([]);
       return;
     }
+    let cancelled = false;
     setSearching(true);
     debounceRef.current = setTimeout(async () => {
       try {
         const results = await searchMedications(query);
+        if (cancelled) return;
         setSearchResults(results);
       } catch (err) {
+        if (cancelled) return;
         console.warn('[MedScreen] search failed:', err);
         setSearchResults([]);
       } finally {
-        setSearching(false);
+        if (!cancelled) setSearching(false);
       }
     }, 300);
     return () => {
+      cancelled = true;
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [query, selected]);

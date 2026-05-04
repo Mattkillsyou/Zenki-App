@@ -20,6 +20,7 @@ import { spacing, borderRadius } from '../theme';
 import { FadeInView, KeyboardAwareScrollView, ScreenContainer, HealthKitBadge } from '../components';
 import { FoodSearchModal } from '../components/FoodSearchModal';
 import { ReorderableSections, ReorderableItem } from '../components/ReorderableSections';
+import { WeekCalendar, WeekDay, startOfWeek, addDays } from '../components/WeekCalendar';
 import { MealType, MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from '../types/nutrition';
 
 function todayISO(): string {
@@ -103,8 +104,9 @@ export function MacroTrackerScreen({ navigation, route }: any) {
   const [mealEditMode, setMealEditMode] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     AsyncStorage.getItem(MEAL_ORDER_KEY).then((raw) => {
-      if (!raw) return;
+      if (cancelled || !raw) return;
       try {
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) return;
@@ -116,6 +118,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
         setMealOrder([...valid, ...missing]);
       } catch { /* ignore */ }
     });
+    return () => { cancelled = true; };
   }, []);
 
   const handleMealReorder = useCallback((nextIds: string[]) => {
@@ -139,7 +142,9 @@ export function MacroTrackerScreen({ navigation, route }: any) {
   useEffect(() => {
     if (!user) return;
     if (wizardChecked) return;
+    let cancelled = false;
     AsyncStorage.getItem(SETUP_DONE_KEY).then((done) => {
+      if (cancelled) return;
       setWizardChecked(true);
       if (done === 'true') return;
       if (hasSetup) return;
@@ -152,7 +157,8 @@ export function MacroTrackerScreen({ navigation, route }: any) {
         setWizardFat(String(existing.fat));
       }
       setWizardOpen(true);
-    }).catch(() => setWizardChecked(true));
+    }).catch(() => { if (!cancelled) setWizardChecked(true); });
+    return () => { cancelled = true; };
   }, [user, hasSetup, wizardChecked, goalsFor]);
 
   const handleWizardSkip = async () => {
@@ -177,17 +183,20 @@ export function MacroTrackerScreen({ navigation, route }: any) {
 
   // If navigated with { openSearch: true } from the Home quick-actions row,
   // pop the Food Search modal automatically so tapping "Search" on Home
-  // lands right on the search.
+  // lands right on the search. Clear the param after consuming it so a
+  // subsequent navigate('MacroTracker', { openSearch: true }) actually
+  // re-fires this effect (otherwise the dep stays `true` and the next
+  // tap from Home does nothing — what users see as "I can't add a second food").
   useEffect(() => {
-    if (openSearchOnMount) setSearchOpen(true);
-  }, [openSearchOnMount]);
+    if (openSearchOnMount) {
+      setSearchOpen(true);
+      navigation.setParams({ openSearch: undefined });
+    }
+  }, [openSearchOnMount, navigation]);
 
   const today = todayISO();
   const [selectedDate, setSelectedDate] = useState(today);
-  const [calendarMonth, setCalendarMonth] = useState(() => {
-    const d = new Date();
-    return { year: d.getFullYear(), month: d.getMonth() };
-  });
+  const [weekStart, setWeekStart] = useState<string>(() => startOfWeek(today));
 
   // Log-entry form
   const [name, setName] = useState('');
@@ -209,26 +218,26 @@ export function MacroTrackerScreen({ navigation, route }: any) {
   const totals = user ? totalsForDate(user.id, selectedDate) : { calories: 0, protein: 0, carbs: 0, fat: 0 };
   const isToday = selectedDate === today;
 
-  // Build calendar data — which days have entries this month
-  const calendarDays = useMemo(() => {
+  // Build week-strip data — 7 days starting from `weekStart`. Each day gets
+  // a dot reflecting whether food was logged + whether the calorie goal was hit.
+  const calendarDays: WeekDay[] = useMemo(() => {
     if (!user) return [];
-    const { year, month } = calendarMonth;
-    const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const result: { day: number; date: string; hasEntries: boolean; hitGoal: boolean }[] = [];
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const entries = macrosForDate(user.id, dateStr);
-      const dayTotals = totalsForDate(user.id, dateStr);
-      result.push({
-        day: d,
-        date: dateStr,
-        hasEntries: entries.length > 0,
-        hitGoal: goals ? dayTotals.calories >= goals.calories * 0.8 : false,
+    const out: WeekDay[] = [];
+    for (let i = 0; i < 7; i++) {
+      const date = addDays(weekStart, i);
+      const entries = macrosForDate(user.id, date);
+      const dayTotals = totalsForDate(user.id, date);
+      const hasEntries = entries.length > 0;
+      const hitGoal = goals ? dayTotals.calories >= goals.calories * 0.8 : false;
+      out.push({
+        date,
+        dotColor: hasEntries
+          ? (hitGoal ? colors.success : colors.gold)
+          : undefined,
       });
     }
-    return { firstDay, days: result, monthLabel: new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) };
-  }, [user, calendarMonth, macrosForDate, totalsForDate, goals]);
+    return out;
+  }, [user, weekStart, macrosForDate, totalsForDate, goals, colors]);
 
   function openGoals() {
     if (!goals) return;
@@ -321,14 +330,31 @@ export function MacroTrackerScreen({ navigation, route }: any) {
 
           <HealthKitBadge style={{ marginHorizontal: spacing.lg, marginBottom: spacing.md }} />
 
-          {/* Search + Scan + Photo — top action row */}
+          {/* ─── Week strip (matches Medication tracker for visual consistency) ─── */}
+          <FadeInView delay={40}>
+            <WeekCalendar
+              weekStart={weekStart}
+              selectedDate={selectedDate}
+              days={calendarDays}
+              onSelectDate={setSelectedDate}
+              onPrev={() => setWeekStart((w) => addDays(w, -7))}
+              onNext={() => setWeekStart((w) => addDays(w, 7))}
+            />
+          </FadeInView>
+
+          {/* Selected date label */}
+          <Text style={[styles.dateLabel, { color: colors.textMuted }]}>
+            {isToday ? 'TODAY' : new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()}
+          </Text>
+
+          {/* Search + Scan + Photo — primary log-entry actions (under the calendar, larger pillboxes) */}
           <View style={styles.actionRow}>
             <SoundPressable
               activeOpacity={0.85}
               onPress={() => setSearchOpen(true)}
               style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
-              <Ionicons name="search" size={22} color={colors.gold} />
+              <Ionicons name="search" size={26} color={colors.gold} />
               <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Search</Text>
             </SoundPressable>
             <SoundPressable
@@ -336,7 +362,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
               onPress={() => navigation.navigate('BarcodeScanner')}
               style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
-              <Ionicons name="barcode-outline" size={22} color={colors.gold} />
+              <Ionicons name="barcode-outline" size={26} color={colors.gold} />
               <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Scan</Text>
             </SoundPressable>
             <SoundPressable
@@ -344,83 +370,10 @@ export function MacroTrackerScreen({ navigation, route }: any) {
               onPress={() => navigation.navigate('PhotoFood')}
               style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
-              <Ionicons name="sparkles-outline" size={22} color={colors.gold} />
+              <Ionicons name="sparkles-outline" size={26} color={colors.gold} />
               <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Photo</Text>
             </SoundPressable>
           </View>
-
-          {/* ─── Food Calendar (MacroFactor style) ─── */}
-          <FadeInView delay={40}>
-            <View style={[styles.calendarCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              {/* Month nav */}
-              <View style={styles.calMonthRow}>
-                <SoundPressable onPress={() => setCalendarMonth((prev) => {
-                  const d = new Date(prev.year, prev.month - 1, 1);
-                  return { year: d.getFullYear(), month: d.getMonth() };
-                })}>
-                  <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
-                </SoundPressable>
-                <Text style={[styles.calMonthLabel, { color: colors.textPrimary }]}>
-                  {(calendarDays as any).monthLabel || ''}
-                </Text>
-                <SoundPressable onPress={() => setCalendarMonth((prev) => {
-                  const d = new Date(prev.year, prev.month + 1, 1);
-                  return { year: d.getFullYear(), month: d.getMonth() };
-                })}>
-                  <Ionicons name="chevron-forward" size={20} color={colors.textPrimary} />
-                </SoundPressable>
-              </View>
-
-              {/* Day-of-week header */}
-              <View style={styles.calWeekRow}>
-                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                  <Text key={i} style={[styles.calWeekDay, { color: colors.textMuted }]}>{d}</Text>
-                ))}
-              </View>
-
-              {/* Day grid */}
-              <View style={styles.calGrid}>
-                {/* Empty cells for offset */}
-                {Array.from({ length: (calendarDays as any).firstDay || 0 }).map((_, i) => (
-                  <View key={`empty-${i}`} style={styles.calCell} />
-                ))}
-                {((calendarDays as any).days || []).map((day: any) => {
-                  const isSelected = day.date === selectedDate;
-                  const isCurrentDay = day.date === today;
-                  return (
-                    <SoundPressable
-                      key={day.day}
-                      style={[
-                        styles.calCell,
-                        isSelected && { backgroundColor: colors.gold, borderRadius: 8 },
-                      ]}
-                      onPress={() => setSelectedDate(day.date)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[
-                        styles.calDayText,
-                        { color: isSelected ? '#000' : isCurrentDay ? colors.gold : colors.textPrimary },
-                        isCurrentDay && !isSelected && { fontWeight: '900' },
-                      ]}>
-                        {day.day}
-                      </Text>
-                      {day.hasEntries && !isSelected && (
-                        <View style={[
-                          styles.calDot,
-                          { backgroundColor: day.hitGoal ? colors.success : colors.gold },
-                        ]} />
-                      )}
-                    </SoundPressable>
-                  );
-                })}
-              </View>
-            </View>
-          </FadeInView>
-
-          {/* Selected date label */}
-          <Text style={[styles.dateLabel, { color: colors.textMuted }]}>
-            {isToday ? 'TODAY' : new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()}
-          </Text>
 
           {/* Setup CTA — shown until user completes the BMR wizard */}
           {!hasSetup && (
@@ -1036,24 +989,25 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 17, fontWeight: '800', letterSpacing: 0.3 },
 
-  // Action row (Search / Scan / Photo)
+  // Action row (Search / Scan / Photo) — under the week calendar, scaled up
   actionRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
   },
   actionBtn: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 11,
-    borderRadius: 12,
+    paddingVertical: 18,
+    borderRadius: 16,
     borderWidth: 1.5,
   },
-  actionBtnLabel: { fontSize: 13, fontWeight: '700' },
+  actionBtnLabel: { fontSize: 14, fontWeight: '700' },
 
   // Food calendar
   calendarCard: {

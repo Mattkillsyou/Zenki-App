@@ -44,12 +44,13 @@ export function AdminBroadcastScreen({ navigation }: any) {
   };
 
   useEffect(() => {
+    let cancelled = false;
     AsyncStorage.getItem(HISTORY_KEY).then((raw) => {
-      if (raw) {
-        try { setHistory(JSON.parse(raw)); } catch { /* ignore */ }
-      }
+      if (cancelled || !raw) return;
+      try { setHistory(JSON.parse(raw)); } catch { /* ignore */ }
     });
     refreshRecipientCount();
+    return () => { cancelled = true; };
   }, []);
 
   const saveHistory = async (next: Broadcast[]) => {

@@ -1,7 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateId } from '../utils/generateId';
+import {
+  subscribeToAppointments,
+  upsertAppointmentInFirestore,
+  deleteAppointmentFromFirestore,
+} from '../services/appointmentSync';
 
 const STORAGE_KEY = '@zenki_appointments';
 
@@ -109,8 +114,17 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
     }
   }, []);
 
+  // Live Firestore subscription — source of truth across devices.
   useEffect(() => {
-    if (loaded) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(appointments));
+    const unsub = subscribeToAppointments((items) => {
+      setAppointments(items);
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(items)).catch(() => {});
+    });
+    return () => { unsub(); };
+  }, []);
+
+  useEffect(() => {
+    if (loaded) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(appointments)).catch(() => {});
   }, [appointments, loaded]);
 
   const requestAppointment = useCallback(async (a: Omit<Appointment, 'id' | 'status' | 'createdAt'>) => {
@@ -121,70 +135,88 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
       createdAt: new Date().toISOString(),
     };
     setAppointments((prev) => [...prev, next]);
+    upsertAppointmentInFirestore(next).catch(() => {});
     return next;
   }, []);
 
   const confirmAppointment = useCallback(async (id: string) => {
-    let appt: Appointment | undefined;
-    setAppointments((prev) =>
-      prev.map((a) => {
-        if (a.id !== id) return a;
-        appt = { ...a, status: 'confirmed' as AppointmentStatus };
-        return appt;
-      }),
-    );
-    if (appt) {
-      const notificationId = await scheduleNotification(appt);
-      if (notificationId) {
-        setAppointments((prev) =>
-          prev.map((a) => (a.id === id ? { ...a, notificationId } : a)),
-        );
-      }
-    }
+    // Read latest state via a no-op functional update so the closure is
+    // never stale (useCallback deps are []).
+    let target: Appointment | undefined;
+    setAppointments((prev) => {
+      target = prev.find((a) => a.id === id);
+      return prev;
+    });
+    if (!target) return;
+
+    const tentative: Appointment = { ...target, status: 'confirmed' as AppointmentStatus };
+    const notificationId = await scheduleNotification(tentative);
+    const finalAppt: Appointment = notificationId
+      ? { ...tentative, notificationId }
+      : tentative;
+
+    // Single state update + single Firestore upsert. Avoids the dual-set
+    // race where a concurrent snapshot could clobber the in-flight
+    // notificationId patch.
+    setAppointments((prev) => prev.map((a) => (a.id === id ? finalAppt : a)));
+    upsertAppointmentInFirestore(finalAppt).catch(() => {});
   }, []);
 
   const cancelAppointment = useCallback(async (id: string) => {
-    // Use functional update to avoid stale closure over appointments
+    let updated: Appointment | undefined;
     setAppointments((prev) => {
       const existing = prev.find((a) => a.id === id);
       if (existing?.notificationId) {
-        // Cancel notification outside of state update (fire-and-forget)
         cancelNotification(existing.notificationId).catch(() => {});
       }
-      return prev.map((a) => (a.id === id ? { ...a, status: 'cancelled' as const, notificationId: undefined } : a));
+      return prev.map((a) => {
+        if (a.id !== id) return a;
+        updated = { ...a, status: 'cancelled' as const, notificationId: undefined };
+        return updated;
+      });
     });
+    if (updated) upsertAppointmentInFirestore(updated).catch(() => {});
   }, []);
 
   const completeAppointment = useCallback((id: string) => {
+    let updated: Appointment | undefined;
     setAppointments((prev) => {
       const existing = prev.find((a) => a.id === id);
       if (existing?.notificationId) {
-        // Fire-and-forget — the scheduled "in 1 hour" reminder is no longer
-        // useful once the session is marked complete.
         cancelNotification(existing.notificationId).catch(() => {});
       }
-      return prev.map((a) =>
-        a.id === id ? { ...a, status: 'completed' as const, notificationId: undefined } : a,
-      );
+      return prev.map((a) => {
+        if (a.id !== id) return a;
+        updated = { ...a, status: 'completed' as const, notificationId: undefined };
+        return updated;
+      });
     });
+    if (updated) upsertAppointmentInFirestore(updated).catch(() => {});
   }, []);
 
-  // Filtered views (memberId / admin filters happen at the screen level)
-  const myAppointments = appointments;
-  const pendingForAdmin = appointments.filter((a) => a.status === 'pending');
+  // Filtered views (memberId / admin filters happen at the screen level).
+  // Memoized so consumers reading just `pendingForAdmin` don't re-render
+  // whenever any other context-state field changes.
+  const pendingForAdmin = useMemo(
+    () => appointments.filter((a) => a.status === 'pending'),
+    [appointments],
+  );
+
+  const value = useMemo(
+    () => ({
+      appointments,
+      myAppointments: appointments,
+      pendingForAdmin,
+      requestAppointment,
+      confirmAppointment,
+      cancelAppointment,
+      completeAppointment,
+    }),
+    [appointments, pendingForAdmin, requestAppointment, confirmAppointment, cancelAppointment, completeAppointment],
+  );
 
   return (
-    <AppointmentContext.Provider
-      value={{
-        appointments,
-        myAppointments,
-        pendingForAdmin,
-        requestAppointment,
-        confirmAppointment,
-        cancelAppointment,
-        completeAppointment,
-      }}
-    >
+    <AppointmentContext.Provider value={value}>
       {children}
     </AppointmentContext.Provider>
   );

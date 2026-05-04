@@ -16,10 +16,12 @@ import { typography, spacing, borderRadius } from '../theme';
 import { Button } from '../components';
 import { getProductImages } from '../data/products';
 import { useProducts } from '../context/ProductContext';
+import { useCart } from '../context/CartContext';
 
 export function ProductDetailScreen({ navigation, route }: any) {
   const { colors } = useTheme();
   const { products } = useProducts();
+  const { addToCart } = useCart();
   const { productId } = route.params;
   const product = products.find((p) => p.id === productId);
 
@@ -63,7 +65,7 @@ export function ProductDetailScreen({ navigation, route }: any) {
       Alert.alert('Select Size', 'Please choose a size before adding to cart.');
       return;
     }
-    // TODO: integrate real cart state management
+    addToCart(product, quantity, selectedSize ?? undefined);
     Alert.alert(
       'Added to Cart',
       `${product.name}${selectedSize ? ` (${selectedSize})` : ''} × ${quantity}\n\nMember price: $${(product.memberPrice * quantity).toFixed(2)}`,

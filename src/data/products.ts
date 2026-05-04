@@ -1,4 +1,5 @@
 import { ImageSourcePropType } from 'react-native';
+import { WIX_CDN_BASE } from '../config/api';
 
 export type ProductCategory = 'All' | 'Apparel' | 'Gear' | 'Accessories';
 
@@ -40,8 +41,9 @@ export const CATEGORIES: ProductCategory[] = ['All', 'Apparel', 'Gear', 'Accesso
 // ──────────────────────────────────────────────────────────
 
 // Wix CDN image transform helper — requests a high-res version suitable for mobile detail views.
+// Base URL is in src/config/api.ts so it can be swapped without touching this file.
 const wx = (id: string, ext = 'jpg') =>
-  ({ uri: `https://static.wixstatic.com/media/${id}/v1/fill/w_1200,h_1500,al_c,q_90/file.${ext}` });
+  ({ uri: `${WIX_CDN_BASE}/${id}/v1/fill/w_1200,h_1500,al_c,q_90/file.${ext}` });
 
 export const PRODUCTS: Product[] = [
   {

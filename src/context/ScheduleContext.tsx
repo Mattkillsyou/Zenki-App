@@ -2,6 +2,11 @@ import React, { createContext, useContext, useEffect, useMemo, useState, useCall
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ClassType, DAYS, SCHEDULES, ScheduleEntry } from '../data/schedule';
 import { generateId } from '../utils/generateId';
+import {
+  subscribeToSchedule,
+  upsertScheduleDay,
+  clearScheduleDay,
+} from '../services/scheduleSync';
 
 const STORAGE_KEY = '@zenki_schedule_overrides_v1';
 
@@ -74,34 +79,64 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, []);
 
+  // Live Firestore subscription. Replaces local state for any day that has a
+  // doc in /schedule; days with no doc fall back to the in-app seed. Cached
+  // to AsyncStorage so cold-boot offline still shows last-known state.
   useEffect(() => {
-    if (!loaded) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(schedule)).catch(() => {});
-  }, [schedule, loaded]);
+    const unsub = subscribeToSchedule((byDay) => {
+      setSchedule(() => {
+        const next = seedScheduleAsClasses();
+        for (const day of DAYS) {
+          const fromFs = byDay[day];
+          if (Array.isArray(fromFs)) next[day] = fromFs;
+        }
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+        return next;
+      });
+    });
+    return () => { unsub(); };
+  }, []);
+
+  // Push a single day's array to Firestore. The subscription listener
+  // round-trips the change into local state + AsyncStorage cache.
+  const writeDay = useCallback((day: DayKey, classes: ScheduleClass[]) => {
+    upsertScheduleDay(day, classes).catch(() => {});
+  }, []);
 
   const addClass = useCallback(async (day: DayKey, klass: Omit<ScheduleClass, 'id'>) => {
     const created: ScheduleClass = { ...klass, id: generateId('cls') };
-    setSchedule((prev) => ({ ...prev, [day]: [...(prev[day] || []), created] }));
+    let nextDayClasses: ScheduleClass[] = [];
+    setSchedule((prev) => {
+      nextDayClasses = [...(prev[day] || []), created];
+      return { ...prev, [day]: nextDayClasses };
+    });
+    writeDay(day, nextDayClasses);
     return created;
-  }, []);
+  }, [writeDay]);
 
   const updateClass = useCallback(async (day: DayKey, id: string, patch: Partial<ScheduleClass>) => {
-    setSchedule((prev) => ({
-      ...prev,
-      [day]: (prev[day] || []).map((c) => (c.id === id ? { ...c, ...patch, id: c.id } : c)),
-    }));
-  }, []);
+    let nextDayClasses: ScheduleClass[] = [];
+    setSchedule((prev) => {
+      nextDayClasses = (prev[day] || []).map((c) => (c.id === id ? { ...c, ...patch, id: c.id } : c));
+      return { ...prev, [day]: nextDayClasses };
+    });
+    writeDay(day, nextDayClasses);
+  }, [writeDay]);
 
   const removeClass = useCallback(async (day: DayKey, id: string) => {
-    setSchedule((prev) => ({
-      ...prev,
-      [day]: (prev[day] || []).filter((c) => c.id !== id),
-    }));
-  }, []);
+    let nextDayClasses: ScheduleClass[] = [];
+    setSchedule((prev) => {
+      nextDayClasses = (prev[day] || []).filter((c) => c.id !== id);
+      return { ...prev, [day]: nextDayClasses };
+    });
+    writeDay(day, nextDayClasses);
+  }, [writeDay]);
 
   const resetToSeed = useCallback(async () => {
     setSchedule(seedScheduleAsClasses());
     AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+    // Clear every day's Firestore doc so seed shows for everyone.
+    await Promise.all(DAYS.map((d) => clearScheduleDay(d).catch(() => false)));
   }, []);
 
   const getToday = useCallback((): ScheduleClass[] => {

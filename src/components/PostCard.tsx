@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, Image, Animated, Alert, ActionSheetIOS, Platform } from 'react-native';
+import { View, Text, StyleSheet, Image, Animated, Alert, ActionSheetIOS, Platform, Share } from 'react-native';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -8,12 +9,12 @@ import { useBlocks } from '../context/BlocksContext';
 import { useAuth } from '../context/AuthContext';
 import { Post } from '../services/firebasePosts';
 import { ReportModal } from './ReportModal';
-import { typography } from '../theme';
 
 interface PostCardProps {
   post: Post;
   onLike: (postId: string, liked: boolean) => void;
   onUserPress: (userId: string) => void;
+  onCommentPress?: (postId: string) => void;
 }
 
 /**
@@ -25,7 +26,7 @@ interface PostCardProps {
  * - Inline caption with username prefix
  * - "View all comments" link
  */
-export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
+export function PostCard({ post, onLike, onUserPress, onCommentPress }: PostCardProps) {
   const { colors } = useTheme();
   const { reduceMotion } = useMotion();
   const { user } = useAuth();
@@ -99,6 +100,21 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
     onLike(post.id, !post.liked);
   };
 
+  const handleShare = async () => {
+    try {
+      const message = post.caption
+        ? `${post.displayName}: "${post.caption}"\n\nShared from Zenki Dojo`
+        : `${post.displayName} shared on Zenki Dojo`;
+      await Share.share({ message });
+    } catch {
+      // user cancelled or share unavailable — silent
+    }
+  };
+
+  const handleComment = () => {
+    if (onCommentPress) onCommentPress(post.id);
+  };
+
   // Double-tap image to like (Instagram behavior)
   const handleMediaTap = () => {
     const now = Date.now();
@@ -164,14 +180,22 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
 
       {/* Media (photo/video) OR text caption prominence */}
       {post.mediaUrl && !mediaErrored ? (
-        <SoundPressable activeOpacity={0.98} onPress={handleMediaTap}>
-          <Image
-            source={{ uri: post.mediaUrl }}
-            style={styles.media}
-            resizeMode="cover"
+        post.mediaType === 'video' ? (
+          <PostVideoMedia
+            uri={post.mediaUrl}
+            onTap={handleMediaTap}
             onError={() => setMediaErrored(true)}
           />
-        </SoundPressable>
+        ) : (
+          <SoundPressable activeOpacity={0.98} onPress={handleMediaTap}>
+            <Image
+              source={{ uri: post.mediaUrl }}
+              style={styles.media}
+              resizeMode="cover"
+              onError={() => setMediaErrored(true)}
+            />
+          </SoundPressable>
+        )
       ) : (
         <View style={styles.textPostWrap}>
           <Text style={[styles.textPostBody, { color: colors.textPrimary }]}>
@@ -183,7 +207,7 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
       {/* Actions */}
       <View style={styles.actions}>
         <View style={styles.actionsLeft}>
-          <SoundPressable onPress={handleLike} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <SoundPressable onPress={handleLike} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} style={styles.heartGroup}>
             <Animated.View style={{ transform: [{ scale: heartAnim }] }}>
               <Ionicons
                 name={post.liked ? 'heart' : 'heart-outline'}
@@ -191,25 +215,18 @@ export function PostCard({ post, onLike, onUserPress }: PostCardProps) {
                 color={post.liked ? colors.red : colors.textPrimary}
               />
             </Animated.View>
+            <Text style={[styles.heartCount, { color: colors.textPrimary }]}>
+              {post.likes > 0 ? post.likes.toLocaleString() : ''}
+            </Text>
           </SoundPressable>
-          <SoundPressable hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <SoundPressable onPress={handleComment} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
             <Ionicons name="chatbubble-outline" size={24} color={colors.textPrimary} />
           </SoundPressable>
-          <SoundPressable hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <SoundPressable onPress={handleShare} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
             <Ionicons name="paper-plane-outline" size={24} color={colors.textPrimary} />
           </SoundPressable>
         </View>
-        <SoundPressable hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-          <Ionicons name="bookmark-outline" size={24} color={colors.textPrimary} />
-        </SoundPressable>
       </View>
-
-      {/* Like count */}
-      {post.likes > 0 && (
-        <Text style={[styles.likeCount, { color: colors.textPrimary }]}>
-          {post.likes.toLocaleString()} {post.likes === 1 ? 'like' : 'likes'}
-        </Text>
-      )}
 
       {/* Inline caption — only show below actions for media posts. Text-only already shows it above. */}
       {post.caption && post.mediaUrl ? (
@@ -233,6 +250,38 @@ function getTimeAgo(isoDate: string): string {
   if (days < 7) return `${days}d`;
   const weeks = Math.floor(days / 7);
   return `${weeks}w`;
+}
+
+/**
+ * Auto-playing, looping, muted feed video. Single tap forwards to the
+ * parent's tap handler (so double-tap-to-like still works); the absence
+ * of native controls means the player UI never gets in the way.
+ */
+function PostVideoMedia({
+  uri,
+  onTap,
+  onError,
+}: {
+  uri: string;
+  onTap: () => void;
+  onError: () => void;
+}) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = true;
+    p.muted = true;
+    p.play();
+  });
+  return (
+    <SoundPressable activeOpacity={0.98} onPress={onTap}>
+      <VideoView
+        player={player}
+        style={styles.media}
+        contentFit="cover"
+        nativeControls={false}
+        allowsPictureInPicture={false}
+      />
+    </SoundPressable>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -302,13 +351,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
   },
-
-  likeCount: {
-    ...typography.body,
-    fontWeight: '800',
+  heartGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  heartCount: {
     fontSize: 14,
-    paddingHorizontal: 12,
-    marginBottom: 3,
+    fontWeight: '700',
+    minWidth: 14,
   },
   captionLine: {
     fontSize: 14,

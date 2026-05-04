@@ -6,3 +6,19 @@ Simulator Screenshot - iPhone 17 Pro Max - 2026-04-24 at 23.39.52/
 
 # App Store screenshot work-in-progress (not needed for the binary build)
 app-store-screenshots/
+
+# Loose simulator screenshots / recordings sitting in the project root
+# from QA passes — they get included in the EAS upload otherwise.
+Simulator Screenshot*.png
+Simulator Screen Recording*.mov
+
+# Local xcodebuild artifacts (~2.3 GB) — EAS does its own native build
+# in the cloud, so this directory is never needed for the upload.
+ios/build/
+
+# Local Pods / DerivedData / xcworkspace user state — EAS regenerates
+# these in the cloud build environment.
+ios/Pods/
+ios/build-*/
+ios/*.xcworkspace/xcuserdata/
+ios/*.xcodeproj/xcuserdata/

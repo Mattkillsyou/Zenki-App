@@ -68,27 +68,31 @@ export function AdminReportsScreen({ navigation }: any) {
   const [actingOn, setActingOn] = useState<string | null>(null);
   const [permError, setPermError] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<Report[]> => {
     setPermError(false);
-    const list = await listOpenReports();
     // listOpenReports silently returns [] on permission errors — we can't
     // distinguish "no reports" from "not an admin" from the return value, so
     // give the "no reports" copy the benefit of the doubt. If rules are denying,
     // the console.warn inside the service surfaces it.
-    setReports(list);
+    return await listOpenReports();
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       setLoading(true);
-      await load();
+      const list = await load();
+      if (cancelled) return;
+      setReports(list);
       setLoading(false);
     })();
+    return () => { cancelled = true; };
   }, [load]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await load();
+    const list = await load();
+    setReports(list);
     setRefreshing(false);
   };
 

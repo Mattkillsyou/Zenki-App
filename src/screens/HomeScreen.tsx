@@ -345,15 +345,17 @@ export function HomeScreen({ navigation }: any) {
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   useEffect(() => {
     if (!dismissedKey) return;
+    let cancelled = false;
     AsyncStorage.getItem(dismissedKey)
       .then((raw) => {
-        if (!raw) return;
+        if (cancelled || !raw) return;
         try {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) setDismissedIds(parsed);
         } catch { /* ignore */ }
       })
       .catch(() => { /* ignore */ });
+    return () => { cancelled = true; };
   }, [dismissedKey]);
   const dismissAnnouncement = useCallback((id: string) => {
     setDismissedIds((prev) => {
@@ -368,7 +370,7 @@ export function HomeScreen({ navigation }: any) {
   const { myLogs, myPRs } = useWorkouts();
   const userLogsCount = user?.id ? myLogs(user.id).length : 0;
   const userPRsCount = user?.id ? myPRs(user.id).length : 0;
-  const dailyQuote = getDailyQuote();
+  const [dailyQuote, setDailyQuote] = React.useState(getDailyQuote);
   const hasUnreadNotifications = useHasUnreadNotifications();
 
   useScreenSoundTheme('home');
@@ -633,6 +635,7 @@ export function HomeScreen({ navigation }: any) {
   }, []);
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
+    setDailyQuote(getDailyQuote());
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     refreshTimerRef.current = setTimeout(() => setRefreshing(false), 800);
   }, []);
@@ -640,8 +643,8 @@ export function HomeScreen({ navigation }: any) {
   // ── Module reorder (drag to rearrange) + show/hide ──
   // Employees swap the food / training tools for clock-in + today's checklist;
   // every other module (announcements, xp, dashboard, etc.) stays the same.
-  const NON_EMPLOYEE_MODULE_ORDER = ['announcements', 'vouchers', 'quote', 'xpBar', 'achievements', 'training', 'quickFoodActions', 'dashboard', 'quickStats'];
-  const EMPLOYEE_MODULE_ORDER = ['timeclock', 'checklist', 'announcements', 'vouchers', 'quote', 'xpBar', 'achievements', 'dashboard', 'quickStats'];
+  const NON_EMPLOYEE_MODULE_ORDER = ['announcements', 'vouchers', 'quote', 'xpBar', 'achievements', 'macroBars', 'quickFoodActions', 'training', 'dashboard', 'quickStats'];
+  const EMPLOYEE_MODULE_ORDER = ['timeclock', 'checklist', 'announcements', 'vouchers', 'quote', 'xpBar', 'achievements', 'macroBars', 'dashboard', 'quickStats'];
   const DEFAULT_MODULE_ORDER = isEmployee ? EMPLOYEE_MODULE_ORDER : NON_EMPLOYEE_MODULE_ORDER;
   const [moduleOrder, setModuleOrder] = useState<string[]>(DEFAULT_MODULE_ORDER);
   const [moduleVisibility, setModuleVisibility] = useState<Record<string, boolean>>({});
@@ -750,20 +753,12 @@ export function HomeScreen({ navigation }: any) {
                 <TouchableOpacity
                   ref={spinFabRef}
                   onLayout={measureCoachTarget('spinFab', spinFabRef)}
-                  style={[
-                    styles.iconButton,
-                    {
-                      backgroundColor: colors.surface,
-                      shadowColor: '#D4A017',
-                      // @ts-ignore — boxShadow is web-only
-                      boxShadow: '0 0 10px rgba(212,160,23,0.65), 0 0 18px rgba(212,160,23,0.3)',
-                    },
-                  ]}
+                  style={[styles.iconButton, { backgroundColor: '#FFFFFF' }]}
                   onPress={() => { play('navigate'); setSpinOpen(true); }}
                   activeOpacity={0.7}
                   accessibilityLabel="Daily spin"
                 >
-                  <Ionicons name="aperture" size={22} color="#D4A017" />
+                  <Ionicons name="aperture" size={22} color="#000000" />
                 </TouchableOpacity>
               )}
               <TouchableOpacity
@@ -1102,6 +1097,40 @@ export function HomeScreen({ navigation }: any) {
                     </View>
                   </FadeInView>
                 ) : null,
+                macroBars: (
+                  <FadeInView delay={320} slideUp={16}>
+                    <View style={[styles.section, { marginTop: 14 }]}>
+                      <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 10 }]}>Today's Macros</Text>
+                      <SoundPressable
+                        activeOpacity={0.85}
+                        onPress={() => !editMode && navigation.navigate('MacroTracker')}
+                        style={[styles.macroBarCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}
+                      >
+                        {([
+                          { label: 'Calories', value: todayNutrition.calories, goal: todayGoals.calories, unit: 'kcal', color: colors.gold },
+                          { label: 'Protein',  value: todayNutrition.protein,  goal: todayGoals.protein,  unit: 'g',    color: colors.red },
+                          { label: 'Carbs',    value: todayNutrition.carbs,    goal: todayGoals.carbs,    unit: 'g',    color: colors.success },
+                          { label: 'Fat',      value: todayNutrition.fat,      goal: todayGoals.fat,      unit: 'g',    color: colors.warning },
+                        ] as const).map((m) => {
+                          const pct = m.goal > 0 ? Math.min(1, m.value / m.goal) : 0;
+                          return (
+                            <View key={m.label} style={styles.macroBarRow}>
+                              <View style={styles.macroBarHeader}>
+                                <Text style={[styles.macroBarLabel, { color: colors.textPrimary }]}>{m.label}</Text>
+                                <Text style={[styles.macroBarValue, { color: colors.textSecondary }]}>
+                                  {Math.round(m.value)} / {m.goal} {m.unit}
+                                </Text>
+                              </View>
+                              <View style={[styles.macroBarTrack, { backgroundColor: colors.borderSubtle }]}>
+                                <View style={[styles.macroBarFill, { width: `${pct * 100}%`, backgroundColor: m.color }]} />
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </SoundPressable>
+                    </View>
+                  </FadeInView>
+                ),
                 training: (
                   <FadeInView delay={340} slideUp={16}>
                     <View
@@ -1927,6 +1956,41 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '500',
     textAlign: 'center',
+  },
+
+  // ── Macro bars ──
+  macroBarCard: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: spacing.sm,
+  },
+  macroBarRow: {
+    gap: 6,
+  },
+  macroBarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+  },
+  macroBarLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  macroBarValue: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  macroBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  macroBarFill: {
+    height: 6,
+    borderRadius: 3,
   },
 
   // ── Schedule rows ──

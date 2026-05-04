@@ -24,11 +24,11 @@ export const OFF_BASE_URL = 'https://world.openfoodfacts.org';
  * The function holds the API key server-side; the app only sends image payloads.
  * See `functions/` at project root for the source code of these endpoints.
  *
- * Replace this with your real Firebase project URL after deployment.
  * Format: https://{region}-{projectId}.cloudfunctions.net
+ * Live (verified): `recognizeFood` returns HTTP 401 to unauthenticated calls.
  */
 export const AI_FUNCTION_BASE_URL =
-  'https://us-central1-zenki-dojo.cloudfunctions.net'; // TODO(owner): replace after deploy
+  'https://us-central1-zenki-dojo.cloudfunctions.net';
 
 /**
  * Maximum image side length sent to the AI. We downscale client-side to keep
@@ -37,3 +37,31 @@ export const AI_FUNCTION_BASE_URL =
  * and medical-report scans alike.
  */
 export const AI_IMAGE_MAX_DIMENSION = 1024;
+
+/**
+ * Google Apps Script Web App that proxies timeclock entries into the
+ * dojo's master timesheet Google Sheet. Rotating: redeploy the script
+ * (`Deploy → New deployment`) and replace the URL here.
+ *
+ * Empty string disables sync (entries are logged locally only).
+ */
+export const SHEETS_PROXY_URL =
+  'https://script.google.com/macros/s/AKfycbz1I9JhmLuJAjR16bEL1XNWRRucF4KrgYXFj-PQX7PcPetYvODd3UFsToFln2W1JDA/exec';
+
+/**
+ * Public marketing site URLs surfaced from in-app menus.
+ */
+export const PRIVACY_URL = 'https://zenki-dojo.web.app/privacy';
+export const SUPPORT_URL = 'https://zenki-dojo.web.app/support';
+
+/**
+ * Expo push-notification batch endpoint. Standard URL for all Expo apps;
+ * see https://docs.expo.dev/push-notifications/sending-notifications/.
+ */
+export const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
+
+/**
+ * Wix CDN base — used by `data/products.ts:wx()` to build high-res image URIs
+ * for product detail galleries. Path template: `${WIX_CDN_BASE}/{id}/v1/fill/...`
+ */
+export const WIX_CDN_BASE = 'https://static.wixstatic.com/media';

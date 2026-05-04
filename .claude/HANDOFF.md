@@ -309,3 +309,70 @@ Last updated: 2026-04-28 (later same day) by Claude.
       – Resend Cloud Function deploy. Code is committed (8f466e1)
         but needs the user to set RESEND_API_KEY and run
         `firebase deploy --only functions:sendPasswordReset`.
+
+## 2026-04-29 audit + repair pass
+
+See `.claude/AUDIT_2026-04-29.md` and `.claude/REPAIR_PLAN.md` for the
+full report. Headline:
+
+  • Static audit found 0 P0, 1 P1, 7 P2, 9 P3 across `src/` (232 files).
+  • All §2 / §16 / §30 cleanup is verified total: SpinWheelIcon gone,
+    deleted-theme refs gone, voucher state migrated cleanly to HomeScreen.
+  • The Master Prompt §38 prose ("15 Alert.alert placeholders in
+    AdminProducts, 10 in AdminSchedule") is stale — both files were
+    cleaned up; AdminProducts has 8 productive alerts (validation /
+    errors / confirms), AdminSchedule has 0 (uses the centralized
+    `showAlert` / `confirmAlert` helpers).
+
+Repairs applied in this pass (all source-only, tsc still clean):
+
+  • P1-1 Profile photo persistence — added `uploadProfileImage` to
+    `src/services/storage.ts` (writes to `users/{uid}/profile/{id}.{ext}`),
+    and wired ProfileScreen to read `user.profilePhoto` on mount, upload
+    to Firebase Storage on pick/take, and write the download URL back via
+    `pushMemberToFirestore`. Optimistic local update + rollback on error.
+  • P2-1 `SHEETS_PROXY_URL` moved to `src/config/api.ts`.
+  • P2-2 .. P2-7 `useEffect` cancellation guards added to
+    AdminBroadcast / AdminReports (load() now returns the list so
+    cancellation actually works) / MedicationTracker (debounced search) /
+    MacroTracker (×2) / ActivityTracker (location IIFE) /
+    HomeScreen (dismissed-announcements hydration).
+  • P3-2 Migrated 5 callsites from `ImagePicker.MediaTypeOptions.Images`
+    to the new `mediaTypes: ['images']` form (BloodworkUpload,
+    AdminProducts, PhotoFood ×2, DexaUpload). Zero `MediaTypeOptions`
+    refs remain.
+  • P3-3 SignIn invite-gate Alert.alert → inline error banner; removed
+    now-dead `Alert` import from SignInScreen.
+  • P3-4 `PRIVACY_URL` / `SUPPORT_URL` exported from `src/config/api.ts`
+    and consumed by HelpScreen. SettingsScreen "About / Terms / Privacy"
+    Linking.openURL switched from `http://` to `https://`.
+
+All previously-deferred items also completed in this pass:
+
+  • **§31 Resend Cloud Function — DEPLOYED.** Live at
+    `https://us-central1-zenki-dojo.cloudfunctions.net/sendPasswordReset`.
+    Smoke-tested: GET → 405, POST → 200 {ok:true}. Function uses
+    RESEND_API_KEY from Google Secret Manager (v1, granted to default
+    compute SA). The default sender is still `onboarding@resend.dev`
+    (Resend sandbox); production-flip requires verifying a sending domain
+    at https://resend.com/domains and updating FROM_ADDRESS in
+    `functions/src/sendPasswordReset.ts:42`.
+  • Stale TODO at `src/config/api.ts:31` removed — URL is verified correct.
+  • `ProductDetailScreen.tsx:66` cart TODO — REPLACED with real cart.
+    Created `src/context/CartContext.tsx` (persists to `@zenki_cart`
+    with optional `selectedSize`); refactored StoreScreen to consume the
+    shared context (still owns wishlist, promo codes, checkout flow);
+    ProductDetail's "Add to Cart" now actually adds to the same cart
+    that StoreScreen displays. Two items with different sizes are
+    separate cart lines.
+  • Expo push endpoint and Wix CDN base both moved into
+    `src/config/api.ts` (`EXPO_PUSH_API_URL`, `WIX_CDN_BASE`).
+
+Carry-forward gotchas added in this pass:
+
+  • **Node.js runtime upgraded to 22.** All 6 Cloud Functions
+    (adminActionReport, deleteAccount, extractDexa, parseBloodwork,
+    recognizeFood, sendPasswordReset) redeployed on `nodejs22` after
+    the Node 20 deprecation notice. `functions/package.json`
+    `engines.node` bumped to "22"; smoke-test post-deploy: recognizeFood
+    POST → 401, sendPasswordReset POST → 200 {ok:true}.

@@ -2,6 +2,14 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { EmployeeTask, TaskCompletion } from '../types/employeeTask';
 import { generateId } from '../utils/generateId';
+import {
+  subscribeToTasks,
+  subscribeToCompletions,
+  upsertTaskInFirestore,
+  deleteTaskFromFirestore,
+  upsertCompletionInFirestore,
+  deleteCompletionFromFirestore,
+} from '../services/employeeTaskSync';
 
 const TASKS_KEY = '@zenki_employee_tasks';
 const COMPLETIONS_KEY = '@zenki_task_completions';
@@ -50,19 +58,13 @@ function genId(): string {
   return generateId('task');
 }
 
-const DEFAULT_SEED_TASKS: Omit<EmployeeTask, 'id' | 'createdAt'>[] = [
-  { title: 'Unlock & open the dojo', source: 'default' },
-  { title: 'Wipe mats with disinfectant', source: 'default' },
-  { title: 'Stock water & towel station', source: 'default' },
-  { title: 'Check bathrooms & restock', source: 'default' },
-  { title: 'Close out register & lock up', source: 'default' },
-];
-
 export function EmployeeTaskProvider({ children }: { children: React.ReactNode }) {
   const [tasks, setTasks] = useState<EmployeeTask[]>([]);
   const [completions, setCompletions] = useState<TaskCompletion[]>([]);
   const [loaded, setLoaded] = useState(false);
 
+  // AsyncStorage cache hydrate. Firestore subscription overwrites once it
+  // fires; this just covers the offline cold-boot window.
   useEffect(() => {
     (async () => {
       try {
@@ -70,30 +72,35 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
           AsyncStorage.getItem(TASKS_KEY),
           AsyncStorage.getItem(COMPLETIONS_KEY),
         ]);
-        if (tRaw) {
-          const existing: EmployeeTask[] = JSON.parse(tRaw);
-          setTasks(existing);
-        } else {
-          // Seed default daily tasks on first run
-          const seeded: EmployeeTask[] = DEFAULT_SEED_TASKS.map((t) => ({
-            ...t,
-            id: genId(),
-            createdAt: new Date().toISOString(),
-          }));
-          setTasks(seeded);
-        }
+        if (tRaw) setTasks(JSON.parse(tRaw));
         if (cRaw) setCompletions(JSON.parse(cRaw));
       } catch { /* ignore */ }
       setLoaded(true);
     })();
   }, []);
 
+  // Live Firestore subscriptions for both collections.
   useEffect(() => {
-    if (loaded) AsyncStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+    const unsubTasks = subscribeToTasks((items) => {
+      setTasks(items);
+      AsyncStorage.setItem(TASKS_KEY, JSON.stringify(items)).catch(() => {});
+    });
+    const unsubCompletions = subscribeToCompletions((items) => {
+      setCompletions(items);
+      AsyncStorage.setItem(COMPLETIONS_KEY, JSON.stringify(items)).catch(() => {});
+    });
+    return () => {
+      unsubTasks();
+      unsubCompletions();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (loaded) AsyncStorage.setItem(TASKS_KEY, JSON.stringify(tasks)).catch(() => {});
   }, [tasks, loaded]);
 
   useEffect(() => {
-    if (loaded) AsyncStorage.setItem(COMPLETIONS_KEY, JSON.stringify(completions));
+    if (loaded) AsyncStorage.setItem(COMPLETIONS_KEY, JSON.stringify(completions)).catch(() => {});
   }, [completions, loaded]);
 
   // ── Queries ─────────────────────────────────────────
@@ -130,12 +137,17 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
         (c) => c.taskId === taskId && c.memberId === memberId && c.date === today,
       );
       if (existing) {
+        deleteCompletionFromFirestore({ taskId, memberId, date: today }).catch(() => {});
         return prev.filter((c) => c !== existing);
       }
-      return [
-        ...prev,
-        { taskId, memberId, date: today, completedAt: new Date().toISOString() },
-      ];
+      const created: TaskCompletion = {
+        taskId,
+        memberId,
+        date: today,
+        completedAt: new Date().toISOString(),
+      };
+      upsertCompletionInFirestore(created).catch(() => {});
+      return [...prev, created];
     });
   }, []);
 
@@ -150,13 +162,18 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
         createdAt: new Date().toISOString(),
       };
       setTasks((prev) => [task, ...prev]);
+      upsertTaskInFirestore(task).catch(() => {});
       return task;
     },
     [],
   );
 
   const removePersonalTask = useCallback((id: string) => {
-    setTasks((prev) => prev.filter((t) => !(t.id === id && t.source === 'personal')));
+    setTasks((prev) => {
+      const target = prev.find((t) => t.id === id && t.source === 'personal');
+      if (target) deleteTaskFromFirestore(id).catch(() => {});
+      return prev.filter((t) => !(t.id === id && t.source === 'personal'));
+    });
   }, []);
 
   // ── Admin actions ───────────────────────────────────
@@ -170,6 +187,7 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
       createdAt: new Date().toISOString(),
     };
     setTasks((prev) => [task, ...prev]);
+    upsertTaskInFirestore(task).catch(() => {});
     return task;
   }, []);
 
@@ -185,19 +203,31 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
         createdAt: new Date().toISOString(),
       };
       setTasks((prev) => [task, ...prev]);
+      upsertTaskInFirestore(task).catch(() => {});
       return task;
     },
     [],
   );
 
   const updateTask = useCallback((id: string, patch: Partial<EmployeeTask>) => {
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+    setTasks((prev) => {
+      const next = prev.map((t) => (t.id === id ? { ...t, ...patch } : t));
+      const merged = next.find((t) => t.id === id);
+      if (merged) upsertTaskInFirestore(merged).catch(() => {});
+      return next;
+    });
   }, []);
 
   const removeTask = useCallback((id: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== id));
-    // Also drop any completions for it
-    setCompletions((prev) => prev.filter((c) => c.taskId !== id));
+    setCompletions((prev) => {
+      const stale = prev.filter((c) => c.taskId === id);
+      stale.forEach((c) => {
+        deleteCompletionFromFirestore({ taskId: c.taskId, memberId: c.memberId, date: c.date }).catch(() => {});
+      });
+      return prev.filter((c) => c.taskId !== id);
+    });
+    deleteTaskFromFirestore(id).catch(() => {});
   }, []);
 
   const value = useMemo(

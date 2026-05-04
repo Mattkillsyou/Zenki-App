@@ -15,7 +15,10 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+// expo-file-system v55 — the top-level stubs (readAsStringAsync, etc.)
+// throw at runtime. The legacy entry point still implements them. Same
+// pattern as src/services/senpaiAudio.ts.
+import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { HealthDataConsentModal, HEALTH_CONSENT_KEY } from '../components/HealthDataConsentModal';
 import { useTheme } from '../context/ThemeContext';

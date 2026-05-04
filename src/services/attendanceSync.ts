@@ -1,5 +1,15 @@
-import { collection, addDoc, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
-import { db, FIREBASE_CONFIGURED } from '../config/firebase';
+import {
+  collection,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  getDocs,
+  onSnapshot,
+  Unsubscribe,
+} from 'firebase/firestore';
+import { auth, db, FIREBASE_CONFIGURED } from '../config/firebase';
 import { AttendanceVisit } from '../types/attendance';
 import { getTodayString } from '../utils/location';
 
@@ -49,7 +59,9 @@ export async function pushAttendanceToSheets(visit: AttendanceVisit): Promise<bo
 // ─────────────────────────────────────────────────
 
 /**
- * Write a visit to the Firestore 'attendance' collection.
+ * Write a visit to the Firestore 'attendance' collection. Stamps
+ * `firebaseUid` from the live auth state so security rules can authorize
+ * the create — `visit.memberId` is the app's internal id, not the auth uid.
  */
 export async function pushAttendanceToFirestore(visit: AttendanceVisit): Promise<boolean> {
   if (!FIREBASE_CONFIGURED || !db) {
@@ -57,9 +69,16 @@ export async function pushAttendanceToFirestore(visit: AttendanceVisit): Promise
     return false;
   }
 
+  const firebaseUid = auth?.currentUser?.uid;
+  if (!firebaseUid) {
+    console.warn('[Attendance Firestore] No signed-in Firebase user — skipping write');
+    return false;
+  }
+
   try {
     await addDoc(collection(db, 'attendance'), {
       ...visit,
+      firebaseUid,
       createdAt: new Date().toISOString(),
     });
     return true;
@@ -108,5 +127,56 @@ export async function fetchAllAttendance(maxResults = 500): Promise<AttendanceVi
   } catch (err) {
     console.warn('[Attendance Firestore] Fetch all failed:', err);
     return [];
+  }
+}
+
+/**
+ * Subscribe to today's attendance visits live (admin-only).
+ * Replaces the previous 60s polling — admin sees check-ins within seconds.
+ */
+export function subscribeToTodayAttendance(
+  cb: (visits: AttendanceVisit[]) => void,
+): Unsubscribe {
+  if (!FIREBASE_CONFIGURED || !db) return () => {};
+  try {
+    const q = query(
+      collection(db, 'attendance'),
+      where('date', '==', getTodayString()),
+      orderBy('checkInTime', 'asc'),
+    );
+    return onSnapshot(
+      q,
+      (snap) => cb(snap.docs.map((d) => d.data() as AttendanceVisit)),
+      (err) => console.warn('[Attendance Firestore] Today subscribe failed:', err),
+    );
+  } catch (err) {
+    console.warn('[Attendance Firestore] Today subscribe init failed:', err);
+    return () => {};
+  }
+}
+
+/**
+ * Subscribe to recent attendance history live (admin-only).
+ * Most-recent first, capped to `maxResults` to keep payload small.
+ */
+export function subscribeToAllAttendance(
+  cb: (visits: AttendanceVisit[]) => void,
+  maxResults = 500,
+): Unsubscribe {
+  if (!FIREBASE_CONFIGURED || !db) return () => {};
+  try {
+    const q = query(
+      collection(db, 'attendance'),
+      orderBy('checkInTime', 'desc'),
+      limit(maxResults),
+    );
+    return onSnapshot(
+      q,
+      (snap) => cb(snap.docs.map((d) => d.data() as AttendanceVisit)),
+      (err) => console.warn('[Attendance Firestore] All subscribe failed:', err),
+    );
+  } catch (err) {
+    console.warn('[Attendance Firestore] All subscribe init failed:', err);
+    return () => {};
   }
 }

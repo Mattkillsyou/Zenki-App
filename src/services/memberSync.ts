@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   setDoc,
   deleteDoc,
   getDocs,
@@ -73,15 +74,31 @@ export async function upsertMemberInFirestore(member: Member): Promise<boolean> 
     console.log('[Members Firestore] Not configured — skipping sync');
     return false;
   }
+  const ref = doc(db, 'members', member.id);
   try {
     await setDoc(
-      doc(db, 'members', member.id),
+      ref,
       { ...member, updatedAt: new Date().toISOString() },
       { merge: true },
     );
-    return true;
   } catch (err) {
     console.warn('[Members Firestore] Upsert failed:', err);
+    return false;
+  }
+  // Server-confirm: read the doc back from the server (bypassing the local
+  // cache) so we know the rule allowed the write and the doc is actually on
+  // Firestore. Without this check, an offline-cached optimistic write looks
+  // identical to a real write — exactly the failure mode that caused new
+  // signups to silently never appear in the admin members list.
+  try {
+    const snap = await getDocFromServer(ref);
+    if (!snap.exists()) {
+      console.warn('[Members Firestore] Server-confirm: doc not present after write — rule likely rejected.');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Members Firestore] Server-confirm failed:', err);
     return false;
   }
 }

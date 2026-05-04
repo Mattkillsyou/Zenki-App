@@ -30,17 +30,13 @@ function AdminCard({ icon, title, subtitle, count, accentColor, onPress }: Admin
     <PressableScale onPress={onPress}>
       <View style={[styles.adminCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.adminCardTop}>
-          <View style={[styles.adminCardIcon, { backgroundColor: accentColor + '20', width: 52, height: 52, borderRadius: 16 }]}>
-            <Ionicons name={icon} size={26} color={accentColor} />
+          <View style={[styles.adminCardIcon, { backgroundColor: accentColor + '18' }]}>
+            <Ionicons name={icon} size={22} color={accentColor} />
           </View>
-          <Text style={[styles.adminCardCount, { color: accentColor, fontSize: 28, fontWeight: '800' }]}>{count}</Text>
+          <Text style={[styles.adminCardCount, { color: accentColor }]} numberOfLines={1}>{count}</Text>
         </View>
-        <Text style={[styles.adminCardTitle, { color: colors.textPrimary, fontSize: 17, fontWeight: '700' }]}>{title}</Text>
-        <Text style={[styles.adminCardSubtitle, { color: colors.textMuted, fontSize: 13 }]}>{subtitle}</Text>
-        <View style={styles.adminCardFooter}>
-          <Text style={[styles.adminCardAction, { color: accentColor }]}>Manage</Text>
-          <Ionicons name="chevron-forward" size={16} color={accentColor} />
-        </View>
+        <Text style={[styles.adminCardTitle, { color: colors.textPrimary }]} numberOfLines={1}>{title}</Text>
+        <Text style={[styles.adminCardSubtitle, { color: colors.textMuted }]} numberOfLines={1}>{subtitle}</Text>
       </View>
     </PressableScale>
   );
@@ -66,27 +62,36 @@ export function AdminScreen({ navigation }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScreenContainer>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xxl * 2 }}>
+        {/* Header — iOS-nav-bar style: 22pt title, balanced spacing, no risk of clipping */}
         <View style={styles.header}>
           <SoundPressable
             onPress={() => navigation.goBack()}
-            style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5 }]}
+            style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            hitSlop={6}
           >
-            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </SoundPressable>
-          <Text style={[styles.title, { color: colors.textPrimary, fontSize: 34, fontWeight: '800' }]}>Admin Panel</Text>
-          <View style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5 }]} />
+          <Text
+            style={[styles.title, { color: colors.textPrimary }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
+          >
+            Admin Panel
+          </Text>
+          <View style={{ width: 36, height: 36 }} />
         </View>
 
-        {/* Welcome */}
-        <FadeInView delay={0} slideUp={10}>
-          <View style={[styles.welcomeCard, { backgroundColor: colors.redMuted, borderColor: colors.red + '25' }]}>
-            <Ionicons name="shield-checkmark-outline" size={22} color={colors.red} />
+        {/* Owner pill — subtle band with accent left bar instead of full red-tinted card */}
+        <FadeInView delay={0} slideUp={8}>
+          <View style={[styles.ownerPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.ownerAccent, { backgroundColor: colors.red }]} />
+            <Ionicons name="shield-checkmark" size={18} color={colors.red} />
             <View style={styles.welcomeText}>
-              <Text style={[styles.welcomeTitle, { color: colors.red }]}>Owner Dashboard</Text>
-              <Text style={[styles.welcomeDesc, { color: colors.red }]}>
-                Manage your dojo members, store, and schedule
+              <Text style={[styles.welcomeTitle, { color: colors.textPrimary }]} numberOfLines={1}>Owner Dashboard</Text>
+              <Text style={[styles.welcomeDesc, { color: colors.textMuted }]} numberOfLines={1}>
+                Manage your dojo
               </Text>
             </View>
           </View>
@@ -123,7 +128,7 @@ export function AdminScreen({ navigation }: any) {
         </FadeInView>
 
         {/* Admin Cards Grid */}
-        <View style={[styles.grid, { gap: 14 }]}>
+        <View style={styles.grid}>
           <FadeInView delay={60} slideUp={12} style={styles.gridItem}>
             <AdminCard
               icon="people-outline"
@@ -145,7 +150,7 @@ export function AdminScreen({ navigation }: any) {
             />
           </FadeInView>
         </View>
-        <View style={[styles.grid, { gap: 14 }]}>
+        <View style={styles.grid}>
           <FadeInView delay={180} slideUp={12} style={styles.gridItem}>
             <AdminCard
               icon="calendar-outline"
@@ -167,7 +172,7 @@ export function AdminScreen({ navigation }: any) {
             />
           </FadeInView>
         </View>
-        <View style={[styles.grid, { gap: 14 }]}>
+        <View style={styles.grid}>
           <FadeInView delay={280} slideUp={12} style={styles.gridItem}>
             <AdminCard
               icon="megaphone-outline"
@@ -189,7 +194,7 @@ export function AdminScreen({ navigation }: any) {
             />
           </FadeInView>
         </View>
-        <View style={[styles.grid, { gap: 14 }]}>
+        <View style={styles.grid}>
           <FadeInView delay={360} slideUp={12} style={styles.gridItem}>
             <AdminCard
               icon="checkmark-circle-outline"
@@ -211,7 +216,7 @@ export function AdminScreen({ navigation }: any) {
             />
           </FadeInView>
         </View>
-        <View style={[styles.grid, { gap: 14 }]}>
+        <View style={styles.grid}>
           <FadeInView delay={440} slideUp={12} style={styles.gridItem}>
             <AdminCard
               icon="flag-outline"
@@ -229,7 +234,7 @@ export function AdminScreen({ navigation }: any) {
         {/* Quick Actions */}
         <FadeInView delay={300} slideUp={12}>
           <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: colors.gold, fontSize: 13, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' }]}>QUICK ACTIONS</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>QUICK ACTIONS</Text>
             {[
               { icon: 'person-add-outline' as const, label: 'Add New Member', screen: 'AdminMembers' },
               { icon: 'add-circle-outline' as const, label: 'Add New Product', screen: 'AdminProducts' },
@@ -237,16 +242,16 @@ export function AdminScreen({ navigation }: any) {
             ].map((action) => (
               <SoundPressable
                 key={action.label}
-                style={[styles.quickAction, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 20 }]}
+                style={[styles.quickAction, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 onPress={() => navigation.navigate(action.screen)}
               >
-                <View style={[styles.quickActionIcon, { backgroundColor: colors.gold + '20', width: 52, height: 52, borderRadius: 16 }]}>
-                  <Ionicons name={action.icon} size={22} color={colors.gold} />
+                <View style={[styles.quickActionIcon, { backgroundColor: colors.gold + '18' }]}>
+                  <Ionicons name={action.icon} size={18} color={colors.gold} />
                 </View>
-                <Text style={[styles.quickActionLabel, { color: colors.textPrimary, fontSize: 17, fontWeight: '700' }]}>
+                <Text style={[styles.quickActionLabel, { color: colors.textPrimary }]} numberOfLines={1}>
                   {action.label}
                 </Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </SoundPressable>
             ))}
           </View>
@@ -261,115 +266,133 @@ export function AdminScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  // Nav-bar style header — 22pt title with adjustsFontSizeToFit, generous
+  // top padding (sits on top of SafeAreaView's dynamic-island inset) so the
+  // title can't crowd the status bar even on iPhone Pro Max.
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingTop: 0,
-    paddingBottom: spacing.md,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+    minHeight: 64,
   },
-  backButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
-  title: { ...typography.sectionTitle },
-  welcomeCard: {
+  backButton: {
+    width: 36, height: 36, borderRadius: 18, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  title: { fontSize: 22, fontWeight: '700', lineHeight: 28, letterSpacing: -0.3 },
+
+  // Owner pill — replaces the loud full-tinted welcome card.
+  ownerPill: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: spacing.lg,
-    padding: spacing.md + 4,
-    borderRadius: borderRadius.lg,
+    paddingVertical: 12,
+    paddingRight: 14,
+    paddingLeft: 14,
+    borderRadius: 14,
     borderWidth: 1,
-    gap: spacing.md,
+    gap: 12,
     marginBottom: spacing.lg,
+    overflow: 'hidden',
+  },
+  ownerAccent: {
+    position: 'absolute',
+    left: 0, top: 0, bottom: 0,
+    width: 3,
   },
   welcomeText: { flex: 1 },
-  welcomeTitle: { ...typography.body, fontWeight: '700' },
-  welcomeDesc: { ...typography.bodySmall, marginTop: 2 },
+  welcomeTitle: { fontSize: 14, fontWeight: '700' },
+  welcomeDesc: { fontSize: 12, marginTop: 1 },
+
+  // Cards grid
   grid: {
     flexDirection: 'row',
     paddingHorizontal: spacing.lg,
-    marginBottom: 14,
+    marginBottom: 12,
+    gap: 12,
   },
   gridItem: { flex: 1 },
   adminCard: {
-    // Fixed height so siblings in a row align regardless of title/subtitle
-    // wrap. justifyContent docks the Manage chevron to the bottom so the
-    // header (icon + count) stays put even when content above varies.
-    height: 180,
-    padding: 16,
-    borderRadius: 20,
-    borderWidth: 1.5,
+    height: 132,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
     justifyContent: 'space-between',
   },
   adminCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.md,
+    alignItems: 'center',
   },
   adminCardIcon: {
+    width: 40, height: 40, borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  adminCardCount: { fontWeight: '800' },
-  adminCardTitle: { ...typography.cardTitle },
-  adminCardSubtitle: { ...typography.bodySmall, marginTop: 2 },
-  adminCardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.md,
-    gap: 4,
-  },
-  adminCardAction: { ...typography.label, fontSize: 11 },
+  adminCardCount: { fontSize: 22, fontWeight: '700', letterSpacing: -0.3 },
+  adminCardTitle: { fontSize: 15, fontWeight: '700', marginTop: 8 },
+  adminCardSubtitle: { fontSize: 12, marginTop: 2 },
+
+  // Quick Actions
   section: {
     paddingHorizontal: spacing.lg,
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
   },
-  sectionLabel: { ...typography.label, marginBottom: spacing.md },
+  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.5, marginBottom: 10 },
   quickAction: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.sm,
-    gap: spacing.md,
+    marginBottom: 8,
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
   },
-  quickActionLabel: { ...typography.body, fontWeight: '700', flex: 1 },
+  quickActionLabel: { fontSize: 15, fontWeight: '600', flex: 1 },
   quickActionIcon: {
+    width: 36, height: 36, borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  // Who's Here
   whosHereCard: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
-    padding: spacing.md + 4,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1.5,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
   },
   whosHereHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: spacing.sm,
+    marginBottom: 8,
   },
-  whosHereTitle: { fontSize: 17, fontWeight: '700', flex: 1 },
-  whosHereEmpty: { fontSize: 14, fontWeight: '500' },
+  whosHereTitle: { fontSize: 14, fontWeight: '700', flex: 1, letterSpacing: 0.2 },
+  whosHereEmpty: { fontSize: 12, fontWeight: '500' },
   liveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    gap: 5,
   },
-  liveDot: { width: 8, height: 8, borderRadius: 4 },
-  liveCount: { fontSize: 15, fontWeight: '800' },
-  visitorScroll: { marginTop: 4 },
-  visitorChip: { alignItems: 'center', marginRight: 16, width: 52 },
+  liveDot: { width: 6, height: 6, borderRadius: 3 },
+  liveCount: { fontSize: 12, fontWeight: '700' },
+  visitorScroll: { marginTop: 2 },
+  visitorChip: { alignItems: 'center', marginRight: 14, width: 48 },
   visitorAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 40, height: 40, borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  visitorInitial: { fontSize: 18, fontWeight: '700' },
-  visitorName: { fontSize: 11, fontWeight: '600', marginTop: 4 },
+  visitorInitial: { fontSize: 16, fontWeight: '700' },
+  visitorName: { fontSize: 10, fontWeight: '600', marginTop: 4 },
 });

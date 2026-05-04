@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { collection, getDocs, doc, updateDoc, query, where } from 'firebase/firestore';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
+import { EXPO_PUSH_API_URL } from '../config/api';
 
 // Configure how notifications are displayed when app is foregrounded
 Notifications.setNotificationHandler({
@@ -132,7 +133,7 @@ export async function broadcastPushNotification(
     }));
 
     try {
-      const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      const response = await fetch(EXPO_PUSH_API_URL, {
         method: 'POST',
         headers: {
           Accept: 'application/json',

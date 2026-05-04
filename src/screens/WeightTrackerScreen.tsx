@@ -21,6 +21,7 @@ import { useSenpai } from '../context/SenpaiContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 import { spacing, borderRadius } from '../theme';
 import { FadeInView, LineChart, KeyboardAwareScrollView, ScreenContainer, HealthKitBadge } from '../components';
+import { WeekCalendar, WeekDay, startOfWeek, addDays, todayIso } from '../components/WeekCalendar';
 import { WeightUnit } from '../types/nutrition';
 import { computeTrendWeight, trendChange, kgToLbs } from '../utils/nutrition';
 import { WeightGoal } from '../types/activity';
@@ -63,6 +64,8 @@ export function WeightTrackerScreen({ navigation }: any) {
   const [goalOpen, setGoalOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [weekStart, setWeekStart] = useState<string>(() => startOfWeek(todayIso()));
+  const [selectedDate, setSelectedDate] = useState<string>(() => todayIso());
   const [goalTarget, setGoalTarget] = useState('');
   const [goalDate, setGoalDate] = useState('');
   const [savedGoal, setSavedGoal] = useState<WeightGoal | null>(null);
@@ -331,9 +334,28 @@ export function WeightTrackerScreen({ navigation }: any) {
             </View>
           </FadeInView>
 
-          {/* Monthly calendar — gold dot on logged days, per master prompt §10 */}
+          {/* Week calendar — matches Macro / Medication tracker for visual
+              consistency. Gold dot on days with a weigh-in. */}
           <FadeInView delay={20}>
-            <WeightLogCalendar loggedDates={new Set(mine.map((w) => w.date))} />
+            <WeekCalendar
+              weekStart={weekStart}
+              selectedDate={selectedDate}
+              days={(() => {
+                const logged = new Set(mine.map((w) => w.date));
+                const out: WeekDay[] = [];
+                for (let i = 0; i < 7; i++) {
+                  const date = addDays(weekStart, i);
+                  out.push({
+                    date,
+                    dotColor: logged.has(date) ? colors.gold : undefined,
+                  });
+                }
+                return out;
+              })()}
+              onSelectDate={setSelectedDate}
+              onPrev={() => setWeekStart((w) => addDays(w, -7))}
+              onNext={() => setWeekStart((w) => addDays(w, 7))}
+            />
           </FadeInView>
 
           {/* Log form — moved below visualization */}

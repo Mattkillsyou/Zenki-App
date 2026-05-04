@@ -12,6 +12,19 @@ import { generateId } from '../utils/generateId';
  * image regardless of the bucket-level read rule.
  */
 export async function uploadProductImage(uri: string): Promise<string> {
+  return uploadToUserPath(uri, 'products');
+}
+
+/**
+ * Upload a profile photo. Path is `users/{uid}/profile/{id}.{ext}` — same
+ * `users/{uid}/**` rule as products, so no storage.rules change is needed.
+ * Returns the public download URL to store on the Member record.
+ */
+export async function uploadProfileImage(uri: string): Promise<string> {
+  return uploadToUserPath(uri, 'profile');
+}
+
+async function uploadToUserPath(uri: string, subdir: string): Promise<string> {
   if (!FIREBASE_CONFIGURED || !storage) {
     throw new Error('firebase-not-configured');
   }
@@ -21,7 +34,7 @@ export async function uploadProductImage(uri: string): Promise<string> {
   const blob = await uriToBlob(uri);
   const ext = guessExtension(uri, blob.type) || 'jpg';
   const id = generateId('img');
-  const path = `users/${uid}/products/${id}.${ext}`;
+  const path = `users/${uid}/${subdir}/${id}.${ext}`;
   const objectRef = ref(storage, path);
   const contentType = blob.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`;
   await uploadBytes(objectRef, blob, { contentType });

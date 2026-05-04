@@ -66,6 +66,7 @@ import { ActivityTrackerScreen } from '../screens/ActivityTrackerScreen';
 import { BodyLabScreen } from '../screens/BodyLabScreen';
 import { ProductDetailScreen } from '../screens/ProductDetailScreen';
 import { CreatePostScreen } from '../screens/CreatePostScreen';
+import { CommentsScreen } from '../screens/CommentsScreen';
 import { UserProfileScreen } from '../screens/UserProfileScreen';
 import { AchievementsScreen } from '../screens/AchievementsScreen';
 import { AchievementDetailScreen } from '../screens/AchievementDetailScreen';
@@ -269,6 +270,7 @@ export function RootNavigator() {
 
       {/* Community */}
       <Stack.Screen name="CreatePost" component={withErrorBoundary(CreatePostScreen, 'Create Post')} options={modalTransition} />
+      <Stack.Screen name="Comments" component={withErrorBoundary(CommentsScreen, 'Comments')} options={pushTransition} />
       <Stack.Screen name="UserProfile" component={withErrorBoundary(UserProfileScreen, 'User Profile')} options={pushTransition} />
 
       {/* Detail — push */}

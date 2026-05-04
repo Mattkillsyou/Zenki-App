@@ -94,13 +94,12 @@ export function AdminMembersScreen({ navigation }: any) {
 
     const unsub = subscribeToAllMembers((remote) => {
       if (cancelled || remote.length === 0) return;
-      // Merge Firestore docs over the current in-memory list so we don't
-      // lose seed-only members that haven't been pushed yet.
-      setMembers((prev) => {
-        const byId = new Map(prev.map((m) => [m.id, m]));
-        for (const r of remote) byId.set(r.id, { ...(byId.get(r.id) ?? {} as Member), ...r });
-        return Array.from(byId.values());
-      });
+      // Firestore is the source of truth once it's responded with data.
+      // REPLACE local state instead of merging — otherwise admin-deleted
+      // members keep reappearing from the seed `MEMBERS` array, which is
+      // the "stuck with default users" symptom. Seeds only show pre-backfill
+      // (when remote is still empty and the early-return above keeps them).
+      setMembers(remote);
     });
 
     return () => {

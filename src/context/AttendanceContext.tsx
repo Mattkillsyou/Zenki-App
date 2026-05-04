@@ -11,11 +11,12 @@ import {
   pushAttendanceToFirestore,
   fetchTodayAttendance,
   fetchAllAttendance,
+  subscribeToTodayAttendance,
+  subscribeToAllAttendance,
 } from '../services/attendanceSync';
 import { FIREBASE_CONFIGURED } from '../config/firebase';
 
 const STORAGE_KEY = '@zenki_attendance';
-const FIRESTORE_POLL_MS = 60_000; // Refresh Firestore data every 60s for admins
 
 interface AttendanceContextValue {
   visits: AttendanceVisit[];
@@ -53,7 +54,6 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
   const [isAtDojo, setIsAtDojo] = useState(false);
   const [locationPermission, setLocationPermission] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const firestorePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const visitsRef = useRef(state.visits);
 
   // Firestore-synced data (admin-only)
@@ -105,7 +105,9 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
     }
   }, [locationPermission, user, loaded]);
 
-  // ─── Firestore polling for admins ───
+  // ─── Firestore live subscriptions for admins ───
+  // Replaces the old 60s polling — admin sees member check-ins within seconds.
+  // refreshFromFirestore is kept as an explicit pull-to-refresh fallback.
   const refreshFromFirestore = useCallback(async () => {
     if (!useFirestore) return;
     const [todayData, allData] = await Promise.all([
@@ -116,19 +118,29 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
     setFirestoreAllVisits(allData);
   }, [useFirestore]);
 
+  // Track the local date so the today-subscription re-arms after midnight.
+  // `subscribeToTodayAttendance` captures `getTodayString()` at call-time,
+  // so a long-running session would otherwise show yesterday's visitors.
+  const [todayKey, setTodayKey] = useState<string>(getTodayString());
   useEffect(() => {
-    if (useFirestore) {
-      // Fetch immediately, then poll
-      refreshFromFirestore();
-      firestorePollRef.current = setInterval(refreshFromFirestore, FIRESTORE_POLL_MS);
-    }
-    return () => {
-      if (firestorePollRef.current) {
-        clearInterval(firestorePollRef.current);
-        firestorePollRef.current = null;
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        const fresh = getTodayString();
+        setTodayKey((prev) => (prev === fresh ? prev : fresh));
       }
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!useFirestore) return;
+    const unsubToday = subscribeToTodayAttendance(setFirestoreTodayVisitors);
+    const unsubAll = subscribeToAllAttendance(setFirestoreAllVisits);
+    return () => {
+      unsubToday();
+      unsubAll();
     };
-  }, [useFirestore, refreshFromFirestore]);
+  }, [useFirestore, todayKey]);
 
   const checkLocation = useCallback(async () => {
     if (!user || Platform.OS === 'web') return;

@@ -1,6 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateId } from '../utils/generateId';
+import {
+  subscribeToAnnouncements,
+  upsertAnnouncementInFirestore,
+  deleteAnnouncementFromFirestore,
+} from '../services/announcementSync';
 
 const STORAGE_KEY = '@zenki_announcements';
 
@@ -19,39 +24,38 @@ interface AnnouncementContextValue {
   removeAnnouncement: (id: string) => void;
 }
 
-const DEFAULT_ANNOUNCEMENTS: Announcement[] = [
-  {
-    id: 'default-1',
-    title: 'Mat Cleaning · Saturday 8AM',
-    description: 'Weekly deep clean. Open mat from 10 AM.',
-    pinned: true,
-    createdAt: new Date().toISOString(),
-  },
-];
-
 const AnnouncementContext = createContext<AnnouncementContextValue>({
-  announcements: DEFAULT_ANNOUNCEMENTS,
+  announcements: [],
   addAnnouncement: () => {},
   updateAnnouncement: () => {},
   removeAnnouncement: () => {},
 });
 
 export function AnnouncementProvider({ children }: { children: React.ReactNode }) {
-  const [announcements, setAnnouncements] = useState<Announcement[]>(DEFAULT_ANNOUNCEMENTS);
-  const [loaded, setLoaded] = useState(false);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
+  // AsyncStorage cache hydrate — covers offline cold-boot. Firestore
+  // subscription overwrites this as soon as it fires.
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
       if (raw) {
         try { setAnnouncements(JSON.parse(raw)); } catch { /* ignore */ }
       }
-      setLoaded(true);
     });
   }, []);
 
+  // Live Firestore subscription — source of truth for all clients. The
+  // subscription callback persists to AsyncStorage on every fire, including
+  // for optimistic updates (Firestore reflects pending writes locally), so
+  // a second `useEffect([announcements])` would just write the same value
+  // again — pure thrash.
   useEffect(() => {
-    if (loaded) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(announcements));
-  }, [announcements, loaded]);
+    const unsub = subscribeToAnnouncements((items) => {
+      setAnnouncements(items);
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(items)).catch(() => {});
+    });
+    return () => { unsub(); };
+  }, []);
 
   const addAnnouncement = useCallback((a: Omit<Announcement, 'id' | 'createdAt'>) => {
     const next: Announcement = {
@@ -60,21 +64,31 @@ export function AnnouncementProvider({ children }: { children: React.ReactNode }
       createdAt: new Date().toISOString(),
     };
     setAnnouncements((prev) => [next, ...prev]);
+    upsertAnnouncementInFirestore(next).catch(() => {});
   }, []);
 
   const updateAnnouncement = useCallback((id: string, patch: Partial<Announcement>) => {
-    setAnnouncements((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+    setAnnouncements((prev) => {
+      const nextList = prev.map((a) => (a.id === id ? { ...a, ...patch } : a));
+      const merged = nextList.find((a) => a.id === id);
+      if (merged) upsertAnnouncementInFirestore(merged).catch(() => {});
+      return nextList;
+    });
   }, []);
 
   const removeAnnouncement = useCallback((id: string) => {
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+    deleteAnnouncementFromFirestore(id).catch(() => {});
   }, []);
 
-  return (
-    <AnnouncementContext.Provider value={{ announcements, addAnnouncement, updateAnnouncement, removeAnnouncement }}>
-      {children}
-    </AnnouncementContext.Provider>
+  // Memoize the provider value so consumers don't re-render every time
+  // an unrelated parent re-renders the tree.
+  const value = useMemo(
+    () => ({ announcements, addAnnouncement, updateAnnouncement, removeAnnouncement }),
+    [announcements, addAnnouncement, updateAnnouncement, removeAnnouncement],
   );
+
+  return <AnnouncementContext.Provider value={value}>{children}</AnnouncementContext.Provider>;
 }
 
 export function useAnnouncements() {

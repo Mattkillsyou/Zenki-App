@@ -1,14 +1,11 @@
 import { TimeEntry } from '../types/timeclock';
 import { formatTime, calculatePayBreakdown } from '../utils/timeclock';
+import { SHEETS_PROXY_URL } from '../config/api';
 
 // ─────────────────────────────────────────────────
 // Google Sheets Sync Service
-//
-// After deploying the Vercel proxy, paste the URL below.
-// e.g. 'https://zenki-timesheet-proxy.vercel.app/api/timesheet'
+// URL is in src/config/api.ts so it can be rotated without touching this file.
 // ─────────────────────────────────────────────────
-
-const SHEETS_PROXY_URL = 'https://script.google.com/macros/s/AKfycbz1I9JhmLuJAjR16bEL1XNWRRucF4KrgYXFj-PQX7PcPetYvODd3UFsToFln2W1JDA/exec';
 
 export async function pushTimeEntry(
   entry: TimeEntry,

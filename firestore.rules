@@ -63,10 +63,32 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn()
                     && request.resource.data.userId == request.auth.uid;
+      // Owner can update anything on their own post. Any signed-in user
+      // can update — but ONLY the `likes` counter — so that the like /
+      // unlike flow can increment/decrement the count without needing a
+      // Cloud Function.
       allow update: if isSignedIn()
-                    && resource.data.userId == request.auth.uid;
+                    && (resource.data.userId == request.auth.uid
+                        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']));
       allow delete: if isSignedIn()
                     && (resource.data.userId == request.auth.uid || isAdmin());
+
+      // Likes — each user owns one like-doc per post, keyed by their uid.
+      // Anyone signed in can read (so feed renders the heart state); only
+      // the owner can write theirs.
+      match /likes/{likerUid} {
+        allow read: if isSignedIn();
+        allow create, delete: if isOwner(likerUid);
+      }
+
+      // Comments — anyone signed in reads; only the comment author writes.
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn()
+                      && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if isSignedIn()
+                              && resource.data.userId == request.auth.uid;
+      }
     }
 
     // Direct-message threads — only participants read/write.
@@ -90,18 +112,35 @@ service cloud.firestore {
     }
 
     // Follow edges — public-ish graph.
+    // Legacy single-collection shape (kept for older clients).
+    // `resource` is null on create — split create/delete so the right side
+    // of the comparison is non-null in each case.
     match /follows/{followId} {
       allow read: if isSignedIn();
-      allow create, delete: if isSignedIn()
-                            && resource.data.followerId == request.auth.uid;
+      allow create: if isSignedIn()
+                    && request.resource.data.followerId == request.auth.uid;
+      allow delete: if isSignedIn()
+                    && resource.data.followerId == request.auth.uid;
+    }
+
+    // Active subcollection shape used by `firebaseFollow.ts`:
+    //   /following/{followerUid}/follows/{followedUid}
+    // The follower owns their own follows list. Anyone signed in can read
+    // any user's follows list (used by getFeed to discover who to query and
+    // by profile screens to show follow counts).
+    match /following/{followerUid}/follows/{followedUid} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isOwner(followerUid);
     }
 
     // Attendance — any member can see class attendance; can only check
-    // themselves in. No updates or deletes (audit trail).
+    // themselves in. The doc carries `firebaseUid` (stamped at write time)
+    // because the app's internal `memberId` is not the auth uid. No updates
+    // or deletes (audit trail).
     match /attendance/{docId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn()
-                    && request.resource.data.memberId == request.auth.uid;
+                    && request.resource.data.firebaseUid == request.auth.uid;
       allow update, delete: if false;
     }
 
@@ -163,6 +202,65 @@ service cloud.firestore {
     match /admins/{uid} {
       allow read: if isAdmin() || isOwner(uid);
       allow write: if isAdmin();
+    }
+
+    // Class schedule — one doc per day key (`Mon`, `Tue`, …) holding the
+    // full classes array. Anyone signed in reads; only admins write.
+    match /schedule/{dayKey} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Announcements — admin-only writes; all signed-in members read.
+    match /announcements/{annId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Appointments — admins manage everything; members can request their
+    // own. The doc carries `firebaseUid` (stamped at write time from
+    // `auth.currentUser.uid`) because the app's `memberId` is an internal
+    // id ('1','2',…), not the Firebase Auth uid.
+    match /appointments/{apptId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin()
+                    || (isSignedIn()
+                        && request.resource.data.firebaseUid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    // Employee task templates — admins manage default + assigned tasks;
+    // members can create/edit/delete their own personal tasks (source must
+    // be 'personal' and the doc's `firebaseUid` must match their auth uid).
+    match /employeeTasks/{taskId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin()
+        || (isSignedIn()
+            && request.resource.data.source == 'personal'
+            && request.resource.data.firebaseUid == request.auth.uid);
+      allow update: if isAdmin()
+        || (isSignedIn()
+            && resource.data.source == 'personal'
+            && resource.data.firebaseUid == request.auth.uid
+            && request.resource.data.source == 'personal'
+            && request.resource.data.firebaseUid == request.auth.uid);
+      allow delete: if isAdmin()
+        || (isSignedIn()
+            && resource.data.source == 'personal'
+            && resource.data.firebaseUid == request.auth.uid);
+    }
+
+    // Per-day task completion records — each member owns their own.
+    // Doc id is `${taskId}_${memberId}_${date}`; the doc carries
+    // `firebaseUid` so rules can verify against the auth uid.
+    // No updates (audit trail).
+    match /taskCompletions/{compId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.firebaseUid == request.auth.uid;
+      allow delete: if isSignedIn()
+                    && resource.data.firebaseUid == request.auth.uid;
+      allow update: if false;
     }
 
     // Default deny — anything not listed above is locked.

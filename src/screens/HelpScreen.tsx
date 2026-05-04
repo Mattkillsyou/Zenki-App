@@ -7,10 +7,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
 import { resetCoachmarks } from '../components/CoachmarkTutorial';
+import { PRIVACY_URL, SUPPORT_URL } from '../config/api';
 
 const APP_VERSION = '1.0.0';
-const PRIVACY_URL = 'https://zenki-dojo.web.app/privacy';
-const SUPPORT_URL = 'https://zenki-dojo.web.app/support';
 const CONTACT_EMAIL = 'mattbrowntheemail@gmail.com';
 
 interface Faq {

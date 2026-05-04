@@ -21,9 +21,9 @@ import { CATEGORIES, Product } from '../data/products';
 import { useProducts } from '../context/ProductContext';
 import { useGamification } from '../context/GamificationContext';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
+import { useCart } from '../context/CartContext';
 
 const WISHLIST_KEY = '@zenki_wishlist';
-const CART_KEY = '@zenki_cart';
 
 const PROMO_CODES: Record<string, { discountPercent: number; label: string }> = {
   ZENKI20: { discountPercent: 20, label: '20% off' },
@@ -34,19 +34,14 @@ const PROMO_CODES: Record<string, { discountPercent: number; label: string }> = 
 // Conversion rate: $1 = 10 Dojo Points
 const POINTS_PER_DOLLAR = 10;
 
-interface CartItem {
-  product: Product;
-  quantity: number;
-}
-
 export function StoreScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { state: gamState, redeemPoints, recordGearPurchase } = useGamification();
   const { products: PRODUCTS } = useProducts();
   const { play } = useSound();
   useScreenSoundTheme('store');
+  const { cart, cartCount, cartTotal, addToCart: cartAdd, removeFromCart, clearCart } = useCart();
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [cart, setCart] = useState<CartItem[]>([]);
   const [showCart, setShowCart] = useState(false);
   const [usePoints, setUsePoints] = useState(false);
   const [pageIdx, setPageIdx] = useState(0);
@@ -61,16 +56,15 @@ export function StoreScreen({ navigation }: any) {
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountPercent: number; label: string } | null>(null);
 
-  // Persist cart and wishlist
+  // Persist wishlist (cart now persists via CartContext).
   useEffect(() => {
-    AsyncStorage.getItem(WISHLIST_KEY).then((raw) => { if (raw) try { setWishlist(JSON.parse(raw)); } catch {} });
-    AsyncStorage.getItem(CART_KEY).then((raw) => { if (raw) try { setCart(JSON.parse(raw)); } catch {} });
+    let cancelled = false;
+    AsyncStorage.getItem(WISHLIST_KEY).then((raw) => {
+      if (cancelled || !raw) return;
+      try { setWishlist(JSON.parse(raw)); } catch { /* ignore */ }
+    });
+    return () => { cancelled = true; };
   }, []);
-
-  useEffect(() => {
-    if (cart.length > 0) AsyncStorage.setItem(CART_KEY, JSON.stringify(cart));
-    else AsyncStorage.removeItem(CART_KEY);
-  }, [cart]);
 
   useEffect(() => {
     AsyncStorage.setItem(WISHLIST_KEY, JSON.stringify(wishlist));
@@ -119,23 +113,8 @@ export function StoreScreen({ navigation }: any) {
 
   const addToCart = (product: Product) => {
     play('tap');
-    setCart((prev) => {
-      const existing = prev.find((item) => item.product.id === product.id);
-      if (existing) {
-        return prev.map((item) =>
-          item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item,
-        );
-      }
-      return [...prev, { product, quantity: 1 }];
-    });
+    cartAdd(product);
   };
-
-  const removeFromCart = (productId: string) => {
-    setCart((prev) => prev.filter((item) => item.product.id !== productId));
-  };
-
-  const cartTotal = cart.reduce((sum, item) => sum + item.product.memberPrice * item.quantity, 0);
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const renderProduct = ({ item }: { item: Product }) => (
     <TouchableOpacity
@@ -263,13 +242,15 @@ export function StoreScreen({ navigation }: any) {
           ) : (
             <>
               {cart.map((item) => (
-                <View key={item.product.id} style={[{ flexDirection: 'row', alignItems: 'center', borderRadius: 20, padding: 16, marginBottom: 12, gap: 16, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5 }]}>
+                <View key={`${item.product.id}-${item.selectedSize ?? ''}`} style={[{ flexDirection: 'row', alignItems: 'center', borderRadius: 20, padding: 16, marginBottom: 12, gap: 16, backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1.5 }]}>
                   <Image source={item.product.image} style={styles.cartItemImage} resizeMode="cover" />
                   <View style={styles.cartItemInfo}>
-                    <Text style={[styles.cartItemName, { color: colors.textPrimary }]} numberOfLines={2}>{item.product.name}</Text>
+                    <Text style={[styles.cartItemName, { color: colors.textPrimary }]} numberOfLines={2}>
+                      {item.product.name}{item.selectedSize ? ` · ${item.selectedSize}` : ''}
+                    </Text>
                     <Text style={[styles.cartItemPrice, { color: colors.gold }]}>${item.product.memberPrice.toFixed(2)} × {item.quantity}</Text>
                   </View>
-                  <TouchableOpacity onPress={() => removeFromCart(item.product.id)}>
+                  <TouchableOpacity onPress={() => removeFromCart(item.product.id, item.selectedSize)}>
                     <Ionicons name="trash-outline" size={20} color={colors.error} />
                   </TouchableOpacity>
                 </View>
@@ -360,7 +341,7 @@ export function StoreScreen({ navigation }: any) {
                     ? `Your order was paid in full with ${Math.floor(pointsDiscount * POINTS_PER_DOLLAR).toLocaleString()} Dojo Points. No balance due.`
                     : `Balance due at the dojo: $${finalTotal.toFixed(2)}. We'll set your items aside for pickup.`;
                   Alert.alert('Order Reserved', balanceMsg);
-                  setCart([]);
+                  clearCart();
                   setShowCart(false);
                   setUsePoints(false);
                 }}
@@ -525,8 +506,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   productImageContainer: {
+    width: '100%',
+    overflow: 'hidden',
+    // Container's actual height comes from `aspectRatio: 1` (inline). The
+    // explicit width:'100%' is what gives Yoga a base measurement to derive
+    // height from — without it, in flex-wrap grids the column can momentarily
+    // collapse to 0×0 and the Image renders against the black background.
   },
   productImage: {
+    // absoluteFillObject ensures the image always paints the full container
+    // regardless of when % heights are resolved (the cause of "black images
+    // in the store grid").
+    ...StyleSheet.absoluteFillObject,
     width: '100%',
     height: '100%',
   },

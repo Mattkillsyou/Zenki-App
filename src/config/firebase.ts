@@ -1,6 +1,6 @@
 import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getAuth, initializeAuth, Auth, Persistence } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -12,26 +12,31 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // `firebase/auth` exports (only browser/inMemory/indexedDB persistence
 // remain). Without RN persistence, every app launch starts unauthenticated:
 // accounts and posts appear to "not stick" because `getCurrentUid()` is
-// null on relaunch. This shim implements the same internal Persistence
-// contract the removed function used.
+// null on relaunch.
+//
+// `initializeAuth({ persistence })` expects a CLASS CONSTRUCTOR (it calls
+// `new Persistence()` internally), not an instance. Returning an object
+// literal triggers `INTERNAL ASSERTION FAILED: Expected a class definition`
+// at boot, which silently drops the entire Firebase Auth subsystem —
+// `auth` ends up null, `getCurrentUid()` returns null, and any feature
+// that requires an authenticated session (posting, likes, follows) fails.
 // ─────────────────────────────────────────────────
-function asyncStoragePersistence(): Persistence {
-  return {
-    type: 'LOCAL',
-    async _isAvailable() { return true; },
-    async _set(key: string, value: unknown) {
-      await AsyncStorage.setItem(key, JSON.stringify(value));
-    },
-    async _get<T>(key: string): Promise<T | null> {
-      const raw = await AsyncStorage.getItem(key);
-      return raw ? (JSON.parse(raw) as T) : null;
-    },
-    async _remove(key: string) {
-      await AsyncStorage.removeItem(key);
-    },
-    _addListener() {},
-    _removeListener() {},
-  } as unknown as Persistence;
+class AsyncStoragePersistence {
+  static readonly type = 'LOCAL' as const;
+  readonly type = 'LOCAL' as const;
+  async _isAvailable() { return true; }
+  async _set(key: string, value: unknown) {
+    await AsyncStorage.setItem(key, JSON.stringify(value));
+  }
+  async _get<T>(key: string): Promise<T | null> {
+    const raw = await AsyncStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  }
+  async _remove(key: string) {
+    await AsyncStorage.removeItem(key);
+  }
+  _addListener() {}
+  _removeListener() {}
 }
 
 // ─────────────────────────────────────────────────
@@ -72,12 +77,25 @@ if (FIREBASE_CONFIGURED) {
     if (Platform.OS === 'web') {
       auth = getAuth(app);
     } else {
+      // Pass the CLASS, not an instance — Firebase v12 instantiates it.
       auth = initializeAuth(app, {
-        persistence: asyncStoragePersistence(),
+        persistence: AsyncStoragePersistence as unknown as Persistence,
       });
     }
 
-    db = getFirestore(app);
+    // Firestore on React Native: the default WebChannel/gRPC transport
+    // doesn't work in RN's networking stack — `addDoc` resolves locally
+    // in the offline cache but the server never sees the write, leaving
+    // /posts (and every other collection) silently empty even though the
+    // client thinks the operation succeeded. Force long-polling so writes
+    // and reads actually round-trip to Firestore.
+    if (Platform.OS === 'web') {
+      db = getFirestore(app);
+    } else {
+      db = initializeFirestore(app, {
+        experimentalForceLongPolling: true,
+      });
+    }
     storage = getStorage(app);
   } catch (e) {
     console.warn('[Firebase] Init failed:', e);

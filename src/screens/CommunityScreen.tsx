@@ -150,12 +150,6 @@ export function CommunityScreen({ navigation }: any) {
           >
             <Ionicons name="search-outline" size={24} color={colors.textPrimary} />
           </SoundPressable>
-          <SoundPressable
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            onPress={() => navigation.navigate('MessagesList')}
-          >
-            <Ionicons name="paper-plane-outline" size={24} color={colors.textPrimary} />
-          </SoundPressable>
         </View>
       </View>
 
@@ -181,7 +175,12 @@ export function CommunityScreen({ navigation }: any) {
         <FlatList
           data={visiblePosts}
           renderItem={({ item }) => (
-            <PostCard post={item} onLike={handleLike} onUserPress={handleUserPress} />
+            <PostCard
+              post={item}
+              onLike={handleLike}
+              onUserPress={handleUserPress}
+              onCommentPress={(postId) => navigation.navigate('Comments', { postId })}
+            />
           )}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={renderHeader}
@@ -291,8 +290,8 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 100,
-    right: spacing.lg,
+    bottom: 24,
+    right: 16,
     width: 56,
     height: 56,
     borderRadius: 28,

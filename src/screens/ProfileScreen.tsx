@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,8 @@ import { useWorkouts } from '../context/WorkoutContext';
 import { useGpsActivity } from '../context/GpsActivityContext';
 import { useHeartRate } from '../context/HeartRateContext';
 import { formatCount } from '../utils/formatCount';
+import { uploadProfileImage } from '../services/storage';
+import { pushMemberToFirestore } from '../services/memberSync';
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { value: 'clean-light',  label: 'Light',  icon: 'sunny-outline' },
@@ -37,11 +39,48 @@ export function ProfileScreen({ navigation }: any) {
   const { myLogs } = useWorkouts();
   const { memberActivities } = useGpsActivity();
   const { memberSessions } = useHeartRate();
-  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(user?.profilePhoto ?? null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showPhotoMenu, setShowPhotoMenu] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editBio, setEditBio] = useState('');
   const [editGoals, setEditGoals] = useState('');
+
+  // Re-sync local photo state when the Member doc changes (e.g. Firestore
+  // subscription in AuthContext picks up an admin edit, or the user updates
+  // the photo on another device).
+  useEffect(() => {
+    setProfilePhoto(user?.profilePhoto ?? null);
+  }, [user?.profilePhoto]);
+
+  const persistPhoto = async (uri: string | null) => {
+    if (!user) return;
+    // Optimistic local update so the avatar swaps immediately.
+    setProfilePhoto(uri);
+    try {
+      let downloadUrl: string | undefined = undefined;
+      if (uri) {
+        setUploadingPhoto(true);
+        downloadUrl = await uploadProfileImage(uri);
+        setProfilePhoto(downloadUrl);
+      }
+      await pushMemberToFirestore({ ...user, profilePhoto: downloadUrl });
+    } catch (err: any) {
+      // Roll back on failure so the avatar reflects what's actually saved.
+      setProfilePhoto(user.profilePhoto ?? null);
+      const code = err?.code || err?.message || '';
+      Alert.alert(
+        'Photo not saved',
+        code === 'firebase-not-configured'
+          ? 'Photo storage is not configured for this build.'
+          : code === 'not-signed-in'
+          ? 'Sign in is required to save a profile photo.'
+          : `Couldn't save photo: ${err?.message || 'unknown error'}`,
+      );
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   // Training Summary
   const trainingSummary = useMemo(() => {
@@ -77,6 +116,7 @@ export function ProfileScreen({ navigation }: any) {
   const unlockedCount = gamState.achievements.filter((a) => a.unlocked).length;
 
   const handlePickPhoto = async () => {
+    if (uploadingPhoto) return;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission Required', 'Please allow access to your photo library.');
@@ -88,17 +128,18 @@ export function ProfileScreen({ navigation }: any) {
       aspect: [1, 1],
       quality: 0.8,
     });
-    if (!result.canceled && result.assets[0]) setProfilePhoto(result.assets[0].uri);
+    if (!result.canceled && result.assets[0]) await persistPhoto(result.assets[0].uri);
   };
 
   const handleTakePhoto = async () => {
+    if (uploadingPhoto) return;
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission Required', 'Please allow camera access.');
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
-    if (!result.canceled && result.assets[0]) setProfilePhoto(result.assets[0].uri);
+    if (!result.canceled && result.assets[0]) await persistPhoto(result.assets[0].uri);
   };
 
   return (
@@ -150,7 +191,7 @@ export function ProfileScreen({ navigation }: any) {
                 <Text style={[styles.photoMenuText, { color: colors.textPrimary }]}>Choose from Library</Text>
               </SoundPressable>
               {profilePhoto && (
-                <SoundPressable style={styles.photoMenuItem} onPress={() => { setShowPhotoMenu(false); setProfilePhoto(null); }}>
+                <SoundPressable style={styles.photoMenuItem} onPress={() => { setShowPhotoMenu(false); persistPhoto(null); }}>
                   <Ionicons name="trash-outline" size={18} color={colors.error} />
                   <Text style={[styles.photoMenuText, { color: colors.error }]}>Remove Photo</Text>
                 </SoundPressable>

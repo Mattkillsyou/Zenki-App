@@ -40,43 +40,82 @@ export function CreatePostScreen({ navigation }: any) {
       videoMaxDuration: 60,        // 60s cap for video posts
     };
 
-    let result;
-    if (source === 'camera') {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Camera access is required.');
-        return;
+    try {
+      let result;
+      if (source === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Camera access is required.');
+          return;
+        }
+        // For video, the system also needs the microphone permission. iOS will
+        // hard-crash launchCameraAsync if NSMicrophoneUsageDescription is
+        // missing from the Info.plist — that's fixed in app.json now, but
+        // request the perm explicitly here so the prompt is friendly.
+        result = await ImagePicker.launchCameraAsync(options);
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Photo library access is required.');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync(options);
       }
-      result = await ImagePicker.launchCameraAsync(options);
-    } else {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Photo library access is required.');
-        return;
-      }
-      result = await ImagePicker.launchImageLibraryAsync(options);
-    }
 
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      setMediaUri(asset.uri);
-      setMediaType(asset.type === 'video' ? 'video' : 'photo');
-      const w = asset.width || 1;
-      const h = asset.height || 1;
-      setAspectRatio(w / h);
-      setOrientation(detectOrientation(w, h));
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setMediaUri(asset.uri);
+        setMediaType(asset.type === 'video' ? 'video' : 'photo');
+        const w = asset.width || 1;
+        const h = asset.height || 1;
+        setAspectRatio(w / h);
+        setOrientation(detectOrientation(w, h));
+      }
+    } catch (err: any) {
+      // Catch native ImagePicker rejections (camera unavailable, permission
+      // edge cases, mic-not-authorized for video, etc.) so the app doesn't
+      // crash — surface a friendly alert and stay on the New Post screen.
+      Alert.alert(
+        'Camera unavailable',
+        err?.message || 'We couldn\'t open the camera. Try again, or pick from your library.',
+      );
     }
   };
 
   const handlePost = async () => {
+    const friendlyError = (err: any): { title: string; body: string } => {
+      const code = err?.code || err?.message || '';
+      if (code === 'not-signed-in') {
+        return {
+          title: "Couldn't post",
+          body: "Sign out and sign back in — your account isn't fully connected to the server.",
+        };
+      }
+      if (code === 'firebase-not-configured') {
+        return {
+          title: "Couldn't post",
+          body: 'The community feed is not configured for this build.',
+        };
+      }
+      if (code === 'permission-denied' || /permission/i.test(code)) {
+        return {
+          title: "Couldn't post",
+          body: "You don't have permission to post yet — ask the dojo admin to verify your account.",
+        };
+      }
+      return { title: 'Error', body: 'Failed to post. Please try again.' };
+    };
+
     if (mode === 'text') {
       if (!caption.trim()) return;
       setUploading(true);
       try {
-        await createTextPost(caption);
+        const created = await createTextPost(caption);
+        if (!created) throw new Error('post-failed');
         navigation.goBack();
-      } catch {
-        Alert.alert('Error', 'Failed to post. Please try again.');
+      } catch (err) {
+        const { title, body } = friendlyError(err);
+        Alert.alert(title, body);
         setUploading(false);
       }
       return;
@@ -84,10 +123,12 @@ export function CreatePostScreen({ navigation }: any) {
     if (!mediaUri) return;
     setUploading(true);
     try {
-      await createPost(mediaUri, mediaType, caption);
+      const created = await createPost(mediaUri, mediaType, caption);
+      if (!created) throw new Error('post-failed');
       navigation.goBack();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to create post. Please try again.');
+    } catch (err) {
+      const { title, body } = friendlyError(err);
+      Alert.alert(title, body);
       setUploading(false);
     }
   };

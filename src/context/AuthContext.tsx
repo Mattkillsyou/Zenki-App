@@ -144,17 +144,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Stamp the firebaseUid onto the member so /members rules can authorize
-    // the self-create. Without this, pushMemberToFirestore is silently denied
-    // and the new member never appears in the admin panel.
-    const memberWithUid: Member = firebaseUid ? { ...member, firebaseUid } : member;
+    // the self-create. Read the uid from `auth.currentUser` (the live source
+    // of truth), falling back to the value captured above. Some auth flows
+    // (Apple/Google OAuth) populate currentUser asynchronously a tick after
+    // the createAccount call returns — reading from the live auth here makes
+    // sure we never push a member doc with a stale/missing firebaseUid.
+    const stampedUid = auth?.currentUser?.uid ?? firebaseUid;
+    const memberWithUid: Member = stampedUid
+      ? { ...member, firebaseUid: stampedUid }
+      : member;
 
     await AsyncStorage.setItem(CUSTOM_MEMBER_KEY, JSON.stringify(memberWithUid));
     await AsyncStorage.setItem(STORAGE_KEY, memberWithUid.id);
     setUser(memberWithUid);
 
-    // Sync to Sheets + Firestore members doc (fire-and-forget)
+    // Sheets sync stays fire-and-forget (best-effort).
     pushMemberToSheets(memberWithUid);
-    pushMemberToFirestore(memberWithUid);
+
+    // Firestore push is now AWAITED — without this the rule check sometimes
+    // ran before auth state propagated to Firestore, the create silently
+    // failed, and the new member never appeared in the admin members list.
+    // upsertMemberInFirestore swallows errors internally (returns false), so
+    // this await never throws — it just guarantees the network round-trip
+    // happens before the function returns.
+    if (stampedUid) {
+      try {
+        await pushMemberToFirestore(memberWithUid);
+      } catch (err) {
+        console.warn('[AuthContext] pushMemberToFirestore awaited but threw:', err);
+      }
+    }
 
     // Register for push notifications + save token
     registerForPushNotifications().then((token) => {
