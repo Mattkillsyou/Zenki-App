@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, Platform, Image, Alert, Modal, Animated, Easing } from 'react-native';
+  View, Text, StyleSheet, TextInput, Platform, Image, Modal, Animated, Easing } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Google from 'expo-auth-session/providers/google';
 import * as Crypto from 'expo-crypto';
@@ -137,6 +137,25 @@ export function SignInScreen({ navigation }: any) {
       setErrorMsg("Apple Sign-In needs Firebase set up first — try email + password.");
       return;
     }
+    // Pre-flight: AppleAuthentication.isAvailableAsync() returns false on
+    // builds where the `com.apple.developer.applesignin` entitlement isn't
+    // bound — this typically means an UNSIGNED local sim build (entitlements
+    // only bind at code-sign time, so an `xcodebuild CODE_SIGNING_ALLOWED=NO`
+    // binary advertises no Apple-Sign-In capability and the SDK refuses to
+    // open the system prompt). Same root cause as the keychain redbox we
+    // filter in App.tsx. TestFlight / signed dev-client builds are fine.
+    let available = false;
+    try {
+      available = await AppleAuthentication.isAvailableAsync();
+    } catch {
+      available = false;
+    }
+    if (!available) {
+      setErrorMsg(
+        "Apple Sign-In isn't available on this build. On the iOS Simulator, this is expected — the entitlement only binds on signed TestFlight builds. Use email + password here.",
+      );
+      return;
+    }
     setLoading(true);
     try {
       // Apple requires a SHA256-hashed nonce; we send the raw nonce to Firebase
@@ -170,7 +189,20 @@ export function SignInScreen({ navigation }: any) {
     } catch (err: any) {
       // User canceling the prompt is not a real error — silence it.
       if (err?.code === 'ERR_REQUEST_CANCELED') return;
-      setErrorMsg(err?.message ? `Apple sign-in didn't go through — ${err.message}` : "Apple sign-in didn't go through — try email + password instead.");
+      // Specific Apple SDK errors. ERR_REQUEST_FAILED commonly indicates the
+      // simulator isn't signed into an Apple ID, ERR_INVALID_RESPONSE means
+      // Apple returned no usable identity token (often a bundle-id /
+      // entitlement mismatch), ERR_AUTHORIZATION_REQUEST_FAILED is generic.
+      const code = err?.code ?? '';
+      const friendly =
+        code === 'ERR_REQUEST_FAILED'
+          ? "Apple couldn't process the request. On the simulator this usually means it isn't signed into an Apple ID — Settings → Sign in to your iPhone."
+          : code === 'ERR_INVALID_RESPONSE'
+            ? "Apple returned an empty identity token. This typically means the build isn't signed for the right bundle ID."
+            : err?.message
+              ? `Apple sign-in didn't go through — ${err.message}`
+              : "Apple sign-in didn't go through — try email + password instead.";
+      setErrorMsg(friendly);
     } finally {
       setLoading(false);
     }
@@ -196,10 +228,11 @@ export function SignInScreen({ navigation }: any) {
     if (inviteCode.toLowerCase().trim() === INVITE_CODE) {
       await AsyncStorage.setItem(INVITE_VERIFIED_KEY, 'true');
       setShowInviteGate(false);
+      setErrorMsg(null);
       // Stay on SignIn after verification — user picks "Sign In"
       // (existing account) or "Create Account" (new signup → Onboarding).
     } else {
-      Alert.alert('Invalid Code', 'Please enter a valid invite code.');
+      setErrorMsg('Please enter a valid invite code.');
     }
   };
 
