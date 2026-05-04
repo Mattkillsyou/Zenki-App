@@ -58,6 +58,10 @@ export function useSenpaiChat() {
   const [messages, setMessages] = useState<ChatThreadMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<SenpaiChatError | null>(null);
+  // The id of the most recently arrived assistant message — Phase 4 typing
+  // reveal animates only this one. Naturally decays when the next reply
+  // lands. Reset to null on hydrate so rehydrated history doesn't animate.
+  const [lastArrivedId, setLastArrivedId] = useState<string | null>(null);
   const hydratedRef = useRef(false);
 
   // Load persisted history on mount
@@ -161,6 +165,9 @@ export function useSenpaiChat() {
               : m,
           ),
         );
+        // Mark this as the freshly arrived id so the renderer knows to
+        // typing-reveal it. Naturally decays when the next reply lands.
+        setLastArrivedId(placeholderId);
 
         // Mirror the chat reply into the floating mascot animation
         try {
@@ -178,8 +185,9 @@ export function useSenpaiChat() {
   const clear = useCallback(async () => {
     setMessages([]);
     setError(null);
+    setLastArrivedId(null);
     await AsyncStorage.removeItem(HISTORY_KEY).catch(() => {});
   }, []);
 
-  return { messages, loading, error, send, clear };
+  return { messages, loading, error, lastArrivedId, send, clear };
 }

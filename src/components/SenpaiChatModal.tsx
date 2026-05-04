@@ -41,9 +41,44 @@ interface Props {
   onClose: () => void;
 }
 
+/**
+ * Reveal `fullText` one character at a time at ~30 chars/sec when `animate`
+ * is true; otherwise return the full string immediately. Phase 4 typing
+ * effect — purely cosmetic since the API returns the full reply at once.
+ *
+ * Per-bubble: bubbles for messages rehydrated from AsyncStorage pass
+ * animate=false and never tick; only the message just returned from the
+ * cloud function (lastArrivedId from the hook) animates.
+ */
+function useTypingReveal(fullText: string, animate: boolean, charsPerSecond = 30): string {
+  const [revealed, setRevealed] = useState(animate ? fullText.slice(0, 1) : fullText);
+
+  useEffect(() => {
+    if (!animate || !fullText) {
+      setRevealed(fullText);
+      return;
+    }
+    let i = 1;
+    setRevealed(fullText.slice(0, i));
+    const intervalMs = Math.max(8, Math.round(1000 / charsPerSecond));
+    const timer = setInterval(() => {
+      i++;
+      if (i >= fullText.length) {
+        setRevealed(fullText);
+        clearInterval(timer);
+      } else {
+        setRevealed(fullText.slice(0, i));
+      }
+    }, intervalMs);
+    return () => clearInterval(timer);
+  }, [fullText, animate, charsPerSecond]);
+
+  return revealed;
+}
+
 export function SenpaiChatModal({ visible, onClose }: Props) {
   const { colors } = useTheme();
-  const { messages, loading, error, send, clear } = useSenpaiChat();
+  const { messages, loading, error, lastArrivedId, send, clear } = useSenpaiChat();
   const [draft, setDraft] = useState('');
   const [showDisclaimer, setShowDisclaimer] = useState(false);
 
@@ -78,7 +113,7 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
   const inverted = useMemo(() => [...messages].reverse(), [messages]);
 
   const renderMessage = ({ item }: { item: ChatThreadMessage }) => (
-    <ChatBubble message={item} colors={colors} />
+    <ChatBubble message={item} colors={colors} animate={item.id === lastArrivedId} />
   );
 
   return (
@@ -202,8 +237,23 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
 
 /* ─── ChatBubble ─────────────────────────────────────────────────────── */
 
-function ChatBubble({ message, colors }: { message: ChatThreadMessage; colors: any }) {
+function ChatBubble({
+  message,
+  colors,
+  animate,
+}: {
+  message: ChatThreadMessage;
+  colors: any;
+  animate: boolean;
+}) {
   const isUser = message.role === 'user';
+
+  // Only animate fresh assistant replies. User bubbles, errors, pending
+  // placeholders, and rehydrated history all bypass the typing effect.
+  const shouldAnimate =
+    animate && !isUser && !message.pending && !message.error && message.content.length > 0;
+  const displayText = useTypingReveal(message.content, shouldAnimate);
+
   return (
     <View style={[styles.bubbleRow, { justifyContent: isUser ? 'flex-end' : 'flex-start' }]}>
       <View
@@ -225,7 +275,7 @@ function ChatBubble({ message, colors }: { message: ChatThreadMessage; colors: a
             message.pending && { color: colors.textMuted, fontStyle: 'italic' },
           ]}
         >
-          {message.pending ? '...' : message.content}
+          {message.pending ? '...' : isUser ? message.content : displayText}
         </Text>
       </View>
     </View>
