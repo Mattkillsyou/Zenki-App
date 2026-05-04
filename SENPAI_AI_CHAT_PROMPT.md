@@ -1,8 +1,20 @@
 # Senpai AI Chat — Implementation Plan
 
-**Status:** In progress
+**Status:** Phases 0-4 shipped; Phase 5 skipped (small audience); Phase 6 deferred.
 **Owner:** Matt
 **Decision date:** 2026-05-02
+
+## Phase status
+
+| Phase | Status | Commit |
+|---|---|---|
+| 0 — Backend prep | ✅ Shipped | `28845e6` |
+| 1 — Backend MVP (Haiku 4.5 + persona + caching + crisis check + rate limit) | ✅ Shipped | `28845e6` |
+| 2 — Client UI (modal, hook, SECRET LAB toggle, disclaimer) | ✅ Shipped | `8c1db08` |
+| 3 — User context via tool use (`get_user_stats`) | ✅ Shipped | `5413d4e` |
+| 4 — Typing-reveal animation | ✅ Shipped | `4a8368d` |
+| 5 — Additional safety hardening + admin cost dashboard | ⏭️ **Skipped** — audience is 1-10 occasional users; baseline rate limit + crisis check + disclaimer (already in Phase 1+2) cover the realistic risk surface. At ~5 turns/day × 10 users × $0.001/turn ≈ **~$1.50/month**, a cost dashboard is overkill. Revisit if user count grows. |
+| 6 — Polish (Firestore-synced history, voice input, push, model A/B) | Deferred indefinitely |
 
 Built around existing infrastructure:
 - Firebase Functions (`functions/src/index.ts` pattern — `onRequest` HTTP endpoints with Bearer auth + `enforceRateLimit`)
