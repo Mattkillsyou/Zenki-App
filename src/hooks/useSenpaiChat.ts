@@ -16,6 +16,8 @@ import {
   type SenpaiChatError,
   type SenpaiUserContext,
 } from '../services/senpaiChat';
+import { fetchSenpaiAudio } from '../services/senpaiSpeak';
+import { playSenpaiAudio, stopSenpaiAudio } from '../services/senpaiAudio';
 import { getCurrentIdToken } from '../services/firebaseAuth';
 import { useSenpai, type MascotMood } from '../context/SenpaiContext';
 import { useGamification } from '../context/GamificationContext';
@@ -23,6 +25,7 @@ import { useWorkouts } from '../context/WorkoutContext';
 import { useAuth } from '../context/AuthContext';
 
 const HISTORY_KEY = '@senpai_chat_history';
+const VOICE_KEY = '@senpai_chat_voice_enabled';
 const MAX_PERSISTED_TURNS = 50;
 
 export interface ChatThreadMessage {
@@ -62,23 +65,41 @@ export function useSenpaiChat() {
   // reveal animates only this one. Naturally decays when the next reply
   // lands. Reset to null on hydrate so rehydrated history doesn't animate.
   const [lastArrivedId, setLastArrivedId] = useState<string | null>(null);
+  // Voice playback toggle — when on, replies are sent through the
+  // senpaiSpeak (ElevenLabs) function and the returned audio is played.
+  // Persisted under @senpai_chat_voice_enabled. Default OFF — paid TTS
+  // calls shouldn't fire on every chat session by default.
+  const [voiceEnabled, setVoiceEnabledState] = useState(false);
   const hydratedRef = useRef(false);
 
-  // Load persisted history on mount
+  // Load persisted history + voice flag on mount
   useEffect(() => {
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(HISTORY_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
+        const [historyRaw, voiceRaw] = await Promise.all([
+          AsyncStorage.getItem(HISTORY_KEY),
+          AsyncStorage.getItem(VOICE_KEY),
+        ]);
+        if (historyRaw) {
+          const parsed = JSON.parse(historyRaw);
           if (Array.isArray(parsed)) setMessages(parsed.slice(-MAX_PERSISTED_TURNS));
         }
+        if (voiceRaw === 'true') setVoiceEnabledState(true);
       } catch {
         /* ignore — fresh history is fine */
       } finally {
         hydratedRef.current = true;
       }
     })();
+  }, []);
+
+  const setVoiceEnabled = useCallback((on: boolean) => {
+    setVoiceEnabledState(on);
+    AsyncStorage.setItem(VOICE_KEY, String(on)).catch(() => {});
+    if (!on) {
+      // Killed mid-clip — stop whatever's playing right now
+      stopSenpaiAudio();
+    }
   }, []);
 
   // Persist any time messages change (after initial hydration)
@@ -175,12 +196,38 @@ export function useSenpaiChat() {
         } catch {
           /* non-fatal */
         }
+
+        // Voice playback — fire-and-forget so the chat UI stays responsive
+        // even if TTS is slow or fails. Errors are logged via console only;
+        // the bubble already shows the typed text.
+        if (voiceEnabled) {
+          (async () => {
+            try {
+              const ttsToken = await getCurrentIdToken();
+              const ttsResult = await fetchSenpaiAudio(text, undefined, ttsToken ?? undefined);
+              if (ttsResult.ok) {
+                await playSenpaiAudio(ttsResult.data.audioBase64);
+              } else {
+                // eslint-disable-next-line no-console
+                console.warn('[senpaiSpeak]', ttsResult.error.code, ttsResult.error.message);
+              }
+            } catch (e) {
+              // eslint-disable-next-line no-console
+              console.warn('[senpaiSpeak] playback failed', e);
+            }
+          })();
+        }
       } finally {
         setLoading(false);
       }
     },
-    [loading, triggerReaction, gamState, myLogs, user],
+    [loading, triggerReaction, gamState, myLogs, user, voiceEnabled],
   );
+
+  // Stop any in-flight audio when the consumer unmounts (modal closes)
+  useEffect(() => {
+    return () => stopSenpaiAudio();
+  }, []);
 
   const clear = useCallback(async () => {
     setMessages([]);
@@ -189,5 +236,14 @@ export function useSenpaiChat() {
     await AsyncStorage.removeItem(HISTORY_KEY).catch(() => {});
   }, []);
 
-  return { messages, loading, error, lastArrivedId, send, clear };
+  return {
+    messages,
+    loading,
+    error,
+    lastArrivedId,
+    voiceEnabled,
+    setVoiceEnabled,
+    send,
+    clear,
+  };
 }

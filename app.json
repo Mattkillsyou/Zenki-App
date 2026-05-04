@@ -63,7 +63,16 @@
       ],
       "expo-apple-authentication",
       "expo-audio",
-      "expo-asset"
+      "expo-asset",
+      "expo-video",
+      "expo-maps",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Zenki Dojo records your voice when you talk to Senpai in the chat — audio is transcribed on-device and not stored or uploaded.",
+          "speechRecognitionPermission": "Zenki Dojo transcribes your voice on-device when you talk to Senpai in the chat — the audio never leaves your phone."
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true,
@@ -76,6 +85,8 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Zenki Dojo uses your location to automatically log dojo visits and, when you start a GPS-tracked workout, to record your route, distance, and pace.",
         "NSCameraUsageDescription": "Zenki Dojo uses your camera to scan food barcodes for macro logging, take progress and food photos, and set your profile picture. Photos stay on your device unless you post them.",
+        "NSMicrophoneUsageDescription": "Zenki Dojo records audio along with video posts so the audio matches the moment you captured. Also used to capture your voice when you talk to Senpai in the chat — audio is transcribed on-device and not stored or uploaded.",
+        "NSSpeechRecognitionUsageDescription": "Zenki Dojo transcribes your voice on-device when you talk to Senpai in the chat. The audio never leaves your phone.",
         "NSPhotoLibraryUsageDescription": "Zenki Dojo accesses photos you choose — for profile pictures, community posts, and uploading bloodwork or DEXA scans. Images are not shared unless you explicitly post them.",
         "NSCalendarsFullAccessUsageDescription": "Zenki Dojo adds your booked classes and training sessions to your calendar when you opt in.",
         "NSCalendarsUsageDescription": "Zenki Dojo adds your booked classes and training sessions to your calendar when you opt in.",

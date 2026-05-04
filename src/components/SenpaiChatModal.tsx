@@ -14,7 +14,7 @@
  *   - "Clear chat" wipes both local state and AsyncStorage history.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -30,9 +30,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+} from 'expo-speech-recognition';
 
 import { useTheme } from '../context/ThemeContext';
 import { useSenpaiChat, type ChatThreadMessage } from '../hooks/useSenpaiChat';
+import { stopSenpaiAudio } from '../services/senpaiAudio';
 
 const DISCLAIMER_KEY = '@senpai_chat_disclaimer_v1';
 
@@ -78,9 +83,96 @@ function useTypingReveal(fullText: string, animate: boolean, charsPerSecond = 30
 
 export function SenpaiChatModal({ visible, onClose }: Props) {
   const { colors } = useTheme();
-  const { messages, loading, error, lastArrivedId, send, clear } = useSenpaiChat();
+  const {
+    messages,
+    loading,
+    error,
+    lastArrivedId,
+    voiceEnabled,
+    setVoiceEnabled,
+    send,
+    clear,
+  } = useSenpaiChat();
   const [draft, setDraft] = useState('');
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [recording, setRecording] = useState(false);
+  // Track the draft text at recording-start time so live STT results can be
+  // appended (rather than overwriting) anything the user typed manually.
+  const draftAtRecordStartRef = useRef('');
+
+  // Live STT events from expo-speech-recognition. These hooks are no-ops
+  // until ExpoSpeechRecognitionModule.start() is called.
+  useSpeechRecognitionEvent('result', (event) => {
+    const transcript = event.results?.[0]?.transcript ?? '';
+    if (!transcript) return;
+    const prefix = draftAtRecordStartRef.current;
+    setDraft(prefix ? `${prefix} ${transcript}` : transcript);
+  });
+
+  useSpeechRecognitionEvent('end', () => {
+    setRecording(false);
+  });
+
+  useSpeechRecognitionEvent('error', (event) => {
+    setRecording(false);
+    // Don't surface aborted-by-user errors as alerts
+    if (event?.error === 'aborted' || event?.error === 'no-speech') return;
+    Alert.alert(
+      'Mic trouble',
+      `Speech recognition error: ${event?.message ?? event?.error ?? 'unknown'}`,
+    );
+  });
+
+  // Stop recording + audio when modal closes
+  useEffect(() => {
+    if (!visible) {
+      try {
+        ExpoSpeechRecognitionModule.stop();
+      } catch {
+        /* ignore */
+      }
+      stopSenpaiAudio();
+      setRecording(false);
+    }
+  }, [visible]);
+
+  const startRecording = async () => {
+    try {
+      const perms = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!perms.granted) {
+        Alert.alert(
+          'Mic access needed',
+          'Senpai needs microphone + speech-recognition permission to hear you. Enable both in Settings → Zenki Dojo.',
+        );
+        return;
+      }
+      draftAtRecordStartRef.current = draft.trim();
+      setRecording(true);
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        interimResults: true,
+        continuous: false,
+        requiresOnDeviceRecognition: false,
+      });
+    } catch (e: any) {
+      setRecording(false);
+      Alert.alert('Mic trouble', e?.message ?? 'Could not start recording.');
+    }
+  };
+
+  const stopRecording = () => {
+    try {
+      ExpoSpeechRecognitionModule.stop();
+    } catch {
+      /* ignore */
+    }
+    setRecording(false);
+  };
+
+  const toggleRecording = () => {
+    if (recording) stopRecording();
+    else startRecording();
+  };
 
   // Disclaimer gate — show on first open until accepted
   useEffect(() => {
@@ -127,9 +219,21 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
           <View style={styles.headerTitleWrap}>
             <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Senpai</Text>
             <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>
-              {loading ? 'thinking...' : 'always tired'}
+              {loading ? 'thinking...' : recording ? 'listening...' : 'always tired'}
             </Text>
           </View>
+          <Pressable
+            onPress={() => setVoiceEnabled(!voiceEnabled)}
+            hitSlop={12}
+            style={styles.headerBtn}
+            accessibilityLabel={voiceEnabled ? 'Mute voice replies' : 'Enable voice replies'}
+          >
+            <Ionicons
+              name={voiceEnabled ? 'volume-high' : 'volume-mute-outline'}
+              size={22}
+              color={voiceEnabled ? colors.gold : colors.textMuted}
+            />
+          </Pressable>
           <Pressable onPress={handleClear} hitSlop={12} style={styles.headerBtn}>
             <Ionicons name="trash-outline" size={22} color={colors.textMuted} />
           </Pressable>
@@ -169,17 +273,39 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
 
           {/* Input row */}
           <View style={[styles.inputRow, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
+            <Pressable
+              onPress={toggleRecording}
+              disabled={loading}
+              accessibilityLabel={recording ? 'Stop recording' : 'Start voice input'}
+              style={[
+                styles.micBtn,
+                {
+                  backgroundColor: recording
+                    ? '#FF2E51'
+                    : loading
+                    ? colors.surfaceSecondary
+                    : colors.surface,
+                  borderColor: recording ? '#FF2E51' : colors.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name={recording ? 'stop' : 'mic-outline'}
+                size={20}
+                color={recording ? '#FFF' : loading ? colors.textMuted : colors.textPrimary}
+              />
+            </Pressable>
             <TextInput
               value={draft}
               onChangeText={setDraft}
-              placeholder="say something..."
+              placeholder={recording ? 'listening...' : 'say something...'}
               placeholderTextColor={colors.textMuted}
               style={[
                 styles.input,
                 {
                   color: colors.textPrimary,
                   backgroundColor: colors.surface,
-                  borderColor: colors.border,
+                  borderColor: recording ? '#FF2E51' : colors.border,
                 },
               ]}
               multiline
@@ -362,6 +488,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },

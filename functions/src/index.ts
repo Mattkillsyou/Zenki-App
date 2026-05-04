@@ -38,6 +38,10 @@ export { diagPostsCount } from './diagPostsCount';
 // See SENPAI_AI_CHAT_PROMPT.md for design + persona reference.
 export { senpaiChat } from './senpaiChat';
 
+// Senpai TTS endpoint — wraps ElevenLabs to give the chibi mascot a voice.
+// Requires ELEVENLABS_API_KEY secret + at least Starter ($5/mo) plan.
+export { senpaiSpeak } from './senpaiSpeak';
+
 // ─────────────────────────────────────────────
 // Setup
 // ─────────────────────────────────────────────
