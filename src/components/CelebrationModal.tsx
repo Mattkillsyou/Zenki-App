@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Modal, Animated } from 'react-native';
+import { View, Text, StyleSheet, Modal, Animated, Pressable } from 'react-native';
 import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -24,16 +24,25 @@ function ConfettiDots() {
   ).current;
 
   useEffect(() => {
-    dots.forEach((dot) => {
-      Animated.loop(
+    // Capture the loop handles so we can stop them on unmount — without
+    // cleanup these run forever on the native driver, accumulating across
+    // every celebration shown and eventually stalling touch responsiveness
+    // (suspected cause of post-spin home-screen freezes).
+    const loops = dots.map((dot) => {
+      const loop = Animated.loop(
         Animated.sequence([
           Animated.delay(dot.delay),
           Animated.timing(dot.anim, { toValue: 1, duration: 1500, useNativeDriver: true }),
           Animated.timing(dot.anim, { toValue: 0, duration: 0, useNativeDriver: true }),
         ]),
-      ).start();
+      );
+      loop.start();
+      return loop;
     });
-  }, []);
+    return () => {
+      loops.forEach((l) => l.stop());
+    };
+  }, [dots]);
 
   return (
     <>
@@ -69,15 +78,29 @@ export function CelebrationModal({ celebration, onDismiss }: CelebrationModalPro
 
   useEffect(() => {
     if (celebration) {
+      // Reset to entry values, then animate. Without resetting, a second
+      // celebration after the first dismisses would re-use the final
+      // (1.0, 1.0) state and the spring would be a visual no-op.
+      scaleAnim.setValue(0.5);
+      opacityAnim.setValue(0);
       Animated.parallel([
         Animated.spring(scaleAnim, { toValue: 1, friction: 4, tension: 60, useNativeDriver: true }),
         Animated.timing(opacityAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
       ]).start();
+      // Failsafe: if the animation gets dropped (e.g. when stacked behind
+      // another Modal that's mid-dismiss), force the card visible after a
+      // short window so the user is never staring at an invisible card with
+      // an unresponsive backdrop.
+      const failsafe = setTimeout(() => {
+        scaleAnim.setValue(1);
+        opacityAnim.setValue(1);
+      }, 500);
+      return () => clearTimeout(failsafe);
     } else {
       scaleAnim.setValue(0.5);
       opacityAnim.setValue(0);
     }
-  }, [celebration]);
+  }, [celebration, scaleAnim, opacityAnim]);
 
   if (!celebration) return null;
 
@@ -88,23 +111,33 @@ export function CelebrationModal({ celebration, onDismiss }: CelebrationModalPro
   const iconColor = celebration.type === 'streak_milestone' ? '#FF6B35' : colors.gold;
 
   return (
-    <Modal visible transparent animationType="none">
-      <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.85)' }]}>
+    // onRequestClose wires the Android back button + iOS gesture to dismiss.
+    // Critical when this modal stacks on top of another (e.g. SpinWheelModal):
+    // without a tappable backdrop the user could end up locked out if the
+    // spring animation didn't finish rendering the AWESOME button.
+    <Modal visible transparent animationType="none" onRequestClose={onDismiss}>
+      <Pressable
+        style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.85)' }]}
+        onPress={onDismiss}
+      >
         <ConfettiDots />
-        <Animated.View style={[styles.card, { backgroundColor: colors.surface, transform: [{ scale: scaleAnim }], opacity: opacityAnim }]}>
-          <Ionicons name={icon as any} size={64} color={iconColor} />
-          <Text style={[styles.title, { color: colors.textPrimary }]}>{celebration.title}</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{celebration.subtitle}</Text>
-          {celebration.xpGained && (
-            <View style={[styles.xpBadge, { backgroundColor: colors.goldMuted }]}>
-              <Text style={[styles.xpText, { color: colors.gold }]}>+{celebration.xpGained} XP</Text>
-            </View>
-          )}
-          <SoundPressable style={[styles.button, { backgroundColor: colors.gold }]} onPress={onDismiss}>
-            <Text style={styles.buttonText}>AWESOME!</Text>
-          </SoundPressable>
-        </Animated.View>
-      </View>
+        {/* stopPropagation so tapping the card doesn't bubble to the backdrop */}
+        <Pressable onPress={(e) => e.stopPropagation()}>
+          <Animated.View style={[styles.card, { backgroundColor: colors.surface, transform: [{ scale: scaleAnim }], opacity: opacityAnim }]}>
+            <Ionicons name={icon as any} size={64} color={iconColor} />
+            <Text style={[styles.title, { color: colors.textPrimary }]}>{celebration.title}</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{celebration.subtitle}</Text>
+            {celebration.xpGained && (
+              <View style={[styles.xpBadge, { backgroundColor: colors.goldMuted }]}>
+                <Text style={[styles.xpText, { color: colors.gold }]}>+{celebration.xpGained} XP</Text>
+              </View>
+            )}
+            <SoundPressable style={[styles.button, { backgroundColor: colors.gold }]} onPress={onDismiss}>
+              <Text style={styles.buttonText}>AWESOME!</Text>
+            </SoundPressable>
+          </Animated.View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }

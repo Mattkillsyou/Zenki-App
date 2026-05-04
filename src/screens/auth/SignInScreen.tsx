@@ -373,10 +373,15 @@ export function SignInScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Invite Gate */}
+      {/* Invite Gate — uses KeyboardAwareScrollView (not KeyboardView) so the
+          centered card content can scroll when the on-screen keyboard rises;
+          on iPhone Pro Max the icon+title+subtitle+input+button stack is just
+          tall enough to clip the Continue button under the keyboard otherwise.
+          Per §32 keyboard sweep: modal-internal centered forms need scroll
+          fallback, not just a KAV wrapper. */}
       <Modal visible={showInviteGate} animationType="fade">
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-          <KeyboardView style={styles.gateContainer}>
+          <KeyboardAwareScrollView contentContainerStyle={styles.gateContainer}>
             <View style={[styles.gateIconWrap, { backgroundColor: colors.goldMuted }]}>
               <Ionicons name="shield-checkmark-outline" size={48} color={colors.gold} />
             </View>
@@ -391,7 +396,7 @@ export function SignInScreen({ navigation }: any) {
               autoCapitalize="none"
             />
             <Button title="Continue" onPress={handleVerifyInvite} fullWidth size="lg" />
-          </KeyboardView>
+          </KeyboardAwareScrollView>
         </SafeAreaView>
       </Modal>
 
