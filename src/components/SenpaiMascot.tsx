@@ -63,23 +63,27 @@ export function SenpaiMascot() {
   const [hidden, setHidden] = useState(false);
   const [showClose, setShowClose] = useState(false);
 
-  // Inline walkie-talkie chat state. Tap on senpai = start listening; the
-  // speech bubble above her doubles as the chat surface (live transcript
-  // while you speak → her reply text once the model returns), and TTS
-  // plays the audio of her response over the speaker. No separate modal.
+  // Inline walkie-talkie chat state. HOLD senpai for 2s = start listening,
+  // HOLD for 3s while listening = stop. The speech bubble above her doubles
+  // as the chat surface (live transcript while you speak → her reply text
+  // once the model returns), and TTS plays the audio of her response over
+  // the speaker. No separate modal, no tap-to-toggle (that was removed
+  // because the user couldn't tell whether their tap had registered as a
+  // hold or a release).
   const {
     messages,
     loading: chatLoading,
     error: chatError,
     voiceEnabled,
     setVoiceEnabled,
+    ttsPlaying,
     send: sendChat,
   } = useSenpaiChat();
   // `listening` = user's intent: "the mic should be on." Once on, it
   // stays on through silence, through senpai's replies, and through
-  // re-arming, until the user double-taps to turn it off. `sttActive`
-  // is the lower-level state of whether STT is currently engaged with
-  // the OS — we transition this internally as the system loops.
+  // re-arming, until the user holds for 3s to turn it off. We track
+  // listeningRef in parallel so STT event callbacks (which capture state
+  // by closure) read a fresh value rather than the stale render-time one.
   const [listening, setListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
   const transcriptRef = useRef('');
@@ -107,20 +111,34 @@ export function SenpaiMascot() {
     transcriptRef.current = '';
     setLiveTranscript('');
 
+    console.warn(
+      '[SenpaiMascot] STT end fired. transcript:',
+      JSON.stringify(finalTranscript),
+      'listening:', listeningRef.current,
+      'chatLoading:', chatLoading,
+    );
+
     // Auto-send the captured speech as soon as STT detects end-of-turn.
-    // The mic itself doesn't go off — the `listening` flag is the user's
-    // intent and stays true until they hold to turn it off.
-    if (finalTranscript && !chatLoading) {
+    // Two guards beyond the obvious (transcript exists, chat not in flight):
+    //   - listeningRef.current: stopListening() flips this BEFORE calling
+    //     stop(), so a late 'result' arriving between can't trigger a
+    //     send the user already abandoned.
+    //   - !chargingRef.current: if the user is currently mid-hold to stop
+    //     the mic, an STT silence-end firing in the middle of that hold
+    //     shouldn't ship a message they're trying to abandon.
+    if (
+      finalTranscript &&
+      !chatLoading &&
+      listeningRef.current &&
+      !chargingRef.current
+    ) {
       sendChat(finalTranscript);
-      // Don't re-arm yet — wait for senpai's reply (the lastAssistantMsg
-      // effect below schedules the re-arm with a TTS-friendly delay).
       return;
     }
 
-    // No speech captured (silence timeout). If user still wants the mic
-    // on, re-arm. Use a short delay so the native engine has a tick to
-    // settle before we ask it to start again — synchronous re-arms tend
-    // to throw on iOS Simulator and silently flap `listening` off.
+    // No speech captured (silence timeout with nothing said). If user
+    // still wants the mic on, re-arm after a short delay so the native
+    // engine has a tick to settle.
     if (listeningRef.current && !chatLoading) {
       setTimeout(() => {
         if (!listeningRef.current || chatLoading) return;
@@ -128,12 +146,13 @@ export function SenpaiMascot() {
           ExpoSpeechRecognitionModule.start({
             lang: 'en-US',
             interimResults: true,
-            continuous: true,
+            // Single-shot — iOS auto-stops on silence and fires 'end',
+            // which is what triggers sendChat. Continuous mode wedges
+            // the mic open and 'end' never fires until stop().
+            continuous: false,
             requiresOnDeviceRecognition: false,
           });
         } catch (e) {
-          // Engine permanently dead — keep the visual indicator on
-          // (user intent) but log so we can see it.
           console.warn('[SenpaiMascot] STT re-arm failed:', e);
         }
       }, 250);
@@ -162,11 +181,11 @@ export function SenpaiMascot() {
           ExpoSpeechRecognitionModule.start({
             lang: 'en-US',
             interimResults: true,
-            continuous: true,
+            continuous: false,
             requiresOnDeviceRecognition: false,
           });
         } catch {
-          /* engine perma-dead; visual stays on, user can hold to stop */
+          /* engine perma-dead; visual stays on, user can tap to stop */
         }
       }, 400);
     }
@@ -197,10 +216,12 @@ export function SenpaiMascot() {
       ExpoSpeechRecognitionModule.start({
         lang: 'en-US',
         interimResults: true,
-        // Continuous so the mic stays open until the user explicitly
-        // taps to stop. iOS still drops the session on long silence —
-        // the 'end' handler re-arms when that happens.
-        continuous: true,
+        // Single-shot. iOS auto-stops on silence and fires 'end' →
+        // sendChat. The 'end' handler re-arms while listeningRef is
+        // still true, so the conversation flows like a walkie-talkie
+        // without ever wedging the mic open. Continuous mode never
+        // fires 'end' until stop(), so replies never landed.
+        continuous: false,
         requiresOnDeviceRecognition: false,
       });
     } catch (e: any) {
@@ -210,18 +231,27 @@ export function SenpaiMascot() {
   };
 
   const stopListening = () => {
-    // User-initiated stop — clear intent so the 'end' handler doesn't
-    // re-arm the mic. Drop any pending transcript on the floor.
+    // User-initiated stop. Order matters:
+    //   1. listeningRef false FIRST — so any late STT 'result' event that
+    //      fires between here and the 'end' callback won't trigger a
+    //      send (the 'end' handler now guards on listeningRef).
+    //   2. Drop the pending transcript so we don't accidentally send
+    //      half-formed speech.
+    //   3. stop() the engine — this fires 'end' but we've already armed
+    //      the guards above.
+    //   4. Cut TTS audio. If the user tapped to stop while senpai was
+    //      mid-reply, they want her to shut up too — not keep talking.
     listeningRef.current = false;
     setListening(false);
     transcriptRef.current = '';
     setLiveTranscript('');
     try { ExpoSpeechRecognitionModule.stop(); } catch { /* ignore */ }
+    stopSenpaiAudio();
   };
 
   // Most recent settled assistant message — drives the bubble text after
   // a reply lands AND triggers the after-reply mic re-arm so the
-  // conversation continues hands-free until the user double-taps off.
+  // conversation continues hands-free until the user holds 3s to stop.
   const lastAssistantMsg = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i];
@@ -234,9 +264,15 @@ export function SenpaiMascot() {
     if (!listening) return;
     if (!lastAssistantMsg) return;
     if (lastReplyIdRef.current === lastAssistantMsg.id) return;
+    // Wait for TTS playback to actually finish — otherwise STT picks up
+    // senpai's own voice through the speaker and transcribes garbage. The
+    // old fixed 4500ms guess was reliably too short for bilingual replies
+    // (Japanese + English easily runs 6–8s). ttsPlaying flips false in
+    // the audio cleanup callback, so this effect re-runs and re-arms.
+    if (ttsPlaying) return;
     lastReplyIdRef.current = lastAssistantMsg.id;
-    // Wait for TTS audio to actually start playing before re-opening
-    // the mic — otherwise STT picks up senpai's own voice. Tunable.
+    // Small additional delay so the audio output buffer fully drains and
+    // the speech engine sees clear silence before we open the mic again.
     const t = setTimeout(() => {
       if (!listeningRef.current || chatLoading) return;
       transcriptRef.current = '';
@@ -245,17 +281,17 @@ export function SenpaiMascot() {
         ExpoSpeechRecognitionModule.start({
           lang: 'en-US',
           interimResults: true,
-          continuous: true,
+          continuous: false,
           requiresOnDeviceRecognition: false,
         });
       } catch {
         listeningRef.current = false;
         setListening(false);
       }
-    }, 4500);
+    }, 350);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastAssistantMsg?.id, listening]);
+  }, [lastAssistantMsg?.id, listening, ttsPlaying]);
 
   // Position state
   const [basePos, setBasePos] = useState({ x: 0, y: 0 });
@@ -427,13 +463,28 @@ export function SenpaiMascot() {
     return () => bounceLoop.stop();
   }, [state.mascotMood, state.enabled]);
 
-  // Hold-to-toggle mic. Pressable.onLongPress was unreliable inside
-  // the bouncing absolutely-positioned mascot, so we run our own timer
-  // off onPressIn/onPressOut. This also gives us hooks for the charge-up
-  // ring and the boot-up explosion.
-  const HOLD_MS = 2000;
+  // Hold-to-toggle mic. Symmetric gesture model:
+  //   - Hold for HOLD_ON_MS while idle    → mic ON  (charge ring fills, then explosion)
+  //   - Hold for HOLD_OFF_MS while listening → mic OFF (discharge ring fills, then shutdown)
+  // Tap does NOT toggle the mic — the user explicitly asked for hold to be
+  // the only on/off gesture so a stray tap can never confusingly cut their
+  // session mid-utterance. OFF is intentionally longer than ON so it can't
+  // fire by accident if the user happens to rest a finger on the chibi.
+  const HOLD_ON_MS = 2000;
+  const HOLD_OFF_MS = 3000;
   const chargeAnim = useRef(new Animated.Value(0)).current;
   const explosionAnim = useRef(new Animated.Value(0)).current;
+  // Discharge ring — mirrors the charge ring but in the orange shutdown
+  // palette. Drives the hold-to-stop visual so the user gets the same
+  // "I'm doing something with this hold" feedback they get for hold-to-start.
+  const dischargeAnim = useRef(new Animated.Value(0)).current;
+  // Shutdown burst — the inverse of explosion. Same ring + 8 sparkles,
+  // but the ring shrinks (2.6 → 1) and sparkles collapse from a radius
+  // back to center. Plays on hold-to-stop completion.
+  const shutdownAnim = useRef(new Animated.Value(0)).current;
+  const shutdownSparkleAnims = useRef(
+    Array.from({ length: 8 }, () => new Animated.Value(0)),
+  ).current;
   // Listening glow — pulses while the mic is open. Drives a large soft
   // ring around the mascot so the user always knows she's actively
   // hearing them.
@@ -452,7 +503,22 @@ export function SenpaiMascot() {
       longPressFiredRef.current = false;
       return;
     }
-    if (listening || chatLoading) return;
+    // While listening, tap is intentionally a no-op. The user explicitly
+    // asked for hold-to-stop (3s), not tap-to-stop — a single tap toggling
+    // the mic was confusing because they couldn't tell whether their press
+    // had registered as a hold or a release. Cute reactions also stay
+    // suppressed during listening so the mascot's expression stays "I am
+    // listening to you", not "look at me look at me."
+    if (listening) return;
+    // Tap while chat is in flight — give the user feedback so they know
+    // the system saw the tap. We can't truly cancel the upstream call
+    // (Anthropic is already generating), but the AbortController in
+    // sendSenpaiChat will clear chatLoading within 35s if the network
+    // hangs. The reply, if it lands, still updates the bubble.
+    if (chatLoading) {
+      triggerReaction('encouraging', 'thinking... be patient senpai 💕', 1500);
+      return;
+    }
     triggerReaction('cheering', randomDialogue('mascotTap'), 2500);
   };
 
@@ -475,9 +541,33 @@ export function SenpaiMascot() {
     ).start(() => sparkleAnims.forEach((a) => a.setValue(0)));
   };
 
-  const handleHoldComplete = () => {
+  const fireShutdown = () => {
+    // Mirror of fireExplosion played backwards through interpolation:
+    // shutdownRing scale goes 2.6 → 1, sparkles collapse from a radius
+    // to (0,0). Same 700ms duration so on/off feel like one gesture.
+    shutdownAnim.setValue(0);
+    Animated.timing(shutdownAnim, {
+      toValue: 1,
+      duration: 700,
+      useNativeDriver: true,
+    }).start(() => shutdownAnim.setValue(0));
+    shutdownSparkleAnims.forEach((a) => a.setValue(0));
+    Animated.parallel(
+      shutdownSparkleAnims.map((a) =>
+        Animated.timing(a, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ),
+    ).start(() => shutdownSparkleAnims.forEach((a) => a.setValue(0)));
+  };
+
+  const handleHoldOnComplete = () => {
     longPressFiredRef.current = true;
     chargingRef.current = false;
+    // Snap charge ring to 1 then fade out, so the user sees the ring
+    // "pop" full-bright at the moment the hold succeeds.
     chargeAnim.setValue(1);
     Animated.timing(chargeAnim, {
       toValue: 0,
@@ -485,37 +575,73 @@ export function SenpaiMascot() {
       useNativeDriver: false,
     }).start();
     fireExplosion();
-    // Guaranteed visible feedback so the user always sees SOMETHING when
-    // the hold completes. If startListening succeeds, listening=true wins
-    // the bubble priority and shows "speak to me senpai 💕" instead. If
-    // startListening fails silently (perm denied / sim mic missing), this
-    // boot message remains visible so the user knows the hold did fire.
-    if (listening) {
-      triggerReaction('sleeping', 'mic off, going dark 💕', 2000);
-      stopListening();
-    } else if (!chatLoading) {
-      triggerReaction('cheering', 'BOOTING UP — talk to me senpai 💕', 2500);
-      startListening().catch((err) => {
-        console.warn('[SenpaiMascot] startListening threw:', err);
-      });
-    }
+    // Defensive: should never be entered with listening=true (onPressIn
+    // routes the hold to handleHoldOffComplete in that case). If we're
+    // somehow here while a chat is mid-flight, just bail — the user can
+    // try again once the reply lands.
+    if (chatLoading) return;
+    triggerReaction('cheering', 'BOOTING UP — talk to me senpai 💕', 2500);
+    startListening().catch((err) => {
+      console.warn('[SenpaiMascot] startListening threw:', err);
+    });
+  };
+
+  const handleHoldOffComplete = () => {
+    longPressFiredRef.current = true;
+    chargingRef.current = false;
+    // Snap discharge ring to 1 then fade out — visual symmetry with
+    // hold-on completion.
+    dischargeAnim.setValue(1);
+    Animated.timing(dischargeAnim, {
+      toValue: 0,
+      duration: 350,
+      useNativeDriver: false,
+    }).start();
+    fireShutdown();
+    triggerReaction('sleeping', 'mic off, going dark 💕', 2000);
+    stopListening();
   };
 
   const onPressIn = () => {
-    if (listening || chatLoading) return;
+    // Block hold-to-START during chat-in-flight (mic is closed waiting
+    // for the reply; opening it now would be confusing). But ALLOW
+    // hold-to-STOP even mid-flight — if the user wants to bail on the
+    // conversation, they need a way to do it without waiting for the
+    // 35s AbortController timeout.
+    if (chatLoading && !listening) return;
     longPressFiredRef.current = false;
     chargingRef.current = true;
+    if (chargeTimerRef.current) clearTimeout(chargeTimerRef.current);
+
+    if (listening) {
+      // Hold-to-stop path. Run the discharge animation in parallel with
+      // a 3000ms timer; whichever wins (full hold → handleHoldOffComplete
+      // | early release → onPressOut cancels) cleans the other up.
+      dischargeAnim.setValue(0);
+      Animated.timing(dischargeAnim, {
+        toValue: 1,
+        duration: HOLD_OFF_MS,
+        useNativeDriver: false,
+      }).start();
+      chargeTimerRef.current = setTimeout(() => {
+        chargeTimerRef.current = null;
+        handleHoldOffComplete();
+      }, HOLD_OFF_MS);
+      return;
+    }
+
+    // Hold-to-start path. Same shape as above but on chargeAnim with
+    // the shorter HOLD_ON_MS threshold.
     chargeAnim.setValue(0);
     Animated.timing(chargeAnim, {
       toValue: 1,
-      duration: HOLD_MS,
+      duration: HOLD_ON_MS,
       useNativeDriver: false,
     }).start();
-    if (chargeTimerRef.current) clearTimeout(chargeTimerRef.current);
     chargeTimerRef.current = setTimeout(() => {
       chargeTimerRef.current = null;
-      handleHoldComplete();
-    }, HOLD_MS);
+      handleHoldOnComplete();
+    }, HOLD_ON_MS);
   };
 
   const onPressOut = () => {
@@ -525,7 +651,15 @@ export function SenpaiMascot() {
     }
     if (!chargingRef.current) return;
     chargingRef.current = false;
+    // Reset whichever ring was animating. Cheap to fire both — the one
+    // that wasn't running is already at 0 and timing it back to 0 is a
+    // no-op.
     Animated.timing(chargeAnim, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: false,
+    }).start();
+    Animated.timing(dischargeAnim, {
       toValue: 0,
       duration: 250,
       useNativeDriver: false,
@@ -618,16 +752,22 @@ export function SenpaiMascot() {
         ))}
 
         {/* Speech bubble — chat surface + legacy reaction overlay.
-            Priority: live transcript > listening greeting > thinking
-            placeholder > error > latest assistant reply > auto reaction. */}
+            Priority: live transcript (you talking) → loading dots →
+            error → senpai's reply → listening greeting → auto reaction.
+            The reply must beat the listening greeting, otherwise once
+            the mic is open the user never sees senpai answer. */}
         {(() => {
-          const bubbleText = listening
-            ? liveTranscript || 'speak to me senpai 💕'
+          const bubbleText = liveTranscript
+            ? liveTranscript
             : chatLoading
             ? '...'
             : chatError
-            ? "couldn't reach me — tap to try again"
-            : lastAssistantMsg?.content || state.lastReaction;
+            ? "couldn't reach me — hold me again to retry 💕"
+            : lastAssistantMsg?.content
+            ? lastAssistantMsg.content
+            : listening
+            ? 'speak to me senpai 💕'
+            : state.lastReaction;
           return bubbleText ? <SpeechBubble text={bubbleText} colors={colors} /> : null;
         })()}
 
@@ -656,9 +796,9 @@ export function SenpaiMascot() {
         {/* (LIVE badge removed — the speech bubble already says "speak to
             me senpai 💕" while listening. Two indicators were redundant.) */}
 
-        {/* Charge-up ring — fills clockwise during the 4s hold; fades on
-            release. Sits behind the mascot, so the chibi reads as the
-            "battery" being filled. */}
+        {/* Charge-up ring — fills during the hold-to-start (HOLD_ON_MS);
+            fades on release. Pink → gold so the user sees a "warming up"
+            color shift as the threshold approaches. */}
         <Animated.View
           pointerEvents="none"
           style={[
@@ -680,6 +820,41 @@ export function SenpaiMascot() {
               transform: [
                 {
                   scale: chargeAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 1.08],
+                  }),
+                },
+              ],
+            },
+          ]}
+        />
+
+        {/* Discharge ring — fills during the hold-to-stop (HOLD_OFF_MS).
+            Orange → deep red so the user reads it as a distinct "powering
+            down" gesture, not a second start-up. Same geometry as the
+            charge ring, separate Animated.Value so they can coexist
+            without state conflicts. */}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.chargeRing,
+            {
+              borderWidth: dischargeAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 6],
+              }),
+              borderColor: dischargeAnim.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [
+                  'rgba(255, 140, 0, 0)',
+                  'rgba(255, 140, 0, 0.75)',
+                  'rgba(220, 38, 38, 1)',
+                ],
+              }),
+              opacity: dischargeAnim,
+              transform: [
+                {
+                  scale: dischargeAnim.interpolate({
                     inputRange: [0, 1],
                     outputRange: [1, 1.08],
                   }),
@@ -750,11 +925,84 @@ export function SenpaiMascot() {
           );
         })}
 
-        {/* Animated mascot — tap = cute reaction, hold 4 seconds = mic
-            toggle (walkie-talkie). The long delay + charge-ring visual
-            is intentional so a casual tap can never accidentally open
-            the mic, AND so the user has clear feedback the hold is
-            working. */}
+        {/* Shutdown ring — inverse of explosion: starts large + collapses
+            to mascot silhouette, fades out. Played on tap-to-stop.
+            Opacity goes 0 → 1 → 1 → 0 across the 700ms animation; the
+            initial 0 keeps the ring invisible at rest (without it the
+            ring would render full-size + opaque all the time). */}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.shutdownRing,
+            {
+              opacity: shutdownAnim.interpolate({
+                inputRange: [0, 0.05, 0.8, 1],
+                outputRange: [0, 1, 1, 0],
+              }),
+              transform: [
+                {
+                  scale: shutdownAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [2.6, 1],
+                  }),
+                },
+              ],
+            },
+          ]}
+        />
+
+        {/* Shutdown sparkles — orange dots collapsing inward from a
+            radius back to the mascot center. Mirrors the gold burst. */}
+        {shutdownSparkleAnims.map((anim, i) => {
+          const angle = (i / shutdownSparkleAnims.length) * Math.PI * 2;
+          const radius = MASCOT_SIZE * 0.85;
+          const tx = anim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [Math.cos(angle) * radius, 0],
+          });
+          const ty = anim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [Math.sin(angle) * radius, 0],
+          });
+          return (
+            <Animated.View
+              key={`shutdown-spark-${i}`}
+              pointerEvents="none"
+              style={[
+                styles.shutdownSparkle,
+                {
+                  // Opacity 0 → 1 → 1 → 0 across the run; initial 0
+                  // hides the sparkle at rest. Without this the 8 dots
+                  // would always sit at the outer radius around the
+                  // mascot.
+                  opacity: anim.interpolate({
+                    inputRange: [0, 0.05, 0.85, 1],
+                    outputRange: [0, 1, 1, 0],
+                  }),
+                  transform: [
+                    { translateX: tx },
+                    { translateY: ty },
+                    {
+                      scale: anim.interpolate({
+                        inputRange: [0, 0.6, 1],
+                        outputRange: [0.6, 1, 0.3],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            />
+          );
+        })}
+
+        {/* Animated mascot — gestures:
+              - Short tap (idle):     cute reaction
+              - Short tap (chatLoading): "thinking…" feedback
+              - Short tap (listening): no-op (cute reactions silenced)
+              - HOLD 2s (idle):       mic ON  (charge ring + boot explosion)
+              - HOLD 3s (listening):  mic OFF (discharge ring + shutdown)
+            Long thresholds + the live ring fill are intentional so a
+            casual tap can never accidentally open OR close the mic. */}
         <Pressable
           onPress={handleTap}
           onPressIn={onPressIn}
@@ -850,8 +1098,9 @@ const styles = StyleSheet.create({
     zIndex: 0,
   },
 
-  // Charge-up ring — sits behind the mascot. Border thickness, color,
-  // and scale are all driven by chargeAnim (0 → 1 over the 4s hold).
+  // Charge / discharge ring — same geometry, two consumers. Sits behind
+  // the mascot. Border thickness, color, and scale are all driven by the
+  // respective Animated.Value (0 → 1 over HOLD_ON_MS or HOLD_OFF_MS).
   chargeRing: {
     position: 'absolute',
     width: MASCOT_SIZE + 24,
@@ -888,6 +1137,35 @@ const styles = StyleSheet.create({
     zIndex: 6,
     // @ts-ignore — boxShadow web-only fallback
     boxShadow: '0 0 8px rgba(255, 215, 0, 0.9)',
+  },
+
+  // Shutdown ring — inverse of explosion. Orange to match the listening
+  // glow palette, so on/off feel like one continuous color story.
+  shutdownRing: {
+    position: 'absolute',
+    width: MASCOT_SIZE,
+    height: MASCOT_SIZE,
+    left: 0,
+    bottom: 0,
+    borderRadius: MASCOT_SIZE / 2,
+    backgroundColor: 'rgba(255, 140, 0, 0.16)',
+    borderColor: '#FF8C00',
+    borderWidth: 3,
+    zIndex: 5,
+  },
+
+  // Shutdown sparkle — same geometry as the explosion sparkle but orange.
+  shutdownSparkle: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#FF8C00',
+    left: MASCOT_SIZE / 2 - 6,
+    bottom: MASCOT_SIZE / 2 - 6,
+    zIndex: 6,
+    // @ts-ignore — boxShadow web-only fallback
+    boxShadow: '0 0 8px rgba(255, 140, 0, 0.9)',
   },
 
   // Speech bubble

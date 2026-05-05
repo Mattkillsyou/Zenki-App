@@ -4,7 +4,8 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
-  Dimensions} from 'react-native';
+  Dimensions,
+  Linking} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -97,18 +98,25 @@ export function BarcodeScannerScreen({ navigation }: any) {
   }
 
   if (!permission.granted) {
+    // canAskAgain is false once iOS has permanently denied. requestPermission
+    // is a silent no-op in that state — without a Settings deep link the
+    // "Allow camera" button looks broken (the "clicking the camera does
+    // nothing" bug report). Surface Settings instead.
+    const canAsk = permission.canAskAgain;
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: colors.background }]}>
         <Ionicons name="camera-outline" size={48} color={colors.textMuted} />
         <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Camera access needed</Text>
         <Text style={[styles.permBody, { color: colors.textSecondary }]}>
-          We use the camera only to scan barcodes on food packaging. Images are not stored or uploaded.
+          {canAsk
+            ? 'We use the camera only to scan barcodes on food packaging. Images are not stored or uploaded.'
+            : 'Camera access was previously denied. Open Settings → Zenki Dojo → Camera to allow.'}
         </Text>
         <SoundPressable
-          onPress={requestPermission}
+          onPress={canAsk ? requestPermission : () => Linking.openSettings()}
           style={[styles.permBtn, { backgroundColor: colors.gold }]}
         >
-          <Text style={styles.permBtnText}>Allow camera</Text>
+          <Text style={styles.permBtnText}>{canAsk ? 'Allow camera' : 'Open Settings'}</Text>
         </SoundPressable>
         <SoundPressable onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }}>
           <Text style={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>Cancel</Text>

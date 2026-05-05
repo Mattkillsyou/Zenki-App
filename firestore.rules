@@ -49,10 +49,25 @@ service cloud.firestore {
       allow create: if isAdmin()
                     || (isSignedIn()
                         && request.resource.data.firebaseUid == request.auth.uid);
+      // Update has two non-admin paths:
+      //   (a) NORMAL — existing doc already stamped with this user's
+      //       firebaseUid, and the new doc preserves that stamp.
+      //   (b) FIRST-TIME CLAIM — existing doc has no firebaseUid yet AND
+      //       its email matches the auth user's verified email; the new
+      //       doc must stamp the user's firebaseUid. Without this path
+      //       any /members doc that landed without a firebaseUid (admin
+      //       backfilled seed members, or an earlier signup that wrote
+      //       /members but not the stamp) is permanently un-updatable
+      //       by its rightful owner — which broke profile-photo uploads
+      //       and silenced /members backfills on subsequent sign-ins.
       allow update: if isAdmin()
                     || (isSignedIn()
-                        && resource.data.firebaseUid == request.auth.uid
-                        && request.resource.data.firebaseUid == request.auth.uid);
+                        && request.resource.data.firebaseUid == request.auth.uid
+                        && (
+                          resource.data.firebaseUid == request.auth.uid
+                          || (!('firebaseUid' in resource.data)
+                              && resource.data.email == request.auth.token.email)
+                        ));
       allow delete: if isAdmin();
     }
 

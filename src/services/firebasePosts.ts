@@ -133,10 +133,17 @@ export async function getFeed(maxPosts = 50): Promise<Post[]> {
       limit(maxPosts),
     );
     const snap = await getDocs(q);
-    return Promise.all(snap.docs.map(async (d) => {
+    const fallback = await Promise.all(snap.docs.map(async (d) => {
       const liked = await safeIsLiked(d.id);
       return { id: d.id, ...d.data(), liked } as Post;
     }));
+    // Drop malformed docs — without this, a single missing-displayName post
+    // takes down the whole Community tab when PostCard's initials math
+    // calls `.split(' ')` on undefined. The followed-batches path below
+    // already filters; the fallback path was missing it (BUG: feed crash).
+    return fallback.filter(
+      (p) => typeof p.createdAt === 'string' && typeof p.displayName === 'string',
+    );
   }
 
   followedIds.push(uid);

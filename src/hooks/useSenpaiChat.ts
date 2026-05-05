@@ -71,6 +71,11 @@ export function useSenpaiChat() {
   // Persisted under @senpai_chat_voice_enabled. Default OFF — paid TTS
   // calls shouldn't fire on every chat session by default.
   const [voiceEnabled, setVoiceEnabledState] = useState(false);
+  // True from the moment we kick off TTS fetch until audio playback ends
+  // (either naturally, by interruption, or by failure). The mascot reads
+  // this to defer the after-reply mic re-arm until senpai is done talking,
+  // so STT doesn't transcribe her own voice through the speaker.
+  const [ttsPlaying, setTtsPlaying] = useState(false);
   const hydratedRef = useRef(false);
 
   // Load persisted history + voice flag on mount
@@ -197,22 +202,32 @@ export function useSenpaiChat() {
         }
 
         // Voice playback — fire-and-forget so the chat UI stays responsive
-        // even if TTS is slow or fails. Errors are logged via console only;
-        // the bubble already shows the typed text.
+        // even if TTS is slow or fails. ttsPlaying is set TRUE before the
+        // fetch starts and cleared FALSE either via the onEnded callback
+        // (audio actually finished) or in the error/fallback branches
+        // below (so the mascot's mic re-arm isn't blocked forever).
         if (voiceEnabled) {
+          setTtsPlaying(true);
           (async () => {
             try {
               const ttsToken = await getCurrentIdToken();
               const ttsResult = await fetchSenpaiAudio(text, undefined, ttsToken ?? undefined);
               if (ttsResult.ok) {
-                await playSenpaiAudio(ttsResult.data.audioBase64);
+                // playSenpaiAudio resolves when play() is called; the
+                // onEnded callback below fires when the audio actually
+                // finishes playing (or is stopped).
+                await playSenpaiAudio(ttsResult.data.audioBase64, () => {
+                  setTtsPlaying(false);
+                });
               } else {
                 // eslint-disable-next-line no-console
                 console.warn('[senpaiSpeak]', ttsResult.error.code, ttsResult.error.message);
+                setTtsPlaying(false);
               }
             } catch (e) {
               // eslint-disable-next-line no-console
               console.warn('[senpaiSpeak] playback failed', e);
+              setTtsPlaying(false);
             }
           })();
         }
@@ -244,6 +259,7 @@ export function useSenpaiChat() {
     lastArrivedId,
     voiceEnabled,
     setVoiceEnabled,
+    ttsPlaying,
     send,
     clear,
   };

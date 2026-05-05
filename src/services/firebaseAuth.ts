@@ -52,6 +52,12 @@ export async function firebaseSignInWithPassword(
 /**
  * Create a new Firebase Auth user with email + password, then seed their
  * Firestore profile. Returns the new uid.
+ *
+ * Also writes /members/{member.id} with firebaseUid stamped — belt-and-
+ * suspenders so the admin members list reflects new email/password signups
+ * even if the AuthContext-side /members write later races, hits a stale
+ * auth state, or fails silently. Both writes are setDoc with merge:true so
+ * the duplication is idempotent.
  */
 export async function firebaseCreateAccount(
   email: string,
@@ -62,7 +68,8 @@ export async function firebaseCreateAccount(
     throw new Error('firebase-unavailable');
   }
   const cred = await createUserWithEmailAndPassword(auth, email, password);
-  await setDoc(doc(db, 'users', cred.user.uid), {
+  const uid = cred.user.uid;
+  await setDoc(doc(db, 'users', uid), {
     displayName: `${member.firstName} ${member.lastName}`.trim(),
     avatar: null,
     bio: '',
@@ -70,7 +77,23 @@ export async function firebaseCreateAccount(
     memberId: member.id,
     createdAt: new Date().toISOString(),
   });
-  return cred.user.uid;
+  // Also push to /members. The rule allows self-create when the doc's
+  // firebaseUid matches the auth uid — which we just minted, so the
+  // current request carries the right token.
+  try {
+    await setDoc(
+      doc(db, 'members', member.id),
+      {
+        ...member,
+        firebaseUid: uid,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true },
+    );
+  } catch (err) {
+    console.warn('[firebaseAuth] /members write during signup failed:', err);
+  }
+  return uid;
 }
 
 /**

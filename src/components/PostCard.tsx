@@ -128,7 +128,11 @@ export function PostCard({ post, onLike, onUserPress, onCommentPress }: PostCard
   };
 
   const timeAgo = getTimeAgo(post.createdAt);
-  const initials = post.displayName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+  // Defensive: if a malformed post slips past getFeed's filter, don't crash
+  // the whole feed on initials math. Empty string is fine — the avatar block
+  // just renders blank.
+  const safeName = typeof post.displayName === 'string' ? post.displayName : '';
+  const initials = safeName.split(' ').map((n) => n[0] ?? '').join('').slice(0, 2).toUpperCase();
 
   // Track load errors so we gracefully fall back to initials / caption-only
   // instead of showing a broken-image icon if the remote URL is 404 / expired.

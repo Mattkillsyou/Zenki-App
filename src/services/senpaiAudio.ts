@@ -53,11 +53,18 @@ export function stopSenpaiAudio(): void {
 
 /**
  * Decode the base64 mp3 payload, write it to a tempfile, and play it.
- * Returns a stop() function. Resolves once playback either finishes
- * naturally or is interrupted; rejects on decode/write/play error.
+ * Returns a stop() function and resolves once `play()` has been called —
+ * NOT when audio finishes. Pass `onEnded` to be notified when the audio
+ * actually completes (or is stopped). The mascot uses this to defer the
+ * after-reply mic re-arm until senpai stops talking, so STT doesn't
+ * pick up her own voice through the speaker.
  */
-export async function playSenpaiAudio(audioBase64: string): Promise<{ stop: () => void }> {
-  // Interrupt any prior clip
+export async function playSenpaiAudio(
+  audioBase64: string,
+  onEnded?: () => void,
+): Promise<{ stop: () => void }> {
+  // Interrupt any prior clip — the prior clip's onEnded will fire too,
+  // which is what we want (consumer's "TTS done" state goes false).
   stopSenpaiAudio();
 
   await ensureAudioMode();
@@ -78,7 +85,9 @@ export async function playSenpaiAudio(audioBase64: string): Promise<{ stop: () =
 
   const player = createAudioPlayer({ uri: fileUri });
 
-  // Cleanup runs once — either when playback finishes, on stop(), or on error
+  // Cleanup runs once — either when playback finishes, on stop(), or on error.
+  // Fires onEnded after release so the consumer (useSenpaiChat) can flip its
+  // ttsPlaying flag false and let the mascot's mic re-arm.
   let cleaned = false;
   const cleanup = () => {
     if (cleaned) return;
@@ -89,6 +98,11 @@ export async function playSenpaiAudio(audioBase64: string): Promise<{ stop: () =
       /* ignore */
     }
     FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+    try {
+      onEnded?.();
+    } catch {
+      /* consumer error must not break cleanup */
+    }
   };
 
   // expo-audio's player exposes a `playbackStatusUpdate` event we can

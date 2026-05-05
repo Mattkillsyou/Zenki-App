@@ -7,7 +7,6 @@ import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeStorageSet } from '../../utils/safeStorage';
 import { todayDateString } from '../../utils/dates';
@@ -15,8 +14,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { useMotion } from '../../context/MotionContext';
 import { useAuth } from '../../context/AuthContext';
 import { useNutrition } from '../../context/NutritionContext';
-import { useHealthKit } from '../../context/HealthKitContext';
-import { HealthCategory, ALL_HEALTH_CATEGORIES } from '../../services/healthKit';
 import { typography, spacing, borderRadius } from '../../theme';
 import { BELT_ORDER, BELT_DISPLAY_COLORS, BELT_LABELS, BeltLevel, Member } from '../../data/members';
 import { suggestNickname } from '../../utils/nickname';
@@ -31,12 +28,14 @@ import {
 import type { WeightGoal } from '../../types/activity';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const TOTAL_STEPS = 18;
-
-// Body-stats section spans steps 4..10 inclusive (7 steps)
-const BODY_SECTION_START = 4;
-const BODY_SECTION_END = 10;
-const PHOTO_STEP = 11; // first step after body-stats section
+// Onboarding flow:
+//   0 account · 1 name · 2 phone · 3 sex
+//   4 photo · 5 fun-fact · 6 socials · 7 belt · 8 waiver · 9 welcome
+// Body stats (height/weight/age/activity/goal/training/diet) and the
+// in-onboarding permission grid were removed at owner request — users
+// fill body stats later in Body Lab, and PermissionsOnboardingScreen is
+// the single source of permission prompts after account creation.
+const TOTAL_STEPS = 10;
 
 type DietType = 'balanced' | 'high_protein' | 'low_carb' | 'keto';
 type TrainingExp = 'beginner' | 'intermediate' | 'advanced';
@@ -145,33 +144,10 @@ export function OnboardingScreen({ navigation, route }: any) {
   const { reduceMotion } = useMotion();
   const { createAccount } = useAuth();
   const { saveProfile, addWeight, updateGoals } = useNutrition();
-  const healthKit = useHealthKit();
   const [step, setStep] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
-  const [locationGranted, setLocationGranted] = useState(false);
-  const [healthGranted, setHealthGranted] = useState(false);
-  // Per-category toggles — user can opt out of any subset before iOS asks.
-  // Default: all on (they get the maximum integration).
-  const [healthCategories, setHealthCategories] = useState<Record<HealthCategory, boolean>>({
-    workouts: true,
-    heartRate: true,
-    weight: true,
-    nutrition: true,
-    activity: true,
-  });
-  const toggleHealthCategory = (cat: HealthCategory) => {
-    setHealthCategories((prev) => ({ ...prev, [cat]: !prev[cat] }));
-  };
-  const [notificationsGranted, setNotificationsGranted] = useState(false);
-  const [cameraGranted, setCameraGranted] = useState(false);
-  const [photoLibraryGranted, setPhotoLibraryGranted] = useState(false);
-  // Tracks the permission slot currently being requested. iOS only allows one
-  // permission prompt on screen at a time — if the user mashes buttons we'd
-  // silently skip prompts. This flag drives the sequential walk-through and
-  // disables row taps mid-request.
-  const [permRequesting, setPermRequesting] = useState<
-    null | 'location' | 'health' | 'camera' | 'notifications' | 'photoLibrary'
-  >(null);
+  // Permission prompts moved to PermissionsOnboardingScreen post-account
+  // creation; this wizard no longer asks for them inline.
   const [data, setData] = useState<OnboardingData>({
     email: '', password: '', confirmPassword: '',
     firstName: '', lastName: '', phone: '', photo: null, bio: '', funFact: '', nickname: '',
@@ -372,126 +348,12 @@ export function OnboardingScreen({ navigation, route }: any) {
     }
   };
 
-  const requestLocationPermission = async () => {
-    if (Platform.OS === 'web') {
-      setLocationGranted(true);
-      return;
-    }
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    setLocationGranted(status === 'granted');
-  };
-
-  const requestHealthPermission = async () => {
-    if (Platform.OS !== 'ios') {
-      // Android / web: HealthKit is iOS-only. Mark as "skipped" silently.
-      return;
-    }
-    if (!healthKit.available) {
-      // Native module not linked (Expo Go) — show a checkmark anyway so the
-      // user can move on; real grant happens after the dev build.
-      setHealthGranted(true);
-      return;
-    }
-    // Request only the categories the user opted into. iOS will show its
-    // own consent sheet listing those, where the user can still toggle
-    // each one individually.
-    const selected = ALL_HEALTH_CATEGORIES.filter((c) => healthCategories[c]);
-    if (selected.length === 0) {
-      // User unchecked everything — skip the iOS prompt and treat as
-      // declined, but mark the step done so they can move on.
-      setHealthGranted(true);
-      return;
-    }
-    healthKit.setEnabled(true);
-    const ok = await healthKit.authorize(selected);
-    setHealthGranted(ok);
-  };
-
-  const requestNotificationsPermission = async () => {
-    if (Platform.OS === 'web') {
-      setNotificationsGranted(true);
-      return;
-    }
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const Notifications = require('expo-notifications');
-      const { status } = await Notifications.requestPermissionsAsync();
-      setNotificationsGranted(status === 'granted');
-    } catch {
-      setNotificationsGranted(false);
-    }
-  };
-
-  const requestCameraPermission = async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      setCameraGranted(status === 'granted');
-    } catch {
-      setCameraGranted(false);
-    }
-  };
-
-  const requestPhotoLibraryPermission = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      setPhotoLibraryGranted(status === 'granted');
-    } catch {
-      setPhotoLibraryGranted(false);
-    }
-  };
-
-  // Walks through every permission prompt in sequence, awaiting each so
-  // iOS shows one dialog at a time. If the user denies a permission the
-  // flow keeps going — the next dialog just won't show because iOS marks
-  // the previous one resolved.
-  const runPermissionFlow = async () => {
-    if (permRequesting) return;
-    try {
-      setPermRequesting('location');
-      await requestLocationPermission();
-
-      if (Platform.OS === 'ios') {
-        setPermRequesting('health');
-        await requestHealthPermission();
-      }
-
-      setPermRequesting('camera');
-      await requestCameraPermission();
-
-      setPermRequesting('notifications');
-      await requestNotificationsPermission();
-
-      setPermRequesting('photoLibrary');
-      await requestPhotoLibraryPermission();
-    } finally {
-      setPermRequesting(null);
-    }
-  };
-
-  // Wrap the individual row handlers so they also flip the in-flight flag
-  // (lets the row UI show "Asking…" and prevents adjacent taps).
-  const guardedRequest = async (
-    slot: NonNullable<typeof permRequesting>,
-    fn: () => Promise<void>,
-  ) => {
-    if (permRequesting) return;
-    try {
-      setPermRequesting(slot);
-      await fn();
-    } finally {
-      setPermRequesting(null);
-    }
-  };
-
   const stepIcons: (keyof typeof Ionicons.glyphMap)[] = [
     // 0-3 account/name/phone/sex
     'lock-closed-outline', 'person-outline', 'call-outline', 'body-outline',
-    // 4-10 body stats section
-    'resize-outline', 'calendar-number-outline', 'walk-outline', 'trending-up-outline',
-    'barbell-outline', 'nutrition-outline', 'flame-outline',
-    // 11-17 existing renumbered
+    // 4-9 photo/fun-fact/socials/belt/waiver/welcome
     'camera-outline', 'create-outline', 'share-social-outline', 'ribbon-outline',
-    'document-text-outline', 'location-outline', 'checkmark-circle',
+    'document-text-outline', 'checkmark-circle',
   ];
 
   /** Live macro preview for the summary step — recomputes whenever inputs change. */
@@ -684,509 +546,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // ═══════ BODY STATS SECTION (new) — steps 4–10 ═══════
-
-      // Step 4: Height + Weight
+      // Step 4: Profile photo
       case 4: return (
-        <View style={styles.stepContent}>
-          <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
-            <Ionicons name="resize-outline" size={56} color={colors.gold} />
-          </Animated.View>
-          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Your body stats</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>We'll use this to calculate your daily targets</Text>
-
-          {/* Metabolic sex toggle — only for 'other' */}
-          {data.biologicalSex === 'other' && (
-            <View style={styles.metabolicSexBlock}>
-              <Text style={[styles.metabolicSexLabel, { color: colors.textSecondary }]}>
-                For metabolic calculations, which baseline fits better?
-              </Text>
-              <View style={styles.segmentedPill}>
-                {(['male', 'female'] as const).map((ms) => {
-                  const active = data.metabolicSex === ms;
-                  return (
-                    <SoundPressable
-                      key={ms}
-                      onPress={() => setData({ ...data, metabolicSex: ms })}
-                      style={[styles.segmentedPillItem, {
-                        backgroundColor: active ? colors.gold : colors.surface,
-                        borderColor: active ? colors.gold : colors.border,
-                      }]}
-                    >
-                      <Text style={[styles.segmentedPillLabel, { color: active ? '#000' : colors.textPrimary }]}>
-                        {ms === 'male' ? 'Male' : 'Female'}
-                      </Text>
-                    </SoundPressable>
-                  );
-                })}
-              </View>
-            </View>
-          )}
-
-          {/* Height */}
-          <View style={styles.bodyStatBlock}>
-            <View style={styles.bodyStatHeader}>
-              <Text style={[styles.bodyStatLabel, { color: colors.textSecondary }]}>HEIGHT</Text>
-              <View style={styles.segmentedPillSmall}>
-                {(['imperial', 'metric'] as const).map((u) => {
-                  const active = data.heightUnit === u;
-                  return (
-                    <SoundPressable
-                      key={u}
-                      onPress={() => setData({ ...data, heightUnit: u })}
-                      style={[styles.segmentedPillItemSmall, {
-                        backgroundColor: active ? colors.gold : 'transparent',
-                      }]}
-                    >
-                      <Text style={[styles.segmentedPillLabelSmall, { color: active ? '#000' : colors.textSecondary }]}>
-                        {u === 'imperial' ? 'ft/in' : 'cm'}
-                      </Text>
-                    </SoundPressable>
-                  );
-                })}
-              </View>
-            </View>
-            {data.heightUnit === 'imperial' ? (
-              <View style={styles.heightRow}>
-                <View style={[styles.heightInputWrap, { backgroundColor: colors.surface }]}>
-                  <TextInput
-                    style={[styles.bigNumInput, { color: colors.textPrimary }]}
-                    placeholder="5"
-                    placeholderTextColor={colors.textMuted}
-                    value={data.heightFt}
-                    onChangeText={(v) => setData({ ...data, heightFt: v.replace(/[^0-9]/g, '').slice(0, 1) })}
-                    keyboardType="number-pad"
-                    maxLength={1}
-                  />
-                  <Text style={[styles.unitSuffix, { color: colors.textMuted }]}>ft</Text>
-                </View>
-                <View style={[styles.heightInputWrap, { backgroundColor: colors.surface }]}>
-                  <TextInput
-                    style={[styles.bigNumInput, { color: colors.textPrimary }]}
-                    placeholder="10"
-                    placeholderTextColor={colors.textMuted}
-                    value={data.heightIn}
-                    onChangeText={(v) => setData({ ...data, heightIn: v.replace(/[^0-9]/g, '').slice(0, 2) })}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                  />
-                  <Text style={[styles.unitSuffix, { color: colors.textMuted }]}>in</Text>
-                </View>
-              </View>
-            ) : (
-              <View style={[styles.heightInputWrap, { backgroundColor: colors.surface, width: '60%' }]}>
-                <TextInput
-                  style={[styles.bigNumInput, { color: colors.textPrimary }]}
-                  placeholder="178"
-                  placeholderTextColor={colors.textMuted}
-                  value={data.heightCm}
-                  onChangeText={(v) => setData({ ...data, heightCm: v.replace(/[^0-9]/g, '').slice(0, 3) })}
-                  keyboardType="number-pad"
-                  maxLength={3}
-                />
-                <Text style={[styles.unitSuffix, { color: colors.textMuted }]}>cm</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Weight */}
-          <View style={styles.bodyStatBlock}>
-            <View style={styles.bodyStatHeader}>
-              <Text style={[styles.bodyStatLabel, { color: colors.textSecondary }]}>WEIGHT</Text>
-              <View style={styles.segmentedPillSmall}>
-                {(['lb', 'kg'] as const).map((u) => {
-                  const active = data.weightUnit === u;
-                  return (
-                    <SoundPressable
-                      key={u}
-                      onPress={() => setData({ ...data, weightUnit: u })}
-                      style={[styles.segmentedPillItemSmall, {
-                        backgroundColor: active ? colors.gold : 'transparent',
-                      }]}
-                    >
-                      <Text style={[styles.segmentedPillLabelSmall, { color: active ? '#000' : colors.textSecondary }]}>
-                        {u}
-                      </Text>
-                    </SoundPressable>
-                  );
-                })}
-              </View>
-            </View>
-            <View style={[styles.heightInputWrap, { backgroundColor: colors.surface, width: '60%' }]}>
-              <TextInput
-                style={[styles.bigNumInput, { color: colors.textPrimary }]}
-                placeholder={data.weightUnit === 'kg' ? '75' : '165'}
-                placeholderTextColor={colors.textMuted}
-                value={data.weight}
-                onChangeText={(v) => setData({ ...data, weight: v.replace(/[^0-9.]/g, '').slice(0, 5) })}
-                keyboardType="decimal-pad"
-              />
-              <Text style={[styles.unitSuffix, { color: colors.textMuted }]}>{data.weightUnit}</Text>
-            </View>
-          </View>
-        </View>
-      );
-
-      // Step 5: Age + Date of Birth
-      case 5: return (
-        <View style={styles.stepContent}>
-          <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
-            <Ionicons name="calendar-number-outline" size={64} color={colors.gold} />
-          </Animated.View>
-          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>How old are you?</Text>
-          <View style={[styles.heightInputWrap, { backgroundColor: colors.surface, width: '50%' }]}>
-            <TextInput
-              style={[styles.bigNumInput, { color: colors.textPrimary }]}
-              placeholder="30"
-              placeholderTextColor={colors.textMuted}
-              value={data.age}
-              onChangeText={(v) => setData({ ...data, age: v.replace(/[^0-9]/g, '').slice(0, 3) })}
-              keyboardType="number-pad"
-              autoFocus
-            />
-            <Text style={[styles.unitSuffix, { color: colors.textMuted }]}>yrs</Text>
-          </View>
-          <TextInput
-            style={[styles.dobInput, { backgroundColor: colors.surface, color: colors.textPrimary }]}
-            placeholder="Date of birth (YYYY-MM-DD, optional)"
-            placeholderTextColor={colors.textMuted}
-            value={data.dateOfBirth}
-            onChangeText={(v) => {
-              const clean = v.replace(/[^0-9\-]/g, '').slice(0, 10);
-              let age = data.age;
-              // Auto-compute age when a valid date is entered
-              const m = clean.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-              if (m) {
-                const birth = new Date(clean);
-                if (!isNaN(birth.getTime())) {
-                  const now = new Date();
-                  let a = now.getFullYear() - birth.getFullYear();
-                  const md = now.getMonth() - birth.getMonth();
-                  if (md < 0 || (md === 0 && now.getDate() < birth.getDate())) a--;
-                  if (a >= 13 && a <= 100) age = String(a);
-                }
-              }
-              setData({ ...data, dateOfBirth: clean, age });
-            }}
-            keyboardType="numbers-and-punctuation"
-          />
-          <Text style={[styles.microCopy, { color: colors.textMuted }]}>
-            Your metabolism is unique. We'll tailor everything to you.
-          </Text>
-        </View>
-      );
-
-      // Step 6: Activity level
-      case 6: return (
-        <View style={styles.stepContent}>
-          <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
-            <Ionicons name="walk-outline" size={56} color={colors.gold} />
-          </Animated.View>
-          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>How active are you?</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>Outside of Zenki Dojo training</Text>
-          <View style={{ width: '100%', gap: 10 }}>
-            {([
-              { key: 'sedentary', emoji: '\uD83E\uDE91', label: 'Mostly sitting', desc: 'Desk job, minimal movement' },
-              { key: 'light', emoji: '\uD83D\uDEB6', label: 'Lightly active', desc: 'Walking, light activity 1-3x/week' },
-              { key: 'moderate', emoji: '\uD83C\uDFCB\uFE0F', label: 'Moderately active', desc: 'Exercise 3-5x/week' },
-              { key: 'active', emoji: '\uD83D\uDCAA', label: 'Very active', desc: 'Hard training 6-7x/week' },
-              { key: 'very_active', emoji: '\uD83D\uDD25', label: 'Extremely active', desc: 'Athlete level / physical labor job' },
-            ] as { key: ActivityLevel; emoji: string; label: string; desc: string }[]).map((opt) => {
-              const active = data.activityLevel === opt.key;
-              return (
-                <OptionCard
-                  key={opt.key}
-                  emoji={opt.emoji}
-                  label={opt.label}
-                  desc={opt.desc}
-                  active={active}
-                  colors={colors}
-                  onPress={() => setData({ ...data, activityLevel: opt.key })}
-                />
-              );
-            })}
-          </View>
-        </View>
-      );
-
-      // Step 7: Fitness goal + target weight
-      case 7: return (
-        <View style={styles.stepContent}>
-          <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
-            <Ionicons name="trending-up-outline" size={56} color={colors.gold} />
-          </Animated.View>
-          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>What's your goal?</Text>
-          <View style={{ width: '100%', gap: 10 }}>
-            {([
-              { key: 'cut', emoji: '\uD83D\uDCC9', label: 'Lose fat', desc: 'Caloric deficit (~20% below maintenance)' },
-              { key: 'maintain', emoji: '\u2696\uFE0F', label: 'Maintain', desc: 'Stay at current weight and recompose' },
-              { key: 'bulk', emoji: '\uD83D\uDCC8', label: 'Build muscle', desc: 'Caloric surplus (~10% above maintenance)' },
-            ] as { key: Goal; emoji: string; label: string; desc: string }[]).map((opt) => {
-              const active = data.fitnessGoal === opt.key;
-              return (
-                <OptionCard
-                  key={opt.key}
-                  emoji={opt.emoji}
-                  label={opt.label}
-                  desc={opt.desc}
-                  active={active}
-                  colors={colors}
-                  onPress={() => setData({ ...data, fitnessGoal: opt.key })}
-                />
-              );
-            })}
-          </View>
-          {(data.fitnessGoal === 'cut' || data.fitnessGoal === 'bulk') && (
-            <View style={{ width: '100%', marginTop: spacing.md, gap: 10 }}>
-              <Text style={[styles.bodyStatLabel, { color: colors.textSecondary }]}>TARGET WEIGHT</Text>
-              <View style={[styles.heightInputWrap, { backgroundColor: colors.surface }]}>
-                <TextInput
-                  style={[styles.bigNumInput, { color: colors.textPrimary }]}
-                  placeholder={data.weightUnit === 'kg' ? '70' : '160'}
-                  placeholderTextColor={colors.textMuted}
-                  value={data.targetWeight}
-                  onChangeText={(v) => setData({ ...data, targetWeight: v.replace(/[^0-9.]/g, '').slice(0, 5) })}
-                  keyboardType="decimal-pad"
-                />
-                <Text style={[styles.unitSuffix, { color: colors.textMuted }]}>{data.weightUnit}</Text>
-              </View>
-              {weeksToGoal !== null && (
-                <Text style={[styles.microCopy, { color: colors.textMuted, textAlign: 'center' }]}>
-                  At a {data.fitnessGoal === 'cut' ? 'healthy rate (~0.5–1 lb/week)' : 'lean bulk rate (~0.25–0.5 lb/week)'},
-                  {'\n'}you'd reach this in ~{weeksToGoal} weeks
-                </Text>
-              )}
-            </View>
-          )}
-        </View>
-      );
-
-      // Step 8: Training experience + frequency + injuries
-      case 8: return (
-        <View style={styles.stepContent}>
-          <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
-            <Ionicons name="barbell-outline" size={56} color={colors.gold} />
-          </Animated.View>
-          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Your training background</Text>
-
-          <View style={{ width: '100%', gap: 10 }}>
-            {([
-              { key: 'beginner', emoji: '\uD83C\uDF31', label: 'Beginner', desc: 'New to martial arts or strength training' },
-              { key: 'intermediate', emoji: '\uD83E\uDD4B', label: 'Intermediate', desc: '1-3 years consistent training' },
-              { key: 'advanced', emoji: '\u26A1', label: 'Advanced', desc: '3+ years, comfortable with complex movements' },
-            ] as { key: TrainingExp; emoji: string; label: string; desc: string }[]).map((opt) => {
-              const active = data.trainingExperience === opt.key;
-              return (
-                <OptionCard
-                  key={opt.key}
-                  emoji={opt.emoji}
-                  label={opt.label}
-                  desc={opt.desc}
-                  active={active}
-                  colors={colors}
-                  onPress={() => setData({ ...data, trainingExperience: opt.key })}
-                />
-              );
-            })}
-          </View>
-
-          {/* Training frequency */}
-          <View style={{ width: '100%', marginTop: spacing.md, gap: spacing.sm }}>
-            <Text style={[styles.bodyStatLabel, { color: colors.textSecondary }]}>
-              HOW MANY DAYS PER WEEK DO YOU PLAN TO TRAIN?
-            </Text>
-            <View style={styles.freqRow}>
-              {[1, 2, 3, 4, 5, 6, 7].map((n) => {
-                const active = data.trainingDaysPerWeek === n;
-                return (
-                  <SoundPressable
-                    key={n}
-                    onPress={() => setData({ ...data, trainingDaysPerWeek: n })}
-                    style={[styles.freqPill, {
-                      backgroundColor: active ? colors.gold : colors.surface,
-                      borderColor: active ? colors.gold : colors.border,
-                    }]}
-                  >
-                    <Text style={[styles.freqPillLabel, { color: active ? '#000' : colors.textSecondary }]}>{n}</Text>
-                  </SoundPressable>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Injuries */}
-          <View style={{ width: '100%', marginTop: spacing.md, gap: spacing.sm }}>
-            <Text style={[styles.bodyStatLabel, { color: colors.textSecondary }]}>
-              ANY AREAS TO BE CAREFUL WITH? (OPTIONAL)
-            </Text>
-            <View style={styles.injuryWrap}>
-              {[...INJURY_TAGS, 'None'].map((tag) => {
-                const isNone = tag === 'None';
-                const active = isNone ? data.injuries.length === 0 : data.injuries.includes(tag);
-                return (
-                  <SoundPressable
-                    key={tag}
-                    onPress={() => {
-                      if (isNone) {
-                        setData({ ...data, injuries: [] });
-                      } else {
-                        setData({
-                          ...data,
-                          injuries: data.injuries.includes(tag)
-                            ? data.injuries.filter((t) => t !== tag)
-                            : [...data.injuries, tag],
-                        });
-                      }
-                    }}
-                    style={[styles.injuryChip, {
-                      backgroundColor: active
-                        ? (isNone ? colors.goldMuted : 'rgba(239,68,68,0.14)')
-                        : colors.surface,
-                      borderColor: active
-                        ? (isNone ? colors.gold : '#EF4444')
-                        : colors.border,
-                    }]}
-                  >
-                    <Text style={[styles.injuryChipLabel, {
-                      color: active ? (isNone ? colors.gold : '#EF4444') : colors.textSecondary,
-                    }]}>
-                      {tag}
-                    </Text>
-                  </SoundPressable>
-                );
-              })}
-            </View>
-          </View>
-        </View>
-      );
-
-      // Step 9: Dietary preference
-      case 9: return (
-        <View style={styles.stepContent}>
-          <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
-            <Ionicons name="nutrition-outline" size={56} color={colors.gold} />
-          </Animated.View>
-          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Any dietary preference?</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>This adjusts your macro split</Text>
-          <View style={{ width: '100%', gap: 10 }}>
-            {([
-              { key: 'balanced', emoji: '\uD83C\uDF7D\uFE0F', label: 'Balanced', desc: 'Standard protein/carb/fat split (default)' },
-              { key: 'high_protein', emoji: '\uD83E\uDD69', label: 'High Protein', desc: 'Extra protein for muscle recovery' },
-              { key: 'low_carb', emoji: '\uD83E\uDD57', label: 'Low Carb', desc: 'Reduced carbs, higher fat' },
-              { key: 'keto', emoji: '\uD83E\uDD51', label: 'Keto', desc: 'Very low carb, high fat (<50g carbs)' },
-            ] as { key: DietType; emoji: string; label: string; desc: string }[]).map((opt) => {
-              const active = data.dietType === opt.key;
-              return (
-                <OptionCard
-                  key={opt.key}
-                  emoji={opt.emoji}
-                  label={opt.label}
-                  desc={opt.desc}
-                  active={active}
-                  colors={colors}
-                  onPress={() => setData({ ...data, dietType: opt.key })}
-                />
-              );
-            })}
-          </View>
-          <SoundPressable
-            onPress={() => { setData({ ...data, dietType: 'balanced' }); goNext(); }}
-            style={{ paddingVertical: spacing.sm }}
-          >
-            <Text style={{
-              color: colors.textMuted,
-              fontSize: 13,
-              textDecorationLine: 'underline',
-              textAlign: 'center',
-            }}>
-              Skip (use balanced)
-            </Text>
-          </SoundPressable>
-        </View>
-      );
-
-      // Step 10: Calorie + macro summary (motivational)
-      case 10: return (
-        <View style={styles.stepContent}>
-          <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
-            <Ionicons name="flame" size={64} color={colors.gold} />
-          </Animated.View>
-          <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Here's your plan</Text>
-          {summaryPreview ? (
-            <>
-              {/* Daily targets card */}
-              <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}>
-                <Text style={[styles.summaryCalLabel, { color: colors.textSecondary }]}>
-                  {'\uD83D\uDD25 DAILY CALORIES'}
-                </Text>
-                <Text style={[styles.summaryCalValue, { color: colors.gold }]}>
-                  {summaryPreview.calories.toLocaleString()} kcal
-                </Text>
-                <View style={styles.summaryMacroRow}>
-                  <View style={styles.summaryMacroItem}>
-                    <Text style={[styles.summaryMacroValue, { color: colors.textPrimary }]}>{summaryPreview.protein}g</Text>
-                    <Text style={[styles.summaryMacroLabel, { color: colors.textMuted }]}>Protein</Text>
-                  </View>
-                  <View style={[styles.summaryMacroDivider, { backgroundColor: colors.border }]} />
-                  <View style={styles.summaryMacroItem}>
-                    <Text style={[styles.summaryMacroValue, { color: colors.textPrimary }]}>{summaryPreview.carbs}g</Text>
-                    <Text style={[styles.summaryMacroLabel, { color: colors.textMuted }]}>Carbs</Text>
-                  </View>
-                  <View style={[styles.summaryMacroDivider, { backgroundColor: colors.border }]} />
-                  <View style={styles.summaryMacroItem}>
-                    <Text style={[styles.summaryMacroValue, { color: colors.textPrimary }]}>{summaryPreview.fat}g</Text>
-                    <Text style={[styles.summaryMacroLabel, { color: colors.textMuted }]}>Fat</Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Stats row */}
-              <View style={styles.summaryStatsRow}>
-                <View style={styles.summaryStatItem}>
-                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]}>BMR</Text>
-                  <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{summaryPreview.bmr.toLocaleString()} kcal</Text>
-                </View>
-                <View style={styles.summaryStatItem}>
-                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]}>TDEE</Text>
-                  <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{summaryPreview.tdee.toLocaleString()} kcal</Text>
-                </View>
-                <View style={styles.summaryStatItem}>
-                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]}>Goal</Text>
-                  <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>
-                    {data.fitnessGoal === 'cut' ? 'Lose fat' : data.fitnessGoal === 'bulk' ? 'Build muscle' : 'Maintain'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Timeline if target weight set */}
-              {weeksToGoal !== null && data.targetWeight && (
-                <View style={[styles.summaryTimeline, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <Text style={[styles.summaryTimelineText, { color: colors.textSecondary }]}>
-                    Current: <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{data.weight} {data.weightUnit}</Text>
-                    {' → '}
-                    Target: <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{data.targetWeight} {data.weightUnit}</Text>
-                  </Text>
-                  <Text style={[styles.summaryTimelineSub, { color: colors.textMuted }]}>
-                    Estimated time: ~{weeksToGoal} weeks at a healthy pace
-                  </Text>
-                </View>
-              )}
-
-              <Text style={[styles.microCopy, { color: colors.textMuted, marginTop: spacing.sm }]}>
-                These targets are personalized to you and will adapt as you log.
-                {'\n'}You can adjust everything in Settings anytime.
-              </Text>
-            </>
-          ) : (
-            <Text style={[styles.stepSubtitle, { color: colors.textMuted }]}>
-              Fill in your body stats to see your personalized plan.
-            </Text>
-          )}
-        </View>
-      );
-
-      // Step 11: Photo (was 4)
-      case 11: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             {data.photo ? (
@@ -1212,8 +573,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 12: Fun fact + auto-suggested nickname (was 5)
-      case 12: return (
+      // Step 5: Fun fact + nickname
+      case 5: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="sparkles-outline" size={64} color={colors.gold} />
@@ -1255,8 +616,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 13: Socials (was 6)
-      case 13: return (
+      // Step 6: Socials
+      case 6: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="globe-outline" size={64} color={colors.gold} />
@@ -1299,8 +660,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 14: Belt + Stripes (was 7)
-      case 14: return (
+      // Step 7: Belt + stripes
+      case 7: return (
         <View style={[styles.stepContent, { gap: spacing.md }]}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="ribbon-outline" size={48} color={colors.gold} />
@@ -1380,8 +741,8 @@ export function OnboardingScreen({ navigation, route }: any) {
         </View>
       );
 
-      // Step 15: Liability Waiver (was 8)
-      case 15: return (
+      // Step 8: Liability waiver
+      case 8: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="document-text-outline" size={64} color={colors.gold} />
@@ -1423,238 +784,8 @@ export function OnboardingScreen({ navigation, route }: any) {
           </SoundPressable>
         </View>
       );
-
-      // Step 16: App permissions — sequential walk-through. iOS only allows
-      // one permission dialog at a time; tapping rapidly was silently skipping
-      // prompts. Now there's a single "Grant All Permissions" primary button
-      // that walks through them in order, awaiting each. Individual rows still
-      // work for re-requesting one at a time, but they're disabled while a
-      // request is in flight.
-      case 16: {
-        const renderPermRow = (args: {
-          slot: 'location' | 'health' | 'camera' | 'notifications' | 'photoLibrary';
-          icon: keyof typeof Ionicons.glyphMap;
-          tint: string;
-          title: string;
-          desc: string;
-          granted: boolean;
-          onPress: () => Promise<void>;
-        }) => {
-          const isAsking = permRequesting === args.slot;
-          const isLocked = permRequesting !== null && !isAsking;
-          return (
-            <SoundPressable
-              key={args.slot}
-              style={[
-                styles.permRow,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: args.granted ? colors.success + '40' : colors.border,
-                  opacity: isLocked ? 0.5 : 1,
-                },
-              ]}
-              onPress={() => guardedRequest(args.slot, args.onPress)}
-              disabled={isLocked || args.granted}
-            >
-              <View style={[styles.permIcon, { backgroundColor: args.tint + '20' }]}>
-                <Ionicons name={args.icon} size={20} color={args.tint} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.permTitle, { color: colors.textPrimary }]}>{args.title}</Text>
-                <Text style={[styles.permDesc, { color: colors.textMuted }]}>{args.desc}</Text>
-              </View>
-              {isAsking ? (
-                <ActivityIndicator size="small" color={colors.gold} />
-              ) : (
-                <Ionicons
-                  name={args.granted ? 'checkmark-circle' : 'chevron-forward'}
-                  size={20}
-                  color={args.granted ? colors.success : colors.textMuted}
-                />
-              )}
-            </SoundPressable>
-          );
-        };
-
-        const allGranted =
-          locationGranted && cameraGranted && notificationsGranted && photoLibraryGranted &&
-          (Platform.OS !== 'ios' || healthGranted);
-
-        return (
-          <View style={styles.stepContent}>
-            <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
-              <Ionicons name="shield-checkmark-outline" size={64} color={colors.gold} />
-            </Animated.View>
-            <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>App Permissions</Text>
-            <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-              Tap "Grant All" to walk through them one at a time. All are optional and can be changed later in Settings.
-            </Text>
-
-            {!allGranted && (
-              <SoundPressable
-                style={[
-                  styles.permGrantAll,
-                  {
-                    backgroundColor: permRequesting ? colors.surface : colors.gold,
-                    borderColor: colors.gold,
-                  },
-                ]}
-                onPress={runPermissionFlow}
-                disabled={permRequesting !== null}
-              >
-                {permRequesting ? (
-                  <>
-                    <ActivityIndicator size="small" color={colors.gold} />
-                    <Text style={[styles.permGrantAllText, { color: colors.gold }]}>
-                      Asking for {permRequesting === 'photoLibrary' ? 'Photos' : permRequesting.charAt(0).toUpperCase() + permRequesting.slice(1)}…
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Ionicons name="shield-checkmark" size={18} color="#000" />
-                    <Text style={[styles.permGrantAllText, { color: '#000' }]}>Grant All Permissions</Text>
-                  </>
-                )}
-              </SoundPressable>
-            )}
-
-            {renderPermRow({
-              slot: 'location',
-              icon: 'location-outline', tint: '#3B82F6',
-              title: 'Location',
-              desc: 'Auto check-in when you arrive at the dojo + GPS workout tracking',
-              granted: locationGranted,
-              onPress: requestLocationPermission,
-            })}
-
-            {Platform.OS === 'ios' && (
-              <View
-                style={[
-                  styles.healthCard,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: healthGranted ? colors.success + '40' : colors.border,
-                  },
-                ]}
-              >
-                <View style={styles.healthCardHeader}>
-                  <View style={[styles.permIcon, { backgroundColor: '#FF2949' + '20' }]}>
-                    <Ionicons name="heart-outline" size={20} color="#FF2949" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Apple Health</Text>
-                    <Text style={[styles.permDesc, { color: colors.textMuted }]}>
-                      Choose what to share — turn all on, or pick the categories you want
-                    </Text>
-                  </View>
-                  {healthGranted && (
-                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                  )}
-                </View>
-
-                {!healthGranted && (
-                  <>
-                    {([
-                      { key: 'workouts' as HealthCategory, label: 'Workouts', sub: 'Sessions + active calories' },
-                      { key: 'heartRate' as HealthCategory, label: 'Heart Rate', sub: 'Live BPM + resting heart rate' },
-                      { key: 'weight' as HealthCategory, label: 'Weight', sub: 'Weigh-ins both directions' },
-                      { key: 'nutrition' as HealthCategory, label: 'Nutrition', sub: 'Calories, protein, carbs, fat' },
-                      { key: 'activity' as HealthCategory, label: 'Activity', sub: 'Steps + active time' },
-                    ]).map((cat) => {
-                      const on = healthCategories[cat.key];
-                      return (
-                        <SoundPressable
-                          key={cat.key}
-                          onPress={() => toggleHealthCategory(cat.key)}
-                          style={[
-                            styles.healthCatRow,
-                            { borderColor: colors.border },
-                          ]}
-                          activeOpacity={0.7}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.healthCatLabel, { color: colors.textPrimary }]}>{cat.label}</Text>
-                            <Text style={[styles.healthCatSub, { color: colors.textMuted }]}>{cat.sub}</Text>
-                          </View>
-                          <View
-                            style={[
-                              styles.healthCatToggle,
-                              {
-                                backgroundColor: on ? colors.gold : colors.background,
-                                borderColor: on ? colors.gold : colors.border,
-                              },
-                            ]}
-                          >
-                            {on && <Ionicons name="checkmark" size={14} color="#000" />}
-                          </View>
-                        </SoundPressable>
-                      );
-                    })}
-
-                    <View style={styles.healthCardActions}>
-                      <SoundPressable
-                        onPress={() => setHealthCategories({
-                          workouts: true, heartRate: true, weight: true, nutrition: true, activity: true,
-                        })}
-                        style={[styles.healthAllBtn, { borderColor: colors.border }]}
-                      >
-                        <Text style={[styles.healthAllText, { color: colors.textSecondary }]}>Turn all on</Text>
-                      </SoundPressable>
-                      <SoundPressable
-                        onPress={() => guardedRequest('health', requestHealthPermission)}
-                        disabled={permRequesting !== null}
-                        style={[
-                          styles.healthConnectBtn,
-                          {
-                            backgroundColor: colors.gold,
-                            opacity: permRequesting !== null && permRequesting !== 'health' ? 0.5 : 1,
-                          },
-                        ]}
-                      >
-                        {permRequesting === 'health' ? (
-                          <ActivityIndicator size="small" color="#000" />
-                        ) : (
-                          <Text style={styles.healthConnectText}>Connect Apple Health</Text>
-                        )}
-                      </SoundPressable>
-                    </View>
-                  </>
-                )}
-              </View>
-            )}
-
-            {renderPermRow({
-              slot: 'camera',
-              icon: 'camera-outline', tint: '#F97316',
-              title: 'Camera',
-              desc: 'Scan barcodes for food logging + take progress photos + profile pic',
-              granted: cameraGranted,
-              onPress: requestCameraPermission,
-            })}
-
-            {renderPermRow({
-              slot: 'notifications',
-              icon: 'notifications-outline', tint: '#EF4444',
-              title: 'Notifications',
-              desc: 'Class reminders 1hr before, achievement unlocks, and dojo announcements',
-              granted: notificationsGranted,
-              onPress: requestNotificationsPermission,
-            })}
-
-            {renderPermRow({
-              slot: 'photoLibrary',
-              icon: 'images-outline', tint: '#22C55E',
-              title: 'Photo Library',
-              desc: 'Upload food photos for AI macro tracking + share to the community feed',
-              granted: photoLibraryGranted,
-              onPress: requestPhotoLibraryPermission,
-            })}
-          </View>
-        );
-      }
-
-      // Step 17: Welcome (was 10)
-      case 17: return (
+      // Step 9: Welcome
+      case 9: return (
         <View style={styles.stepContent}>
           <Animated.View style={{ transform: [{ scale: iconScaleAnim }] }}>
             <Ionicons name="checkmark-circle" size={80} color={colors.gold} />
@@ -1678,39 +809,10 @@ export function OnboardingScreen({ navigation, route }: any) {
     }
     if (step === 1) return data.firstName.trim().length > 0;
     if (step === 3) return data.biologicalSex !== '';
-    // Body stats
-    if (step === 4) {
-      const cm = resolveHeightCm(data);
-      const heightValid = cm >= 120 && cm <= 230;
-      const w = parseFloat(data.weight);
-      const weightValid = Number.isFinite(w) && (
-        data.weightUnit === 'kg' ? (w >= 30 && w <= 200) : (w >= 66 && w <= 440)
-      );
-      const metabolicOk = data.biologicalSex !== 'other' || data.metabolicSex !== '';
-      return heightValid && weightValid && metabolicOk;
-    }
-    if (step === 5) {
-      const a = parseInt(data.age, 10);
-      return Number.isFinite(a) && a >= 13 && a <= 100;
-    }
-    if (step === 6) return data.activityLevel !== '';
-    if (step === 7) {
-      if (data.fitnessGoal === '') return false;
-      // Target weight optional, but if entered must make directional sense
-      if (data.targetWeight) {
-        const tw = parseFloat(data.targetWeight);
-        const cw = parseFloat(data.weight);
-        if (!Number.isFinite(tw) || tw <= 0) return false;
-        if (data.fitnessGoal === 'cut' && tw >= cw) return false;
-        if (data.fitnessGoal === 'bulk' && tw <= cw) return false;
-      }
-      return true;
-    }
-    if (step === 8) return data.trainingExperience !== '';
-    if (step === 9) return true; // skippable
-    if (step === 10) return true; // summary screen always continuable
-    // Waiver
-    if (step === 15) {
+    // Step 8: Liability waiver — require a signed name that matches the
+    // user's first/last name. Photo (4), fun-fact (5), socials (6), and
+    // belt (7) are all skippable / always continuable.
+    if (step === 8) {
       const expected = `${data.firstName} ${data.lastName}`.trim().toLowerCase();
       const signed = data.signedName.trim().toLowerCase();
       return signed.length > 0 && (signed === expected || signed.includes(data.firstName.trim().toLowerCase()));
@@ -1718,36 +820,9 @@ export function OnboardingScreen({ navigation, route }: any) {
     return true;
   };
 
-  const skipBodyStats = () => {
-    // Jump past the whole body-stats section — no partial NutritionProfile is useful
-    if (!reduceMotion) {
-      Animated.parallel([
-        Animated.timing(slideAnim, { toValue: -SCREEN_WIDTH * 0.3, duration: 200, useNativeDriver: true }),
-        Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-      ]).start(() => setStep(PHOTO_STEP));
-    } else {
-      setStep(PHOTO_STEP);
-    }
-  };
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardView>
-        {/* Section label for the body-stats section */}
-        {step >= BODY_SECTION_START && step <= BODY_SECTION_END && (
-          <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
-            <Text style={{
-              fontSize: 10,
-              fontWeight: '800',
-              letterSpacing: 2,
-              color: colors.gold,
-              textAlign: 'center',
-            }}>
-              BODY STATS · {step - BODY_SECTION_START + 1} of {BODY_SECTION_END - BODY_SECTION_START + 1}
-            </Text>
-          </View>
-        )}
-
         {/* Progress Bar */}
         <View style={styles.progressContainer}>
           <View style={[styles.progressBg, { backgroundColor: colors.surfaceSecondary }]}>
@@ -1817,19 +892,10 @@ export function OnboardingScreen({ navigation, route }: any) {
           )}
         </View>
 
-        {/* Skip links:
-            - Body stats section (4..9): "Skip body stats" jumps past the whole section.
-            - Post-body-stats optional (12, 13, 16): normal single-step skip.
-            - Never on waiver (15), phone (2), summary (10), or welcome (17).
-        */}
-        {step >= BODY_SECTION_START && step <= 9 && (
-          <SoundPressable style={styles.skipButton} onPress={skipBodyStats}>
-            <Text style={[styles.skipText, { color: colors.textMuted, textDecorationLine: 'underline' }]}>
-              Skip body stats for now
-            </Text>
-          </SoundPressable>
-        )}
-        {(step === 12 || step === 13 || step === 16) && (
+        {/* Skip link — optional steps (fun fact, socials) get a normal
+            single-step skip. Phone (2), waiver (8), and welcome (9) are
+            not skippable. */}
+        {(step === 5 || step === 6) && (
           <SoundPressable style={styles.skipButton} onPress={goNext}>
             <Text style={[styles.skipText, { color: colors.textMuted }]}>Skip for now</Text>
           </SoundPressable>

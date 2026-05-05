@@ -64,7 +64,13 @@ export function ProfileScreen({ navigation }: any) {
         downloadUrl = await uploadProfileImage(uri);
         setProfilePhoto(downloadUrl);
       }
-      await pushMemberToFirestore({ ...user, profilePhoto: downloadUrl });
+      // pushMemberToFirestore returns false on rule rejection / network
+      // failure (it swallows the underlying error internally). Without the
+      // explicit check, persistPhoto would silently report success while
+      // the doc was never updated on the server — the photo would then
+      // vanish on next reload, exactly the "doesn't save anywhere" bug.
+      const ok = await pushMemberToFirestore({ ...user, profilePhoto: downloadUrl });
+      if (!ok) throw new Error('members-write-rejected');
     } catch (err: any) {
       // Roll back on failure so the avatar reflects what's actually saved.
       setProfilePhoto(user.profilePhoto ?? null);
@@ -75,6 +81,8 @@ export function ProfileScreen({ navigation }: any) {
           ? 'Photo storage is not configured for this build.'
           : code === 'not-signed-in'
           ? 'Sign in is required to save a profile photo.'
+          : code === 'members-write-rejected'
+          ? "Photo uploaded but couldn't write your profile record. Your /members doc may be missing the firebaseUid stamp — sign out and back in to backfill, or contact admin."
           : `Couldn't save photo: ${err?.message || 'unknown error'}`,
       );
     } finally {
