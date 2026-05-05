@@ -9,6 +9,7 @@ import {
   Modal,
   Pressable} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 import { SoundPressable } from '../components/SoundPressable';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -106,17 +107,15 @@ export function MacroTrackerScreen({ navigation, route }: any) {
   useEffect(() => {
     let cancelled = false;
     AsyncStorage.getItem(MEAL_ORDER_KEY).then((raw) => {
-      if (cancelled || !raw) return;
-      try {
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return;
-        // Sanitize — keep only known meal types, append any missing
-        const valid = parsed.filter((m): m is MealType =>
-          ['breakfast', 'lunch', 'dinner', 'snacks'].includes(m),
-        );
-        const missing = DEFAULT_MEAL_ORDER.filter((m) => !valid.includes(m));
-        setMealOrder([...valid, ...missing]);
-      } catch { /* ignore */ }
+      if (cancelled) return;
+      const parsed = safeParseJSON<unknown[]>(raw, [], Array.isArray);
+      if (parsed.length === 0) return;
+      // Sanitize — keep only known meal types, append any missing
+      const valid = parsed.filter((m): m is MealType =>
+        typeof m === 'string' && ['breakfast', 'lunch', 'dinner', 'snacks'].includes(m),
+      );
+      const missing = DEFAULT_MEAL_ORDER.filter((m) => !valid.includes(m));
+      setMealOrder([...valid, ...missing]);
     });
     return () => { cancelled = true; };
   }, []);
@@ -126,7 +125,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
       ['breakfast', 'lunch', 'dinner', 'snacks'].includes(id),
     );
     setMealOrder(next as MealType[]);
-    AsyncStorage.setItem(MEAL_ORDER_KEY, JSON.stringify(next)).catch(() => {});
+    safeStorageSet(MEAL_ORDER_KEY, next, '[MacroTracker meal order]');
   }, []);
 
   // ── First-time macro-setup wizard ──
@@ -163,7 +162,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
 
   const handleWizardSkip = async () => {
     setWizardOpen(false);
-    await AsyncStorage.setItem(SETUP_DONE_KEY, 'true').catch(() => {});
+    await safeStorageSet(SETUP_DONE_KEY, 'true', '[MacroTracker setup]');
   };
 
   const handleWizardSave = async () => {
@@ -177,7 +176,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
       return;
     }
     updateGoals(user.id, { calories: cal, protein: pro, carbs: carb, fat });
-    await AsyncStorage.setItem(SETUP_DONE_KEY, 'true').catch(() => {});
+    await safeStorageSet(SETUP_DONE_KEY, 'true', '[MacroTracker setup]');
     setWizardOpen(false);
   };
 

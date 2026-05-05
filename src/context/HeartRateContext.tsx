@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSyncedState } from '../hooks/useSyncedState';
 import {
   HRSession,
   HRSample,
@@ -74,8 +75,9 @@ function randomId(): string {
 }
 
 export function HeartRateProvider({ children }: { children: React.ReactNode }) {
-  const [sessions, setSessions] = useState<HRSession[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [sessions, setSessions, loaded] = useSyncedState<HRSession[]>(STORAGE_KEY, [], {
+    validate: Array.isArray,
+  });
   const [bleStatus, setBleStatus] = useState<BLEStatus>('unavailable');
   const [connectedDeviceName, setConnectedDeviceName] = useState<string | null>(null);
   const [currentBpm, setCurrentBpm] = useState(0);
@@ -95,19 +97,7 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
   const bleSubscriptionRef = useRef<any>(null);
   const connectedDeviceRef = useRef<any>(null);
 
-  // ── Load persisted sessions
-  useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (raw) {
-        try { setSessions(JSON.parse(raw)); } catch { /* ignore */ }
-      }
-      setLoaded(true);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (loaded) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-  }, [sessions, loaded]);
+  // (sessions hydration + persistence handled by useSyncedState above.)
 
   // ── Check BLE availability
   useEffect(() => {

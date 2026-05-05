@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useContext, useCallback, useMemo } from 'react';
+import { useSyncedState } from '../hooks/useSyncedState';
 
 const STORAGE_KEY = '@zenki_privacy';
 
@@ -26,35 +26,27 @@ const PrivacyContext = createContext<PrivacyContextValue>({
 });
 
 export function PrivacyProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettings] = useState<PrivacySettings>(DEFAULTS);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (raw) {
-        try { setSettings({ ...DEFAULTS, ...JSON.parse(raw) }); } catch { /* ignore */ }
-      }
-      setLoaded(true);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (loaded) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  }, [settings, loaded]);
+  const [settings, setSettings] = useSyncedState<PrivacySettings>(STORAGE_KEY, DEFAULTS, {
+    // Spread-merge stored value into defaults so older saves missing newer
+    // fields still get reasonable defaults instead of `undefined`.
+    hydrate: (parsed) => ({ ...DEFAULTS, ...parsed }),
+    validate: (v) => typeof v === 'object' && v !== null && !Array.isArray(v),
+  });
 
   const setVisibleInFeed = useCallback((v: boolean) => {
     setSettings((prev) => ({ ...prev, isVisibleInFeed: v }));
-  }, []);
+  }, [setSettings]);
 
   const setMessagingEnabled = useCallback((v: boolean) => {
     setSettings((prev) => ({ ...prev, messagingEnabled: v }));
-  }, []);
+  }, [setSettings]);
 
-  return (
-    <PrivacyContext.Provider value={{ settings, setVisibleInFeed, setMessagingEnabled }}>
-      {children}
-    </PrivacyContext.Provider>
+  const value = useMemo(
+    () => ({ settings, setVisibleInFeed, setMessagingEnabled }),
+    [settings, setVisibleInFeed, setMessagingEnabled],
   );
+
+  return <PrivacyContext.Provider value={value}>{children}</PrivacyContext.Provider>;
 }
 
 export function usePrivacy() {

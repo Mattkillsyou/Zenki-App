@@ -5,6 +5,7 @@ import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
 import { useTheme } from '../context/ThemeContext';
 import { FadeInView, KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { broadcastPushNotification, fetchAllPushTokens } from '../services/pushNotifications';
@@ -46,8 +47,9 @@ export function AdminBroadcastScreen({ navigation }: any) {
   useEffect(() => {
     let cancelled = false;
     AsyncStorage.getItem(HISTORY_KEY).then((raw) => {
-      if (cancelled || !raw) return;
-      try { setHistory(JSON.parse(raw)); } catch { /* ignore */ }
+      if (cancelled) return;
+      const parsed = safeParseJSON<Broadcast[]>(raw, [], Array.isArray);
+      if (parsed.length > 0) setHistory(parsed);
     });
     refreshRecipientCount();
     return () => { cancelled = true; };

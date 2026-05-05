@@ -24,7 +24,7 @@ import { useSpinWheel, WHEEL_SLICES, SpinPrize } from '../context/SpinWheelConte
 import { useSound } from '../context/SoundContext';
 import { Confetti } from './Confetti';
 
-const SLICE_COUNT = 8;
+const SLICE_COUNT = WHEEL_SLICES.length;
 const SLICE_ANGLE = 360 / SLICE_COUNT;
 const WHEEL_SIZE = Math.min(Dimensions.get('window').width - 80, 280);
 const CENTER = WHEEL_SIZE / 2;
@@ -32,6 +32,9 @@ const RADIUS = WHEEL_SIZE / 2 - 6;
 
 // Vibrant per-slice colors — each slice a distinct hue.
 // Ordered to alternate warm/cool around the wheel for visual rhythm.
+// Slot 8 is the deterministic GAMBLING IS BAD wedge — given a near-black
+// "you-are-not-going-to-like-this" treatment so it stands apart from the
+// celebratory hues without screaming for attention before the wheel stops.
 const SLICE_COLORS = [
   '#E63946', // 0 — red       (50 Diamonds)
   '#3B82F6', // 1 — blue      (3 Flames)
@@ -41,6 +44,7 @@ const SLICE_COLORS = [
   '#EC4899', // 5 — pink      (10 Flames)
   '#14B8A6', // 6 — teal      (Jackpot)
   '#D4A017', // 7 — gold      (Free Shirt)
+  '#1F1F23', // 8 — near-black (GAMBLING IS BAD)
 ];
 
 interface Props {
@@ -74,6 +78,7 @@ function labelPos(sliceIdx: number): { x: number; y: number } {
 /** Map a slice index to an Ionicons glyph name. */
 function getSliceIcon(idx: number): keyof typeof Ionicons.glyphMap {
   const slice = WHEEL_SLICES[idx];
+  if (slice.type === 'gamble_lose') return 'close-circle';
   if (slice.type === 'points' && slice.amount >= 1000) return 'trophy';
   if (slice.type === 'points') return 'diamond';
   if (slice.type === 'flames') return 'flame';
@@ -84,6 +89,7 @@ function getSliceIcon(idx: number): keyof typeof Ionicons.glyphMap {
 
 /** Map the prize result to an Ionicons glyph for the result display. */
 function getResultIcon(prize: SpinPrize): keyof typeof Ionicons.glyphMap {
+  if (prize.type === 'gamble_lose') return 'close-circle';
   if (prize.type === 'points' && prize.amount >= 1000) return 'trophy';
   if (prize.type === 'points') return 'diamond';
   if (prize.type === 'flames') return 'flame';
@@ -167,10 +173,14 @@ export function SpinWheelModal({ visible, onClose }: Props) {
     ]).start(() => {
       setSpinning(false);
       setResult(prize);
-      play('success');
-      if (prize.confetti) {
-        setShowConfetti(false);
-        setTimeout(() => setShowConfetti(true), 30);
+      // No "success" sound for the deterministic loss outcome — it's
+      // confusing to celebrate the user being told gambling is bad.
+      if (prize.type !== 'gamble_lose') {
+        play('success');
+        if ('confetti' in prize && prize.confetti) {
+          setShowConfetti(false);
+          setTimeout(() => setShowConfetti(true), 30);
+        }
       }
     });
   };
@@ -314,20 +324,42 @@ export function SpinWheelModal({ visible, onClose }: Props) {
 
           {/* Result or Spin button */}
           {result ? (
-            <View style={styles.resultWrap}>
-              <View style={[styles.resultIconBubble, { backgroundColor: colors.gold + '22', borderColor: colors.gold }]}>
-                <Ionicons name={getResultIcon(result)} size={32} color={colors.gold} />
+            result.type === 'gamble_lose' ? (
+              // Deterministic loss outcome — dry, deadpan presentation.
+              // No COLLECT button (nothing to collect), just dismiss.
+              <View style={styles.resultWrap}>
+                <View style={[styles.resultIconBubble, { backgroundColor: 'rgba(230,57,70,0.12)', borderColor: '#E63946' }]}>
+                  <Ionicons name={getResultIcon(result)} size={32} color="#E63946" />
+                </View>
+                <Text style={[styles.resultTitle, { color: '#E63946' }]}>YOU LOSE</Text>
+                <Text style={[styles.resultPrize, { color: colors.textPrimary }]}>Gambling is bad.</Text>
+                <Text style={[styles.subtitle, { color: colors.textSecondary, marginBottom: 14 }]}>
+                  We'll see you next week.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }]}
+                  onPress={onClose}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.primaryBtnText, { color: colors.textPrimary }]}>UNDERSTOOD</Text>
+                </TouchableOpacity>
               </View>
-              <Text style={[styles.resultTitle, { color: colors.gold }]}>YOU WON</Text>
-              <Text style={[styles.resultPrize, { color: colors.textPrimary }]}>{result.label}</Text>
-              <TouchableOpacity
-                style={[styles.primaryBtn, { backgroundColor: colors.gold }]}
-                onPress={onClose}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.primaryBtnText}>COLLECT</Text>
-              </TouchableOpacity>
-            </View>
+            ) : (
+              <View style={styles.resultWrap}>
+                <View style={[styles.resultIconBubble, { backgroundColor: colors.gold + '22', borderColor: colors.gold }]}>
+                  <Ionicons name={getResultIcon(result)} size={32} color={colors.gold} />
+                </View>
+                <Text style={[styles.resultTitle, { color: colors.gold }]}>YOU WON</Text>
+                <Text style={[styles.resultPrize, { color: colors.textPrimary }]}>{result.label}</Text>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, { backgroundColor: colors.gold }]}
+                  onPress={onClose}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.primaryBtnText}>COLLECT</Text>
+                </TouchableOpacity>
+              </View>
+            )
           ) : (
             <Animated.View style={{ transform: [{ scale: pulseAnim }], width: '100%' }}>
               <TouchableOpacity

@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
+import { todayDateString as todayISO } from '../utils/dates';
 import {
   GamificationState,
   Celebration,
@@ -123,9 +125,6 @@ const GamificationContext = createContext<GamificationContextValue>({
   dismissCelebration: () => {},
 });
 
-function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
-}
 function yesterdayISO(): string {
   return new Date(Date.now() - 86400000).toISOString().split('T')[0];
 }
@@ -164,23 +163,21 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (raw) {
-        try {
-          const saved = JSON.parse(raw);
-          const initial = createInitialAchievements();
-          const merged = initial.map((a) => {
-            const existing = saved.achievements?.find((e: any) => e.id === a.id);
-            if (!existing) return a;
-            return {
-              ...a,
-              unlocked: !!existing.unlocked,
-              unlockedAt: existing.unlockedAt,
-            };
-          });
-          setState({ ...defaultState, ...saved, achievements: merged });
-        } catch {
-          setState(defaultState);
-        }
+      const saved = safeParseJSON<Partial<GamificationState> | null>(raw, null, (v) =>
+        typeof v === 'object' && v !== null && !Array.isArray(v),
+      );
+      if (saved) {
+        const initial = createInitialAchievements();
+        const merged = initial.map((a) => {
+          const existing = saved.achievements?.find((e: any) => e.id === a.id);
+          if (!existing) return a;
+          return {
+            ...a,
+            unlocked: !!existing.unlocked,
+            unlockedAt: existing.unlockedAt,
+          };
+        });
+        setState({ ...defaultState, ...saved, achievements: merged });
       }
       setLoaded(true);
     });

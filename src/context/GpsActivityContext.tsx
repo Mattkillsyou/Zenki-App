@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSyncedState } from '../hooks/useSyncedState';
 import * as Location from 'expo-location';
 import {
   GpsActivity,
@@ -72,8 +72,9 @@ function randomId(): string {
 }
 
 export function GpsActivityProvider({ children }: { children: React.ReactNode }) {
-  const [activities, setActivities] = useState<GpsActivity[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [activities, setActivities, loaded] = useSyncedState<GpsActivity[]>(STORAGE_KEY, [], {
+    validate: Array.isArray,
+  });
   const [isTracking, setIsTracking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentActivityType, setCurrentActivityType] = useState<GpsActivityType>('run');
@@ -93,19 +94,6 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
   const pausedTimeRef = useRef(0);        // accumulated paused time in ms
   const pauseStartRef = useRef(0);        // when current pause started
   const isPausedRef = useRef(false);
-
-  useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (raw) {
-        try { setActivities(JSON.parse(raw)); } catch { /* ignore */ }
-      }
-      setLoaded(true);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (loaded) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(activities));
-  }, [activities, loaded]);
 
   /** Clear all running timers and watches. */
   const cleanupTimers = useCallback(() => {

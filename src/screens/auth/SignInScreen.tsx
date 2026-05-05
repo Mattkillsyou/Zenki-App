@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { Button, KeyboardAwareScrollView, KeyboardView } from '../../components';
+import { Button, KeyboardAwareScrollView } from '../../components';
 import { MEMBERS, CREDENTIALS } from '../../data/members';
 import { spacing, borderRadius } from '../../theme';
 import { FIREBASE_CONFIGURED } from '../../config/firebase';
@@ -400,8 +400,7 @@ export function SignInScreen({ navigation }: any) {
         </SafeAreaView>
       </Modal>
 
-      <KeyboardView>
-        <View style={styles.contentContainer}>
+      <KeyboardAwareScrollView contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
 
           {/* Logo */}
           <View style={styles.logoSection}>
@@ -517,15 +516,14 @@ export function SignInScreen({ navigation }: any) {
               <Text style={[styles.footerLink, { color: colors.gold }]}>Create Account</Text>
             </SoundPressable>
           </View>
-        </View>
-      </KeyboardView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  contentContainer: { flex: 1, paddingTop: 16, paddingHorizontal: 32, paddingBottom: 16, gap: 16 },
+  contentContainer: { flexGrow: 1, paddingTop: 16, paddingHorizontal: 32, paddingBottom: 32, gap: 16 },
 
   // Logo
   logoSection: { alignItems: 'center' },

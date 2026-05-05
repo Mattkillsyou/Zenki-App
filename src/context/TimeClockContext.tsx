@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
 import { TimeClockState, TimeEntry } from '../types/timeclock';
 import type { PeriodTotals } from '../utils/timeclock';
 import {
@@ -66,24 +67,20 @@ export function TimeClockProvider({
   // Load from AsyncStorage
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (raw) {
-        try {
-          const saved: TimeClockState = JSON.parse(raw);
-          // Check if period needs rollover
-          const current = getCurrentBiweeklyPeriod();
-          if (saved.currentPeriod.startDate !== current.startDate) {
-            // Archive old period, start fresh
-            const newState: TimeClockState = {
-              currentEntry: saved.currentEntry, // preserve if still clocked in
-              currentPeriod: { ...current, entries: [] },
-              history: [...saved.history, saved.currentPeriod],
-            };
-            setState(newState);
-          } else {
-            setState(saved);
-          }
-        } catch {
-          setState(defaultState);
+      const saved = safeParseJSON<TimeClockState | null>(raw, null, (v) =>
+        typeof v === 'object' && v !== null && 'currentPeriod' in (v as object),
+      );
+      if (saved) {
+        // Check if period needs rollover
+        const current = getCurrentBiweeklyPeriod();
+        if (saved.currentPeriod.startDate !== current.startDate) {
+          setState({
+            currentEntry: saved.currentEntry, // preserve if still clocked in
+            currentPeriod: { ...current, entries: [] },
+            history: [...saved.history, saved.currentPeriod],
+          });
+        } else {
+          setState(saved);
         }
       }
       setLoaded(true);

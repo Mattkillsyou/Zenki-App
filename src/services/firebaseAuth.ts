@@ -14,6 +14,7 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { Member } from '../data/members';
 import { generateId } from '../utils/generateId';
+import { todayDateString } from '../utils/dates';
 
 /**
  * Stable email for a member — uses their real email or a fallback.
@@ -295,10 +296,15 @@ function buildMemberFromOAuth(params: {
     email: params.email,
     belt: 'none',
     stripes: 0,
-    memberSince: new Date().toISOString().split('T')[0],
+    memberSince: todayDateString(),
     isAdmin: false,
     totalSessions: 0,
     weekStreak: 0,
+    // Stamp the Firebase UID so the /members create rule
+    // (firebaseUid == request.auth.uid) authorizes this self-create.
+    // Without this, OAuth signups silently fail to write to /members and
+    // never appear in the admin members list.
+    firebaseUid: params.uid,
   };
 }
 
@@ -314,6 +320,8 @@ async function rehydrateOrCreateOAuthMember(
   if (!db) return { member: fallback, isNewAccount: true };
   const userDoc = doc(db, 'users', uid);
   const snap = await getDoc(userDoc);
+  let member: Member = fallback;
+  let isNewAccount = true;
   if (snap.exists()) {
     const data = snap.data();
     // If we previously stored the full member, rehydrate it; otherwise the
@@ -321,21 +329,38 @@ async function rehydrateOrCreateOAuthMember(
     // the fallback but reuse the existing memberId so analytics line up.
     const existingMember = (data as any).member as Member | undefined;
     if (existingMember && existingMember.id) {
-      return { member: existingMember, isNewAccount: false };
+      member = existingMember;
+      isNewAccount = false;
     }
   }
-  // First-time OAuth — write the full member payload so future sessions can rehydrate
-  await setDoc(userDoc, {
-    displayName: `${fallback.firstName} ${fallback.lastName}`.trim(),
-    avatar: null,
-    bio: '',
-    isPrivate: false,
-    memberId: fallback.id,
-    member: fallback,
-    createdAt: new Date().toISOString(),
-    authProvider: 'oauth',
-  }, { merge: true });
-  return { member: fallback, isNewAccount: true };
+  if (isNewAccount) {
+    // First-time OAuth — write the full member payload so future sessions can rehydrate
+    await setDoc(userDoc, {
+      displayName: `${fallback.firstName} ${fallback.lastName}`.trim(),
+      avatar: null,
+      bio: '',
+      isPrivate: false,
+      memberId: fallback.id,
+      member: fallback,
+      createdAt: new Date().toISOString(),
+      authProvider: 'oauth',
+    }, { merge: true });
+  }
+  // Always upsert to /members/{id} (idempotent via merge). The admin members
+  // list reads from /members, not /users, and the OAuth path historically
+  // never wrote there — so older Apple/Google signups are missing from the
+  // admin list. Pushing on every sign-in backfills them and keeps email/oauth
+  // parity. Stamps firebaseUid so the /members create rule passes.
+  try {
+    const memberWithUid: Member = member.firebaseUid === uid
+      ? member
+      : { ...member, firebaseUid: uid };
+    const { upsertMemberInFirestore } = await import('./memberSync');
+    await upsertMemberInFirestore(memberWithUid);
+  } catch (err) {
+    console.warn('[firebaseAuth] OAuth → /members upsert failed:', err);
+  }
+  return { member, isNewAccount };
 }
 
 /**

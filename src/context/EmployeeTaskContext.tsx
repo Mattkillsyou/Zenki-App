@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { EmployeeTask, TaskCompletion } from '../types/employeeTask';
 import { generateId } from '../utils/generateId';
+import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
+import { todayDateString as todayISO } from '../utils/dates';
 import {
   subscribeToTasks,
   subscribeToCompletions,
@@ -50,9 +52,6 @@ const EmployeeTaskContext = createContext<EmployeeTaskContextValue>({
   removeTask: () => {},
 });
 
-function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
-}
 
 function genId(): string {
   return generateId('task');
@@ -72,9 +71,13 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
           AsyncStorage.getItem(TASKS_KEY),
           AsyncStorage.getItem(COMPLETIONS_KEY),
         ]);
-        if (tRaw) setTasks(JSON.parse(tRaw));
-        if (cRaw) setCompletions(JSON.parse(cRaw));
-      } catch { /* ignore */ }
+        const cachedTasks = safeParseJSON<EmployeeTask[]>(tRaw, [], Array.isArray);
+        const cachedCompletions = safeParseJSON<TaskCompletion[]>(cRaw, [], Array.isArray);
+        if (cachedTasks.length > 0) setTasks(cachedTasks);
+        if (cachedCompletions.length > 0) setCompletions(cachedCompletions);
+      } catch (err) {
+        console.warn('[EmployeeTasks] cold-boot hydrate failed:', err);
+      }
       setLoaded(true);
     })();
   }, []);
@@ -83,11 +86,11 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     const unsubTasks = subscribeToTasks((items) => {
       setTasks(items);
-      AsyncStorage.setItem(TASKS_KEY, JSON.stringify(items)).catch(() => {});
+      safeStorageSet(TASKS_KEY, items, '[EmployeeTasks tasks]');
     });
     const unsubCompletions = subscribeToCompletions((items) => {
       setCompletions(items);
-      AsyncStorage.setItem(COMPLETIONS_KEY, JSON.stringify(items)).catch(() => {});
+      safeStorageSet(COMPLETIONS_KEY, items, '[EmployeeTasks completions]');
     });
     return () => {
       unsubTasks();
@@ -96,11 +99,11 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
   }, []);
 
   useEffect(() => {
-    if (loaded) AsyncStorage.setItem(TASKS_KEY, JSON.stringify(tasks)).catch(() => {});
+    if (loaded) safeStorageSet(TASKS_KEY, tasks, '[EmployeeTasks tasks]');
   }, [tasks, loaded]);
 
   useEffect(() => {
-    if (loaded) AsyncStorage.setItem(COMPLETIONS_KEY, JSON.stringify(completions)).catch(() => {});
+    if (loaded) safeStorageSet(COMPLETIONS_KEY, completions, '[EmployeeTasks completions]');
   }, [completions, loaded]);
 
   // ── Queries ─────────────────────────────────────────

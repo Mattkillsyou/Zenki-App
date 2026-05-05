@@ -3,6 +3,7 @@ import React, {
 } from 'react';
 import { Platform, AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeStorageGetJSON, safeStorageSet } from '../utils/safeStorage';
 import { useAuth } from './AuthContext';
 import { useNutrition } from './NutritionContext';
 import { useWorkouts } from './WorkoutContext';
@@ -70,22 +71,15 @@ const HealthKitContext = createContext<HealthKitContextValue>({
 type SyncedSet = Record<string, true>;
 
 async function loadSynced(): Promise<SyncedSet> {
-  try {
-    const raw = await AsyncStorage.getItem(SYNCED_IDS_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
+  return safeStorageGetJSON<SyncedSet>(
+    SYNCED_IDS_KEY,
+    {},
+    (v) => typeof v === 'object' && v !== null && !Array.isArray(v),
+  );
 }
 
 async function saveSynced(set: SyncedSet): Promise<void> {
-  try {
-    await AsyncStorage.setItem(SYNCED_IDS_KEY, JSON.stringify(set));
-  } catch {
-    /* ignore */
-  }
+  await safeStorageSet(SYNCED_IDS_KEY, set, '[HealthKit synced]');
 }
 
 // ─────────────────────────────────────────────────
@@ -144,7 +138,7 @@ export function HealthKitProvider({ children }: { children: React.ReactNode }) {
 
   const setEnabled = useCallback((on: boolean) => {
     setEnabledState(on);
-    AsyncStorage.setItem(ENABLED_KEY, String(on)).catch(() => {});
+    safeStorageSet(ENABLED_KEY, String(on), '[HealthKit enabled]');
   }, []);
 
   // ── Mark / check sync state ──

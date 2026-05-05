@@ -6,7 +6,9 @@ import {
   Image,
   ActivityIndicator,
   ScrollView,
-  Alert} from 'react-native';
+  Alert,
+  TextInput,
+} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,6 +40,11 @@ export function PhotoFoodScreen({ navigation }: any) {
   const { addMacroEntry } = useNutrition();
 
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+  // Optional free-form hint the user can type to guide the AI's
+  // identification (e.g. "this is turkey not beef", "no cheese, extra
+  // avocado", "rice underneath you can't see"). Cleared on each new
+  // capture so it doesn't bleed across photos.
+  const [userHint, setUserHint] = useState('');
 
   // ── Capture / pick ──
   async function pickFromLibrary() {
@@ -84,6 +91,7 @@ export function PhotoFoodScreen({ navigation }: any) {
         setPhase({ kind: 'error', message: 'Could not read the image.' });
         return;
       }
+      setUserHint(''); // fresh capture → fresh hint
       setPhase({ kind: 'captured', uri: manipulated.uri, base64: manipulated.base64 });
     } catch (e: any) {
       setPhase({ kind: 'error', message: e?.message ?? 'Could not process image.' });
@@ -96,7 +104,12 @@ export function PhotoFoodScreen({ navigation }: any) {
     setPhase({ kind: 'analyzing', uri });
 
     const token = await getCurrentIdToken();
-    const result = await recognizeFood(base64, 'image/jpeg', token ?? undefined);
+    const result = await recognizeFood(
+      base64,
+      'image/jpeg',
+      token ?? undefined,
+      userHint.trim() || undefined,
+    );
     if (!result.ok) {
       const msg =
         result.error.code === 'no_auth'
@@ -198,6 +211,36 @@ export function PhotoFoodScreen({ navigation }: any) {
         {phase.kind === 'captured' && (
           <FadeInView>
             <Image source={{ uri: phase.uri }} style={styles.preview} />
+
+            {/* Optional user-hint TextInput — text the AI uses to
+                disambiguate look-alikes, add hidden ingredients, or
+                correct what's visible. Trim/length-cap happens server
+                side; we just collect raw input here. */}
+            <View style={styles.hintWrap}>
+              <Text style={[styles.hintLabel, { color: colors.textMuted }]}>
+                ADD DETAILS · OPTIONAL
+              </Text>
+              <TextInput
+                value={userHint}
+                onChangeText={setUserHint}
+                placeholder="e.g. ground turkey not beef, no cheese, rice underneath"
+                placeholderTextColor={colors.textMuted}
+                multiline
+                maxLength={200}
+                style={[
+                  styles.hintInput,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    color: colors.textPrimary,
+                  },
+                ]}
+              />
+              <Text style={[styles.hintCount, { color: colors.textMuted }]}>
+                {userHint.length}/200
+              </Text>
+            </View>
+
             <SoundPressable
               activeOpacity={0.85}
               onPress={analyze}
@@ -320,6 +363,34 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', borderWidth: 1,
   },
   title: { fontSize: 20, fontWeight: '800', letterSpacing: 0.5 },
+
+  hintWrap: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
+  },
+  hintLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    marginBottom: spacing.xs,
+  },
+  hintInput: {
+    minHeight: 64,
+    maxHeight: 120,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    fontSize: 14,
+    textAlignVertical: 'top',
+  },
+  hintCount: {
+    fontSize: 11,
+    fontWeight: '500',
+    alignSelf: 'flex-end',
+    marginTop: 4,
+  },
 
   hero: {
     marginHorizontal: spacing.lg,

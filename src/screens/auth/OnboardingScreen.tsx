@@ -9,6 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeStorageSet } from '../../utils/safeStorage';
+import { todayDateString } from '../../utils/dates';
 import { useTheme } from '../../context/ThemeContext';
 import { useMotion } from '../../context/MotionContext';
 import { useAuth } from '../../context/AuthContext';
@@ -253,7 +255,7 @@ export function OnboardingScreen({ navigation, route }: any) {
       phone: data.phone.trim() || undefined,
       belt: data.belt,
       stripes: data.stripes,
-      memberSince: new Date().toISOString().split('T')[0],
+      memberSince: todayDateString(),
       isAdmin: false,
       profilePhoto: data.photo || undefined,
       funFact: data.funFact.trim() || undefined,
@@ -313,7 +315,7 @@ export function OnboardingScreen({ navigation, route }: any) {
       }
 
       // Initial weigh-in
-      const today = new Date().toISOString().split('T')[0];
+      const today = todayDateString();
       try {
         addWeight({
           memberId: id,
@@ -339,11 +341,13 @@ export function OnboardingScreen({ navigation, route }: any) {
           startDate: today,
           unit: data.weightUnit as 'lb' | 'kg',
         };
-        AsyncStorage.setItem('@zenki_weight_goal', JSON.stringify(goal)).catch(() => {});
+        safeStorageSet('@zenki_weight_goal', goal, '[Onboarding weight goal]');
       }
     }
 
-    navigation.replace('Main');
+    // Account is fully provisioned — hand off to the per-permission
+    // onboarding flow, which will land on Main when it's done.
+    navigation.replace('PermissionsOnboarding');
   };
 
   const pickPhoto = async () => {

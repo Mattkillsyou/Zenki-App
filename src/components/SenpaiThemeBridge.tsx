@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeStorageSet } from '../utils/safeStorage';
 import { useSenpai } from '../context/SenpaiContext';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 
@@ -25,7 +26,8 @@ export function SenpaiThemeBridge() {
     AsyncStorage.getItem(PREV_THEME_KEY).then((saved) => {
       if (saved) prevThemeRef.current = saved;
       loadedRef.current = true;
-    }).catch(() => {
+    }).catch((err) => {
+      console.warn('[SenpaiThemeBridge] hydrate failed:', err);
       loadedRef.current = true;
     });
   }, []);
@@ -43,14 +45,16 @@ export function SenpaiThemeBridge() {
     if (senpaiState.enabled && modeRef.current !== 'senpai') {
       if (modeRef.current) {
         prevThemeRef.current = modeRef.current;
-        AsyncStorage.setItem(PREV_THEME_KEY, modeRef.current).catch(() => {});
+        safeStorageSet(PREV_THEME_KEY, modeRef.current, '[SenpaiThemeBridge]');
       }
       setMode('senpai');
     } else if (prev !== null && !senpaiState.enabled && modeRef.current === 'senpai') {
       const restore = (prevThemeRef.current as ThemeMode) || 'clean-dark';
       setMode(restore);
       prevThemeRef.current = null;
-      AsyncStorage.removeItem(PREV_THEME_KEY).catch(() => {});
+      AsyncStorage.removeItem(PREV_THEME_KEY).catch((err) => {
+        console.warn('[SenpaiThemeBridge] removeItem failed:', err);
+      });
     }
   }, [senpaiState.enabled, setMode]);
 

@@ -8,22 +8,35 @@
  */
 
 export const FOOD_RECOGNITION_PROMPT = {
-  system: `You are a precise nutrition analyst. Given a photo of a meal, identify the distinct foods visible and estimate macros for each one.
+  system: `You are a precise nutrition analyst. Given a photo of a meal, decompose it into the underlying ingredients and estimate macros for each one.
 
 Rules:
 - Output ONLY valid JSON. No prose before or after.
-- Separate foods on the plate into individual entries (e.g. "chicken breast", "white rice", "broccoli") rather than one combined entry.
-- estimatedGrams is your best guess of the portion size in grams.
+- Decompose composite dishes into their constituent INGREDIENTS rather than naming the dish as a single entry. Examples:
+    • A burrito → tortilla, grilled chicken, white rice, black beans, shredded cheese, salsa, sour cream (each as a separate entry).
+    • A burger and fries → bun, beef patty, cheese slice, lettuce, tomato, french fries.
+    • A salad → lettuce, tomato, cucumber, dressing, plus each protein/topping individually.
+    • A bowl of cereal → cereal, milk (separate entries).
+- Group like with like: a single ingredient gets one entry, even if it's distributed across the plate. Don't list "rice (left side)" and "rice (right side)" — just one combined "white rice" entry.
+- Ignore drinks unless they're clearly visible AND part of what the user wants logged.
+- estimatedGrams is your best guess of the portion size in grams for that ingredient.
 - macros are for that estimated portion (NOT per 100g).
-- confidence is "low" for ambiguous foods (e.g. a mixed sauce), "medium" for common visible foods, "high" only when both the food and the portion are unambiguous.
+- confidence is "low" for ambiguous ingredients (e.g. a mixed sauce of unknown composition), "medium" for common visible ingredients, "high" only when both the ingredient and the portion are unambiguous.
 - Round protein/carbs/fat to 1 decimal place, calories to whole numbers.
-- Never include commentary, disclaimers, or prose. JSON only.`,
-  user: `Identify the foods in this image and return macros as JSON in this exact shape:
+- Cap total entries at 10. Combine very minor ingredients (garnish, herbs) into the most relevant component.
+
+If the user provides a HINT in the prompt below, treat it as authoritative context:
+- Use the hint to disambiguate look-alike foods (e.g. ground beef vs. ground turkey, regular vs. plant-based meat).
+- Use the hint to add ingredients that aren't visible but the user knows are there (e.g. "rice underneath", "olive oil cooked in").
+- When the hint conflicts with what's visible, trust the user.
+
+Never include commentary, disclaimers, or prose outside the JSON. JSON only.`,
+  user: `Identify the ingredients in this image and return macros as JSON in this exact shape:
 
 {
   "foods": [
     {
-      "name": "string (short, e.g. 'grilled chicken breast')",
+      "name": "string (short, e.g. 'grilled chicken breast', 'white rice', 'shredded cheese')",
       "estimatedGrams": number,
       "confidence": "low" | "medium" | "high",
       "macros": { "calories": number, "protein": number, "carbs": number, "fat": number }
@@ -31,6 +44,32 @@ Rules:
   ]
 }`,
 };
+
+/**
+ * Build the user prompt for `recognizeFood`, optionally appending a
+ * sanitized user hint. Returns a fresh string per request — keep this
+ * out of the prompt-cache prefix.
+ */
+export function buildFoodRecognitionUserPrompt(userHint?: string): string {
+  const base = FOOD_RECOGNITION_PROMPT.user;
+  const hint = sanitizeHint(userHint);
+  if (!hint) return base;
+  return `${base}\n\nUser hint to guide identification: """${hint}"""`;
+}
+
+/**
+ * Strip newlines / control chars and clamp length so a misbehaving hint
+ * can't redirect the model away from the food task. The triple-quote
+ * delimiter in the prompt above further limits injection options.
+ */
+function sanitizeHint(raw: string | undefined): string {
+  if (!raw) return '';
+  return raw
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[^\x20-\x7E]/g, '') // ASCII printable only
+    .trim()
+    .slice(0, 200);
+}
 
 export const DEXA_EXTRACTION_PROMPT = {
   system: `You are a medical-imaging report parser. Given a DEXA body-composition scan report (PDF or photo), extract the standard metrics as structured JSON.

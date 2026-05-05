@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 import { Product } from '../data/products';
 
 const CART_KEY = '@zenki_cart';
@@ -42,14 +43,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     AsyncStorage.getItem(CART_KEY).then((raw) => {
       if (cancelled) return;
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) setCart(parsed);
-        } catch { /* ignore */ }
-      }
+      const parsed = safeParseJSON<CartItem[]>(raw, [], Array.isArray);
+      if (parsed.length > 0) setCart(parsed);
       setHydrated(true);
-    }).catch(() => { if (!cancelled) setHydrated(true); });
+    }).catch((err) => {
+      console.warn('[Cart] hydrate failed:', err);
+      if (!cancelled) setHydrated(true);
+    });
     return () => { cancelled = true; };
   }, []);
 
@@ -58,9 +58,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!hydrated) return;
     if (cart.length > 0) {
-      AsyncStorage.setItem(CART_KEY, JSON.stringify(cart)).catch(() => {});
+      safeStorageSet(CART_KEY, cart, '[Cart]');
     } else {
-      AsyncStorage.removeItem(CART_KEY).catch(() => {});
+      AsyncStorage.removeItem(CART_KEY).catch((err) => {
+        console.warn('[Cart] AsyncStorage.removeItem failed:', err);
+      });
     }
   }, [cart, hydrated]);
 

@@ -29,8 +29,17 @@ class AsyncStoragePersistence {
     await AsyncStorage.setItem(key, JSON.stringify(value));
   }
   async _get<T>(key: string): Promise<T | null> {
+    // Wrap JSON.parse so a corrupt cached blob doesn't throw out of the
+    // auth persistence layer — Firebase Auth treats null as "no session"
+    // which is the safe fallback if the cached payload is unreadable.
     const raw = await AsyncStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : null;
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as T;
+    } catch (err) {
+      console.warn(`[firebase auth persistence] parse failed for ${key}:`, err);
+      return null;
+    }
   }
   async _remove(key: string) {
     await AsyncStorage.removeItem(key);

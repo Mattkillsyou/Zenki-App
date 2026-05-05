@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 import { Member, MEMBERS } from '../data/members';
 import { pushMemberToSheets, pushMemberToFirestore, subscribeToMember } from '../services/memberSync';
 import { getMemberOverride, saveMemberOverride } from '../services/memberOverrides';
@@ -52,14 +53,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let base: Member | null = MEMBERS.find((m) => m.id === id) ?? null;
         if (!base) {
           const raw = await AsyncStorage.getItem(CUSTOM_MEMBER_KEY);
-          if (raw) {
-            try {
-              const custom: Member = JSON.parse(raw);
-              if (custom.id === id) base = custom;
-            } catch {
-              /* ignore */
-            }
-          }
+          const custom = safeParseJSON<Member | null>(raw, null, (v) =>
+            typeof v === 'object' && v !== null && typeof (v as Member).id === 'string',
+          );
+          if (custom && custom.id === id) base = custom;
         }
         if (!base) return;
 
@@ -87,9 +84,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Live Firestore subscription on the signed-in user's member doc. Picks
   // up admin role flips (e.g. isEmployee true) made on another device and
   // mirrors them to the local override cache so they survive app reload.
+  //
+  // ALSO: backfill /members on every app open. Past Apple/Google OAuth
+  // signups (and any other flow that wrote to /users but skipped /members)
+  // are silently missing from the admin members list. An idempotent
+  // upsert here ensures every signed-in user has a /members doc with the
+  // current firebaseUid stamp. Fire-and-forget — failures don't block UI.
   useEffect(() => {
     const id = user?.id;
     if (!id) return;
+    if (user) {
+      const stampedUid = auth?.currentUser?.uid ?? user.firebaseUid;
+      if (stampedUid) {
+        const memberWithUid: Member =
+          user.firebaseUid === stampedUid ? user : { ...user, firebaseUid: stampedUid };
+        pushMemberToFirestore(memberWithUid).catch((err) =>
+          console.warn('[AuthContext] /members backfill failed:', err),
+        );
+      }
+    }
     const unsub = subscribeToMember(id, (fresh) => {
       if (!fresh) return;
       setUser((prev) => {
@@ -180,7 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (token) {
         savePushTokenToFirestore(memberWithUid.id, token);
         const updatedMember = { ...memberWithUid, pushToken: token };
-        AsyncStorage.setItem(CUSTOM_MEMBER_KEY, JSON.stringify(updatedMember)).catch(() => {});
+        safeStorageSet(CUSTOM_MEMBER_KEY, updatedMember, '[Auth custom member]');
       }
     });
   }, []);

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 import { PeriodEntry, CycleInfo, CycleSymptom, FlowIntensity, computeCycleInfo } from '../types/cycle';
 import { generateId } from '../utils/generateId';
 
@@ -70,24 +71,19 @@ export function CycleTrackerProvider({ children }: { children: React.ReactNode }
           AsyncStorage.getItem(STORAGE_KEY),
           AsyncStorage.getItem(SETTINGS_KEY),
         ]);
-        if (entriesRaw) setEntries(JSON.parse(entriesRaw));
-        if (settingsRaw) setSettings(JSON.parse(settingsRaw));
-      } catch {} finally {
+        setEntries(safeParseJSON<PeriodEntry[]>(entriesRaw, [], Array.isArray));
+        setSettings(safeParseJSON<CycleSettings>(settingsRaw, { showOnDashboard: true }));
+      } catch (err) {
+        console.warn('[Cycle] cold-boot hydrate failed:', err);
+      } finally {
         setLoaded(true);
       }
     })();
   }, []);
 
   // Persist on change
-  useEffect(() => {
-    if (!loaded) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(entries)).catch(() => {});
-  }, [entries, loaded]);
-
-  useEffect(() => {
-    if (!loaded) return;
-    AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)).catch(() => {});
-  }, [settings, loaded]);
+  useEffect(() => { if (loaded) safeStorageSet(STORAGE_KEY, entries, '[Cycle entries]'); }, [entries, loaded]);
+  useEffect(() => { if (loaded) safeStorageSet(SETTINGS_KEY, settings, '[Cycle settings]'); }, [settings, loaded]);
 
   const logPeriodStart = useCallback((params: {
     memberId: string;

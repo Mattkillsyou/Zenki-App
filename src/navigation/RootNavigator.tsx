@@ -28,6 +28,7 @@ import { SetPasswordScreen } from '../screens/auth/SetPasswordScreen';
 import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { ContactScreen } from '../screens/auth/ContactScreen';
 import { OnboardingScreen } from '../screens/auth/OnboardingScreen';
+import { PermissionsOnboardingScreen } from '../screens/auth/PermissionsOnboardingScreen';
 
 // Main stack screens
 import { SettingsScreen } from '../screens/SettingsScreen';
@@ -222,6 +223,7 @@ export function RootNavigator() {
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={pushTransition} />
       <Stack.Screen name="Contact" component={ContactScreen} options={pushTransition} />
       <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ ...crossfadeTransition, gestureEnabled: false }} />
+      <Stack.Screen name="PermissionsOnboarding" component={PermissionsOnboardingScreen} options={{ ...crossfadeTransition, gestureEnabled: false }} />
 
       {/* Main tabs — crossfade from auth */}
       <Stack.Screen

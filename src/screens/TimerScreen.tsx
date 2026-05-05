@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
 import { useTheme } from '../context/ThemeContext';
 import { useSound } from '../context/SoundContext';
 import { useSenpai } from '../context/SenpaiContext';
@@ -55,10 +56,12 @@ export function TimerScreen({ navigation, route }: any) {
 
   useEffect(() => {
     AsyncStorage.getItem(TIMER_PRESETS_KEY).then((raw) => {
-      if (raw) try { const parsed = JSON.parse(raw); if (parsed.length > 0) setPresets(parsed); } catch {}
+      const parsed = safeParseJSON<TimerPreset[]>(raw, [], Array.isArray);
+      if (parsed.length > 0) setPresets(parsed);
     });
     AsyncStorage.getItem(TIMER_HISTORY_KEY).then((raw) => {
-      if (raw) try { setHistory(JSON.parse(raw)); } catch {}
+      const parsed = safeParseJSON<TimerSessionLog[]>(raw, [], Array.isArray);
+      if (parsed.length > 0) setHistory(parsed);
     });
   }, []);
 

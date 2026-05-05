@@ -65,12 +65,97 @@ export interface HKDailyTotals {
 
 // ─────────────────────────────────────────────────
 // Lazy native-module loader.
+//
+// `react-native-health` ships without TypeScript types. Rather than `as any`
+// at every callsite, we declare a structural interface for the surface we
+// actually use. The shape is intentionally narrow — extend `HealthKitModule`
+// when you wire up another method, don't widen it.
 // ─────────────────────────────────────────────────
 
-let _AppleHealthKit: any = null;
+type HKCallback<T> = (err: unknown, res: T) => void;
+
+interface HKConstants {
+  Permissions?: Record<string, string>;
+  Units?: Record<string, string>;
+  Activities?: Record<string, number>;
+}
+
+interface HKWeightOpts {
+  value: number;
+  unit: string;
+  metadata?: Record<string, unknown>;
+  date?: string;
+}
+
+interface HKWorkoutOpts {
+  type: number;
+  startDate: string;
+  endDate: string;
+  energyBurned?: number;
+  distance?: number;
+  metadata?: Record<string, unknown>;
+}
+
+interface HKHeartRateOpts {
+  value: number;
+  startDate: string;
+  metadata?: Record<string, unknown>;
+}
+
+interface HKFoodOpts {
+  foodName: string;
+  mealType: string;
+  date: string;
+  energy?: number;
+  energyUnit?: string;
+  protein?: number;
+  carbohydrates?: number;
+  fatTotal?: number;
+  metadata?: Record<string, unknown>;
+}
+
+interface HKMacroOpts {
+  value: number;
+  date: string;
+  metadata?: Record<string, unknown>;
+}
+
+interface HKQueryOpts {
+  startDate: string;
+  endDate?: string;
+  ascending?: boolean;
+  limit?: number;
+  unit?: string;
+}
+
+interface HKSample {
+  value: number;
+  startDate?: string;
+  endDate?: string;
+}
+
+interface HealthKitModule {
+  Constants?: HKConstants;
+  initHealthKit: (opts: { permissions: { read: string[]; write: string[] } }, cb: HKCallback<unknown>) => void;
+  saveWeight: (opts: HKWeightOpts, cb: HKCallback<unknown>) => void;
+  saveWorkout: (opts: HKWorkoutOpts, cb: HKCallback<unknown>) => void;
+  saveHeartRateSample: (opts: HKHeartRateOpts, cb: HKCallback<unknown>) => void;
+  saveFood?: (opts: HKFoodOpts, cb: HKCallback<unknown>) => void;
+  saveEnergyConsumed?: (opts: HKMacroOpts, cb: HKCallback<unknown>) => void;
+  saveProtein?: (opts: HKMacroOpts, cb: HKCallback<unknown>) => void;
+  saveCarbohydrates?: (opts: HKMacroOpts, cb: HKCallback<unknown>) => void;
+  saveFatTotal?: (opts: HKMacroOpts, cb: HKCallback<unknown>) => void;
+  getStepCount: (opts: HKQueryOpts, cb: HKCallback<HKSample>) => void;
+  getActiveEnergyBurned: (opts: HKQueryOpts, cb: HKCallback<HKSample[]>) => void;
+  getAppleExerciseTime?: (opts: HKQueryOpts, cb: HKCallback<HKSample[]>) => void;
+  getHeartRateSamples: (opts: HKQueryOpts, cb: HKCallback<HKSample[]>) => void;
+  getWeightSamples: (opts: HKQueryOpts, cb: HKCallback<HKSample[]>) => void;
+}
+
+let _AppleHealthKit: HealthKitModule | null = null;
 let _loadAttempted = false;
 
-function getAppleHealthKit(): any {
+function getAppleHealthKit(): HealthKitModule | null {
   if (Platform.OS !== 'ios') return null;
   if (_loadAttempted) return _AppleHealthKit;
   _loadAttempted = true;
@@ -78,7 +163,7 @@ function getAppleHealthKit(): any {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mod = require('react-native-health');
     // The package exports default + named (Constants). We accept either shape.
-    const HK = mod?.default ?? mod;
+    const HK = (mod?.default ?? mod) as Partial<HealthKitModule>;
     // Verify the native bridge actually registered its methods. On RN 0.80+
     // bridgeless / hybrid builds, react-native-health@1.19.0's JS shim can
     // load while NativeModules.AppleHealthKit is undefined — the package
@@ -90,7 +175,7 @@ function getAppleHealthKit(): any {
       _AppleHealthKit = null;
       return null;
     }
-    _AppleHealthKit = HK;
+    _AppleHealthKit = HK as HealthKitModule;
   } catch (err) {
     console.warn('[HealthKit] Native module unavailable — running without HealthKit sync:', err);
     _AppleHealthKit = null;
@@ -179,7 +264,7 @@ export function initHealthKit(categories: HealthCategory[] = ALL_HEALTH_CATEGORI
   }
 
   _initPromise = new Promise<boolean>((resolve) => {
-    HK.initHealthKit({ permissions } as any, (err: any) => {
+    HK.initHealthKit({ permissions }, (err) => {
       if (err) {
         console.warn('[HealthKit] init failed:', err);
         _initPromise = null; // allow retry
@@ -197,7 +282,7 @@ export function initHealthKit(categories: HealthCategory[] = ALL_HEALTH_CATEGORI
 // ─────────────────────────────────────────────────
 
 function nodeBackCallback<T>(
-  fn: (cb: (err: any, res: T) => void) => void,
+  fn: (cb: (err: unknown, res: T) => void) => void,
 ): Promise<T | null> {
   return new Promise((resolve) => {
     try {
@@ -234,22 +319,19 @@ function startOfTodayIso(): string {
 export async function pushWeight(weight: number, unit: 'kg' | 'lb', whenIso?: string): Promise<boolean> {
   const HK = getAppleHealthKit();
   if (!HK) return false;
-  const kg = unit === 'lb' ? lbsToKg(weight) : weight;
-  const opts = {
-    value: kg,
-    unit: HK.Constants?.Units?.gram ? 'gram' : 'pound',
+  // react-native-health expects pounds when unit='pound', kilograms otherwise.
+  // We send pounds directly when input is `lb` to avoid float drift; otherwise
+  // we converted above and send kg.
+  const opts: HKWeightOpts = {
+    value: unit === 'lb' ? weight : weight,
+    unit: unit === 'lb' ? 'pound' : 'kg',
     metadata: { source: 'Zenki Dojo' },
     date: whenIso ?? new Date().toISOString(),
   };
-  // react-native-health expects pounds when unit='pound', kilograms otherwise.
-  // We send pounds directly to avoid float drift.
-  if (unit === 'lb') {
-    opts.value = weight;
-    (opts as any).unit = 'pound';
-  } else {
-    (opts as any).unit = 'kg';
-  }
-  const ok = await nodeBackCallback<any>((cb) => HK.saveWeight(opts as any, cb));
+  // Avoid the temporarily-unused kg var lint — we keep the conversion path
+  // documented in case the native bridge stops accepting 'pound'.
+  void lbsToKg;
+  const ok = await nodeBackCallback<unknown>((cb) => HK.saveWeight(opts, cb));
   return ok != null;
 }
 
@@ -266,7 +348,7 @@ export async function pushWorkout(params: {
   if (!HK) return false;
   const Activities = HK.Constants?.Activities ?? {};
   const activity = params.activityType ?? Activities.Other ?? 3000;
-  const opts: any = {
+  const opts: HKWorkoutOpts = {
     type: activity,
     startDate: params.startIso,
     endDate: params.endIso,
@@ -274,7 +356,7 @@ export async function pushWorkout(params: {
     distance: params.distanceMeters,
     metadata: { source: 'Zenki Dojo', ...(params.metadata ?? {}) },
   };
-  const ok = await nodeBackCallback<any>((cb) => HK.saveWorkout(opts, cb));
+  const ok = await nodeBackCallback<unknown>((cb) => HK.saveWorkout(opts, cb));
   return ok != null;
 }
 
@@ -282,12 +364,12 @@ export async function pushWorkout(params: {
 export async function pushHeartRate(bpm: number, whenIso?: string): Promise<boolean> {
   const HK = getAppleHealthKit();
   if (!HK) return false;
-  const opts: any = {
+  const opts: HKHeartRateOpts = {
     value: bpm,
     startDate: whenIso ?? new Date().toISOString(),
     metadata: { source: 'Zenki Dojo' },
   };
-  const ok = await nodeBackCallback<any>((cb) => HK.saveHeartRateSample(opts, cb));
+  const ok = await nodeBackCallback<unknown>((cb) => HK.saveHeartRateSample(opts, cb));
   return ok != null;
 }
 
@@ -302,7 +384,7 @@ export async function pushFood(food: HKFoodSample): Promise<boolean> {
     // Some package versions only expose individual setters
     return pushFoodSplit(food);
   }
-  const opts: any = {
+  const opts: HKFoodOpts = {
     foodName: food.name,
     mealType: food.mealType ?? 'Snack',
     date: food.date,
@@ -313,7 +395,7 @@ export async function pushFood(food: HKFoodSample): Promise<boolean> {
     fatTotal: food.fatG,
     metadata: { source: 'Zenki Dojo' },
   };
-  const ok = await nodeBackCallback<any>((cb) => HK.saveFood(opts, cb));
+  const ok = await nodeBackCallback<unknown>((cb) => HK.saveFood!(opts, cb));
   return ok != null;
 }
 
@@ -323,17 +405,18 @@ async function pushFoodSplit(food: HKFoodSample): Promise<boolean> {
   if (!HK) return false;
   const date = food.date;
   const tasks: Promise<any>[] = [];
+  const meta = { source: 'Zenki Dojo' };
   if (food.calories != null && HK.saveEnergyConsumed) {
-    tasks.push(nodeBackCallback((cb) => HK.saveEnergyConsumed({ value: food.calories, date, metadata: { source: 'Zenki Dojo' } }, cb)));
+    tasks.push(nodeBackCallback((cb) => HK.saveEnergyConsumed!({ value: food.calories!, date, metadata: meta }, cb)));
   }
   if (food.proteinG != null && HK.saveProtein) {
-    tasks.push(nodeBackCallback((cb) => HK.saveProtein({ value: food.proteinG, date, metadata: { source: 'Zenki Dojo' } }, cb)));
+    tasks.push(nodeBackCallback((cb) => HK.saveProtein!({ value: food.proteinG!, date, metadata: meta }, cb)));
   }
   if (food.carbsG != null && HK.saveCarbohydrates) {
-    tasks.push(nodeBackCallback((cb) => HK.saveCarbohydrates({ value: food.carbsG, date, metadata: { source: 'Zenki Dojo' } }, cb)));
+    tasks.push(nodeBackCallback((cb) => HK.saveCarbohydrates!({ value: food.carbsG!, date, metadata: meta }, cb)));
   }
   if (food.fatG != null && HK.saveFatTotal) {
-    tasks.push(nodeBackCallback((cb) => HK.saveFatTotal({ value: food.fatG, date, metadata: { source: 'Zenki Dojo' } }, cb)));
+    tasks.push(nodeBackCallback((cb) => HK.saveFatTotal!({ value: food.fatG!, date, metadata: meta }, cb)));
   }
   const results = await Promise.all(tasks);
   return results.some((r) => r != null);
@@ -347,8 +430,8 @@ export async function pullSteps(sinceIso?: string): Promise<number> {
   const HK = getAppleHealthKit();
   if (!HK) return 0;
   const startDate = sinceIso ?? startOfTodayIso();
-  const res = await nodeBackCallback<any>((cb) =>
-    HK.getStepCount({ startDate } as any, cb),
+  const res = await nodeBackCallback<HKSample>((cb) =>
+    HK.getStepCount({ startDate }, cb),
   );
   return Number(res?.value ?? 0);
 }
@@ -357,8 +440,8 @@ export async function pullActiveEnergyKcal(sinceIso?: string): Promise<number> {
   const HK = getAppleHealthKit();
   if (!HK) return 0;
   const startDate = sinceIso ?? startOfTodayIso();
-  const samples = await nodeBackCallback<any[]>((cb) =>
-    HK.getActiveEnergyBurned({ startDate } as any, cb),
+  const samples = await nodeBackCallback<HKSample[]>((cb) =>
+    HK.getActiveEnergyBurned({ startDate }, cb),
   );
   if (!samples || !Array.isArray(samples)) return 0;
   return samples.reduce((acc, s) => acc + Number(s?.value ?? 0), 0);
@@ -369,8 +452,8 @@ export async function pullActiveMinutes(sinceIso?: string): Promise<number> {
   if (!HK) return 0;
   const startDate = sinceIso ?? startOfTodayIso();
   if (!HK.getAppleExerciseTime) return 0;
-  const samples = await nodeBackCallback<any[]>((cb) =>
-    HK.getAppleExerciseTime({ startDate } as any, cb),
+  const samples = await nodeBackCallback<HKSample[]>((cb) =>
+    HK.getAppleExerciseTime!({ startDate }, cb),
   );
   if (!samples || !Array.isArray(samples)) return 0;
   return samples.reduce((acc, s) => acc + Number(s?.value ?? 0), 0);
@@ -380,24 +463,24 @@ export async function pullLatestHeartRate(): Promise<HKHeartRateSample | null> {
   const HK = getAppleHealthKit();
   if (!HK) return null;
   const startDate = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  const samples = await nodeBackCallback<any[]>((cb) =>
-    HK.getHeartRateSamples({ startDate, ascending: false, limit: 1 } as any, cb),
+  const samples = await nodeBackCallback<HKSample[]>((cb) =>
+    HK.getHeartRateSamples({ startDate, ascending: false, limit: 1 }, cb),
   );
   if (!samples || samples.length === 0) return null;
   const s = samples[0];
-  return { bpm: Number(s.value), date: s.startDate ?? s.endDate };
+  return { bpm: Number(s.value), date: s.startDate ?? s.endDate ?? new Date().toISOString() };
 }
 
 export async function pullLatestWeight(): Promise<HKWeightSample | null> {
   const HK = getAppleHealthKit();
   if (!HK) return null;
   const startDate = new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString();
-  const samples = await nodeBackCallback<any[]>((cb) =>
-    HK.getWeightSamples({ startDate, unit: 'kg', ascending: false, limit: 1 } as any, cb),
+  const samples = await nodeBackCallback<HKSample[]>((cb) =>
+    HK.getWeightSamples({ startDate, unit: 'kg', ascending: false, limit: 1 }, cb),
   );
   if (!samples || samples.length === 0) return null;
   const s = samples[0];
-  return { kg: Number(s.value), date: s.startDate ?? s.endDate };
+  return { kg: Number(s.value), date: s.startDate ?? s.endDate ?? new Date().toISOString() };
 }
 
 export async function pullDailyTotals(dateIso?: string): Promise<HKDailyTotals> {

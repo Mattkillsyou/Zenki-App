@@ -37,8 +37,8 @@ export function isWithinDojo(latitude: number, longitude: number): boolean {
 }
 
 /**
- * Today's date as YYYY-MM-DD in the local timezone.
+ * Today's date as YYYY-MM-DD (UTC). Re-exported from `utils/dates` as
+ * `getTodayString` so existing call sites don't need to be touched.
+ * For new code, prefer the canonical `todayDateString()` import.
  */
-export function getTodayString(): string {
-  return new Date().toISOString().split('T')[0];
-}
+export { todayDateString as getTodayString } from './dates';

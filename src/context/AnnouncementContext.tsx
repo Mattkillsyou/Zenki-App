@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateId } from '../utils/generateId';
+import { safeStorageGetJSON, safeStorageSet } from '../utils/safeStorage';
 import {
   subscribeToAnnouncements,
   upsertAnnouncementInFirestore,
@@ -37,10 +37,8 @@ export function AnnouncementProvider({ children }: { children: React.ReactNode }
   // AsyncStorage cache hydrate — covers offline cold-boot. Firestore
   // subscription overwrites this as soon as it fires.
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (raw) {
-        try { setAnnouncements(JSON.parse(raw)); } catch { /* ignore */ }
-      }
+    safeStorageGetJSON<Announcement[]>(STORAGE_KEY, [], Array.isArray).then((cached) => {
+      if (cached.length > 0) setAnnouncements(cached);
     });
   }, []);
 
@@ -52,7 +50,7 @@ export function AnnouncementProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     const unsub = subscribeToAnnouncements((items) => {
       setAnnouncements(items);
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(items)).catch(() => {});
+      safeStorageSet(STORAGE_KEY, items, '[Announcements]');
     });
     return () => { unsub(); };
   }, []);

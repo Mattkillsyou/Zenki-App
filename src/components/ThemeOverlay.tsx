@@ -90,20 +90,12 @@ function Vignette({ color }: { color: string }) {
       />
     );
   }
-  // Native: approximate with border overlay
-  return (
-    <View
-      style={[
-        styles.fullScreen,
-        {
-          borderWidth: 60,
-          borderColor: color,
-          borderRadius: 0,
-          opacity: 0.5,
-        },
-      ]}
-    />
-  );
+  // Native: previously approximated with a 60px border overlay, but on
+  // iPhone that read as a chunky dark band running down the left and
+  // right edges of every themed screen. Disabled on native — the visual
+  // tax outweighed the atmospheric benefit. Web vignette (radial-gradient)
+  // still renders normally.
+  return null;
 }
 
 /* ─── Flicker ────────────────────────────────────────────────────────────── */
@@ -325,17 +317,25 @@ function SheikahRune({ rune, color }: { rune: any; color: string }) {
   const rotation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Slow continuous rotation
-    Animated.loop(
+    // Slow continuous rotation — capture the loop handle so unmount can
+    // stop it. Without this the rune keeps spinning on the native driver
+    // forever and stacks across theme changes.
+    const rotateLoop = Animated.loop(
       Animated.timing(rotation, {
         toValue: 1,
         duration: rune.rotationSpeed,
         useNativeDriver: true,
       }),
-    ).start();
+    );
+    rotateLoop.start();
 
-    // Float upward cycle
+    // Float upward cycle — recursive via .start() callback. Use a
+    // `cancelled` flag so the recursion bails after unmount; otherwise
+    // animate() keeps re-queuing forever on Animated.Values whose views
+    // are gone.
+    let cancelled = false;
     const animate = () => {
+      if (cancelled) return;
       const startPx = (rune.startY / 100) * SCREEN_H;
       translateY.setValue(startPx);
       fade.setValue(0);
@@ -351,12 +351,18 @@ function SheikahRune({ rune, color }: { rune: any; color: string }) {
           Animated.timing(fade, { toValue: 1, duration: rune.speed * 0.6, useNativeDriver: true }),
           Animated.timing(fade, { toValue: 0, duration: rune.speed * 0.2, useNativeDriver: true }),
         ]),
-      ]).start(() => animate());
+      ]).start(() => {
+        if (!cancelled) animate();
+      });
     };
 
     const timer = setTimeout(animate, rune.delay);
-    return () => clearTimeout(timer);
-  }, []);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      rotateLoop.stop();
+    };
+  }, [rune, rotation, translateY, fade]);
 
   const rotateInterpolation = rotation.interpolate({
     inputRange: [0, 1],

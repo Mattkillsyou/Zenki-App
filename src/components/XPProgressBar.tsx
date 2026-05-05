@@ -28,14 +28,19 @@ export function XPProgressBar({ level, currentXP, nextLevelXP, progress, totalXP
 
   useEffect(() => {
     if (reduceMotion) return;
-    Animated.loop(
+    // Capture loop handle so we can stop it on unmount — without cleanup
+    // the native-driver animation runs forever and accumulates across
+    // remounts, which contributed to post-spin home-screen freezes.
+    const loop = Animated.loop(
       Animated.timing(shineAnim, {
         toValue: 2,
         duration: 2000,
         useNativeDriver: true,
       }),
-    ).start();
-  }, [reduceMotion]);
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reduceMotion, shineAnim]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.surface }]}>

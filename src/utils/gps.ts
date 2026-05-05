@@ -4,6 +4,7 @@
  */
 
 import { GpsPoint, GpsActivity, SplitData } from '../types/activity';
+import { safeParseJSON } from './safeStorage';
 
 /** Haversine distance between two GPS coordinates (meters). */
 export function haversineMeters(
@@ -448,18 +449,14 @@ export function encodeRoute(route: GpsPoint[]): string {
 
 /** Decode a route from the compact format back to GpsPoint[]. */
 export function decodeRoute(encoded: string): GpsPoint[] {
-  try {
-    const arr = JSON.parse(encoded);
-    return arr.map((p: any) => ({
-      latitude: p.la,
-      longitude: p.lo,
-      altitude: p.al,
-      speed: p.sp,
-      timestamp: p.t,
-    }));
-  } catch {
-    return [];
-  }
+  const arr = safeParseJSON<any[]>(encoded, [], Array.isArray);
+  return arr.map((p: any) => ({
+    latitude: p.la,
+    longitude: p.lo,
+    altitude: p.al,
+    speed: p.sp,
+    timestamp: p.t,
+  }));
 }
 
 /** Smooth a route by averaging adjacent points (simple moving window). */

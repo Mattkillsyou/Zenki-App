@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
+import { todayDateString as todayISO } from '../utils/dates';
 import { WorkoutLog, PersonalRecord } from '../types/workout';
 import { EXERCISES_BY_KEY } from '../data/exercises';
 import { generateId } from '../utils/generateId';
@@ -44,9 +46,6 @@ const WorkoutContext = createContext<WorkoutContextValue>({
   removePR: () => {},
 });
 
-function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
-}
 
 function genId(prefix: string): string {
   return generateId(prefix);
@@ -69,8 +68,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(PRS_KEY),
         ]);
         if (cancelled) return;
-        setLogs(lRaw ? JSON.parse(lRaw) : []);
-        setPRs(pRaw ? JSON.parse(pRaw) : []);
+        setLogs(safeParseJSON<WorkoutLog[]>(lRaw, [], Array.isArray));
+        setPRs(safeParseJSON<PersonalRecord[]>(pRaw, [], Array.isArray));
       } catch { /* ignore */ }
       if (!cancelled) setLoaded(true);
     })();

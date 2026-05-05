@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
 import { Member, MEMBERS } from '../data/members';
 
 // Local cache of admin-edited members and self-signups, keyed by member id.
@@ -11,10 +12,11 @@ type Overrides = Record<string, Member>;
 async function readOverrides(): Promise<Overrides> {
   try {
     const raw = await AsyncStorage.getItem(OVERRIDES_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? (parsed as Overrides) : {};
-  } catch {
+    return safeParseJSON<Overrides>(raw, {}, (v) =>
+      typeof v === 'object' && v !== null && !Array.isArray(v),
+    );
+  } catch (err) {
+    console.warn('[memberOverrides] readOverrides failed:', err);
     return {};
   }
 }

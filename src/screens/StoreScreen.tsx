@@ -15,6 +15,7 @@ import { KeyboardAwareScrollView } from '../components';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { CATEGORIES, Product } from '../data/products';
@@ -60,8 +61,9 @@ export function StoreScreen({ navigation }: any) {
   useEffect(() => {
     let cancelled = false;
     AsyncStorage.getItem(WISHLIST_KEY).then((raw) => {
-      if (cancelled || !raw) return;
-      try { setWishlist(JSON.parse(raw)); } catch { /* ignore */ }
+      if (cancelled) return;
+      const parsed = safeParseJSON<string[]>(raw, [], Array.isArray);
+      if (parsed.length > 0) setWishlist(parsed);
     });
     return () => { cancelled = true; };
   }, []);
@@ -118,6 +120,7 @@ export function StoreScreen({ navigation }: any) {
 
   const renderProduct = ({ item }: { item: Product }) => (
     <TouchableOpacity
+      key={item.id}
       style={[styles.productCard, { backgroundColor: colors.surface }]}
       onPress={() => handleProductPress(item)}
       activeOpacity={0.85}

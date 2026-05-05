@@ -18,6 +18,7 @@ import {
   FOOD_RECOGNITION_PROMPT,
   DEXA_EXTRACTION_PROMPT,
   BLOODWORK_EXTRACTION_PROMPT,
+  buildFoodRecognitionUserPrompt,
   safeParseJson,
 } from './prompts';
 
@@ -58,6 +59,9 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB
 interface VisionRequest {
   imageBase64?: string;
   mimeType?: 'image/jpeg' | 'image/png' | 'application/pdf';
+  /** Optional free-form user hint, only honored by `recognizeFood`. Sanitized
+   *  + length-clamped server-side before being included in the model prompt. */
+  userHint?: string;
 }
 
 // ─────────────────────────────────────────────
@@ -162,9 +166,10 @@ export const recognizeFood = onRequest(
     if (bodyErr) { res.status(400).send(bodyErr); return; }
 
     try {
+      const userPrompt = buildFoodRecognitionUserPrompt(req.body.userHint);
       const text = await callClaude(
         FOOD_RECOGNITION_PROMPT.system,
-        FOOD_RECOGNITION_PROMPT.user,
+        userPrompt,
         req.body.imageBase64,
         req.body.mimeType as any,
         ANTHROPIC_API_KEY.value(),

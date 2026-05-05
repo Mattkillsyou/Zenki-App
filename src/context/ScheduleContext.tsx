@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState, useCall
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ClassType, DAYS, SCHEDULES, ScheduleEntry } from '../data/schedule';
 import { generateId } from '../utils/generateId';
+import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 import {
   subscribeToSchedule,
   upsertScheduleDay,
@@ -60,20 +61,18 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
       if (cancelled) return;
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as Partial<ScheduleByDay>;
-          // Merge stored schedule on top of seed so newly-added seed classes
-          // (via a code release) still appear unless explicitly overridden.
-          const next = seedScheduleAsClasses();
-          for (const day of DAYS) {
-            if (parsed && Array.isArray(parsed[day])) next[day] = parsed[day] as ScheduleClass[];
-          }
-          setSchedule(next);
-        } catch {
-          /* ignore — fall through with seed */
-        }
+      const parsed = safeParseJSON<Partial<ScheduleByDay>>(
+        raw,
+        {},
+        (v) => typeof v === 'object' && v !== null && !Array.isArray(v),
+      );
+      // Merge stored schedule on top of seed so newly-added seed classes
+      // (via a code release) still appear unless explicitly overridden.
+      const next = seedScheduleAsClasses();
+      for (const day of DAYS) {
+        if (Array.isArray(parsed[day])) next[day] = parsed[day] as ScheduleClass[];
       }
+      setSchedule(next);
       setLoaded(true);
     });
     return () => { cancelled = true; };
@@ -90,7 +89,7 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
           const fromFs = byDay[day];
           if (Array.isArray(fromFs)) next[day] = fromFs;
         }
-        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+        safeStorageSet(STORAGE_KEY, next, '[Schedule]');
         return next;
       });
     });
@@ -134,7 +133,9 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
 
   const resetToSeed = useCallback(async () => {
     setSchedule(seedScheduleAsClasses());
-    AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+    AsyncStorage.removeItem(STORAGE_KEY).catch((err) => {
+      console.warn('[Schedule] AsyncStorage.removeItem failed:', err);
+    });
     // Clear every day's Firestore doc so seed shows for everyone.
     await Promise.all(DAYS.map((d) => clearScheduleDay(d).catch(() => false)));
   }, []);

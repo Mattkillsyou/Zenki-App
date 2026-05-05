@@ -74,12 +74,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     this.setState({ errorInfo });
 
-    // Log to console in dev
-    if (__DEV__) {
-      console.error('[ErrorBoundary]', this.props.screenName || 'Unknown', error, errorInfo);
-    }
+    // Log on every build, not just __DEV__. This is the only signal
+    // anyone gets from a crashed render in production until a real
+    // crash reporter (Sentry/Crashlytics) is wired up. console output
+    // is captured by Xcode (iOS) / logcat (Android) / `expo logs`.
+    const tag = this.props.screenName || 'Unknown';
+    console.error(`[ErrorBoundary:${tag}]`, error, errorInfo?.componentStack ?? '');
 
-    // External callback for error reporting
+    // External callback for error reporting (e.g., wire to Sentry later).
     if (this.props.onError) {
       this.props.onError(error, errorInfo);
     }

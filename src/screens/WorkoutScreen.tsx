@@ -10,6 +10,7 @@ import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useWorkouts } from '../context/WorkoutContext';
@@ -451,7 +452,8 @@ function StatsTab({
   const [structuredLogs, setStructuredLogs] = React.useState<StructuredWorkoutLog[]>([]);
   React.useEffect(() => {
     AsyncStorage.getItem(STRUCTURED_LOGS_KEY).then((raw) => {
-      if (raw) try { setStructuredLogs(JSON.parse(raw)); } catch {}
+      const parsed = safeParseJSON<StructuredWorkoutLog[]>(raw, [], Array.isArray);
+      if (parsed.length > 0) setStructuredLogs(parsed);
     });
   }, []);
 

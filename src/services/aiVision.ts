@@ -40,8 +40,13 @@ export async function recognizeFood(
   imageBase64: string,
   mimeType: 'image/jpeg' | 'image/png' = 'image/jpeg',
   idToken?: string,
+  userHint?: string,
 ): Promise<AIResult<{ foods: RecognizedFood[] }>> {
-  return callFunction('recognizeFood', { imageBase64, mimeType }, idToken);
+  return callFunction(
+    'recognizeFood',
+    { imageBase64, mimeType, userHint: userHint?.trim() || undefined },
+    idToken,
+  );
 }
 
 // ─────────────────────────────────────────────
@@ -111,7 +116,7 @@ export async function parseBloodwork(
 
 async function callFunction<T>(
   endpoint: string,
-  body: { imageBase64: string; mimeType: string },
+  body: { imageBase64: string; mimeType: string; userHint?: string },
   idToken?: string,
 ): Promise<AIResult<T>> {
   try {

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { Product, PRODUCTS as BUILTIN_PRODUCTS, ProductCategory } from '../data/products';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
@@ -85,9 +86,8 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
   // ── Initial load: AsyncStorage first (fast), Firestore subscribe second
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (raw) {
-        try { setCustomProducts(JSON.parse(raw)); } catch { /* ignore */ }
-      }
+      const parsed = safeParseJSON<StoredCustomProduct[]>(raw, [], Array.isArray);
+      if (parsed.length > 0) setCustomProducts(parsed);
       setLoaded(true);
     });
   }, []);

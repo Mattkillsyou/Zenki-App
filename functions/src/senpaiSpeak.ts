@@ -32,9 +32,12 @@ import { enforceRateLimit } from './rateLimit';
 
 const ELEVENLABS_API_KEY = defineSecret('ELEVENLABS_API_KEY');
 
-// Rachel — calm young female, decent fit for the Daria-DDLC deadpan.
-// Override per-request via the `voiceId` body field.
-const DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
+// Hina — community voice (Shunshun, "Japanese Cute Voice"). Young Japanese
+// female, anime idol style, kawaii — Japanese-accent English via the
+// multilingual flash model. Picked from the ElevenLabs voice library
+// (29.4K users) as the closest match for インスタのビッチ's chaotic-feral
+// magical-girl energy. Override per-request via the `voiceId` body field.
+const DEFAULT_VOICE_ID = 'lhTvHflPVOqgSWyuWQry';
 
 const MODEL_ID = 'eleven_flash_v2_5';
 const MAX_TEXT_CHARS = 1500; // hard cap to avoid runaway TTS costs
@@ -128,9 +131,13 @@ export const senpaiSpeak = onRequest(
             text,
             model_id: MODEL_ID,
             voice_settings: {
-              stability: 0.45,        // slightly looser → more natural
-              similarity_boost: 0.75,
-              style: 0.15,            // a touch of expression for the deadpan
+              // Tuned for a chaotic, expressive character — looser
+              // stability lets her hit highs and lows; higher style turns
+              // up emotional exaggeration so "EEEEE!!" and "tee hee!!"
+              // actually land in audio.
+              stability: 0.30,
+              similarity_boost: 0.70,
+              style: 0.55,
               use_speaker_boost: true,
             },
           }),

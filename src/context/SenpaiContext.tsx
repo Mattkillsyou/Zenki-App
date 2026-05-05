@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ImpactType } from '../components/SenpaiImpactEffect';
+import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 
 const STORAGE_KEY = '@zenki_senpai_mode';
 const VOLUME_KEY = '@zenki_senpai_volume';
@@ -120,13 +121,8 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
           volumeRaw === 'low' || volumeRaw === 'med' || volumeRaw === 'high' ? volumeRaw : 'high';
         const sparkleIntensity: SparkleIntensity =
           sparkleRaw === 'maximum' ? 'maximum' : 'normal';
-        let memoryLog: MemoryEntry[] = [];
-        if (memoryRaw) {
-          try {
-            const parsed = JSON.parse(memoryRaw);
-            if (Array.isArray(parsed)) memoryLog = parsed.slice(-MEMORY_CAP);
-          } catch { /* ignore malformed memory */ }
-        }
+        const parsedMemory = safeParseJSON<MemoryEntry[]>(memoryRaw, [], Array.isArray);
+        const memoryLog: MemoryEntry[] = parsedMemory.slice(-MEMORY_CAP);
         const outfitId = typeof outfitRaw === 'string' && outfitRaw.length > 0 ? outfitRaw : 'default';
         const ambientEffects = ambientRaw === null ? true : ambientRaw === 'true';
         volumeRef.current = volume;
@@ -150,28 +146,28 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
       enabled: on,
       transformationPlayed: on ? s.transformationPlayed : false,
     }));
-    AsyncStorage.setItem(STORAGE_KEY, String(on)).catch(() => {});
+    safeStorageSet(STORAGE_KEY, String(on), '[Senpai]');
   }, []);
 
   const setVolume = useCallback((vol: SenpaiVolume) => {
     volumeRef.current = vol;
     setState((s) => ({ ...s, volume: vol }));
-    AsyncStorage.setItem(VOLUME_KEY, vol).catch(() => {});
+    safeStorageSet(VOLUME_KEY, vol, '[Senpai]');
   }, []);
 
   const setSparkleIntensity = useCallback((intensity: SparkleIntensity) => {
     setState((s) => ({ ...s, sparkleIntensity: intensity }));
-    AsyncStorage.setItem(SPARKLE_KEY, intensity).catch(() => {});
+    safeStorageSet(SPARKLE_KEY, intensity, '[Senpai]');
   }, []);
 
   const clearMemoryLog = useCallback(() => {
     setState((s) => ({ ...s, memoryLog: [] }));
-    AsyncStorage.setItem(MEMORY_KEY, '[]').catch(() => {});
+    safeStorageSet(MEMORY_KEY, '[]', '[Senpai]');
   }, []);
 
   const setOutfit = useCallback((id: string) => {
     setState((s) => ({ ...s, outfitId: id }));
-    AsyncStorage.setItem(OUTFIT_KEY, id).catch(() => {});
+    safeStorageSet(OUTFIT_KEY, id, '[Senpai]');
   }, []);
 
   const markTransformationPlayed = useCallback(() => {
@@ -180,7 +176,7 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
 
   const setAmbientEffects = useCallback((on: boolean) => {
     setState((s) => ({ ...s, ambientEffects: on }));
-    AsyncStorage.setItem(AMBIENT_KEY, String(on)).catch(() => {});
+    safeStorageSet(AMBIENT_KEY, String(on), '[Senpai]');
   }, []);
 
   const clearReaction = useCallback(() => {
@@ -207,7 +203,7 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
     setState((s) => {
       const nextLog = [...s.memoryLog, entry];
       const cappedLog = nextLog.length > MEMORY_CAP ? nextLog.slice(nextLog.length - MEMORY_CAP) : nextLog;
-      AsyncStorage.setItem(MEMORY_KEY, JSON.stringify(cappedLog)).catch(() => {});
+      safeStorageSet(MEMORY_KEY, cappedLog, '[Senpai]');
       return {
         ...s,
         mascotMood: mood,
@@ -233,7 +229,7 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
 
   const setChatEnabled = useCallback((on: boolean) => {
     setState((s) => ({ ...s, chatEnabled: on }));
-    AsyncStorage.setItem(CHAT_ENABLED_KEY, String(on)).catch(() => {});
+    safeStorageSet(CHAT_ENABLED_KEY, String(on), '[Senpai]');
   }, []);
 
   useEffect(() => {

@@ -29,6 +29,7 @@ const editModeLayoutAnim: any = {
   delete: { type: 'easeInEaseOut', property: 'opacity' },
 };
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -348,20 +349,18 @@ export function HomeScreen({ navigation }: any) {
     let cancelled = false;
     AsyncStorage.getItem(dismissedKey)
       .then((raw) => {
-        if (cancelled || !raw) return;
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) setDismissedIds(parsed);
-        } catch { /* ignore */ }
+        if (cancelled) return;
+        const parsed = safeParseJSON<string[]>(raw, [], Array.isArray);
+        if (parsed.length > 0) setDismissedIds(parsed);
       })
-      .catch(() => { /* ignore */ });
+      .catch((err) => { console.warn('[HomeScreen] dismissed hydrate failed:', err); });
     return () => { cancelled = true; };
   }, [dismissedKey]);
   const dismissAnnouncement = useCallback((id: string) => {
     setDismissedIds((prev) => {
       if (prev.includes(id)) return prev;
       const next = [...prev, id];
-      if (dismissedKey) AsyncStorage.setItem(dismissedKey, JSON.stringify(next)).catch(() => {});
+      if (dismissedKey) safeStorageSet(dismissedKey, next, '[HomeScreen dismissed]');
       return next;
     });
   }, [dismissedKey]);
@@ -681,27 +680,23 @@ export function HomeScreen({ navigation }: any) {
   useEffect(() => {
     if (!orderStorageKey) return;
     AsyncStorage.getItem(orderStorageKey).then((raw) => {
-      if (!raw) return;
-      try {
-        const saved = JSON.parse(raw);
-        if (!Array.isArray(saved)) return;
-        const merged = [
-          ...saved.filter((id: string) => DEFAULT_MODULE_ORDER.includes(id)),
-          ...DEFAULT_MODULE_ORDER.filter((id) => !saved.includes(id)),
-        ];
-        setModuleOrder(merged);
-      } catch { /* ignore */ }
+      const saved = safeParseJSON<string[]>(raw, [], Array.isArray);
+      if (saved.length === 0) return;
+      const merged = [
+        ...saved.filter((id) => DEFAULT_MODULE_ORDER.includes(id)),
+        ...DEFAULT_MODULE_ORDER.filter((id) => !saved.includes(id)),
+      ];
+      setModuleOrder(merged);
     });
   }, [orderStorageKey]);
 
   useEffect(() => {
     if (!visibilityStorageKey) return;
     AsyncStorage.getItem(visibilityStorageKey).then((raw) => {
-      if (!raw) return;
-      try {
-        const saved = JSON.parse(raw);
-        if (saved && typeof saved === 'object') setModuleVisibility(saved);
-      } catch { /* ignore */ }
+      const saved = safeParseJSON<Record<string, boolean>>(raw, {}, (v) =>
+        typeof v === 'object' && v !== null && !Array.isArray(v),
+      );
+      if (Object.keys(saved).length > 0) setModuleVisibility(saved);
     });
   }, [visibilityStorageKey]);
 

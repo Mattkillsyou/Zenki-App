@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
+import { todayDateString } from '../utils/dates';
 import { DrinkEntry, DrinkType, DrinkTrackerState, MonthlySummary, PendingDrink } from '../types/drinks';
 import { DRINK_DEFINITIONS } from '../data/drinks';
 import { generateId } from '../utils/generateId';
@@ -61,15 +63,14 @@ export function DrinkTrackerProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          // Backfill paid status + pending array for older saves
-          setState({
-            entries: (parsed.entries || []).map((e: any) => ({ ...e, paid: e.paid ?? false })),
-            pending: parsed.pending || [],
-          });
-        } catch { /* ignore */ }
+      const parsed = safeParseJSON<{ entries?: any[]; pending?: any[] }>(raw, {}, (v) =>
+        typeof v === 'object' && v !== null && !Array.isArray(v),
+      );
+      if (parsed.entries || parsed.pending) {
+        setState({
+          entries: (parsed.entries || []).map((e: any) => ({ ...e, paid: e.paid ?? false })),
+          pending: parsed.pending || [],
+        });
       }
       setLoaded(true);
     });
@@ -168,7 +169,7 @@ export function DrinkTrackerProvider({ children }: { children: React.ReactNode }
   }, []);
 
   // ── Derived state ──
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayDateString();
 
   const todayEntries = useMemo(
     () => state.entries.filter((e) => e.date === today),

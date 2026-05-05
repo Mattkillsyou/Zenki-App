@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
+import { todayDateString as todayISO, currentIsoWeek } from '../utils/dates';
 import { useGamification } from './GamificationContext';
 
 const STORAGE_KEY = '@zenki_spin_wheel';
@@ -8,14 +10,19 @@ const STORAGE_KEY = '@zenki_spin_wheel';
 export type SpinPrize =
   | { type: 'flames'; amount: number; label: string; icon: string; confetti?: boolean; rare?: boolean }
   | { type: 'points'; amount: number; label: string; icon: string; confetti?: boolean; rare?: boolean }
-  | { type: 'item';   itemKey: 'free_drink' | 'free_shirt'; label: string; icon: string; confetti?: boolean; rare?: boolean };
+  | { type: 'item';   itemKey: 'free_drink' | 'free_shirt'; label: string; icon: string; confetti?: boolean; rare?: boolean }
+  | { type: 'gamble_lose'; label: string; icon: string };
 
 /**
- * The 8 wheel slices — ordered clockwise from the top.
+ * The 9 wheel slices — ordered clockwise from the top.
  *  `icon`      — rendered ON the wheel (simple, recognizable)
  *  `label`     — only revealed in the result display after winning
  *  `confetti`  — triggers the confetti cannon when won
  *  `rare`      — flagged as jackpot-tier, subject to monthly cap
+ *
+ * Slot 8 is the deterministic "GAMBLING IS BAD" wedge — it's NEVER picked
+ * by RNG (its weight in SLICE_WEIGHTS is 0). The spin() override below
+ * forces this slice on the user's first-ever spin and once per ISO week.
  *
  * Positions match the weight table in SLICE_WEIGHTS below (same index).
  */
@@ -28,27 +35,15 @@ export const WHEEL_SLICES: SpinPrize[] = [
   { type: 'flames',  amount: 10,   label: '10 Flames',                icon: '🔥' },                         // 5
   { type: 'points',  amount: 1000, label: 'JACKPOT · 1,000 Diamonds', icon: '👑', confetti: true, rare: true }, // 6
   { type: 'item',    itemKey: 'free_shirt', label: 'FREE SHIRT',      icon: '👕', confetti: true, rare: true }, // 7
+  { type: 'gamble_lose', label: 'YOU LOSE',                           icon: '🚫' },                          // 8
 ];
 
 /**
  * Weighted probabilities per slice — sum must equal WEIGHT_TOTAL.
- * Tuned for a $5K/mo exclusive dojo (~20 members, ~$1.2M/yr revenue).
- * Prizes feel premium and generous, matching the luxury positioning.
- *
- *  - 50 pts ....... 32%  (common feels-good filler)
- *  - 3 flames ..... 24%  (common)
- *  - 100 pts ...... 15%  (medium)
- *  - Free Drink ... 8%   (rare-ish — capped 1/week)
- *  - 200 pts ...... 14%  (solid win)
- *  - 10 flames .... 5%   (premium flames)
- *  - 1,000 pts .... 0.5% (rare jackpot — capped 1/month)
- *  - Free Shirt ... 1.5% (premium — capped 1/quarter per member)
- *
- * Projected annual cost at 50% daily engagement: ~$30K/yr ≈ 2.5% of revenue.
- * Even at 100% engagement: ~$60K/yr ≈ 5% of revenue.
- * Luxury tier can absorb this for the retention & wow factor.
+ * Slot 8 (gamble_lose) is weight 0: it's only reachable via the
+ * deterministic override in `spin()`, never via RNG.
  */
-const SLICE_WEIGHTS = [320, 240, 150, 80, 140, 50, 5, 15];
+const SLICE_WEIGHTS = [320, 240, 150, 80, 140, 50, 5, 15, 0];
 const WEIGHT_TOTAL = SLICE_WEIGHTS.reduce((a, b) => a + b, 0); // 1000
 
 /** Pity floor: guarantee at least one flame win within every PITY_WINDOW spins. */
@@ -73,6 +68,9 @@ const SLICE_CAPS: Record<number, PrizeCap> = {
   7: { max: 1, window: 'quarter' },  // Free Shirt — 1/quarter per member (premium tier)
 };
 
+/** Index of the deterministic "GAMBLING IS BAD" wedge. */
+export const GAMBLING_WEDGE_INDEX = 8;
+
 interface SpinHistoryEntry {
   date: string;
   prize: SpinPrize;
@@ -83,6 +81,12 @@ interface SpinWheelState {
   freeDrinkCredits: number;
   freeShirtCredits: number;
   history: SpinHistoryEntry[];
+  /** Has this user ever spun the wheel? Used to force the GAMBLING wedge
+   *  on their very first spin. */
+  hasSpunEver: boolean;
+  /** ISO week of the most recent forced GAMBLING wedge spin (e.g.
+   *  "2026-W18"). The next spin in a new ISO week lands on the wedge. */
+  lastGamblingWedgeWeek: string | null;
 }
 
 interface SpinWheelContextValue extends SpinWheelState {
@@ -100,6 +104,8 @@ const defaultState: SpinWheelState = {
   freeDrinkCredits: 0,
   freeShirtCredits: 0,
   history: [],
+  hasSpunEver: false,
+  lastGamblingWedgeWeek: null,
 };
 
 const SpinWheelContext = createContext<SpinWheelContextValue>({
@@ -111,9 +117,6 @@ const SpinWheelContext = createContext<SpinWheelContextValue>({
   getSliceOdds: () => SLICE_WEIGHTS.map((w) => (w / WEIGHT_TOTAL) * 100),
 });
 
-function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
-}
 
 /** Returns true if the given ISO date falls within the current window. */
 function inWindow(dateISO: string, window: 'week' | 'month' | 'quarter' | 'year'): boolean {
@@ -145,11 +148,24 @@ export function SpinWheelProvider({ children }: { children: React.ReactNode }) {
   const [loaded, setLoaded] = useState(false);
   const { awardPoints, awardFlames, recordSpinWin } = useGamification();
 
+  // State ref so the spin() callback never closes over a stale state.
+  // Avoiding `state.history` in spin's deps is the freeze fix: previously
+  // spin's identity changed on every state mutation, which re-rendered
+  // every consumer (including HomeScreen, which subscribes to this
+  // context) on every spin tick.
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
+
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (raw) {
-        try { setState({ ...defaultState, ...JSON.parse(raw) }); } catch { /* ignore */ }
-      }
+      const parsed = safeParseJSON<Partial<SpinWheelState>>(raw, {}, (v) =>
+        typeof v === 'object' && v !== null && !Array.isArray(v),
+      );
+      // Merge stored state on top of defaults so older saves missing the
+      // new `hasSpunEver` / `lastGamblingWedgeWeek` fields fall through to
+      // false / null — which is the intended "existing user gets the
+      // wedge on their next spin" behavior.
+      setState({ ...defaultState, ...parsed });
       setLoaded(true);
     });
   }, []);
@@ -161,8 +177,36 @@ export function SpinWheelProvider({ children }: { children: React.ReactNode }) {
   const hasSpunToday = state.lastSpinDate === todayISO();
 
   const spin = useCallback((): { sliceIndex: number; prize: SpinPrize } => {
+    // Snapshot the latest state from the ref — never the closure.
+    const snap = stateRef.current;
+
+    // ─── Deterministic override — the GAMBLING IS BAD wedge ───────────
+    // Triggers when:
+    //  - this is the user's first-ever spin
+    //  - this is the first spin of a new ISO week (vs. the last forced
+    //    wedge week)
+    const thisWeek = currentIsoWeek();
+    const forceLoss =
+      !snap.hasSpunEver ||
+      snap.lastGamblingWedgeWeek !== thisWeek;
+
+    if (forceLoss) {
+      const prize = WHEEL_SLICES[GAMBLING_WEDGE_INDEX];
+      // No points / flames / streak award on the GAMBLING outcome —
+      // it's a deterministic loss for the bit.
+      setState((prev) => ({
+        ...prev,
+        lastSpinDate: todayISO(),
+        hasSpunEver: true,
+        lastGamblingWedgeWeek: thisWeek,
+        history: [{ date: todayISO(), prize }, ...prev.history].slice(0, 60),
+      }));
+      return { sliceIndex: GAMBLING_WEDGE_INDEX, prize };
+    }
+
+    // ─── Normal weighted spin ─────────────────────────────────────────
     // 1. Pity system — guarantee a flame win if none in last PITY_WINDOW spins
-    const recent = state.history.slice(0, PITY_WINDOW);
+    const recent = snap.history.slice(0, PITY_WINDOW);
     const hasRecentFlame = recent.some((h) => h.prize.type === 'flames');
     const needPity = recent.length >= PITY_WINDOW && !hasRecentFlame;
 
@@ -174,7 +218,7 @@ export function SpinWheelProvider({ children }: { children: React.ReactNode }) {
     Object.entries(SLICE_CAPS).forEach(([idxStr, cap]) => {
       const idx = parseInt(idxStr, 10);
       const slice = WHEEL_SLICES[idx];
-      const matchingWins = state.history.filter((h) => {
+      const matchingWins = snap.history.filter((h) => {
         if (!inWindow(h.date, cap.window)) return false;
         // Match by same prize identity
         if (slice.type === 'item' && h.prize.type === 'item') {
@@ -216,53 +260,62 @@ export function SpinWheelProvider({ children }: { children: React.ReactNode }) {
 
     const prize = WHEEL_SLICES[idx];
 
-    // Grant immediately
+    // Grant immediately (only for non-loss outcomes)
     if (prize.type === 'points') awardPoints(prize.amount);
     else if (prize.type === 'flames') awardFlames(prize.amount);
     recordSpinWin();
     // free_drink / free_shirt stored as credits in this context
 
     setState((prev) => ({
+      ...prev,
       lastSpinDate: todayISO(),
+      hasSpunEver: true,
       freeDrinkCredits: prev.freeDrinkCredits + (prize.type === 'item' && prize.itemKey === 'free_drink' ? 1 : 0),
       freeShirtCredits: prev.freeShirtCredits + (prize.type === 'item' && prize.itemKey === 'free_shirt' ? 1 : 0),
       history: [{ date: todayISO(), prize }, ...prev.history].slice(0, 60),
     }));
 
     return { sliceIndex: idx, prize };
-  }, [awardPoints, awardFlames, state.history]);
+    // Deps are stable references — `stateRef` reads inside cover state
+    // freshness without re-creating the callback per state change. This
+    // is what stops HomeScreen (a consumer) from re-rendering on every
+    // spin-driven state mutation.
+  }, [awardPoints, awardFlames, recordSpinWin]);
 
   const consumeFreeDrink = useCallback((): boolean => {
-    if (state.freeDrinkCredits <= 0) return false;
+    if (stateRef.current.freeDrinkCredits <= 0) return false;
     setState((prev) => ({ ...prev, freeDrinkCredits: Math.max(0, prev.freeDrinkCredits - 1) }));
     return true;
-  }, [state.freeDrinkCredits]);
+  }, []);
 
   const consumeFreeShirt = useCallback((): boolean => {
-    if (state.freeShirtCredits <= 0) return false;
+    if (stateRef.current.freeShirtCredits <= 0) return false;
     setState((prev) => ({ ...prev, freeShirtCredits: Math.max(0, prev.freeShirtCredits - 1) }));
     return true;
-  }, [state.freeShirtCredits]);
+  }, []);
 
   const getSliceOdds = useCallback(
     () => SLICE_WEIGHTS.map((w) => (w / WEIGHT_TOTAL) * 100),
     [],
   );
 
-  return (
-    <SpinWheelContext.Provider
-      value={{
-        ...state,
-        hasSpunToday,
-        spin,
-        consumeFreeDrink,
-        consumeFreeShirt,
-        getSliceOdds,
-      }}
-    >
-      {children}
-    </SpinWheelContext.Provider>
+  // Memoize the provider value so consumers (HomeScreen, SpinWheelModal)
+  // don't re-render on every parent render. Critical for the freeze fix:
+  // before this, every state mutation propagated a new value object
+  // through the entire HomeScreen subtree.
+  const value = useMemo<SpinWheelContextValue>(
+    () => ({
+      ...state,
+      hasSpunToday,
+      spin,
+      consumeFreeDrink,
+      consumeFreeShirt,
+      getSliceOdds,
+    }),
+    [state, hasSpunToday, spin, consumeFreeDrink, consumeFreeShirt, getSliceOdds],
   );
+
+  return <SpinWheelContext.Provider value={value}>{children}</SpinWheelContext.Provider>;
 }
 
 export function useSpinWheel() {

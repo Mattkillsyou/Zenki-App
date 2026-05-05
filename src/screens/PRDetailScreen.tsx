@@ -14,6 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { useWorkouts } from '../context/WorkoutContext';
 import { spacing } from '../theme';
 import { FadeInView, LineChart, KeyboardAwareScrollView } from '../components';
+import { todayDateString as todayISO } from '../utils/dates';
 import {
   EXERCISES_BY_KEY,
   formatPRValue,
@@ -25,10 +26,6 @@ import {
 // ScreenContainer cap on iPad (~700pt).
 const { width: WINDOW_WIDTH } = Dimensions.get('window');
 const SCREEN_WIDTH = Math.min(WINDOW_WIDTH, 700);
-
-function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
-}
 
 function formatShortDate(iso: string): string {
   const d = new Date(iso + 'T12:00:00');

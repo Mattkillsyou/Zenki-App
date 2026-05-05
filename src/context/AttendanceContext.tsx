@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
 import * as Location from 'expo-location';
 import { useAuth } from './AuthContext';
 import { generateId } from '../utils/generateId';
@@ -71,11 +72,10 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
   // Load visits from AsyncStorage
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (raw) {
-        try {
-          setState(JSON.parse(raw));
-        } catch { /* ignore */ }
-      }
+      const parsed = safeParseJSON<AttendanceState | null>(raw, null, (v) =>
+        typeof v === 'object' && v !== null && 'visits' in (v as object),
+      );
+      if (parsed) setState(parsed);
       setLoaded(true);
     });
   }, []);

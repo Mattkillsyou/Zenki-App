@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 import {
   WeightEntry,
   MacroEntry,
@@ -170,13 +171,14 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(BLOODWORK_KEY),
         ]);
         if (cancelled) return;
-        setWeights(wRaw ? JSON.parse(wRaw) : []);
-        setMacros(mRaw ? JSON.parse(mRaw) : []);
-        setGoalsByMember(gRaw ? JSON.parse(gRaw) : {});
-        setProfilesByMember(pRaw ? JSON.parse(pRaw) : {});
-        setRecentFoodsByMember(rRaw ? JSON.parse(rRaw) : {});
-        setDexaScans(dRaw ? JSON.parse(dRaw) : []);
-        setBloodwork(bRaw ? JSON.parse(bRaw) : []);
+        const isObject = (v: unknown) => typeof v === 'object' && v !== null && !Array.isArray(v);
+        setWeights(safeParseJSON<WeightEntry[]>(wRaw, [], Array.isArray));
+        setMacros(safeParseJSON<MacroEntry[]>(mRaw, [], Array.isArray));
+        setGoalsByMember(safeParseJSON<Record<string, MacroGoals>>(gRaw, {}, isObject));
+        setProfilesByMember(safeParseJSON<Record<string, NutritionProfile>>(pRaw, {}, isObject));
+        setRecentFoodsByMember(safeParseJSON<Record<string, FoodSearchResult[]>>(rRaw, {}, isObject));
+        setDexaScans(safeParseJSON<DexaScan[]>(dRaw, [], Array.isArray));
+        setBloodwork(safeParseJSON<BloodworkReport[]>(bRaw, [], Array.isArray));
       } catch (e) {
         // non-fatal — start empty
       } finally {
@@ -189,34 +191,13 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id]);
 
   // Persist on change
-  useEffect(() => {
-    if (!loaded) return;
-    AsyncStorage.setItem(WEIGHT_KEY, JSON.stringify(weights)).catch(() => {});
-  }, [weights, loaded]);
-  useEffect(() => {
-    if (!loaded) return;
-    AsyncStorage.setItem(MACRO_KEY, JSON.stringify(macros)).catch(() => {});
-  }, [macros, loaded]);
-  useEffect(() => {
-    if (!loaded) return;
-    AsyncStorage.setItem(GOALS_KEY, JSON.stringify(goalsByMember)).catch(() => {});
-  }, [goalsByMember, loaded]);
-  useEffect(() => {
-    if (!loaded) return;
-    AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profilesByMember)).catch(() => {});
-  }, [profilesByMember, loaded]);
-  useEffect(() => {
-    if (!loaded) return;
-    AsyncStorage.setItem(RECENT_FOODS_KEY, JSON.stringify(recentFoodsByMember)).catch(() => {});
-  }, [recentFoodsByMember, loaded]);
-  useEffect(() => {
-    if (!loaded) return;
-    AsyncStorage.setItem(DEXA_KEY, JSON.stringify(dexaScans)).catch(() => {});
-  }, [dexaScans, loaded]);
-  useEffect(() => {
-    if (!loaded) return;
-    AsyncStorage.setItem(BLOODWORK_KEY, JSON.stringify(bloodwork)).catch(() => {});
-  }, [bloodwork, loaded]);
+  useEffect(() => { if (loaded) safeStorageSet(WEIGHT_KEY, weights, '[Nutrition weights]'); }, [weights, loaded]);
+  useEffect(() => { if (loaded) safeStorageSet(MACRO_KEY, macros, '[Nutrition macros]'); }, [macros, loaded]);
+  useEffect(() => { if (loaded) safeStorageSet(GOALS_KEY, goalsByMember, '[Nutrition goals]'); }, [goalsByMember, loaded]);
+  useEffect(() => { if (loaded) safeStorageSet(PROFILE_KEY, profilesByMember, '[Nutrition profiles]'); }, [profilesByMember, loaded]);
+  useEffect(() => { if (loaded) safeStorageSet(RECENT_FOODS_KEY, recentFoodsByMember, '[Nutrition recents]'); }, [recentFoodsByMember, loaded]);
+  useEffect(() => { if (loaded) safeStorageSet(DEXA_KEY, dexaScans, '[Nutrition dexa]'); }, [dexaScans, loaded]);
+  useEffect(() => { if (loaded) safeStorageSet(BLOODWORK_KEY, bloodwork, '[Nutrition bloodwork]'); }, [bloodwork, loaded]);
 
   // ── Weight ──
   const myWeights = useCallback(

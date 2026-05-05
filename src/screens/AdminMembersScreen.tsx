@@ -20,6 +20,8 @@ import {
   BELT_LABELS,
 } from '../data/members';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeStorageSet } from '../utils/safeStorage';
+import { todayDateString } from '../utils/dates';
 import {
   upsertMemberInFirestore,
   deleteMemberFromFirestore,
@@ -45,7 +47,7 @@ const EMPTY_MEMBER: Omit<Member, 'id'> = {
   phone: '',
   belt: 'white',
   stripes: 0,
-  memberSince: new Date().toISOString().split('T')[0],
+  memberSince: todayDateString(),
   isAdmin: false,
   isEmployee: false,
   totalSessions: 0,
@@ -86,7 +88,7 @@ export function AdminMembersScreen({ navigation }: any) {
         backfillMembersToFirestore(merged).then((res) => {
           console.log('[Members] Auto-backfill:', res);
           if (res.ok > 0) {
-            AsyncStorage.setItem(BACKFILL_FLAG_KEY, new Date().toISOString()).catch(() => {});
+            safeStorageSet(BACKFILL_FLAG_KEY, new Date().toISOString(), '[AdminMembers backfill flag]');
           }
         });
       });

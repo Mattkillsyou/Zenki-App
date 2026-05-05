@@ -2,6 +2,7 @@ import React, {
   createContext, useContext, useState, useEffect, useCallback, useMemo,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 import {
   MedicationEntry, MedicationLog,
   isMedicationScheduledForDate,
@@ -164,14 +165,8 @@ export function MedicationTrackerProvider({ children }: { children: React.ReactN
           AsyncStorage.getItem(STORAGE_KEY),
           AsyncStorage.getItem(LOG_STORAGE_KEY),
         ]);
-        if (medsRaw) {
-          const parsed = JSON.parse(medsRaw);
-          if (Array.isArray(parsed)) setMedications(parsed);
-        }
-        if (logsRaw) {
-          const parsed = JSON.parse(logsRaw);
-          if (Array.isArray(parsed)) setLogs(parsed);
-        }
+        setMedications(safeParseJSON<MedicationEntry[]>(medsRaw, [], Array.isArray));
+        setLogs(safeParseJSON<MedicationLog[]>(logsRaw, [], Array.isArray));
       } catch (err) {
         console.warn('[MedicationTracker] load failed:', err);
       } finally {
@@ -181,15 +176,8 @@ export function MedicationTrackerProvider({ children }: { children: React.ReactN
   }, []);
 
   // Persist on change
-  useEffect(() => {
-    if (!loaded) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(medications)).catch(() => {});
-  }, [medications, loaded]);
-
-  useEffect(() => {
-    if (!loaded) return;
-    AsyncStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(logs)).catch(() => {});
-  }, [logs, loaded]);
+  useEffect(() => { if (loaded) safeStorageSet(STORAGE_KEY, medications, '[Medications]'); }, [medications, loaded]);
+  useEffect(() => { if (loaded) safeStorageSet(LOG_STORAGE_KEY, logs, '[Medication logs]'); }, [logs, loaded]);
 
   // ─────────────────────────────────────────────────
   // Mutations

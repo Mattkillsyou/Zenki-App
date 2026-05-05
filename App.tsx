@@ -2,6 +2,7 @@ import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { View, Platform, StyleSheet, LogBox } from 'react-native';
 
 // Silence dev-mode redboxes that only surface on local sim builds.
@@ -59,6 +60,12 @@ import { BlocksProvider } from './src/context/BlocksContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ThemeOverlay } from './src/components/ThemeOverlay';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { OfflineBanner } from './src/components/OfflineBanner';
+import { initCrashReporter, reportError } from './src/services/crashReporter';
+
+// Init the crash reporter as early as possible so any error during the
+// provider tree's first render gets captured. Idempotent.
+initCrashReporter();
 
 function AppContent() {
   const { colors, isDark } = useTheme();
@@ -186,7 +193,14 @@ const webStyles = StyleSheet.create({
 
 export default function App() {
   return (
-    <ErrorBoundary screenName="App Root">
+    <GestureHandlerRootView style={{ flex: 1 }}>
+    <ErrorBoundary
+      screenName="App Root"
+      onError={(error, info) => reportError(error, {
+        tags: { boundary: 'app-root' },
+        extras: { componentStack: info.componentStack },
+      })}
+    >
       <SafeAreaProvider>
         <AuthProvider>
         <BlocksProvider>
@@ -237,7 +251,9 @@ export default function App() {
         </MotionProvider>
         </BlocksProvider>
         </AuthProvider>
+        <OfflineBanner />
       </SafeAreaProvider>
     </ErrorBoundary>
+    </GestureHandlerRootView>
   );
 }

@@ -19,19 +19,28 @@ export function StreakBadge({ streak, compact }: StreakBadgeProps) {
 
   useEffect(() => {
     if (reduceMotion || streak === 0) return;
-    Animated.loop(
+    // Capture loop handles so we can stop them on unmount / dep change.
+    // Without cleanup these run forever on the native driver and pile up
+    // every time `streak` changes, contributing to home-screen stalls.
+    const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.15, duration: 800, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
       ]),
-    ).start();
-    Animated.loop(
+    );
+    const glow = Animated.loop(
       Animated.sequence([
         Animated.timing(glowAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
         Animated.timing(glowAnim, { toValue: 0.6, duration: 1200, useNativeDriver: true }),
       ]),
-    ).start();
-  }, [streak, reduceMotion]);
+    );
+    pulse.start();
+    glow.start();
+    return () => {
+      pulse.stop();
+      glow.stop();
+    };
+  }, [streak, reduceMotion, pulseAnim, glowAnim]);
 
   if (streak === 0) {
     return (

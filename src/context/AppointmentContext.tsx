@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateId } from '../utils/generateId';
+import { safeStorageGetJSON, safeStorageSet } from '../utils/safeStorage';
 import {
   subscribeToAppointments,
   upsertAppointmentInFirestore,
@@ -101,10 +101,8 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      if (raw) {
-        try { setAppointments(JSON.parse(raw)); } catch { /* ignore */ }
-      }
+    safeStorageGetJSON<Appointment[]>(STORAGE_KEY, [], Array.isArray).then((cached) => {
+      if (cached.length > 0) setAppointments(cached);
       setLoaded(true);
     });
 
@@ -118,13 +116,13 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     const unsub = subscribeToAppointments((items) => {
       setAppointments(items);
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(items)).catch(() => {});
+      safeStorageSet(STORAGE_KEY, items, '[Appointments]');
     });
     return () => { unsub(); };
   }, []);
 
   useEffect(() => {
-    if (loaded) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(appointments)).catch(() => {});
+    if (loaded) safeStorageSet(STORAGE_KEY, appointments, '[Appointments]');
   }, [appointments, loaded]);
 
   const requestAppointment = useCallback(async (a: Omit<Appointment, 'id' | 'status' | 'createdAt'>) => {

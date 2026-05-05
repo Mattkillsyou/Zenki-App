@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
+import { todayDateString } from '../utils/dates';
 import { spacing, borderRadius } from '../theme';
 import { FadeInView, KeyboardView } from '../components';
 import {
@@ -134,7 +135,7 @@ export function MacroSetupScreen({ navigation }: any) {
       weightKg,
     );
     // Also record a fresh weigh-in if they don't have one today
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayDateString();
     if (!latest || latest.date !== today) {
       addWeight({
         memberId: user.id,

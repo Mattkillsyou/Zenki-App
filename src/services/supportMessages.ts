@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
 import { Platform } from 'react-native';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
@@ -101,8 +102,9 @@ async function enqueue(msg: Omit<QueuedMessage, 'localId'>) {
 async function readQueue(): Promise<QueuedMessage[]> {
   try {
     const raw = await AsyncStorage.getItem(QUEUE_KEY);
-    return raw ? (JSON.parse(raw) as QueuedMessage[]) : [];
-  } catch {
+    return safeParseJSON<QueuedMessage[]>(raw, [], Array.isArray);
+  } catch (err) {
+    console.warn('[supportMessages] readQueue failed:', err);
     return [];
   }
 }

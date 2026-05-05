@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 
 import {
   sendSenpaiChat,
@@ -80,13 +81,11 @@ export function useSenpaiChat() {
           AsyncStorage.getItem(HISTORY_KEY),
           AsyncStorage.getItem(VOICE_KEY),
         ]);
-        if (historyRaw) {
-          const parsed = JSON.parse(historyRaw);
-          if (Array.isArray(parsed)) setMessages(parsed.slice(-MAX_PERSISTED_TURNS));
-        }
+        const parsed = safeParseJSON<ChatThreadMessage[]>(historyRaw, [], Array.isArray);
+        if (parsed.length > 0) setMessages(parsed.slice(-MAX_PERSISTED_TURNS));
         if (voiceRaw === 'true') setVoiceEnabledState(true);
-      } catch {
-        /* ignore — fresh history is fine */
+      } catch (err) {
+        console.warn('[useSenpaiChat] hydrate failed:', err);
       } finally {
         hydratedRef.current = true;
       }
@@ -95,7 +94,7 @@ export function useSenpaiChat() {
 
   const setVoiceEnabled = useCallback((on: boolean) => {
     setVoiceEnabledState(on);
-    AsyncStorage.setItem(VOICE_KEY, String(on)).catch(() => {});
+    safeStorageSet(VOICE_KEY, String(on), '[useSenpaiChat]');
     if (!on) {
       // Killed mid-clip — stop whatever's playing right now
       stopSenpaiAudio();
@@ -106,7 +105,7 @@ export function useSenpaiChat() {
   useEffect(() => {
     if (!hydratedRef.current) return;
     const trimmed = messages.slice(-MAX_PERSISTED_TURNS);
-    AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed)).catch(() => {});
+    safeStorageSet(HISTORY_KEY, trimmed, '[useSenpaiChat]');
   }, [messages]);
 
   const send = useCallback(
@@ -233,7 +232,9 @@ export function useSenpaiChat() {
     setMessages([]);
     setError(null);
     setLastArrivedId(null);
-    await AsyncStorage.removeItem(HISTORY_KEY).catch(() => {});
+    await AsyncStorage.removeItem(HISTORY_KEY).catch((err) => {
+      console.warn('[useSenpaiChat] removeItem failed:', err);
+    });
   }, []);
 
   return {

@@ -15,6 +15,7 @@ import { KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { ALL_THEMES } from '../theme/themes';
 import type { ThemeDefinition } from '../theme/colors';
@@ -176,7 +177,6 @@ export function SettingsScreen({ navigation }: any) {
     setSparkleIntensity: setSenpaiSparkle,
     setAmbientEffects: setSenpaiAmbientEffects,
     clearMemoryLog: clearSenpaiMemory,
-    setChatEnabled: setSenpaiChatEnabled,
   } = useSenpai();
   const [pushEnabled, setPushEnabled] = useState(true);
   const [classReminders, setClassReminders] = useState(true);
@@ -188,16 +188,15 @@ export function SettingsScreen({ navigation }: any) {
   // Load notification prefs
   useEffect(() => {
     AsyncStorage.getItem('@zenki_notif_prefs').then((raw) => {
-      if (!raw) return;
-      try {
-        const p = JSON.parse(raw);
-        if (p.pushEnabled !== undefined) setPushEnabled(p.pushEnabled);
-        if (p.classReminders !== undefined) setClassReminders(p.classReminders);
-        if (p.emailUpdates !== undefined) setEmailUpdates(p.emailUpdates);
-        if (p.streakAlerts !== undefined) setStreakAlerts(p.streakAlerts);
-        if (p.achievementAlerts !== undefined) setAchievementAlerts(p.achievementAlerts);
-        if (p.calendarSync !== undefined) setCalendarSync(p.calendarSync);
-      } catch {}
+      const p = safeParseJSON<Record<string, boolean>>(raw, {}, (v) =>
+        typeof v === 'object' && v !== null && !Array.isArray(v),
+      );
+      if (p.pushEnabled !== undefined) setPushEnabled(p.pushEnabled);
+      if (p.classReminders !== undefined) setClassReminders(p.classReminders);
+      if (p.emailUpdates !== undefined) setEmailUpdates(p.emailUpdates);
+      if (p.streakAlerts !== undefined) setStreakAlerts(p.streakAlerts);
+      if (p.achievementAlerts !== undefined) setAchievementAlerts(p.achievementAlerts);
+      if (p.calendarSync !== undefined) setCalendarSync(p.calendarSync);
     });
   }, []);
 
@@ -393,8 +392,13 @@ export function SettingsScreen({ navigation }: any) {
                   styles.themeCard,
                   {
                     backgroundColor: colors.surface,
-                    borderColor: isActive ? colors.accent : 'transparent',
-                    borderWidth: 2,
+                    // Only render a border when active — a transparent
+                    // borderWidth of 2 still produces a faint anti-aliased
+                    // edge on iOS, which read as "darker outline" on the
+                    // inactive cards.
+                    ...(isActive
+                      ? { borderColor: colors.accent, borderWidth: 2 }
+                      : {}),
                   },
                 ]}
                 onPress={() => { play('navigate'); setMode(t.id as ThemeMode); }}
@@ -423,9 +427,51 @@ export function SettingsScreen({ navigation }: any) {
           })}
         </View>
 
+        {/* Senpai Mode toggle — sits right under the theme picker because
+            enabling it locks the theme + spawns the floating chibi (the
+            most "I want this on" decision in the app). The expanded
+            senpai controls (volume, sparkles, outfit, memory) still live
+            in the SECRET LAB section further down. */}
+        <View
+          style={[
+            styles.sectionCard,
+            {
+              backgroundColor: senpaiState.enabled ? 'rgba(255, 46, 81, 0.04)' : colors.surface,
+              borderRadius: 20,
+              padding: 0,
+              marginTop: spacing.md,
+            },
+          ]}
+        >
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Senpai Mode</Text>
+              <Text style={[styles.settingDesc, { color: colors.textMuted }]}>
+                Your personal anime cheerleader
+              </Text>
+            </View>
+            <Switch
+              value={senpaiState.enabled}
+              onValueChange={(val) => {
+                setSenpaiEnabled(val);
+                if (val) {
+                  senpaiJingle();
+                  triggerReaction('celebrating', 'SENPAI NOTICED ME!!', 4000);
+                  Alert.alert(
+                    '⚠️ Warning',
+                    'May contain excessive enthusiasm and sparkles. Not responsible for increased motivation.',
+                  );
+                }
+              }}
+              trackColor={{ false: colors.surfaceSecondary, true: '#FF2E51' }}
+              thumbColor={colors.background}
+            />
+          </View>
+        </View>
+
         {/* Preferences */}
         {renderSectionHeader('PREFERENCES')}
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
           {/* Units toggle */}
           <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
             <View style={styles.settingInfo}>
@@ -459,7 +505,7 @@ export function SettingsScreen({ navigation }: any) {
 
         {/* Notifications */}
         {renderSectionHeader('NOTIFICATIONS')}
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
           {renderToggleRow(
             'Push Notifications',
             'Receive alerts on your device',
@@ -496,7 +542,7 @@ export function SettingsScreen({ navigation }: any) {
         {isAdmin && (
           <>
             {renderSectionHeader('CALENDAR')}
-            <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+            <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
               {renderToggleRow(
                 'Block busy times from booking',
                 "When on, members can't book slots you already have an event for",
@@ -509,7 +555,7 @@ export function SettingsScreen({ navigation }: any) {
 
         {/* Learn */}
         {renderSectionHeader('LEARN')}
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
           {renderNavRow('school-outline', 'Training', () => navigation.navigate('TrainingHome'))}
         </View>
 
@@ -517,7 +563,7 @@ export function SettingsScreen({ navigation }: any) {
         {Platform.OS === 'ios' && (
           <>
             {renderSectionHeader('APPLE HEALTH')}
-            <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+            <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
               <View style={styles.healthRow}>
                 <View style={styles.healthRowLeft}>
                   <Ionicons name="heart" size={22} color="#FF3B30" />
@@ -571,21 +617,21 @@ export function SettingsScreen({ navigation }: any) {
 
         {/* Privacy & Safety */}
         {renderSectionHeader('PRIVACY & SAFETY')}
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
           {renderNavRow('person-remove-outline', 'Blocked Users', () => navigation.navigate('BlockedUsers'))}
         </View>
 
         {/* Account */}
         {isAdmin && renderSectionHeader('ACCOUNT')}
         {isAdmin && (
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+          <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
             {renderNavRow('key-outline', 'Change Password', () => setPwModalOpen(true))}
           </View>
         )}
 
         {/* Data */}
         {renderSectionHeader('DATA')}
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
           {renderNavRow('download-outline', 'Export All Data', () => {
             Alert.alert('Export Data', 'This will compile all your data into a downloadable JSON file.', [
               { text: 'Cancel', style: 'cancel' },
@@ -639,28 +685,8 @@ export function SettingsScreen({ navigation }: any) {
             padding: 0,
           },
         ]}>
-          <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-            <View style={styles.settingInfo}>
-              <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Senpai Mode</Text>
-              <Text style={[styles.settingDesc, { color: colors.textMuted }]}>Your personal anime cheerleader</Text>
-            </View>
-            <Switch
-              value={senpaiState.enabled}
-              onValueChange={(val) => {
-                setSenpaiEnabled(val);
-                if (val) {
-                  senpaiJingle();
-                  triggerReaction('celebrating', 'SENPAI NOTICED ME!!', 4000);
-                  Alert.alert(
-                    '\u26A0\uFE0F Warning',
-                    'May contain excessive enthusiasm and sparkles. Not responsible for increased motivation.',
-                  );
-                }
-              }}
-              trackColor={{ false: colors.surfaceSecondary, true: '#FF2E51' }}
-              thumbColor={colors.background}
-            />
-          </View>
+          {/* Senpai Mode toggle moved up under the Theme picker; the
+              expanded controls below only render when she's already on. */}
 
           {/* Senpai sub-settings — only visible when enabled */}
           {senpaiState.enabled && (
@@ -749,23 +775,8 @@ export function SettingsScreen({ navigation }: any) {
                 />
               </View>
 
-              {/* Chat with Senpai (AI chat \u2014 Phase 2 of SENPAI_AI_CHAT_PROMPT.md) */}
-              <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-                <View style={styles.settingInfo}>
-                  <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Chat with Senpai</Text>
-                  <Text style={[styles.settingDesc, { color: colors.textMuted }]}>
-                    {senpaiState.chatEnabled
-                      ? 'Tap the mascot to chat \u00B7 she is too tired to be excited about it'
-                      : 'Talk to her. She has opinions. Most of them are tired.'}
-                  </Text>
-                </View>
-                <Switch
-                  value={senpaiState.chatEnabled}
-                  onValueChange={(val) => setSenpaiChatEnabled(val)}
-                  trackColor={{ false: colors.surfaceSecondary, true: '#FF2E51' }}
-                  thumbColor={colors.background}
-                />
-              </View>
+              {/* Chat is now always-on via hold-to-talk on the mascot
+                  herself \u2014 no toggle needed. The character IS the chat. */}
 
               {/* Outfit picker — placeholder */}
               <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
@@ -846,7 +857,7 @@ export function SettingsScreen({ navigation }: any) {
 
         {/* About */}
         {renderSectionHeader('ABOUT')}
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
           {renderNavRow('information-circle-outline', 'About Zenki Dojo', () =>
             Linking.openURL('https://www.zenkidojo.com')
           )}
@@ -857,7 +868,7 @@ export function SettingsScreen({ navigation }: any) {
             Linking.openURL('https://www.zenkidojo.com/privacy')
           )}
         </View>
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, marginTop: spacing.sm, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, marginTop: spacing.sm, borderRadius: 20, padding: 0 }]}>
           <Text style={[styles.versionText, { color: colors.textMuted }]}>
             Zenki Dojo v{Constants.expoConfig?.version ?? '1.0.0'}
           </Text>
@@ -865,7 +876,7 @@ export function SettingsScreen({ navigation }: any) {
 
         {/* Danger Zone */}
         {renderSectionHeader('DANGER ZONE')}
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, marginTop: spacing.sm, borderColor: colors.border, borderRadius: 20, borderWidth: 1.5, padding: 0 }]}>
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, marginTop: spacing.sm, borderRadius: 20, padding: 0 }]}>
           {renderNavRow('log-out-outline', 'Sign Out', handleSignOut, true)}
           {renderNavRow('person-remove-outline', 'Delete Account', handleDeleteAccount, true)}
         </View>

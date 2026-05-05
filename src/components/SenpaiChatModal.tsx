@@ -17,18 +17,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
   FlatList,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeStorageSet } from '../utils/safeStorage';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ExpoSpeechRecognitionModule,
@@ -93,29 +92,42 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
     send,
     clear,
   } = useSenpaiChat();
-  const [draft, setDraft] = useState('');
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [recording, setRecording] = useState(false);
-  // Track the draft text at recording-start time so live STT results can be
-  // appended (rather than overwriting) anything the user typed manually.
-  const draftAtRecordStartRef = useRef('');
+  // Live transcript accumulator. Held in a ref so the 'end' event handler
+  // sees the final value regardless of React's render timing — without this
+  // we'd send stale text and the bubble would lag a turn behind the user.
+  const transcriptRef = useRef('');
+  // The most recent assistant message id we've already auto-listened after.
+  // Prevents the post-response re-arm from firing on every history rehydrate.
+  const reArmedAfterRef = useRef<string | null>(null);
+  // Mic-on pulse for the big talk button.
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   // Live STT events from expo-speech-recognition. These hooks are no-ops
   // until ExpoSpeechRecognitionModule.start() is called.
   useSpeechRecognitionEvent('result', (event) => {
     const transcript = event.results?.[0]?.transcript ?? '';
     if (!transcript) return;
-    const prefix = draftAtRecordStartRef.current;
-    setDraft(prefix ? `${prefix} ${transcript}` : transcript);
+    transcriptRef.current = transcript;
   });
 
   useSpeechRecognitionEvent('end', () => {
     setRecording(false);
+    // Walkie-talkie behavior: when the user stops talking (or the engine
+    // detects end-of-speech), automatically send what they said. No
+    // separate "send" button — speech IS the send action.
+    const finalTranscript = transcriptRef.current.trim();
+    transcriptRef.current = '';
+    if (finalTranscript && !loading) {
+      send(finalTranscript);
+    }
   });
 
   useSpeechRecognitionEvent('error', (event) => {
     setRecording(false);
-    // Don't surface aborted-by-user errors as alerts
+    transcriptRef.current = '';
+    // Don't surface aborted-by-user / silence errors as alerts.
     if (event?.error === 'aborted' || event?.error === 'no-speech') return;
     Alert.alert(
       'Mic trouble',
@@ -123,7 +135,7 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
     );
   });
 
-  // Stop recording + audio when modal closes
+  // Stop recording + audio when modal closes.
   useEffect(() => {
     if (!visible) {
       try {
@@ -133,10 +145,29 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
       }
       stopSenpaiAudio();
       setRecording(false);
+      transcriptRef.current = '';
+      reArmedAfterRef.current = null;
     }
   }, [visible]);
 
+  // Pulse the big talk button while recording.
+  useEffect(() => {
+    if (!recording) {
+      pulseAnim.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.08, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [recording, pulseAnim]);
+
   const startRecording = async () => {
+    if (loading) return;
     try {
       const perms = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!perms.granted) {
@@ -146,7 +177,7 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
         );
         return;
       }
-      draftAtRecordStartRef.current = draft.trim();
+      transcriptRef.current = '';
       setRecording(true);
       ExpoSpeechRecognitionModule.start({
         lang: 'en-US',
@@ -174,6 +205,42 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
     else startRecording();
   };
 
+  // Auto-arm the mic when the modal first opens (after disclaimer accepted),
+  // and again after senpai finishes responding — true walkie-talkie cadence.
+  // We key off the most recent non-error assistant message id; whenever a
+  // new one arrives, we re-listen.
+  const lastFinalAssistant = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === 'assistant' && !m.pending && !m.error) return m;
+    }
+    return null;
+  }, [messages]);
+
+  useEffect(() => {
+    if (!visible || showDisclaimer || recording || loading) return;
+    // Force voice on for walkie-talkie mode — the user is interacting by
+    // speech only, hearing the reply is the whole point.
+    if (!voiceEnabled) setVoiceEnabled(true);
+    if (!lastFinalAssistant) {
+      // First open, no replies yet — start listening immediately.
+      if (reArmedAfterRef.current !== '__open__') {
+        reArmedAfterRef.current = '__open__';
+        startRecording();
+      }
+      return;
+    }
+    if (reArmedAfterRef.current !== lastFinalAssistant.id) {
+      reArmedAfterRef.current = lastFinalAssistant.id;
+      // Small delay so TTS audio gets a chance to start before the mic re-opens
+      // (otherwise we'd hear ourselves and STT would pick up senpai's voice).
+      const t = setTimeout(() => {
+        if (visible) startRecording();
+      }, 4500);
+      return () => clearTimeout(t);
+    }
+  }, [visible, showDisclaimer, lastFinalAssistant, recording, loading, voiceEnabled, setVoiceEnabled]);
+
   // Disclaimer gate — show on first open until accepted
   useEffect(() => {
     if (!visible) return;
@@ -183,15 +250,8 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
   }, [visible]);
 
   const handleAcceptDisclaimer = () => {
-    AsyncStorage.setItem(DISCLAIMER_KEY, 'accepted').catch(() => {});
+    safeStorageSet(DISCLAIMER_KEY, 'accepted', '[SenpaiChatModal]');
     setShowDisclaimer(false);
-  };
-
-  const handleSend = () => {
-    const text = draft.trim();
-    if (!text || loading) return;
-    setDraft('');
-    send(text);
   };
 
   const handleClear = () => {
@@ -222,118 +282,73 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
               {loading ? 'thinking...' : recording ? 'listening...' : 'always tired'}
             </Text>
           </View>
-          <Pressable
-            onPress={() => setVoiceEnabled(!voiceEnabled)}
-            hitSlop={12}
-            style={styles.headerBtn}
-            accessibilityLabel={voiceEnabled ? 'Mute voice replies' : 'Enable voice replies'}
-          >
-            <Ionicons
-              name={voiceEnabled ? 'volume-high' : 'volume-mute-outline'}
-              size={22}
-              color={voiceEnabled ? colors.gold : colors.textMuted}
-            />
-          </Pressable>
           <Pressable onPress={handleClear} hitSlop={12} style={styles.headerBtn}>
             <Ionicons name="trash-outline" size={22} color={colors.textMuted} />
           </Pressable>
         </View>
 
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-        >
-          {/* Thread */}
-          {messages.length === 0 ? (
-            <View style={styles.emptyWrap}>
-              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>...hi.</Text>
-              <Text style={[styles.emptyBody, { color: colors.textMuted }]}>
-                You opened the chat. Now what.
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={inverted}
-              keyExtractor={(m) => m.id}
-              renderItem={renderMessage}
-              inverted
-              contentContainerStyle={styles.threadContent}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="interactive"
-            />
-          )}
+        {/* Thread */}
+        {messages.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>...hi.</Text>
+            <Text style={[styles.emptyBody, { color: colors.textMuted }]}>
+              {recording ? 'I\'m listening.' : 'Tap and talk. I\'ll respond.'}
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={inverted}
+            keyExtractor={(m) => m.id}
+            renderItem={renderMessage}
+            inverted
+            contentContainerStyle={styles.threadContent}
+          />
+        )}
 
-          {/* Error toast */}
-          {error && (
-            <View style={[styles.errorBar, { backgroundColor: colors.error + '20', borderColor: colors.error }]}>
-              <Text style={[styles.errorText, { color: colors.error }]}>{error.message}</Text>
-            </View>
-          )}
+        {/* Error toast */}
+        {error && (
+          <View style={[styles.errorBar, { backgroundColor: colors.error + '20', borderColor: colors.error }]}>
+            <Text style={[styles.errorText, { color: colors.error }]}>{error.message}</Text>
+          </View>
+        )}
 
-          {/* Input row */}
-          <View style={[styles.inputRow, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
+        {/* Walkie-talkie button — voice-only, no keyboard. The button shows
+            current state (listening / thinking / talking / idle); tapping
+            toggles the mic. Modal also auto-arms the mic on open and after
+            each senpai reply. */}
+        <View style={styles.talkRow}>
+          <Text style={[styles.statusText, { color: colors.textMuted }]}>
+            {loading
+              ? 'thinking...'
+              : recording
+              ? 'listening — tap to send'
+              : 'tap to talk'}
+          </Text>
+          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
             <Pressable
               onPress={toggleRecording}
               disabled={loading}
-              accessibilityLabel={recording ? 'Stop recording' : 'Start voice input'}
+              accessibilityLabel={recording ? 'Stop and send' : 'Start talking'}
               style={[
-                styles.micBtn,
+                styles.talkBtn,
                 {
                   backgroundColor: recording
                     ? '#FF2E51'
                     : loading
                     ? colors.surfaceSecondary
-                    : colors.surface,
-                  borderColor: recording ? '#FF2E51' : colors.border,
+                    : colors.gold,
+                  borderColor: recording ? '#FF2E51' : colors.gold,
                 },
               ]}
             >
               <Ionicons
-                name={recording ? 'stop' : 'mic-outline'}
-                size={20}
-                color={recording ? '#FFF' : loading ? colors.textMuted : colors.textPrimary}
+                name={recording ? 'mic' : loading ? 'hourglass-outline' : 'mic-outline'}
+                size={48}
+                color={recording ? '#FFF' : loading ? colors.textMuted : '#000'}
               />
             </Pressable>
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder={recording ? 'listening...' : 'say something...'}
-              placeholderTextColor={colors.textMuted}
-              style={[
-                styles.input,
-                {
-                  color: colors.textPrimary,
-                  backgroundColor: colors.surface,
-                  borderColor: recording ? '#FF2E51' : colors.border,
-                },
-              ]}
-              multiline
-              maxLength={1000}
-              editable={!loading}
-              returnKeyType="send"
-              onSubmitEditing={handleSend}
-              blurOnSubmit
-            />
-            <Pressable
-              onPress={handleSend}
-              disabled={loading || draft.trim().length === 0}
-              style={[
-                styles.sendBtn,
-                {
-                  backgroundColor:
-                    loading || draft.trim().length === 0 ? colors.surfaceSecondary : colors.gold,
-                },
-              ]}
-            >
-              <Ionicons
-                name="arrow-up"
-                size={20}
-                color={loading || draft.trim().length === 0 ? colors.textMuted : '#000'}
-              />
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
+          </Animated.View>
+        </View>
 
         {/* Disclaimer overlay (first open only) */}
         {showDisclaimer && (
@@ -466,38 +481,27 @@ const styles = StyleSheet.create({
   },
   errorText: { fontSize: 13 },
 
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
+  // Walkie-talkie talk row — replaces the old input row + text field.
+  talkRow: {
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 24,
+    gap: 12,
   },
-  input: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 120,
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
+  statusText: {
+    fontSize: 13,
+    letterSpacing: 0.5,
   },
-  sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  talkBtn: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  micBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    // Soft glow on iOS
+    // @ts-ignore — boxShadow web-only on RN
+    boxShadow: '0 0 30px rgba(212,160,23,0.35)',
   },
 
   disclaimerOverlay: {

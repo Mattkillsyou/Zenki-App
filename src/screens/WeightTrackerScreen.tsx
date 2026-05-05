@@ -14,6 +14,8 @@ import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
+import { todayDateString } from '../utils/dates';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
@@ -77,7 +79,10 @@ export function WeightTrackerScreen({ navigation }: any) {
   // Load saved goal
   React.useEffect(() => {
     AsyncStorage.getItem(WEIGHT_GOAL_KEY).then((raw) => {
-      if (raw) try { setSavedGoal(JSON.parse(raw)); } catch {}
+      const parsed = safeParseJSON<WeightGoal | null>(raw, null, (v) =>
+        typeof v === 'object' && v !== null && !Array.isArray(v),
+      );
+      if (parsed) setSavedGoal(parsed);
     });
   }, []);
 
@@ -1216,7 +1221,7 @@ function WeightLogCalendar({ loggedDates }: { loggedDates: Set<string> }) {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const todayIso = new Date().toISOString().split('T')[0];
+  const todayIso = todayDateString();
 
   const goPrev = () => {
     setCursor((c) => c.month === 0
