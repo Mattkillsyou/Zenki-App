@@ -6,6 +6,7 @@ import {
   upsertAnnouncementInFirestore,
   deleteAnnouncementFromFirestore,
 } from '../services/announcementSync';
+import { syncOrAlert } from '../utils/syncOrAlert';
 
 const STORAGE_KEY = '@zenki_announcements';
 
@@ -62,21 +63,21 @@ export function AnnouncementProvider({ children }: { children: React.ReactNode }
       createdAt: new Date().toISOString(),
     };
     setAnnouncements((prev) => [next, ...prev]);
-    upsertAnnouncementInFirestore(next).catch(() => {});
+    syncOrAlert(upsertAnnouncementInFirestore(next), 'Announcement');
   }, []);
 
   const updateAnnouncement = useCallback((id: string, patch: Partial<Announcement>) => {
     setAnnouncements((prev) => {
       const nextList = prev.map((a) => (a.id === id ? { ...a, ...patch } : a));
       const merged = nextList.find((a) => a.id === id);
-      if (merged) upsertAnnouncementInFirestore(merged).catch(() => {});
+      if (merged) syncOrAlert(upsertAnnouncementInFirestore(merged), 'Announcement');
       return nextList;
     });
   }, []);
 
   const removeAnnouncement = useCallback((id: string) => {
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-    deleteAnnouncementFromFirestore(id).catch(() => {});
+    syncOrAlert(deleteAnnouncementFromFirestore(id), 'Announcement delete');
   }, []);
 
   // Memoize the provider value so consumers don't re-render every time

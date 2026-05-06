@@ -130,10 +130,26 @@ export function DexaUploadScreen({ navigation }: any) {
     if (isPicking) return;
     setIsPicking(true);
     try {
-      const r = await DocumentPicker.getDocumentAsync({
-        type: 'application/pdf',
-        copyToCacheDirectory: true,
-      });
+      // Retry once on "Different document picking in progress" — see the
+      // matching block in BloodworkUploadScreen.pickPdf for context.
+      let r;
+      try {
+        r = await DocumentPicker.getDocumentAsync({
+          type: 'application/pdf',
+          copyToCacheDirectory: true,
+        });
+      } catch (firstErr: any) {
+        const msg = String(firstErr?.message ?? '');
+        if (/Different document picking/i.test(msg)) {
+          await new Promise((resolve) => setTimeout(resolve, 600));
+          r = await DocumentPicker.getDocumentAsync({
+            type: 'application/pdf',
+            copyToCacheDirectory: true,
+          });
+        } else {
+          throw firstErr;
+        }
+      }
       if (r.canceled) return;
       const asset = r.assets?.[0];
       if (!asset) {

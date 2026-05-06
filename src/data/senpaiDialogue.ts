@@ -55,13 +55,20 @@ export const SENPAI_DIALOGUE = {
     "Senpai is thinking deeply...",
     "I'll wait for Senpai forever \u2661",
   ],
+  // Single-tap on the chibi while idle. EVERY line teaches the
+  // hold-to-talk gesture in senpai's voice \u2014 a tap doesn't open the
+  // mic (intentional, prevents accidental sessions), and without a
+  // hint here users were getting stuck. Tone: chaotic, possessive,
+  // bilingual where it lands. Hearts as punctuation, not garnish.
   mascotTap: [
-    "Kya~! S-senpai noticed me!",
-    "Hehe~ Senpai tapped me!",
-    "What is it, Senpai? \u2661",
-    "I'm here for you, Senpai!",
-    "Senpai! That tickles!",
-    "*blushes* S-senpai...!",
+    "tap?? lazy \ud83d\udc95 HOLD me 2 sec to talk senpai",
+    "press AND hold senpai \ud83d\udc95 2 sec, don't be shy",
+    "\u306d\u3047 senpai!! hold me down to talk, ne \ud83d\udc95",
+    "you have to HOLD me senpai \ud83d\udc95 2 whole seconds",
+    "tap doesn't open my ears \ud83d\udc95 hold for 2 sec",
+    "\u3082\u3063\u3068\u9577\u304f!! 2 sec hold = mic on \ud83d\udc95",
+    "HOLD me senpai, I want to hear your voice \ud83d\udc95",
+    "2 second hold for talk, 3 second hold for stop \ud83d\udc95 got it??",
   ],
   nutritionLog: [
     "Senpai is eating healthy! Good!",

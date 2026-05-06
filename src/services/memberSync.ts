@@ -112,6 +112,43 @@ export async function pushMemberToFirestore(member: Member): Promise<boolean> {
 }
 
 /**
+ * Sync the /admins/{uid} doc with a member's isAdmin flag. The Firestore
+ * `isAdmin()` rule reads from /admins (not /members.isAdmin), so toggling
+ * `Member.isAdmin` alone never granted real admin powers — the admin
+ * panel's "Admin Access" switch was a UI checkbox with no enforcement
+ * behind it. Calling this from the save path actually opens the rule gate.
+ *
+ * Returns true if the doc was written/deleted, false on rule rejection or
+ * missing firebaseUid (seed members who haven't signed in yet can't have
+ * a /admins doc until they have an auth account).
+ */
+export async function setMemberAdminRole(member: Member, makeAdmin: boolean): Promise<boolean> {
+  if (!FIREBASE_CONFIGURED || !db) return false;
+  if (!member.firebaseUid) {
+    console.warn('[Members Firestore] setMemberAdminRole: no firebaseUid for', member.id, '- ask them to sign in first');
+    return false;
+  }
+  const ref = doc(db, 'admins', member.firebaseUid);
+  try {
+    if (makeAdmin) {
+      await setDoc(ref, {
+        memberId: member.id,
+        email: member.email ?? '',
+        firstName: member.firstName ?? '',
+        lastName: member.lastName ?? '',
+        grantedAt: new Date().toISOString(),
+      }, { merge: true });
+    } else {
+      await deleteDoc(ref);
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Members Firestore] setMemberAdminRole failed:', err);
+    return false;
+  }
+}
+
+/**
  * Delete a member doc from Firestore by id. Returns true on success.
  * Failures are logged and surfaced as `false` so callers can show feedback.
  */

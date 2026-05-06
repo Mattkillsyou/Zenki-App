@@ -99,24 +99,45 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
 
   // (sessions hydration + persistence handled by useSyncedState above.)
 
-  // ── Check BLE availability
+  // ── Check BLE availability (NO BleManager instantiation here)
+  // Constructing `new BleManager()` synthesizes a CBCentralManager on iOS,
+  // which immediately fires the Bluetooth permission dialog. Doing that on
+  // app mount made the prompt land before the user reached the
+  // PermissionsOnboarding "Bluetooth" step — making that step a no-op and
+  // looking duplicate. Mark as 'disconnected' here without instantiating;
+  // the manager is created lazily inside scanAndConnect, when the user has
+  // actually opted in to a workout heart-rate scan.
   useEffect(() => {
     if (Platform.OS === 'web') {
       setBleStatus('unavailable');
       return;
     }
-    try {
-      const { BleManager } = require('react-native-ble-plx');
-      bleManagerRef.current = new BleManager();
-      setBleStatus('disconnected');
-      return () => { bleManagerRef.current?.destroy(); };
-    } catch {
-      setBleStatus('unavailable');
-    }
+    setBleStatus('disconnected');
+    return () => {
+      bleManagerRef.current?.destroy();
+      bleManagerRef.current = null;
+    };
   }, []);
 
   // ── BLE scan + connect
   const scanAndConnect = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS === 'web') {
+      setBleStatus('unavailable');
+      return false;
+    }
+    // Lazy-init: instantiate BleManager only on first scan attempt. iOS
+    // shows the system Bluetooth prompt at this moment, which is the
+    // earliest justified time (user has explicitly chosen to connect a
+    // heart-rate monitor).
+    if (!bleManagerRef.current) {
+      try {
+        const { BleManager } = require('react-native-ble-plx');
+        bleManagerRef.current = new BleManager();
+      } catch {
+        setBleStatus('unavailable');
+        return false;
+      }
+    }
     const manager = bleManagerRef.current;
     if (!manager) {
       setBleStatus('unavailable');

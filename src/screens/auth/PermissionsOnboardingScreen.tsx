@@ -21,6 +21,8 @@ import { useTheme } from '../../context/ThemeContext';
 import { spacing, borderRadius } from '../../theme';
 import { safeStorageSet } from '../../utils/safeStorage';
 import { initHealthKit, ALL_HEALTH_CATEGORIES } from '../../services/healthKit';
+import { registerForPushNotifications, savePushTokenToFirestore } from '../../services/pushNotifications';
+import { useAuth } from '../../context/AuthContext';
 
 // Persist key for the outcomes record. Used later by feature gates to know
 // whether to show "you skipped this — re-enable in Settings" hints.
@@ -168,6 +170,7 @@ const STEPS: PermissionStep[] = [
 
 export function PermissionsOnboardingScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const { user } = useAuth();
 
   // Filter out steps disabled on this platform up-front so the pager
   // count + "step N of M" math is honest.
@@ -204,11 +207,23 @@ export function PermissionsOnboardingScreen({ navigation }: any) {
       console.warn(`[PermissionsOnboarding] ${step.id} request threw:`, err);
       result = 'denied';
     }
+    // The notifications step's request() asks iOS for permission but does
+    // NOT save an Expo push token to Firestore. Without that token, admin
+    // broadcasts find no recipients. Register + save here right after the
+    // grant, while we still have explicit user consent in scope.
+    if (step.id === 'notifications' && result === 'granted' && user?.id) {
+      try {
+        const token = await registerForPushNotifications();
+        if (token) await savePushTokenToFirestore(user.id, token);
+      } catch (err) {
+        console.warn('[PermissionsOnboarding] push token save failed:', err);
+      }
+    }
     const next = { ...outcomes, [step.id]: result };
     setOutcomes(next);
     setBusy(false);
     advance(next);
-  }, [busy, step, outcomes, advance]);
+  }, [busy, step, outcomes, advance, user?.id]);
 
   const handleSkip = useCallback(() => {
     if (busy) return;

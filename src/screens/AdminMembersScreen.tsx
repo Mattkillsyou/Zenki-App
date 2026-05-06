@@ -27,6 +27,7 @@ import {
   deleteMemberFromFirestore,
   subscribeToAllMembers,
   backfillMembersToFirestore,
+  setMemberAdminRole,
   BackfillResult,
 } from '../services/memberSync';
 import { getMergedMembers, saveMemberOverride, deleteMemberOverride } from '../services/memberOverrides';
@@ -168,10 +169,19 @@ export function AdminMembersScreen({ navigation }: any) {
   };
 
   // Persist the given member to AsyncStorage (always succeeds) and to
-  // Firestore (best-effort — silently no-ops if rules block the write).
-  const persistMember = (member: Member) => {
+  // Firestore. Awaits the Firestore write and surfaces failure — without
+  // this, a rule-rejected write returned silently and the local optimistic
+  // update was clobbered on the next live snapshot ("admin changes don't
+  // stick" symptom).
+  const persistMember = async (member: Member): Promise<void> => {
     saveMemberOverride(member).catch(() => {});
-    upsertMemberInFirestore(member).catch(() => {});
+    const ok = await upsertMemberInFirestore(member);
+    if (!ok) {
+      showAlert(
+        'Save not synced',
+        "Saved locally, but the cloud rejected the write — your /admins entry may be missing, or the member doc lacks a firebaseUid stamp. The change will revert on next reload until this is resolved.",
+      );
+    }
   };
 
   const handleSave = async () => {
@@ -231,7 +241,32 @@ export function AdminMembersScreen({ navigation }: any) {
           ? prev.map((m) => (m.id === editingMember.id ? updated : m))
           : [...prev, updated],
       );
-      persistMember(updated);
+      await persistMember(updated);
+
+      // Sync /admins/{uid} doc with the isAdmin toggle. Without this, the
+      // toggle was a cosmetic checkbox — Firestore rules gate admin
+      // powers behind /admins, not /members.isAdmin. (Bug: "ADMIN
+      // permission does nothing.") If the member has no firebaseUid yet
+      // (never signed in), we surface that so the admin knows why the
+      // role didn't take effect.
+      const wasAdmin = editingMember?.isAdmin ?? false;
+      const nowAdmin = updated.isAdmin === true;
+      if (wasAdmin !== nowAdmin) {
+        if (!updated.firebaseUid) {
+          showAlert(
+            'Admin role pending',
+            `${updated.firstName} doesn't have a Firebase account yet — they need to sign in once before the admin toggle takes effect. The badge is saved; permissions will follow on first login.`,
+          );
+        } else {
+          const ok = await setMemberAdminRole(updated, nowAdmin);
+          if (!ok) {
+            showAlert(
+              'Admin role not synced',
+              `The /admins entry for ${updated.firstName} couldn't be ${nowAdmin ? 'created' : 'removed'}. Check your own admin doc exists in Firestore.`,
+            );
+          }
+        }
+      }
 
       setModalVisible(false);
       setEditingMember(null);
@@ -309,7 +344,7 @@ export function AdminMembersScreen({ navigation }: any) {
     if (!target || target.stripes >= 4) return;
     const updated: Member = { ...target, stripes: target.stripes + 1 };
     setMembers((prev) => prev.map((m) => (m.id === id ? updated : m)));
-    persistMember(updated);
+    persistMember(updated).catch(() => {});
   };
 
   const promoteBelt = (id: string) => {
@@ -320,7 +355,7 @@ export function AdminMembersScreen({ navigation }: any) {
     const next = BELT_ORDER[idx + 1];
     const updated: Member = { ...member, belt: next, stripes: 0 };
     setMembers((prev) => prev.map((m) => (m.id === id ? updated : m)));
-    persistMember(updated);
+    persistMember(updated).catch(() => {});
   };
 
   const renderFormField = (label: string, value: string, key: string, opts?: { keyboard?: any; autoCapitalize?: any }) => (

@@ -23,6 +23,7 @@ import { useAuth } from '../context/AuthContext';
 import { useHealthKit } from '../context/HealthKitContext';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { useSenpai } from '../context/SenpaiContext';
+import { useSenpaiChat } from '../hooks/useSenpaiChat';
 import { senpaiJingle } from '../sounds/synth';
 import Constants from 'expo-constants';
 import { typography, spacing } from '../theme';
@@ -178,6 +179,11 @@ export function SettingsScreen({ navigation }: any) {
     setAmbientEffects: setSenpaiAmbientEffects,
     clearMemoryLog: clearSenpaiMemory,
   } = useSenpai();
+  const {
+    voiceEnabled: senpaiVoiceEnabled,
+    setVoiceEnabled: setSenpaiVoiceEnabled,
+    resetTtsFailures: resetSenpaiTtsFailures,
+  } = useSenpaiChat();
   const [pushEnabled, setPushEnabled] = useState(true);
   const [classReminders, setClassReminders] = useState(true);
   const [emailUpdates, setEmailUpdates] = useState(false);
@@ -443,7 +449,7 @@ export function SettingsScreen({ navigation }: any) {
             },
           ]}
         >
-          <View style={styles.settingRow}>
+          <View style={[styles.settingRow, { borderBottomColor: colors.border, borderBottomWidth: senpaiState.enabled ? StyleSheet.hairlineWidth : 0 }]}>
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Senpai Mode</Text>
               <Text style={[styles.settingDesc, { color: colors.textMuted }]}>
@@ -467,6 +473,32 @@ export function SettingsScreen({ navigation }: any) {
               thumbColor={colors.background}
             />
           </View>
+
+          {/* Senpai voice (TTS) — only meaningful when Senpai Mode is on.
+              Persisted to AsyncStorage. Auto-disables after consecutive
+              TTS failures (e.g. ElevenLabs free-tier blocked) so the user
+              can flip it back on here once their account is healthy. */}
+          {senpaiState.enabled && (
+            <View style={styles.settingRow}>
+              <View style={styles.settingInfo}>
+                <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Senpai Voice</Text>
+                <Text style={[styles.settingDesc, { color: colors.textMuted }]}>
+                  Hear her replies out loud (ElevenLabs TTS)
+                </Text>
+              </View>
+              <Switch
+                value={senpaiVoiceEnabled}
+                onValueChange={(val) => {
+                  setSenpaiVoiceEnabled(val);
+                  // Re-enabling clears the auto-disable failure counter
+                  // — the next reply will get a fresh shot at TTS.
+                  if (val) resetSenpaiTtsFailures();
+                }}
+                trackColor={{ false: colors.surfaceSecondary, true: '#FF2E51' }}
+                thumbColor={colors.background}
+              />
+            </View>
+          )}
         </View>
 
         {/* Preferences */}

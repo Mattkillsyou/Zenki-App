@@ -134,10 +134,31 @@ export function BloodworkUploadScreen({ navigation }: any) {
     if (isPicking) return;
     setIsPicking(true);
     try {
-      const r = await DocumentPicker.getDocumentAsync({
-        type: 'application/pdf',
-        copyToCacheDirectory: true,
-      });
+      // expo-document-picker keeps a module-level "currently picking"
+      // flag that gets stuck if the previous picker was dismissed via the
+      // iOS swipe-down gesture (the native resolver never fires). On the
+      // next call we get "Different document picking in progress" and the
+      // user is permanently locked out until app restart. Retry once
+      // after a short delay — that's usually enough for the stale state
+      // to time out.
+      let r;
+      try {
+        r = await DocumentPicker.getDocumentAsync({
+          type: 'application/pdf',
+          copyToCacheDirectory: true,
+        });
+      } catch (firstErr: any) {
+        const msg = String(firstErr?.message ?? '');
+        if (/Different document picking/i.test(msg)) {
+          await new Promise((resolve) => setTimeout(resolve, 600));
+          r = await DocumentPicker.getDocumentAsync({
+            type: 'application/pdf',
+            copyToCacheDirectory: true,
+          });
+        } else {
+          throw firstErr;
+        }
+      }
       if (r.canceled) return;
       const asset = r.assets?.[0];
       if (!asset) {

@@ -7,6 +7,7 @@ import {
   upsertAppointmentInFirestore,
   deleteAppointmentFromFirestore,
 } from '../services/appointmentSync';
+import { syncOrAlert } from '../utils/syncOrAlert';
 
 const STORAGE_KEY = '@zenki_appointments';
 
@@ -133,7 +134,7 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
       createdAt: new Date().toISOString(),
     };
     setAppointments((prev) => [...prev, next]);
-    upsertAppointmentInFirestore(next).catch(() => {});
+    syncOrAlert(upsertAppointmentInFirestore(next), 'Appointment');
     return next;
   }, []);
 
@@ -157,7 +158,7 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
     // race where a concurrent snapshot could clobber the in-flight
     // notificationId patch.
     setAppointments((prev) => prev.map((a) => (a.id === id ? finalAppt : a)));
-    upsertAppointmentInFirestore(finalAppt).catch(() => {});
+    syncOrAlert(upsertAppointmentInFirestore(finalAppt), 'Appointment');
   }, []);
 
   const cancelAppointment = useCallback(async (id: string) => {
@@ -173,7 +174,7 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
         return updated;
       });
     });
-    if (updated) upsertAppointmentInFirestore(updated).catch(() => {});
+    if (updated) syncOrAlert(upsertAppointmentInFirestore(updated), 'Appointment');
   }, []);
 
   const completeAppointment = useCallback((id: string) => {
@@ -189,7 +190,7 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
         return updated;
       });
     });
-    if (updated) upsertAppointmentInFirestore(updated).catch(() => {});
+    if (updated) syncOrAlert(upsertAppointmentInFirestore(updated), 'Appointment');
   }, []);
 
   // Filtered views (memberId / admin filters happen at the screen level).

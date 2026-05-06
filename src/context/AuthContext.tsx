@@ -102,6 +102,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.warn('[AuthContext] /members backfill failed:', err),
         );
       }
+      // Backfill push token on every app open (only if iOS notification
+      // permission is already granted — this call won't prompt). Without
+      // this, only freshly-created accounts ever got a token saved, which
+      // is why broadcasts found "no recipients" even with members signed
+      // in on real devices.
+      registerForPushNotifications().then((token) => {
+        if (token) {
+          savePushTokenToFirestore(id, token).catch(() => {});
+        }
+      }).catch(() => {});
     }
     const unsub = subscribeToMember(id, (fresh) => {
       if (!fresh) return;

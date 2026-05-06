@@ -12,6 +12,7 @@ import {
   upsertCompletionInFirestore,
   deleteCompletionFromFirestore,
 } from '../services/employeeTaskSync';
+import { syncOrAlert } from '../utils/syncOrAlert';
 
 const TASKS_KEY = '@zenki_employee_tasks';
 const COMPLETIONS_KEY = '@zenki_task_completions';
@@ -140,7 +141,7 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
         (c) => c.taskId === taskId && c.memberId === memberId && c.date === today,
       );
       if (existing) {
-        deleteCompletionFromFirestore({ taskId, memberId, date: today }).catch(() => {});
+        syncOrAlert(deleteCompletionFromFirestore({ taskId, memberId, date: today }), 'Task completion delete');
         return prev.filter((c) => c !== existing);
       }
       const created: TaskCompletion = {
@@ -149,7 +150,7 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
         date: today,
         completedAt: new Date().toISOString(),
       };
-      upsertCompletionInFirestore(created).catch(() => {});
+      syncOrAlert(upsertCompletionInFirestore(created), 'Task completion');
       return [...prev, created];
     });
   }, []);
@@ -165,7 +166,7 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
         createdAt: new Date().toISOString(),
       };
       setTasks((prev) => [task, ...prev]);
-      upsertTaskInFirestore(task).catch(() => {});
+      syncOrAlert(upsertTaskInFirestore(task), 'Task');
       return task;
     },
     [],
@@ -174,7 +175,7 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
   const removePersonalTask = useCallback((id: string) => {
     setTasks((prev) => {
       const target = prev.find((t) => t.id === id && t.source === 'personal');
-      if (target) deleteTaskFromFirestore(id).catch(() => {});
+      if (target) syncOrAlert(deleteTaskFromFirestore(id), 'Task delete');
       return prev.filter((t) => !(t.id === id && t.source === 'personal'));
     });
   }, []);
@@ -190,7 +191,7 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
       createdAt: new Date().toISOString(),
     };
     setTasks((prev) => [task, ...prev]);
-    upsertTaskInFirestore(task).catch(() => {});
+    syncOrAlert(upsertTaskInFirestore(task), 'Task');
     return task;
   }, []);
 
@@ -206,7 +207,7 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
         createdAt: new Date().toISOString(),
       };
       setTasks((prev) => [task, ...prev]);
-      upsertTaskInFirestore(task).catch(() => {});
+      syncOrAlert(upsertTaskInFirestore(task), 'Task');
       return task;
     },
     [],
@@ -216,7 +217,7 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
     setTasks((prev) => {
       const next = prev.map((t) => (t.id === id ? { ...t, ...patch } : t));
       const merged = next.find((t) => t.id === id);
-      if (merged) upsertTaskInFirestore(merged).catch(() => {});
+      if (merged) syncOrAlert(upsertTaskInFirestore(merged), 'Task');
       return next;
     });
   }, []);
@@ -226,11 +227,11 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
     setCompletions((prev) => {
       const stale = prev.filter((c) => c.taskId === id);
       stale.forEach((c) => {
-        deleteCompletionFromFirestore({ taskId: c.taskId, memberId: c.memberId, date: c.date }).catch(() => {});
+        syncOrAlert(deleteCompletionFromFirestore({ taskId: c.taskId, memberId: c.memberId, date: c.date }), 'Task completion delete');
       });
       return prev.filter((c) => c.taskId !== id);
     });
-    deleteTaskFromFirestore(id).catch(() => {});
+    syncOrAlert(deleteTaskFromFirestore(id), 'Task delete');
   }, []);
 
   const value = useMemo(

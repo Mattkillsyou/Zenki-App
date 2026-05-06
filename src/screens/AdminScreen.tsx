@@ -13,7 +13,12 @@ import { typography, spacing, borderRadius } from '../theme';
 import { FadeInView, PressableScale, ScreenContainer } from '../components';
 import { MEMBERS } from '../data/members';
 import { useProducts } from '../context/ProductContext';
+import { useSchedule } from '../context/ScheduleContext';
+import { useAnnouncements } from '../context/AnnouncementContext';
+import { useAppointments } from '../context/AppointmentContext';
+import { useEmployeeTasks } from '../context/EmployeeTaskContext';
 import { countOpenReports } from '../services/firebaseModeration';
+import { subscribeToAllMembers } from '../services/memberSync';
 
 interface AdminCardProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -46,6 +51,11 @@ export function AdminScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { products: PRODUCTS } = useProducts();
   const { todayVisitors } = useAttendance();
+  const { schedule } = useSchedule();
+  const { announcements } = useAnnouncements();
+  const { pendingForAdmin } = useAppointments();
+  const { tasks } = useEmployeeTasks();
+  const scheduleCount = Object.values(schedule).reduce((sum, dayClasses) => sum + dayClasses.length, 0);
 
   // Live badge: number of open reports. Refresh every time this screen mounts.
   const [openReportsCount, setOpenReportsCount] = useState<number | null>(null);
@@ -57,6 +67,17 @@ export function AdminScreen({ navigation }: any) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Live members count from /members (was hard-wired to MEMBERS.length, the
+  // seed-array length — which never reflected admin-added or self-signup
+  // members and showed a misleading "5" on the Admin Panel tile).
+  const [membersCount, setMembersCount] = useState<number>(MEMBERS.length);
+  useEffect(() => {
+    const unsub = subscribeToAllMembers((remote) => {
+      if (remote.length > 0) setMembersCount(remote.length);
+    });
+    return unsub;
   }, []);
 
   return (
@@ -134,7 +155,7 @@ export function AdminScreen({ navigation }: any) {
               icon="people-outline"
               title="Members"
               subtitle="Add, edit, belts & stripes"
-              count={MEMBERS.length}
+              count={membersCount}
               accentColor={colors.gold}
               onPress={() => navigation.navigate('AdminMembers')}
             />
@@ -156,7 +177,7 @@ export function AdminScreen({ navigation }: any) {
               icon="calendar-outline"
               title="Schedule"
               subtitle="Classes, times, instructors"
-              count={7}
+              count={scheduleCount}
               accentColor={colors.success}
               onPress={() => navigation.navigate('AdminSchedule')}
             />
@@ -178,7 +199,7 @@ export function AdminScreen({ navigation }: any) {
               icon="megaphone-outline"
               title="Broadcast"
               subtitle="Push notifications to members"
-              count={0}
+              count={membersCount}
               accentColor={colors.warning}
               onPress={() => navigation.navigate('AdminBroadcast')}
             />
@@ -188,7 +209,7 @@ export function AdminScreen({ navigation }: any) {
               icon="newspaper-outline"
               title="Announcements"
               subtitle="Edit notices on Home screen"
-              count={0}
+              count={announcements.length}
               accentColor={colors.gold}
               onPress={() => navigation.navigate('AdminAnnouncements')}
             />
@@ -200,7 +221,7 @@ export function AdminScreen({ navigation }: any) {
               icon="checkmark-circle-outline"
               title="Appointments"
               subtitle="Approve & manage bookings"
-              count={0}
+              count={pendingForAdmin.length}
               accentColor={colors.success}
               onPress={() => navigation.navigate('AdminAppointments')}
             />
@@ -210,7 +231,7 @@ export function AdminScreen({ navigation }: any) {
               icon="list-outline"
               title="Employee Tasks"
               subtitle="Daily + time-sensitive checklist"
-              count={0}
+              count={tasks.length}
               accentColor={colors.info}
               onPress={() => navigation.navigate('AdminEmployeeTasks')}
             />

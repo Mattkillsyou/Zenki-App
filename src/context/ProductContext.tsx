@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParseJSON } from '../utils/safeStorage';
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { syncOrAlert } from '../utils/syncOrAlert';
 import { Product, PRODUCTS as BUILTIN_PRODUCTS, ProductCategory } from '../data/products';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import { generateId } from '../utils/generateId';
@@ -133,6 +134,7 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.warn('[Products] addProduct cloud failed, saving local:', e);
         setCustomProducts((prev) => [...prev, record]);
+        syncOrAlert(Promise.resolve(false), 'Product');
       }
     } else {
       setCustomProducts((prev) => [...prev, record]);
@@ -152,6 +154,7 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.warn('[Products] updateProduct cloud failed, saving local:', e);
         setCustomProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
+        syncOrAlert(Promise.resolve(false), 'Product');
       }
     } else {
       setCustomProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
@@ -165,6 +168,7 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.warn('[Products] deleteProduct cloud failed, removing local:', e);
         setCustomProducts((prev) => prev.filter((p) => p.id !== id));
+        syncOrAlert(Promise.resolve(false), 'Product delete');
       }
     } else {
       setCustomProducts((prev) => prev.filter((p) => p.id !== id));

@@ -166,6 +166,17 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Custom (admin-added) product catalog. ProductContext writes here AND
+    // subscribes here — without an explicit rule the collection fell to
+    // the default-deny clause, every admin write was rejected, every read
+    // came back empty, and the Store tab showed the local optimistic add
+    // for a beat before being clobbered by the empty snapshot. Same access
+    // model as /products.
+    match /customProducts/{productId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     // Waivers — submit-only. No one reads from client (admin reads server-side).
     match /waivers/{waiverId} {
       allow read: if false;

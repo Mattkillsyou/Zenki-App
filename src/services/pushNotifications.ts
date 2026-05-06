@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { collection, getDocs, doc, updateDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import { EXPO_PUSH_API_URL } from '../config/api';
 
@@ -17,8 +17,19 @@ Notifications.setNotificationHandler({
 });
 
 /**
- * Request permission + get the Expo push token for this device.
- * Returns the token or null.
+ * Get the Expo push token for this device IF notification permission is
+ * already granted. Does NOT prompt — safe to call from app startup paths
+ * (e.g. AuthContext's user-change effect) without surprising the user with
+ * an iOS permission dialog.
+ *
+ * To actually request the OS prompt, the caller should run their own
+ * `Notifications.requestPermissionsAsync` first (e.g. from
+ * PermissionsOnboardingScreen) and then invoke this to fetch the token.
+ *
+ * Returns the token or null when:
+ *  - running on web / non-physical device
+ *  - permission is denied or not yet granted
+ *  - the Expo push service throws
  */
 export async function registerForPushNotifications(): Promise<string | null> {
   if (Platform.OS === 'web') return null;
@@ -28,14 +39,9 @@ export async function registerForPushNotifications(): Promise<string | null> {
   }
 
   try {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    if (finalStatus !== 'granted') {
-      console.log('[Push] Permission not granted');
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      // Silent — caller is expected to prompt elsewhere when appropriate.
       return null;
     }
 
@@ -58,21 +64,17 @@ export async function registerForPushNotifications(): Promise<string | null> {
 }
 
 /**
- * Save a push token to a member's Firestore document.
+ * Save a push token to a member's Firestore document. The /members doc id
+ * IS the local member id (see memberSync.upsertMemberInFirestore), so a
+ * direct doc lookup is correct — the previous `where('id', '==', memberId)`
+ * query needed Firestore's automatic single-field index AND silently
+ * returned empty when the field wasn't set on a doc.
  */
 export async function savePushTokenToFirestore(memberId: string, token: string): Promise<boolean> {
   if (!FIREBASE_CONFIGURED || !db) return false;
 
   try {
-    // Find the member doc by memberId field
-    const q = query(collection(db, 'members'), where('id', '==', memberId));
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) {
-      console.log('[Push] No member doc for id', memberId, '— token not saved');
-      return false;
-    }
-    const memberDoc = snapshot.docs[0];
-    await updateDoc(doc(db, 'members', memberDoc.id), { pushToken: token });
+    await updateDoc(doc(db, 'members', memberId), { pushToken: token });
     return true;
   } catch (err) {
     console.warn('[Push] Save token failed:', err);

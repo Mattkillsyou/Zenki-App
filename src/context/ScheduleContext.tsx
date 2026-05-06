@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ClassType, DAYS, SCHEDULES, ScheduleEntry } from '../data/schedule';
 import { generateId } from '../utils/generateId';
 import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
+import { syncOrAlert } from '../utils/syncOrAlert';
 import {
   subscribeToSchedule,
   upsertScheduleDay,
@@ -99,7 +100,7 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
   // Push a single day's array to Firestore. The subscription listener
   // round-trips the change into local state + AsyncStorage cache.
   const writeDay = useCallback((day: DayKey, classes: ScheduleClass[]) => {
-    upsertScheduleDay(day, classes).catch(() => {});
+    syncOrAlert(upsertScheduleDay(day, classes), 'Schedule');
   }, []);
 
   const addClass = useCallback(async (day: DayKey, klass: Omit<ScheduleClass, 'id'>) => {

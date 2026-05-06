@@ -74,10 +74,9 @@ export function SenpaiMascot() {
     messages,
     loading: chatLoading,
     error: chatError,
-    voiceEnabled,
-    setVoiceEnabled,
     ttsPlaying,
     send: sendChat,
+    clearError: clearChatError,
   } = useSenpaiChat();
   // `listening` = user's intent: "the mic should be on." Once on, it
   // stays on through silence, through senpai's replies, and through
@@ -88,14 +87,32 @@ export function SenpaiMascot() {
   const [liveTranscript, setLiveTranscript] = useState('');
   const transcriptRef = useRef('');
   const listeningRef = useRef(false);
+  // Short-lived bubble override. When the user taps the chibi we want
+  // them to see the gesture hint EVEN IF a previous chat reply is
+  // still cached in lastAssistantMsg (which would otherwise win the
+  // bubble-text priority forever). Cleared by a timeout. Also used
+  // for the chatLoading "thinking..." nudge so it actually displays.
+  const [bubbleOverride, setBubbleOverride] = useState<string | null>(null);
+  const bubbleOverrideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showBubbleOverride = (text: string, ms: number) => {
+    if (bubbleOverrideTimerRef.current) clearTimeout(bubbleOverrideTimerRef.current);
+    setBubbleOverride(text);
+    bubbleOverrideTimerRef.current = setTimeout(() => {
+      setBubbleOverride(null);
+      bubbleOverrideTimerRef.current = null;
+    }, ms);
+  };
   // The most recent assistant reply id we've already scheduled a
   // re-arm-after for — prevents firing the timer twice on the same turn.
   const lastReplyIdRef = useRef<string | null>(null);
 
-  // Voice-only mode: force TTS playback on the moment we mount.
-  useEffect(() => {
-    if (!voiceEnabled) setVoiceEnabled(true);
-  }, [voiceEnabled, setVoiceEnabled]);
+  // (Removed: force-on voice useEffect. It fought the auto-disable in
+  // useSenpaiChat — every time TTS failures flipped voiceEnabled to
+  // false, this effect would immediately set it back to true, causing
+  // an infinite re-disable loop and burning round-trips on a known-bad
+  // TTS endpoint. Voice now defaults true in the hook, persists 'false'
+  // when auto-disabled, and the user can re-enable it in Settings once
+  // TTS is healthy.)
 
   // Live STT — accumulate transcript in a ref AND mirror to state so the
   // speech bubble shows what you're saying as you say it.
@@ -162,18 +179,40 @@ export function SenpaiMascot() {
   useSpeechRecognitionEvent('error', (event) => {
     transcriptRef.current = '';
     setLiveTranscript('');
-    // We do NOT flip `listening` off on engine errors anymore. `listening`
-    // is the user's intent — only stopListening() (their explicit hold)
-    // turns it off. Engine errors fire every few hundred ms in iOS
-    // Simulator's mic mock and were flickering the indicator off the
-    // moment after the hold completed. If user still wants the mic on,
-    // try to re-arm; if the engine is permanently dead, the indicator
-    // stays on (which matches user intent) and we log the failure.
+    // Three error tiers:
+    //  1. Benign (aborted/no-speech): silence-timeout style, let 'end'
+    //     re-arm if user still wants the mic on.
+    //  2. Unrecoverable (audio-capture/service-not-allowed/language*):
+    //     mic is unavailable — flip listening off, surface an alert.
+    //     Continuing to retry every 400ms here floods the console and
+    //     burns battery without ever recovering. Most common cause on
+    //     iOS Simulator: "Audio Input" not enabled in the simulator's
+    //     I/O menu (no host mic forwarding).
+    //  3. Transient: log + re-arm with a short delay.
     if (event?.error === 'aborted' || event?.error === 'no-speech') {
-      // Benign — let 'end' handle re-arm.
       return;
     }
-    console.warn('[SenpaiMascot] STT error:', event?.error, event?.message);
+    const code = event?.error;
+    const unrecoverable =
+      code === 'audio-capture' ||
+      code === 'service-not-allowed' ||
+      code === 'not-allowed' ||
+      code === 'language-not-supported' ||
+      code === 'bad-grammar';
+    if (unrecoverable) {
+      console.warn('[SenpaiMascot] STT unrecoverable:', code, event?.message);
+      listeningRef.current = false;
+      setListening(false);
+      try { ExpoSpeechRecognitionModule.stop(); } catch { /* ignore */ }
+      Alert.alert(
+        'Mic unavailable',
+        code === 'audio-capture'
+          ? 'iOS couldn\'t access the mic. On the simulator: Simulator menu → I/O → Audio Input → enable a source. On device: check Settings → Zenki Dojo → Microphone.'
+          : `Speech recognition can't start (${code}). Check iOS Settings → Zenki Dojo → Speech Recognition + Microphone.`,
+      );
+      return;
+    }
+    console.warn('[SenpaiMascot] STT error:', code, event?.message);
     if (listeningRef.current && !chatLoading) {
       setTimeout(() => {
         if (!listeningRef.current || chatLoading) return;
@@ -185,7 +224,7 @@ export function SenpaiMascot() {
             requiresOnDeviceRecognition: false,
           });
         } catch {
-          /* engine perma-dead; visual stays on, user can tap to stop */
+          /* engine perma-dead; visual stays on, user can hold to stop */
         }
       }, 400);
     }
@@ -516,10 +555,19 @@ export function SenpaiMascot() {
     // sendSenpaiChat will clear chatLoading within 35s if the network
     // hangs. The reply, if it lands, still updates the bubble.
     if (chatLoading) {
-      triggerReaction('encouraging', 'thinking... be patient senpai 💕', 1500);
+      const msg = 'thinking... be patient senpai 💕';
+      triggerReaction('encouraging', msg, 1500);
+      showBubbleOverride(msg, 1500);
       return;
     }
-    triggerReaction('cheering', randomDialogue('mascotTap'), 2500);
+    // Tap = teach the hold gesture. 3500ms so the user has time to read
+    // and process the hint before it fades. mascotTap dialogue strings
+    // all explain "hold 2s to start, 3s to stop" in senpai's voice.
+    // showBubbleOverride forces the hint to display even when there's
+    // a cached lastAssistantMsg that would otherwise win bubble priority.
+    const hint = randomDialogue('mascotTap');
+    triggerReaction('cheering', hint, 3500);
+    showBubbleOverride(hint, 3500);
   };
 
   const fireExplosion = () => {
@@ -575,6 +623,11 @@ export function SenpaiMascot() {
       useNativeDriver: false,
     }).start();
     fireExplosion();
+    // Always clear any prior chat error on hold-to-start — a stale
+    // error bubble would otherwise mask the listening UX and trap the
+    // user. This is the second escape route from a stuck error (the
+    // first being the 8s auto-dismiss inside useSenpaiChat).
+    clearChatError();
     // Defensive: should never be entered with listening=true (onPressIn
     // routes the hold to handleHoldOffComplete in that case). If we're
     // somehow here while a chat is mid-flight, just bail — the user can
@@ -598,6 +651,9 @@ export function SenpaiMascot() {
       useNativeDriver: false,
     }).start();
     fireShutdown();
+    // Same as hold-on: clear any stuck error so the off gesture also
+    // doubles as an "escape from this error" path.
+    clearChatError();
     triggerReaction('sleeping', 'mic off, going dark 💕', 2000);
     stopListening();
   };
@@ -755,14 +811,30 @@ export function SenpaiMascot() {
             Priority: live transcript (you talking) → loading dots →
             error → senpai's reply → listening greeting → auto reaction.
             The reply must beat the listening greeting, otherwise once
-            the mic is open the user never sees senpai answer. */}
+            the mic is open the user never sees senpai answer.
+            Error text now uses the typed error code so the user can
+            see *why* it failed (auth vs network vs rate-limit vs
+            timeout vs unknown), instead of the old generic blurb. */}
         {(() => {
+          const errText = chatError
+            ? chatError.code === 'no_auth'
+              ? 'sign in expired senpai — open the app fresh 💕'
+              : chatError.code === 'no_network'
+              ? chatError.message + ' 💕'
+              : chatError.code === 'rate_limit'
+              ? chatError.message + ' 💕'
+              : chatError.code === 'server_error'
+              ? `server hiccup (${chatError.message}) — try again 💕`
+              : chatError.code === 'parse_error'
+              ? `bad reply (${chatError.message}) — try again 💕`
+              : `something broke: ${chatError.message} 💕`
+            : null;
           const bubbleText = liveTranscript
             ? liveTranscript
             : chatLoading
             ? '...'
-            : chatError
-            ? "couldn't reach me — hold me again to retry 💕"
+            : errText
+            ? errText
             : lastAssistantMsg?.content
             ? lastAssistantMsg.content
             : listening
@@ -1023,6 +1095,22 @@ export function SenpaiMascot() {
             <Text style={styles.closeBtnText}>x</Text>
           </SoundPressable>
         )}
+
+        {/* DEV-only diagnostic: fires a hardcoded chat message so we can
+            verify the chat round-trip works WITHOUT needing real mic
+            input (e.g. on iOS Simulator without host-mic permission).
+            Stripped from release builds via __DEV__. */}
+        {__DEV__ && !chatLoading && (
+          <SoundPressable
+            style={styles.devTestBtn}
+            onPress={() => {
+              clearChatError();
+              sendChat('test ping from dev — say hi');
+            }}
+          >
+            <Text style={styles.devTestBtnText}>test</Text>
+          </SoundPressable>
+        )}
       </Animated.View>
     </>
   );
@@ -1053,7 +1141,11 @@ function SpeechBubble({ text, colors }: { text: string; colors: any }) {
         },
       ]}
     >
-      <Text style={[styles.bubbleText, { color: colors.textPrimary }]} numberOfLines={3}>
+      {/* No numberOfLines — bilingual replies (Japanese + "..." pause +
+          broken English) routinely run 4–6 lines and the old 3-line cap
+          was truncating them mid-sentence. Bubble grows vertically as
+          needed; maxWidth keeps it from spanning the full screen. */}
+      <Text style={[styles.bubbleText, { color: colors.textPrimary }]}>
         {text}
       </Text>
       <View style={[styles.bubbleArrow, { borderTopColor: colors.surface }]} />
@@ -1168,18 +1260,25 @@ const styles = StyleSheet.create({
     boxShadow: '0 0 8px rgba(255, 140, 0, 0.9)',
   },
 
-  // Speech bubble
+  // Speech bubble — explicit width so it actually goes wide. The
+  // chibi container is only MASCOT_SIZE (140) wide, and even though the
+  // bubble is position:absolute, RN's auto-width measurement was packing
+  // text to fit the parent column instead of expanding to maxWidth.
+  // Forcing `width: 280` reliably gives us a horizontal-favored bubble.
+  // The bubble extends from `right: -10` leftward across the screen,
+  // centering naturally over the chibi.
   bubble: {
     position: 'absolute',
     bottom: MASCOT_SIZE + 8,
     right: -10,
-    maxWidth: 180,
-    padding: 8,
-    borderRadius: 12,
+    width: 280,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
     borderWidth: 1,
     zIndex: 10,
   },
-  bubbleText: { fontSize: 11, fontWeight: '700', lineHeight: 15 },
+  bubbleText: { fontSize: 13, fontWeight: '700', lineHeight: 18 },
   bubbleArrow: {
     position: 'absolute',
     bottom: -6,
@@ -1197,4 +1296,26 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', zIndex: 20,
   },
   closeBtnText: { color: '#FFF', fontSize: 10, fontWeight: '900' },
+
+  // DEV-only test button — sits below the chibi, fires a hardcoded chat
+  // message so we can validate the senpaiChat round-trip without needing
+  // real mic input. Stripped via __DEV__ guard at the call site.
+  devTestBtn: {
+    position: 'absolute',
+    bottom: -28,
+    alignSelf: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 215, 0, 0.85)',
+    borderWidth: 1,
+    borderColor: '#FFD700',
+    zIndex: 30,
+  },
+  devTestBtnText: {
+    color: '#000',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
 });

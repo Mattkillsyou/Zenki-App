@@ -68,14 +68,22 @@ export function useSenpaiChat() {
   const [lastArrivedId, setLastArrivedId] = useState<string | null>(null);
   // Voice playback toggle — when on, replies are sent through the
   // senpaiSpeak (ElevenLabs) function and the returned audio is played.
-  // Persisted under @senpai_chat_voice_enabled. Default OFF — paid TTS
-  // calls shouldn't fire on every chat session by default.
-  const [voiceEnabled, setVoiceEnabledState] = useState(false);
+  // Persisted under @senpai_chat_voice_enabled. Default ON — voice is
+  // the chat's whole UX, but auto-disables after TTS_FAIL_AUTODISABLE
+  // failures and persists 'false' so a known-bad endpoint (e.g.
+  // ElevenLabs free-tier blocked) doesn't keep burning round-trips.
+  const [voiceEnabled, setVoiceEnabledState] = useState(true);
   // True from the moment we kick off TTS fetch until audio playback ends
   // (either naturally, by interruption, or by failure). The mascot reads
   // this to defer the after-reply mic re-arm until senpai is done talking,
   // so STT doesn't transcribe her own voice through the speaker.
   const [ttsPlaying, setTtsPlaying] = useState(false);
+  // Count of consecutive TTS failures. When this hits TTS_FAIL_AUTODISABLE
+  // we auto-flip voiceEnabled to false so the user isn't stuck waiting on
+  // a known-bad TTS endpoint (e.g. ElevenLabs free-tier disabled). The
+  // counter resets on a successful TTS playback.
+  const ttsFailureCountRef = useRef(0);
+  const TTS_FAIL_AUTODISABLE = 2;
   const hydratedRef = useRef(false);
 
   // Load persisted history + voice flag on mount
@@ -88,7 +96,10 @@ export function useSenpaiChat() {
         ]);
         const parsed = safeParseJSON<ChatThreadMessage[]>(historyRaw, [], Array.isArray);
         if (parsed.length > 0) setMessages(parsed.slice(-MAX_PERSISTED_TURNS));
-        if (voiceRaw === 'true') setVoiceEnabledState(true);
+        // Now that initial state is `true`, only override on an
+        // explicit 'false' (auto-disable or user toggle). 'true' or
+        // null both mean "keep voice on."
+        if (voiceRaw === 'false') setVoiceEnabledState(false);
       } catch (err) {
         console.warn('[useSenpaiChat] hydrate failed:', err);
       } finally {
@@ -171,6 +182,12 @@ export function useSenpaiChat() {
         const result = await sendSenpaiChat(apiMessages, userContext, token ?? undefined);
 
         if (!result.ok) {
+          // Surface to console so the metro logs / debugger show the
+          // exact failure reason. The bubble shows a typed message but
+          // having the raw code+message logged makes diagnosing field
+          // failures dramatically faster.
+          // eslint-disable-next-line no-console
+          console.warn('[senpaiChat] failed', result.error.code, result.error.message);
           setError(result.error);
           setMessages((prev) =>
             prev.map((m) =>
@@ -206,28 +223,45 @@ export function useSenpaiChat() {
         // fetch starts and cleared FALSE either via the onEnded callback
         // (audio actually finished) or in the error/fallback branches
         // below (so the mascot's mic re-arm isn't blocked forever).
-        if (voiceEnabled) {
+        // After TTS_FAIL_AUTODISABLE consecutive failures we flip
+        // voiceEnabled off so the user isn't burning round-trips on a
+        // known-bad TTS endpoint (e.g. ElevenLabs free-tier disabled).
+        // Double-gated: voiceEnabled state AND the failure-count ref
+        // (which is always fresh, unlike state which can lag a render
+        // behind rapid sendChat calls — observed: a 3rd TTS attempt
+        // fired between auto-disable's setState and the next render).
+        if (voiceEnabled && ttsFailureCountRef.current < TTS_FAIL_AUTODISABLE) {
           setTtsPlaying(true);
           (async () => {
+            const onTtsFail = (label: string, detail: unknown) => {
+              // eslint-disable-next-line no-console
+              console.warn('[senpaiSpeak]', label, detail);
+              setTtsPlaying(false);
+              ttsFailureCountRef.current += 1;
+              if (ttsFailureCountRef.current >= TTS_FAIL_AUTODISABLE) {
+                // eslint-disable-next-line no-console
+                console.warn(
+                  '[senpaiSpeak] auto-disabling voice after',
+                  ttsFailureCountRef.current,
+                  'consecutive failures',
+                );
+                setVoiceEnabledState(false);
+                safeStorageSet(VOICE_KEY, 'false', '[useSenpaiChat]');
+              }
+            };
             try {
               const ttsToken = await getCurrentIdToken();
               const ttsResult = await fetchSenpaiAudio(text, undefined, ttsToken ?? undefined);
               if (ttsResult.ok) {
-                // playSenpaiAudio resolves when play() is called; the
-                // onEnded callback below fires when the audio actually
-                // finishes playing (or is stopped).
+                ttsFailureCountRef.current = 0;
                 await playSenpaiAudio(ttsResult.data.audioBase64, () => {
                   setTtsPlaying(false);
                 });
               } else {
-                // eslint-disable-next-line no-console
-                console.warn('[senpaiSpeak]', ttsResult.error.code, ttsResult.error.message);
-                setTtsPlaying(false);
+                onTtsFail(ttsResult.error.code, ttsResult.error.message);
               }
             } catch (e) {
-              // eslint-disable-next-line no-console
-              console.warn('[senpaiSpeak] playback failed', e);
-              setTtsPlaying(false);
+              onTtsFail('playback_threw', e);
             }
           })();
         }
@@ -252,6 +286,30 @@ export function useSenpaiChat() {
     });
   }, []);
 
+  // Dismiss the current chat error without wiping history. Used by the
+  // mascot's hold gestures so the user can always escape an error state
+  // (the error otherwise persists in the bubble until a successful send).
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  // Reset the TTS failure counter so the next reply gets a fresh shot
+  // at voice playback. Called when the user re-enables Senpai Voice in
+  // Settings — typically after upgrading their ElevenLabs plan to clear
+  // the auto-disable that fired earlier.
+  const resetTtsFailures = useCallback(() => {
+    ttsFailureCountRef.current = 0;
+  }, []);
+
+  // Auto-dismiss errors after 8 seconds so a stale error never sticks
+  // around forever. Long enough to read, short enough to not block the
+  // user from seeing the listening UX once they hold to retry.
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 8000);
+    return () => clearTimeout(t);
+  }, [error]);
+
   return {
     messages,
     loading,
@@ -262,5 +320,7 @@ export function useSenpaiChat() {
     ttsPlaying,
     send,
     clear,
+    clearError,
+    resetTtsFailures,
   };
 }
