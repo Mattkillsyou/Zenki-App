@@ -30,7 +30,7 @@ import {
   setMemberAdminRole,
   BackfillResult,
 } from '../services/memberSync';
-import { getMergedMembers, saveMemberOverride, deleteMemberOverride } from '../services/memberOverrides';
+import { getMergedMembers, saveMemberOverride, deleteMemberOverride, readOverrides } from '../services/memberOverrides';
 import {
   adminCreateMemberAccount,
   firebaseSendPasswordReset,
@@ -95,14 +95,26 @@ export function AdminMembersScreen({ navigation }: any) {
       });
     });
 
-    const unsub = subscribeToAllMembers((remote) => {
+    const unsub = subscribeToAllMembers(async (remote) => {
       if (cancelled || remote.length === 0) return;
-      // Firestore is the source of truth once it's responded with data.
-      // REPLACE local state instead of merging — otherwise admin-deleted
-      // members keep reappearing from the seed `MEMBERS` array, which is
-      // the "stuck with default users" symptom. Seeds only show pre-backfill
-      // (when remote is still empty and the early-return above keeps them).
-      setMembers(remote);
+      // Apply local tombstones to the live snapshot. Without this, when an
+      // admin deleted a member but the Firestore delete was rule-rejected
+      // (or the network blipped), the doc still existed on the server, the
+      // next snapshot included it, and the deleted member kept reappearing
+      // even though the local AsyncStorage tombstone said it should be
+      // hidden. Filter remote against the tombstone set so the local intent
+      // wins until the cloud catches up — and merge in local field
+      // overrides on top so optimistic edits stay visible during latency.
+      const overrides = await readOverrides();
+      if (cancelled) return;
+      const merged = remote
+        .filter((m) => !(overrides[m.id] as Member & { _deleted?: boolean })?._deleted)
+        .map((m) => {
+          const ov = overrides[m.id];
+          if (!ov || (ov as Member & { _deleted?: boolean })._deleted) return m;
+          return { ...m, ...ov };
+        });
+      setMembers(merged);
     });
 
     return () => {

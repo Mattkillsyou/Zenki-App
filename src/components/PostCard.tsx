@@ -257,9 +257,13 @@ function getTimeAgo(isoDate: string): string {
 }
 
 /**
- * Auto-playing, looping, muted feed video. Single tap forwards to the
- * parent's tap handler (so double-tap-to-like still works); the absence
- * of native controls means the player UI never gets in the way.
+ * Tap-to-play, looping, muted feed video. We deliberately don't autoplay
+ * here: every card with a video instantiates its own expo-video player,
+ * and autoplaying all of them in parallel exhausted iPad's H.264 decoders
+ * (~4-16 simultaneous, depending on hardware) — symptom: the Community
+ * tab would freeze the entire device. Tap the play overlay to start;
+ * single tap on a playing video still forwards to onTap so the
+ * double-tap-to-like gesture from the parent stays intact.
  */
 function PostVideoMedia({
   uri,
@@ -273,18 +277,40 @@ function PostVideoMedia({
   const player = useVideoPlayer(uri, (p) => {
     p.loop = true;
     p.muted = true;
-    p.play();
+    // Intentionally NOT calling p.play() — see comment above.
   });
+  const [hasStarted, setHasStarted] = React.useState(false);
+  const startPlayback = React.useCallback(() => {
+    try {
+      player.play();
+    } catch {
+      /* player not ready yet — ignore; user can tap again */
+    }
+    setHasStarted(true);
+  }, [player]);
   return (
-    <SoundPressable activeOpacity={0.98} onPress={onTap}>
-      <VideoView
-        player={player}
-        style={styles.media}
-        contentFit="cover"
-        nativeControls={false}
-        allowsPictureInPicture={false}
-      />
-    </SoundPressable>
+    <View>
+      <SoundPressable activeOpacity={0.98} onPress={onTap}>
+        <VideoView
+          player={player}
+          style={styles.media}
+          contentFit="cover"
+          nativeControls={false}
+          allowsPictureInPicture={false}
+        />
+      </SoundPressable>
+      {!hasStarted && (
+        <SoundPressable
+          style={styles.videoPlayOverlay}
+          onPress={startPlayback}
+          activeOpacity={0.85}
+        >
+          <View style={styles.videoPlayCircle}>
+            <Ionicons name="play" size={32} color="#fff" />
+          </View>
+        </SoundPressable>
+      )}
+    </View>
   );
 }
 
@@ -331,6 +357,25 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
     backgroundColor: '#000',
+  },
+  videoPlayOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+  videoPlayCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 4, // center optical play triangle
   },
   textPostWrap: {
     paddingHorizontal: 16,

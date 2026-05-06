@@ -13,6 +13,7 @@ import {
 } from '../services/firebaseAuth';
 import { FIREBASE_CONFIGURED, auth } from '../config/firebase';
 import { seedReviewerDataIfNeeded } from '../utils/seedReviewerData';
+import { syncOrAlert } from '../utils/syncOrAlert';
 
 const STORAGE_KEY = '@zenki_current_user';
 const CUSTOM_MEMBER_KEY = '@zenki_custom_member';
@@ -154,14 +155,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           try {
             await firebaseSignInWithPassword(emailForMember(member), password);
             firebaseUid = auth?.currentUser?.uid;
-          } catch (signInErr) {
-            console.warn(
-              '[AuthContext] Email already in use AND sign-in fallback failed — continuing local-only. Cloud Functions (AI photo logging, account deletion) will be unavailable until the user resets their password and signs in.',
-              signInErr,
+          } catch (signInErr: any) {
+            // Email is taken AND the typed password doesn't match the
+            // existing account. Surface this loudly — previously we
+            // continued silently with local-only state, then the user
+            // couldn't sign in later because the password they thought
+            // they set wasn't the one Firebase had. Throw so the caller
+            // (OnboardingScreen) can show the user the real reason.
+            console.warn('[AuthContext] email-in-use + sign-in fallback failed', signInErr);
+            const err = new Error(
+              "An account with this email already exists, and the password you typed doesn't match it. Try signing in instead, or use Forgot Password to reset.",
             );
+            (err as any).code = 'email-in-use-wrong-password';
+            throw err;
           }
         } else {
-          console.warn('[AuthContext] Firebase signup failed — continuing local-only', e);
+          // Any OTHER Firebase Auth signup error must NOT be swallowed.
+          // Continuing with local-only state was the root cause of the
+          // "I created an account, but it says it doesn't exist when I
+          // try to sign in" bug — the local profile looked fine, but no
+          // Firebase Auth user was ever created.
+          console.warn('[AuthContext] Firebase signup failed:', e?.code, e?.message);
+          const code = e?.code || 'unknown';
+          const friendly =
+            code === 'auth/network-request-failed'
+              ? "Couldn't reach the server. Check your internet and try again."
+              : code === 'auth/weak-password'
+              ? 'Password is too weak — Firebase needs at least 6 characters.'
+              : code === 'auth/invalid-email'
+              ? "That email address doesn't look right — double-check the spelling."
+              : code === 'auth/operation-not-allowed'
+              ? 'Email/password sign-up is disabled in Firebase Console — ask the admin to enable it.'
+              : `Signup failed (${code}). Tap Back and try again, or contact the admin if it keeps happening.`;
+          const err = new Error(friendly);
+          (err as any).code = 'firebase-signup-failed';
+          throw err;
         }
       }
     }
@@ -191,10 +219,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // this await never throws — it just guarantees the network round-trip
     // happens before the function returns.
     if (stampedUid) {
+      // Use syncOrAlert so the new user knows when their /members record
+      // failed to land on the server — without this, signup looked
+      // successful but the admin would never see them in the members list,
+      // which is exactly the "people are making accounts and the list is
+      // not updating" symptom.
       try {
-        await pushMemberToFirestore(memberWithUid);
+        await syncOrAlert(pushMemberToFirestore(memberWithUid), 'Profile sync');
       } catch (err) {
-        console.warn('[AuthContext] pushMemberToFirestore awaited but threw:', err);
+        console.warn('[AuthContext] pushMemberToFirestore threw:', err);
       }
     }
 

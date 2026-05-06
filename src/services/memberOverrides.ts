@@ -9,7 +9,7 @@ const OVERRIDES_KEY = '@zenki_member_overrides';
 
 type Overrides = Record<string, Member>;
 
-async function readOverrides(): Promise<Overrides> {
+export async function readOverrides(): Promise<Overrides> {
   try {
     const raw = await AsyncStorage.getItem(OVERRIDES_KEY);
     return safeParseJSON<Overrides>(raw, {}, (v) =>

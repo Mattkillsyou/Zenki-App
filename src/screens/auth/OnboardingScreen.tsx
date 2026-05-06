@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TextInput, ScrollView,
-  Image, Animated, Dimensions, Platform, ActivityIndicator} from 'react-native';
+  Image, Animated, Dimensions, Platform, ActivityIndicator, Alert} from 'react-native';
 import { KeyboardView } from '../../components';
 import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -246,7 +246,20 @@ export function OnboardingScreen({ navigation, route }: any) {
     // Pass password so AuthContext provisions a real Firebase Auth user
     // alongside the local Member record. Without this, signup is local-only
     // and the user can't sign back in through Firebase after signing out.
-    await createAccount(member, data.password);
+    // createAccount now THROWS on Firebase Auth failure (instead of silently
+    // continuing with local-only state). Catch it here so the user sees the
+    // actual reason — previously this path silently created a "ghost"
+    // account that didn't exist on Firebase, and the next sign-in attempt
+    // would error with "no account with that email" leaving the user stuck.
+    try {
+      await createAccount(member, data.password);
+    } catch (err: any) {
+      Alert.alert(
+        'Signup failed',
+        err?.message ?? 'Could not create your account. Try again.',
+      );
+      return;
+    }
 
     // Record the signed waiver (fire-and-forget)
     const signature: WaiverSignature = {

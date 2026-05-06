@@ -189,6 +189,17 @@ export function CommunityScreen({ navigation }: any) {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.gold} />
           }
+          // Aggressive memory caps — prior to these tunings, scrolling a feed
+          // with several video posts froze the iPad: every PostCard mounted
+          // an expo-video player (paused, but each one still consumes a
+          // hardware decoder slot on iOS). Default windowSize of 21 meant
+          // ~21 simultaneous decoders for a video-heavy feed. Capping the
+          // window plus enabling clipped-subview removal keeps the working
+          // set small enough that the H.264 budget never exhausts.
+          windowSize={3}
+          maxToRenderPerBatch={3}
+          initialNumToRender={3}
+          removeClippedSubviews
         />
       )}
 
