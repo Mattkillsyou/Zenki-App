@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, Platform, Image, Modal, Animated, Easing } from 'react-native';
+  View, Text, StyleSheet, TextInput, Platform, Image, Modal, Animated, Easing, ScrollView } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Google from 'expo-auth-session/providers/google';
 import * as Crypto from 'expo-crypto';
@@ -397,7 +397,17 @@ export function SignInScreen({ navigation }: any) {
           fallback, not just a KAV wrapper. */}
       <Modal visible={showInviteGate} animationType="fade">
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-          <KeyboardAwareScrollView contentContainerStyle={styles.gateContainer}>
+          {/* Plain ScrollView (not the shared KAV wrapper): the gate's content
+              is short and sits above the keyboard, so the KeyboardAvoidingView
+              "padding" shift only over-pushed the centered cluster off the top
+              inside this Modal. automaticallyAdjustKeyboardInsets keeps the
+              small-phone scroll fallback (§32) without the over-jump. */}
+          <ScrollView
+            contentContainerStyle={styles.gateContainer}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            automaticallyAdjustKeyboardInsets
+          >
             <View style={[styles.gateIconWrap, { backgroundColor: colors.goldMuted }]}>
               <Ionicons name="shield-checkmark-outline" size={48} color={colors.gold} />
             </View>
@@ -412,7 +422,7 @@ export function SignInScreen({ navigation }: any) {
               autoCapitalize="none"
             />
             <Button title="Continue" onPress={handleVerifyInvite} fullWidth size="lg" />
-          </KeyboardAwareScrollView>
+          </ScrollView>
         </SafeAreaView>
       </Modal>
 
@@ -590,7 +600,7 @@ const styles = StyleSheet.create({
   footerLink: { fontSize: 15, fontWeight: '700' },
 
   // Gate
-  gateContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl, gap: spacing.md + 4 },
+  gateContainer: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl, gap: spacing.md + 4 },
   gateContent: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl, gap: spacing.md + 4 },
   gateIconWrap: { width: 100, height: 100, borderRadius: borderRadius['2xl'], alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   gateTitle: { fontSize: 30, fontWeight: '700', letterSpacing: -0.3 },
