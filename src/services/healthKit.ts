@@ -162,20 +162,42 @@ function getAppleHealthKit(): HealthKitModule | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mod = require('react-native-health');
-    // The package exports default + named (Constants). We accept either shape.
-    const HK = (mod?.default ?? mod) as Partial<HealthKitModule>;
-    // Verify the native bridge actually registered its methods. On RN 0.80+
-    // bridgeless / hybrid builds, react-native-health@1.19.0's JS shim can
-    // load while NativeModules.AppleHealthKit is undefined — the package
-    // surface is then just `{ Constants }` with no callable methods. Treat
-    // that as "native bridge unavailable" so callers degrade cleanly instead
-    // of throwing 'HK.initHealthKit is not a function' at first use.
-    if (typeof HK?.initHealthKit !== 'function') {
-      console.warn('[HealthKit] Native bridge not registered — running without HealthKit sync');
+    // The package's Constants (Permissions/Units/Activities) are JS-side.
+    const Constants = ((mod?.default ?? mod) as Partial<HealthKitModule>)?.Constants;
+
+    // Resolve the NATIVE module directly instead of trusting the package's
+    // top-level export. Under the New Architecture (bridgeless) the TurboModule
+    // interop vends AppleHealthKit's methods as NON-enumerable accessors, but
+    // react-native-health@1.19.0's index.js builds its export with
+    // `Object.assign({}, NativeModules.AppleHealthKit, { Constants })` — and
+    // Object.assign copies only own-ENUMERABLE properties, so it drops every
+    // method and the export collapses to `{ Constants }` (initHealthKit
+    // === undefined). The service then saw "no initHealthKit" and silently
+    // ran without HealthKit — the "Apple Health won't connect" bug.
+    //
+    // Verified at runtime on an iOS 26.5 simulator: NativeModules.AppleHealthKit
+    // is a live object whose `initHealthKit` IS a function, while the package
+    // export's is undefined. So we use the live native module and graft the
+    // JS-side Constants on top — HealthKit works WITHOUT disabling New Arch.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { NativeModules } = require('react-native');
+    const native = NativeModules?.AppleHealthKit;
+
+    if (!native || typeof native.initHealthKit !== 'function') {
+      console.warn('[HealthKit] Native module unavailable — running without HealthKit sync');
       _AppleHealthKit = null;
       return null;
     }
-    _AppleHealthKit = HK as HealthKitModule;
+
+    // Method access forwards to the live native module (bound so the interop
+    // keeps the correct receiver); `Constants` is served from the JS package.
+    _AppleHealthKit = new Proxy(native, {
+      get(target, prop) {
+        if (prop === 'Constants') return Constants;
+        const value = (target as Record<string | symbol, unknown>)[prop];
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    }) as HealthKitModule;
   } catch (err) {
     console.warn('[HealthKit] Native module unavailable — running without HealthKit sync:', err);
     _AppleHealthKit = null;

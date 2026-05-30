@@ -142,9 +142,14 @@ interface OnboardingData {
 export function OnboardingScreen({ navigation, route }: any) {
   const { colors } = useTheme();
   const { reduceMotion } = useMotion();
-  const { createAccount } = useAuth();
+  const { createAccount, user } = useAuth();
   const { saveProfile, addWeight, updateGoals } = useNutrition();
-  const [step, setStep] = useState(0);
+  // OAuth users arrive here already authenticated (the account was created
+  // during the token exchange). In that mode we skip the email/password
+  // account step and UPDATE the existing member at the end rather than
+  // creating a new one.
+  const oauthMode = !!route?.params?.oauth;
+  const [step, setStep] = useState(oauthMode ? 1 : 0);
   const [showPassword, setShowPassword] = useState(false);
   // Permission prompts moved to PermissionsOnboardingScreen post-account
   // creation; this wizard no longer asks for them inline.
@@ -159,6 +164,23 @@ export function OnboardingScreen({ navigation, route }: any) {
     trainingExperience: '', trainingDaysPerWeek: 3,
     dietType: '', injuries: [], metabolicSex: '',
   });
+
+  // Prefill what the OAuth provider already told us so first-time Google/Apple
+  // users don't retype it. Runs once the authenticated member is available.
+  useEffect(() => {
+    if (!oauthMode || !user) return;
+    setData((d) => ({
+      ...d,
+      email: user.email ?? d.email,
+      firstName: user.firstName && user.firstName !== 'Member' ? user.firstName : d.firstName,
+      lastName: user.lastName || d.lastName,
+      phone: user.phone || d.phone,
+      photo: user.profilePhoto ?? d.photo,
+      belt: user.belt ?? d.belt,
+      stripes: user.stripes ?? d.stripes,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oauthMode, user?.id]);
 
   // Password validation
   const pwHasLength = data.password.length >= 8;
@@ -207,7 +229,8 @@ export function OnboardingScreen({ navigation, route }: any) {
   };
 
   const goBack = () => {
-    if (step > 0) {
+    // In OAuth mode step 0 (account creation) is skipped, so 1 is the floor.
+    if (step > (oauthMode ? 1 : 0)) {
       if (!reduceMotion) {
         Animated.parallel([
           Animated.timing(slideAnim, { toValue: SCREEN_WIDTH * 0.3, duration: 200, useNativeDriver: true }),
@@ -220,19 +243,24 @@ export function OnboardingScreen({ navigation, route }: any) {
   };
 
   const handleFinish = async () => {
-    const id = 'user_' + Date.now().toString(36);
-    const username = data.email.split('@')[0].toLowerCase();
+    // OAuth users already have an identity (id/username/email/firebaseUid)
+    // minted during the token exchange — reuse it so we update that member
+    // instead of orphaning it behind a freshly-generated id.
+    const existing = oauthMode ? user : null;
+    const id = existing?.id ?? 'user_' + Date.now().toString(36);
+    const username = existing?.username ?? data.email.split('@')[0].toLowerCase();
+    const email = existing?.email ?? data.email;
     const member: Member = {
       id,
       username,
       firstName: data.firstName,
       lastName: data.lastName,
-      email: data.email,
+      email,
       phone: data.phone.trim() || undefined,
       belt: data.belt,
       stripes: data.stripes,
-      memberSince: todayDateString(),
-      isAdmin: false,
+      memberSince: existing?.memberSince ?? todayDateString(),
+      isAdmin: existing?.isAdmin ?? false,
       profilePhoto: data.photo || undefined,
       funFact: data.funFact.trim() || undefined,
       nickname: data.nickname.trim() || undefined,
@@ -240,19 +268,26 @@ export function OnboardingScreen({ navigation, route }: any) {
       trainingExperience: data.trainingExperience || undefined,
       trainingDaysPerWeek: data.trainingDaysPerWeek,
       injuries: data.injuries.length > 0 ? data.injuries : undefined,
-      totalSessions: 0,
-      weekStreak: 0,
+      totalSessions: existing?.totalSessions ?? 0,
+      weekStreak: existing?.weekStreak ?? 0,
+      // Preserve the Firebase UID so the /members write stays authorized
+      // (rule: firebaseUid == request.auth.uid) and the record isn't orphaned.
+      ...(existing?.firebaseUid ? { firebaseUid: existing.firebaseUid } : {}),
     };
-    // Pass password so AuthContext provisions a real Firebase Auth user
-    // alongside the local Member record. Without this, signup is local-only
-    // and the user can't sign back in through Firebase after signing out.
-    // createAccount now THROWS on Firebase Auth failure (instead of silently
-    // continuing with local-only state). Catch it here so the user sees the
-    // actual reason — previously this path silently created a "ghost"
-    // account that didn't exist on Firebase, and the next sign-in attempt
-    // would error with "no account with that email" leaving the user stuck.
+    // Email signups pass a password so AuthContext provisions a real Firebase
+    // Auth user alongside the local Member record. OAuth users are ALREADY
+    // authenticated and have no password — calling createAccount without one
+    // skips Firebase Auth creation and just persists + syncs the member,
+    // stamping the live OAuth uid (and writing CUSTOM_MEMBER_KEY so they stay
+    // signed in across relaunches). createAccount THROWS on Firebase failure
+    // instead of silently continuing with local-only state, so catch it here
+    // and show the user the actual reason.
     try {
-      await createAccount(member, data.password);
+      if (oauthMode) {
+        await createAccount(member);
+      } else {
+        await createAccount(member, data.password);
+      }
     } catch (err: any) {
       Alert.alert(
         'Signup failed',
@@ -875,7 +910,7 @@ export function OnboardingScreen({ navigation, route }: any) {
 
         {/* Navigation Buttons */}
         <View style={styles.navRow}>
-          {step > 0 ? (
+          {step > (oauthMode ? 1 : 0) ? (
             <SoundPressable style={[styles.navButton, { backgroundColor: colors.surface, borderWidth: 1, borderColor: 'transparent' }]} onPress={goBack}>
               <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
             </SoundPressable>

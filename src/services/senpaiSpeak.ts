@@ -60,7 +60,14 @@ export async function fetchSenpaiAudio(
       return { ok: false, error: { code: 'tts_error', message: 'ElevenLabs quota exceeded.' } };
     }
     if (!res.ok) {
-      return { ok: false, error: { code: 'tts_error', message: `HTTP ${res.status}` } };
+      // Pull the body so we can surface the actual server reason
+      // (e.g. "text required", "text too long") instead of a bare HTTP
+      // code that gives no signal. Body parse is best-effort.
+      const body = await res.text().catch(() => '');
+      return {
+        ok: false,
+        error: { code: 'tts_error', message: `HTTP ${res.status}: ${body || 'no body'}` },
+      };
     }
 
     const json = (await res.json()) as SenpaiSpeakResult;

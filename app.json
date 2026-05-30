@@ -2,7 +2,7 @@
   "expo": {
     "name": "Zenki Dojo",
     "slug": "zenki-dojo",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "zenkidojo",
@@ -78,7 +78,7 @@
       "supportsTablet": true,
       "requireFullScreen": true,
       "bundleIdentifier": "com.zenkidojo.app",
-      "buildNumber": "25",
+      "buildNumber": "28",
       "config": {
         "usesNonExemptEncryption": false
       },

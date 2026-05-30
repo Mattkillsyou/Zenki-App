@@ -117,6 +117,14 @@ export function useSenpaiChat() {
     }
   }, []);
 
+  // Mirror messages into a ref so send() reads the LATEST array
+  // synchronously. Reading state directly inside send() captures a
+  // closure value that's always one render behind a clearChat() →
+  // sendChat() sequence, which is exactly the failure mode the test
+  // button hit (validation 400: "messages cannot be empty").
+  const messagesRef = useRef<ChatThreadMessage[]>(messages);
+  messagesRef.current = messages;
+
   // Persist any time messages change (after initial hydration)
   useEffect(() => {
     if (!hydratedRef.current) return;
@@ -139,18 +147,17 @@ export function useSenpaiChat() {
         pending: true,
       };
 
-      // Snapshot the current thread + new user turn for the API call,
-      // then optimistically render user message + assistant placeholder.
-      let apiMessages: ChatTurn[] = [];
-      setMessages((prev) => {
-        const next = [...prev, userMsg, placeholder];
-        // Build the API payload from prev + the new user turn (no placeholder).
-        // Strip our local-only fields and any errored/pending entries from history.
-        apiMessages = [...prev, userMsg]
-          .filter((m) => !m.pending && !m.error && m.content.length > 0)
-          .map((m) => ({ role: m.role, content: m.content }));
-        return next;
-      });
+      // Snapshot the current thread + new user turn for the API call.
+      // Build apiMessages BEFORE setMessages — the updater fires async,
+      // so doing it inside left apiMessages empty when the next user
+      // turn fired right after a clearChat() (we observed
+      // `messages cannot be empty` 400s from the test button which
+      // clears history and sends in the same handler).
+      const apiMessages: ChatTurn[] = [...messagesRef.current, userMsg]
+        .filter((m) => !m.pending && !m.error && m.content.length > 0)
+        .map((m) => ({ role: m.role, content: m.content }));
+      // Optimistically render user message + assistant placeholder.
+      setMessages((prev) => [...prev, userMsg, placeholder]);
 
       setLoading(true);
       try {
@@ -199,7 +206,12 @@ export function useSenpaiChat() {
           return;
         }
 
-        const { text, mood } = result.data;
+        // text = English bubble copy. speakText = Japanese audio. The
+        // model returns both; we render text and feed speakText to TTS.
+        // Older replies before this rollout returned only `text` — the
+        // backend parser maps that onto both fields, so reading either
+        // here is safe even with a cached Claude response.
+        const { text, speakText, mood } = result.data;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === placeholderId
@@ -250,8 +262,24 @@ export function useSenpaiChat() {
               }
             };
             try {
+              // Skip TTS if speakText doesn't contain Japanese script.
+              // Use Unicode script properties for the broadest, most
+              // accurate match — the previous narrow range
+              // ([぀-ヿ一-龯]) missed some kana and extension kanji
+              // blocks, which caused false-positive skips when the
+              // model produced edge-case Japanese characters.
+              const hasJapanese = /\p{Script=Hiragana}|\p{Script=Katakana}|\p{Script=Han}/u.test(speakText);
+              if (!hasJapanese) {
+                // eslint-disable-next-line no-console
+                console.warn(
+                  '[senpaiSpeak] skipping TTS — no Japanese chars in speakText:',
+                  JSON.stringify(speakText.slice(0, 100)),
+                );
+                setTtsPlaying(false);
+                return;
+              }
               const ttsToken = await getCurrentIdToken();
-              const ttsResult = await fetchSenpaiAudio(text, undefined, ttsToken ?? undefined);
+              const ttsResult = await fetchSenpaiAudio(speakText, undefined, ttsToken ?? undefined);
               if (ttsResult.ok) {
                 ttsFailureCountRef.current = 0;
                 await playSenpaiAudio(ttsResult.data.audioBase64, () => {

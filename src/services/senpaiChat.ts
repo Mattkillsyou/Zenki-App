@@ -41,7 +41,12 @@ export interface SenpaiUserContext {
 }
 
 export interface SenpaiChatReply {
+  // English text shown in the bubble (the user reads this).
   text: string;
+  // Japanese text sent to ElevenLabs TTS (the user hears this). May
+  // contain a single English ALL-CAPS comedic word; otherwise pure
+  // Japanese. Falls back to `text` if the model omitted SPEAK.
+  speakText: string;
   mood: MascotMood;
   usage: {
     input: number;
@@ -94,7 +99,16 @@ export async function sendSenpaiChat(
       };
     }
     if (!res.ok) {
-      return { ok: false, error: { code: 'server_error', message: `HTTP ${res.status}` } };
+      // Surface the body so we can see WHY the server rejected us.
+      // 400 typically = validation failure (empty content, too long,
+      // wrong role order); without the body it's impossible to tell.
+      const body = await res.text().catch(() => '');
+      // eslint-disable-next-line no-console
+      console.warn('[sendSenpaiChat] non-OK', res.status, 'body=', body);
+      return {
+        ok: false,
+        error: { code: 'server_error', message: `HTTP ${res.status}: ${body || 'no body'}` },
+      };
     }
 
     const json = (await res.json()) as SenpaiChatReply;

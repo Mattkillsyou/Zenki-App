@@ -21,16 +21,30 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
 let currentStop: (() => void) | null = null;
-let audioModeSet = false;
 
 async function ensureAudioMode(): Promise<void> {
-  if (audioModeSet) return;
+  // Re-set the audio mode on EVERY play, AND explicitly disable
+  // recording mode + earpiece routing.
+  //
+  // Backstory: STT (expo-speech-recognition) puts the iOS audio session
+  // into PlayAndRecord category with allowsRecording=true. That category
+  // routes audio through the EARPIECE by default (quiet). After STT
+  // ends, the session doesn't auto-reset to Playback, so subsequent TTS
+  // plays "succeed" (the player thinks it's playing) but route to the
+  // earpiece — which on the iOS Simulator means total silence.
+  //
+  // Force the session back to Playback (allowsRecording: false) and
+  // route through the speaker (shouldRouteThroughEarpiece: false). The
+  // user reported "heard it once" — that was before STT had run; after
+  // a hold-to-talk session, the routing got corrupted and stayed quiet.
   try {
     await setAudioModeAsync({
       playsInSilentMode: true,
       interruptionMode: 'mixWithOthers',
+      allowsRecording: false,
+      shouldRouteThroughEarpiece: false,
+      shouldPlayInBackground: false,
     });
-    audioModeSet = true;
   } catch {
     /* non-fatal — audio is best-effort */
   }
@@ -83,15 +97,34 @@ export async function playSenpaiAudio(
     throw new Error(`failed to write audio tempfile: ${(err as Error)?.message}`);
   }
 
+  // Some expo-audio versions on iOS Simulator report `playing: true`
+  // and a valid duration immediately after createAudioPlayer({uri}),
+  // but currentTime never advances and no audio is actually emitted.
+  // Calling .replace() with the same source forces a real load + reset
+  // of the playhead, which fixes the no-audio bug on the sim.
   const player = createAudioPlayer({ uri: fileUri });
+  try {
+    player.replace({ uri: fileUri });
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn('[senpaiAudio] player.replace threw:', e);
+  }
 
-  // Cleanup runs once — either when playback finishes, on stop(), or on error.
-  // Fires onEnded after release so the consumer (useSenpaiChat) can flip its
-  // ttsPlaying flag false and let the mascot's mic re-arm.
+  // Cleanup runs once — either when playback finishes, on stop(), or on
+  // error. Fires onEnded after release so the consumer (useSenpaiChat)
+  // can flip its ttsPlaying flag false and let the mascot's mic re-arm.
+  // Also clears the status poll if it's still running (set below) — a
+  // missing clear here was leaving phantom intervals running against
+  // released players, which corrupted the next play attempt.
   let cleaned = false;
+  let statusPoll: ReturnType<typeof setInterval> | null = null;
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
+    if (statusPoll) {
+      clearInterval(statusPoll);
+      statusPoll = null;
+    }
     try {
       player.release();
     } catch {
@@ -118,45 +151,46 @@ export async function playSenpaiAudio(
     cleanup();
   };
 
-  // Listen for status updates so we can clean up when playback ends
-  // naturally. The exact event API differs slightly between expo-audio
-  // versions; the `addListener` pattern below is the SDK 55 shape.
-  try {
-    const sub = (player as any).addListener?.('playbackStatusUpdate', (status: any) => {
-      if (status?.didJustFinish || (status?.duration > 0 && status?.currentTime >= status?.duration)) {
-        sub?.remove?.();
+  // Two-phase listener: first wait for `isLoaded` before calling play(),
+  // then watch for `didJustFinish` to clean up. createAudioPlayer returns
+  // synchronously but the underlying file decode is async — calling
+  // play() before isLoaded silently no-ops with duration=0 and playing
+  // stays false. (Confirmed via diagnostic.)
+  // expo-audio's `addListener('playbackStatusUpdate', ...)` doesn't
+  // fire reliably on iOS Simulator, so poll `player.currentStatus`
+  // synchronously instead. Two phases: (1) call play() once the
+  // engine reports a positive duration (file loaded), (2) clean up
+  // when playback naturally finishes.
+  let started = false;
+  statusPoll = setInterval(() => {
+    if (cleaned) return;
+    const status: any = (player as any).currentStatus ?? {};
+    const ready = status?.isLoaded === true || (typeof status?.duration === 'number' && status.duration > 0);
+    if (!started && ready) {
+      started = true;
+      try {
+        try { (player as any).seekTo?.(0); } catch { /* ignore */ }
+        player.play();
+      } catch {
         cleanup();
+        return;
       }
-    });
-    // Fallback: if the listener API isn't available on this player, fall
-    // back to a duration-based timeout once we know how long the clip is.
-    if (!sub) {
-      // Player exposes `duration` after metadata loads; best-effort poll.
-      const poll = setInterval(() => {
-        const dur = (player as any).duration;
-        if (typeof dur === 'number' && dur > 0) {
-          clearInterval(poll);
-          // Pad by 250ms to let the audio finish flushing
-          setTimeout(cleanup, dur * 1000 + 250);
-        }
-      }, 100);
-      // Hard fallback — clean up after 30s no matter what
-      setTimeout(() => {
-        clearInterval(poll);
-        cleanup();
-      }, 30_000);
     }
-  } catch {
-    // If event subscription throws, just clean up after 30s
-    setTimeout(cleanup, 30_000);
-  }
-
-  try {
-    player.play();
-  } catch (err) {
+    if (status?.didJustFinish || (status?.duration > 0 && status?.currentTime >= status?.duration && started)) {
+      cleanup();
+    }
+  }, 100);
+  // Fallback if `currentStatus` never reports ready (rare but seen).
+  setTimeout(() => {
+    if (!started && !cleaned) {
+      started = true;
+      try { player.play(); } catch { /* ignore */ }
+    }
+  }, 1500);
+  // Hard timeout — never let the poll run forever.
+  setTimeout(() => {
     cleanup();
-    throw err;
-  }
+  }, 30_000);
 
   currentStop = stop;
   return { stop };

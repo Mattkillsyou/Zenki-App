@@ -117,9 +117,17 @@ export function SignInScreen({ navigation }: any) {
     (async () => {
       try {
         setLoading(true);
-        const { member } = await firebaseSignInWithGoogle({ idToken });
+        const { member, isNewAccount } = await firebaseSignInWithGoogle({ idToken });
         await auth.signIn(member);
-        navigation.replace('Main');
+        // First-time OAuth users go through onboarding (profile + waiver) the
+        // same as email signups; returning users land straight on Main. We
+        // pass { oauth: true } so OnboardingScreen skips the email/password
+        // account step — the account already exists from the token exchange.
+        if (isNewAccount) {
+          navigation.replace('Onboarding', { oauth: true });
+        } else {
+          navigation.replace('Main');
+        }
       } catch (err: any) {
         setErrorMsg(err?.message ? `Google sign-in didn't go through — ${err.message}` : "Google sign-in didn't go through — try email + password instead.");
       } finally {
@@ -178,14 +186,22 @@ export function SignInScreen({ navigation }: any) {
       if (!appleCred.identityToken) {
         throw new Error('Apple did not return an identity token.');
       }
-      const { member } = await firebaseSignInWithApple({
+      const { member, isNewAccount } = await firebaseSignInWithApple({
         identityToken: appleCred.identityToken,
         fullName: appleCred.fullName,
         email: appleCred.email,
         nonce: rawNonce,
       });
       await auth.signIn(member);
-      navigation.replace('Main');
+      // First-time OAuth users go through onboarding (profile + waiver) the
+      // same as email signups; returning users land straight on Main. The
+      // { oauth: true } param tells OnboardingScreen to skip the
+      // email/password account step — the account already exists.
+      if (isNewAccount) {
+        navigation.replace('Onboarding', { oauth: true });
+      } else {
+        navigation.replace('Main');
+      }
     } catch (err: any) {
       // User canceling the prompt is not a real error — silence it.
       if (err?.code === 'ERR_REQUEST_CANCELED') return;

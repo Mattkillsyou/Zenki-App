@@ -76,6 +76,7 @@ export function SenpaiMascot() {
     error: chatError,
     ttsPlaying,
     send: sendChat,
+    clear: clearChat,
     clearError: clearChatError,
   } = useSenpaiChat();
   // `listening` = user's intent: "the mic should be on." Once on, it
@@ -829,7 +830,13 @@ export function SenpaiMascot() {
               ? `bad reply (${chatError.message}) — try again 💕`
               : `something broke: ${chatError.message} 💕`
             : null;
-          const bubbleText = liveTranscript
+          // bubbleOverride is the highest priority (above liveTranscript
+          // even) so a tap-hint or mid-loading nudge ALWAYS displays —
+          // otherwise a stale lastAssistantMsg.content would win and the
+          // user's tap would seem to do nothing.
+          const bubbleText = bubbleOverride
+            ? bubbleOverride
+            : liveTranscript
             ? liveTranscript
             : chatLoading
             ? '...'
@@ -1096,16 +1103,18 @@ export function SenpaiMascot() {
           </SoundPressable>
         )}
 
-        {/* DEV-only diagnostic: fires a hardcoded chat message so we can
-            verify the chat round-trip works WITHOUT needing real mic
-            input (e.g. on iOS Simulator without host-mic permission).
-            Stripped from release builds via __DEV__. */}
+        {/* DEV-only diagnostic: clears chat history (so the model
+            doesn't mimic English replies from earlier turns) and fires
+            a hardcoded message so we can verify the chat round-trip
+            works WITHOUT needing real mic input. Stripped from release
+            builds via __DEV__. */}
         {__DEV__ && !chatLoading && (
           <SoundPressable
             style={styles.devTestBtn}
-            onPress={() => {
+            onPress={async () => {
               clearChatError();
-              sendChat('test ping from dev — say hi');
+              await clearChat();
+              sendChat('say hi');
             }}
           >
             <Text style={styles.devTestBtnText}>test</Text>
@@ -1134,21 +1143,24 @@ function SpeechBubble({ text, colors }: { text: string; colors: any }) {
       style={[
         styles.bubble,
         {
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
+          // Hardcoded SOLID background instead of `colors.surface` —
+          // surface is semi-transparent in the active theme and let
+          // page content bleed through, killing readability against
+          // the chibi + the cards behind her.
+          backgroundColor: '#0F0E2C',
+          borderColor: 'rgba(255,255,255,0.16)',
           opacity: fade,
           transform: [{ scale }],
         },
       ]}
     >
-      {/* No numberOfLines — bilingual replies (Japanese + "..." pause +
-          broken English) routinely run 4–6 lines and the old 3-line cap
-          was truncating them mid-sentence. Bubble grows vertically as
-          needed; maxWidth keeps it from spanning the full screen. */}
-      <Text style={[styles.bubbleText, { color: colors.textPrimary }]}>
+      {/* No numberOfLines — replies routinely run 4–6 lines and the
+          old 3-line cap was truncating them mid-sentence. Bubble grows
+          vertically as needed; width is fixed so it stays horizontal. */}
+      <Text style={[styles.bubbleText, { color: '#FFFFFF' }]}>
         {text}
       </Text>
-      <View style={[styles.bubbleArrow, { borderTopColor: colors.surface }]} />
+      <View style={[styles.bubbleArrow, { borderTopColor: '#0F0E2C' }]} />
     </Animated.View>
   );
 }
