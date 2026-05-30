@@ -781,7 +781,7 @@ export function HomeScreen({ navigation }: any) {
             </Text>
             <View style={styles.welcomeActions}>
               {!editMode && (
-                <View ref={editPillRef} onLayout={measureCoachTarget('edit', editPillRef)}>
+                <View ref={editPillRef} onLayout={measureCoachTarget('edit', editPillRef)} style={{ marginLeft: 8 }}>
                   <TouchableOpacity
                     onPress={() => toggleEditMode(true)}
                     activeOpacity={0.8}
@@ -962,8 +962,9 @@ export function HomeScreen({ navigation }: any) {
                     <View
                       ref={foodActionsRef}
                       onLayout={measureCoachTarget('foodActions', foodActionsRef)}
+                      style={{ marginTop: 6 }}
                     >
-                      <Text style={[styles.sectionTitle, { color: colors.textPrimary, paddingHorizontal: 24, marginTop: 6, marginBottom: 8 }]}>
+                      <Text style={[styles.sectionTitle, { color: colors.textPrimary, paddingHorizontal: 24, marginBottom: 8 }]}>
                         Tracking
                       </Text>
                       <View style={{ paddingHorizontal: 24, flexDirection: 'row', gap: 10 }}>
@@ -2046,7 +2047,6 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 999,
     borderWidth: 1,
-    marginLeft: 8,
   },
   editPillText: {
     fontSize: 10,
