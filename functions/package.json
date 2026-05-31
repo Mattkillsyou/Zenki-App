@@ -10,7 +10,8 @@
     "build": "tsc",
     "serve": "npm run build && npx firebase-tools emulators:start --only functions",
     "deploy": "npm run build && npx firebase-tools deploy --only functions",
-    "logs": "npx firebase-tools functions:log"
+    "logs": "npx firebase-tools functions:log",
+    "eval:senpai": "npm run build && node lib/__evals__/runEval.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",

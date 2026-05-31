@@ -1,13 +1,19 @@
 /**
- * useSenpaiChat — owns the chat thread state, AsyncStorage persistence,
- * and the call to the senpaiChat cloud function.
+ * Senpai chat thread — state, AsyncStorage persistence, and the call to the
+ * senpaiChat cloud function.
+ *
+ * The state is hoisted into a single SenpaiChatProvider (bottom of this file)
+ * so the floating mascot, the full-screen chat modal, and Settings all share
+ * ONE live conversation. Previously each useSenpaiChat() call got its own
+ * copy, reconciled only loosely through AsyncStorage — which meant a message
+ * sent in one surface didn't appear in another until an app restart.
  *
  * Persisted under @senpai_chat_history (last 50 turns trimmed on save).
  * Each Senpai reply also fires triggerReaction so the floating mascot
  * animation matches the chat mood.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 
@@ -15,6 +21,7 @@ import {
   sendSenpaiChat,
   type ChatTurn,
   type SenpaiChatError,
+  type SenpaiChatAction,
   type SenpaiUserContext,
 } from '../services/senpaiChat';
 import { fetchSenpaiAudio } from '../services/senpaiSpeak';
@@ -24,6 +31,11 @@ import { useSenpai, type MascotMood } from '../context/SenpaiContext';
 import { useGamification } from '../context/GamificationContext';
 import { useWorkouts } from '../context/WorkoutContext';
 import { useAuth } from '../context/AuthContext';
+import { useNutrition } from '../context/NutritionContext';
+import { searchFoods } from '../services/foodSearch';
+import { randomDialogue } from '../data/senpaiDialogue';
+import type { FoodSearchResult } from '../types/food';
+import type { MealType, MacroEntry } from '../types/nutrition';
 
 const HISTORY_KEY = '@senpai_chat_history';
 const VOICE_KEY = '@senpai_chat_voice_enabled';
@@ -54,12 +66,59 @@ function daysSinceMostRecent(latestDate: string | undefined): number | undefined
   return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
 }
 
-export function useSenpaiChat() {
+// ─── Client-executed actions (item 4) ───────────────────────────────────────
+// The model can request log_food / remove_food / set_goal; the cloud function
+// returns the request (it can't touch the client-side macro store) and the
+// client does the work here — resolving REAL macros from the food DB,
+// confirming with the user, then writing through NutritionContext. The model
+// never supplies macro numbers.
+
+export type PendingAction =
+  | {
+      kind: 'log_food';
+      query: string;
+      candidates: FoodSearchResult[];
+      selectedIndex: number;
+      servings: number;
+      meal: MealType;
+      status: 'resolving' | 'ready' | 'not_found';
+    }
+  | {
+      kind: 'remove_food';
+      label: string; // human-readable description of what we'll remove
+      targetId: string | null; // resolved entry id; null = nothing matched
+      status: 'ready' | 'not_found';
+    }
+  | {
+      kind: 'set_goal';
+      changes: { calories?: number; protein?: number; carbs?: number; fat?: number };
+      status: 'ready';
+    };
+
+const round0 = (n: number) => Math.round(n);
+const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/** Pick a sensible meal bucket from the wall clock when the user didn't say. */
+function defaultMealByTime(): MealType {
+  const h = new Date().getHours();
+  if (h < 11) return 'breakfast';
+  if (h < 16) return 'lunch';
+  if (h < 21) return 'dinner';
+  return 'snacks';
+}
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+function useSenpaiChatState() {
   const { triggerReaction } = useSenpai();
   const { state: gamState } = useGamification();
   const { myLogs } = useWorkouts();
   const { user } = useAuth();
+  const { addMacroEntry, removeMacroEntry, updateGoals, macrosForDate, rememberFood } = useNutrition();
   const [messages, setMessages] = useState<ChatThreadMessage[]>([]);
+  // Item 4: a client-executed action awaiting user confirmation (log/remove
+  // food, set goal). Resolved from the model's tool request; null when idle.
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<SenpaiChatError | null>(null);
   // The id of the most recently arrived assistant message — Phase 4 typing
@@ -131,6 +190,84 @@ export function useSenpaiChat() {
     const trimmed = messages.slice(-MAX_PERSISTED_TURNS);
     safeStorageSet(HISTORY_KEY, trimmed, '[useSenpaiChat]');
   }, [messages]);
+
+  // Append a locally-generated assistant line (used for action confirmations
+  // — deterministic, in-character, no model round-trip). DISPLAY-only: scripted
+  // lines have no Japanese SPEAK text, so they don't trigger TTS.
+  const pushSenpaiLine = useCallback(
+    (text: string, mood: MascotMood = 'cheering') => {
+      const msg: ChatThreadMessage = { id: makeId(), role: 'assistant', content: text, mood };
+      setMessages((prev) => [...prev, msg]);
+      setLastArrivedId(msg.id);
+      try {
+        triggerReaction(mood, text, 4000);
+      } catch {
+        /* non-fatal */
+      }
+    },
+    [triggerReaction],
+  );
+
+  // Resolve a model-requested action into a PendingAction the user confirms.
+  // For log_food this hits the food DB for REAL macros; we never trust numbers
+  // from the model. Sets pendingAction; the confirm UI (SenpaiActionConfirm)
+  // renders it and calls confirmAction / cancelAction.
+  const stageAction = useCallback(
+    async (action: SenpaiChatAction) => {
+      const memberId = user?.id;
+      const input = action.input ?? {};
+
+      if (action.tool === 'log_food') {
+        const query = (input.query ?? '').trim();
+        const servings = typeof input.servings === 'number' && input.servings > 0 ? input.servings : 1;
+        const meal: MealType = input.meal ?? defaultMealByTime();
+        setPendingAction({ kind: 'log_food', query, candidates: [], selectedIndex: 0, servings, meal, status: 'resolving' });
+        try {
+          const results = await searchFoods(query, 8);
+          setPendingAction((prev) =>
+            prev && prev.kind === 'log_food'
+              ? { ...prev, candidates: results, status: results.length ? 'ready' : 'not_found' }
+              : prev,
+          );
+        } catch {
+          setPendingAction((prev) => (prev && prev.kind === 'log_food' ? { ...prev, status: 'not_found' } : prev));
+        }
+        return;
+      }
+
+      if (action.tool === 'remove_food') {
+        if (!memberId) {
+          setPendingAction({ kind: 'remove_food', label: 'that', targetId: null, status: 'not_found' });
+          return;
+        }
+        const today = macrosForDate(memberId, todayISO());
+        let target: MacroEntry | undefined;
+        if (input.name) {
+          const n = input.name.toLowerCase();
+          target = [...today].reverse().find((e) => e.name.toLowerCase().includes(n));
+        } else {
+          target = today[today.length - 1]; // 'last'
+        }
+        setPendingAction(
+          target
+            ? { kind: 'remove_food', label: `${target.name} (${round0(target.calories)} cal)`, targetId: target.id, status: 'ready' }
+            : { kind: 'remove_food', label: input.name ?? 'that', targetId: null, status: 'not_found' },
+        );
+        return;
+      }
+
+      if (action.tool === 'set_goal') {
+        const changes: { calories?: number; protein?: number; carbs?: number; fat?: number } = {};
+        (['calories', 'protein', 'carbs', 'fat'] as const).forEach((k) => {
+          const v = input[k];
+          if (typeof v === 'number' && v >= 0) changes[k] = round0(v);
+        });
+        setPendingAction({ kind: 'set_goal', changes, status: 'ready' });
+        return;
+      }
+    },
+    [user, macrosForDate],
+  );
 
   const send = useCallback(
     async (userText: string) => {
@@ -230,6 +367,17 @@ export function useSenpaiChat() {
           /* non-fatal */
         }
 
+        // Item 4: if the model requested a client-executed action (log/remove
+        // food, set goal), resolve it (food DB lookup, etc.) and stage a
+        // confirmation. Fire-and-forget — the reply text above already
+        // rendered as the in-character "logging that for you 💕" confirm line.
+        if (result.data.action) {
+          stageAction(result.data.action).catch((e) =>
+            // eslint-disable-next-line no-console
+            console.warn('[senpaiChat] action stage failed', e),
+          );
+        }
+
         // Voice playback — fire-and-forget so the chat UI stays responsive
         // even if TTS is slow or fails. ttsPlaying is set TRUE before the
         // fetch starts and cleared FALSE either via the onEnded callback
@@ -297,10 +445,89 @@ export function useSenpaiChat() {
         setLoading(false);
       }
     },
-    [loading, triggerReaction, gamState, myLogs, user, voiceEnabled],
+    [loading, triggerReaction, gamState, myLogs, user, voiceEnabled, stageAction],
   );
 
-  // Stop any in-flight audio when the consumer unmounts (modal closes)
+  // ─── Action confirm / cancel (item 4) ───
+  // The confirm UI (SenpaiActionConfirm) reads pendingAction and calls these.
+  // All writes go through NutritionContext so the Food Log / Macro Tracker
+  // updates immediately. Success/cancel is reported back as an in-character
+  // assistant line.
+  const confirmAction = useCallback(() => {
+    const action = pendingAction;
+    if (!action) return;
+    const memberId = user?.id;
+    setPendingAction(null);
+    if (!memberId) {
+      pushSenpaiLine("hmm I can't find your account senpai 💕 try signing in again", 'disappointed');
+      return;
+    }
+
+    if (action.kind === 'log_food') {
+      const food = action.candidates[action.selectedIndex];
+      if (!food) return;
+      const s = action.servings;
+      const entry = {
+        memberId,
+        date: todayISO(),
+        name: s !== 1 ? `${food.name} ×${s}` : food.name,
+        calories: round0(food.macros.calories * s),
+        protein: round1(food.macros.protein * s),
+        carbs: round1(food.macros.carbs * s),
+        fat: round1(food.macros.fat * s),
+        mealType: action.meal,
+      };
+      addMacroEntry(entry);
+      try {
+        rememberFood(memberId, food);
+      } catch {
+        /* non-fatal */
+      }
+      pushSenpaiLine(
+        `logged it!! ${entry.name} → ${entry.calories} cal, ${entry.protein}g protein 💕 ${randomDialogue('foodLogged')}`,
+        'cheering',
+      );
+      return;
+    }
+
+    if (action.kind === 'remove_food') {
+      if (!action.targetId) {
+        pushSenpaiLine("couldn't find that one to remove senpai 💕", 'disappointed');
+        return;
+      }
+      removeMacroEntry(action.targetId);
+      pushSenpaiLine(`gone — ${action.label} erased from existence 💕 ${randomDialogue('foodRemoved')}`, 'impressed');
+      return;
+    }
+
+    if (action.kind === 'set_goal') {
+      updateGoals(memberId, action.changes);
+      const parts = Object.entries(action.changes)
+        .map(([k, v]) => `${k} ${v}`)
+        .join(', ');
+      pushSenpaiLine(`done!! new goals — ${parts} 💕 ${randomDialogue('goalSet')}`, 'celebrating');
+      return;
+    }
+  }, [pendingAction, user, addMacroEntry, removeMacroEntry, updateGoals, rememberFood, pushSenpaiLine]);
+
+  const cancelAction = useCallback(() => {
+    if (!pendingAction) return;
+    setPendingAction(null);
+    pushSenpaiLine(randomDialogue('actionCancelled'), 'disappointed');
+  }, [pendingAction, pushSenpaiLine]);
+
+  // Let the confirm UI tweak a pending log before writing (servings, meal,
+  // which candidate). No-op for non-log actions.
+  const updatePendingFood = useCallback(
+    (patch: Partial<{ selectedIndex: number; servings: number; meal: MealType }>) => {
+      setPendingAction((prev) => (prev && prev.kind === 'log_food' ? { ...prev, ...patch } : prev));
+    },
+    [],
+  );
+
+  // Backstop: stop in-flight audio if the whole provider tears down (full app
+  // unmount). State is hoisted to app root now, so this no longer fires on
+  // modal close — the modal stops its own audio in its close/unmount effects.
   useEffect(() => {
     return () => stopSenpaiAudio();
   }, []);
@@ -350,5 +577,33 @@ export function useSenpaiChat() {
     clear,
     clearError,
     resetTtsFailures,
+    // Item 4 — client-executed actions
+    pendingAction,
+    confirmAction,
+    cancelAction,
+    updatePendingFood,
   };
+}
+
+// ─── Shared provider ────────────────────────────────────────────────────────
+// One conversation, shared by the floating mascot bubble, the full-screen
+// chat modal (item 5), and Settings. React.createElement (not JSX) keeps this
+// a .ts file so existing `import { useSenpaiChat } from '../hooks/useSenpaiChat'`
+// paths don't change.
+
+type SenpaiChatContextValue = ReturnType<typeof useSenpaiChatState>;
+
+const SenpaiChatContext = createContext<SenpaiChatContextValue | null>(null);
+
+export function SenpaiChatProvider({ children }: { children: React.ReactNode }) {
+  const value = useSenpaiChatState();
+  return React.createElement(SenpaiChatContext.Provider, { value }, children);
+}
+
+export function useSenpaiChat(): SenpaiChatContextValue {
+  const ctx = useContext(SenpaiChatContext);
+  if (!ctx) {
+    throw new Error('useSenpaiChat must be used within a SenpaiChatProvider');
+  }
+  return ctx;
 }

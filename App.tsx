@@ -50,7 +50,9 @@ import { CycleTrackerProvider } from './src/context/CycleTrackerContext';
 import { MedicationTrackerProvider } from './src/context/MedicationTrackerContext';
 import { HealthKitProvider } from './src/context/HealthKitContext';
 import { SenpaiProvider } from './src/context/SenpaiContext';
+import { SenpaiChatProvider } from './src/hooks/useSenpaiChat';
 import { SenpaiMascot } from './src/components/SenpaiMascot';
+import { SenpaiActionConfirm } from './src/components/SenpaiActionConfirm';
 import { SenpaiOverlay } from './src/components/SenpaiOverlay';
 import { SenpaiReactionBridge } from './src/components/SenpaiReactionBridge';
 import { SenpaiThemeBridge } from './src/components/SenpaiThemeBridge';
@@ -122,6 +124,7 @@ function AppContent() {
       <SenpaiThemeBridge />
       <SenpaiReactionBridge />
       <SenpaiMascot />
+      <SenpaiActionConfirm />
       <SenpaiOverlay />
       <SenpaiImpactBridge />
       <SenpaiTransformation />
@@ -242,11 +245,13 @@ export default function App() {
                           <CycleTrackerProvider>
                           <MedicationTrackerProvider>
                           <SenpaiProvider>
+                            <SenpaiChatProvider>
                             <TimeClockProvider>
                               <HealthKitProvider>
                                 <AppContent />
                               </HealthKitProvider>
                             </TimeClockProvider>
+                            </SenpaiChatProvider>
                           </SenpaiProvider>
                           </MedicationTrackerProvider>
                           </CycleTrackerProvider>

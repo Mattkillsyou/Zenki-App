@@ -40,6 +40,27 @@ export interface SenpaiUserContext {
   }>;
 }
 
+/**
+ * A client-executed action the model requested (e.g. "log a ham sandwich").
+ * The cloud function returns this instead of resolving it — the client looks
+ * up real macros, confirms with the user, and writes via NutritionContext.
+ * `input` is the raw tool input; the client validates/normalizes it.
+ */
+export interface SenpaiChatAction {
+  tool: 'log_food' | 'remove_food' | 'set_goal';
+  input: {
+    query?: string;
+    servings?: number;
+    meal?: 'breakfast' | 'lunch' | 'dinner' | 'snacks';
+    which?: 'last';
+    name?: string;
+    calories?: number;
+    protein?: number;
+    carbs?: number;
+    fat?: number;
+  };
+}
+
 export interface SenpaiChatReply {
   // English text shown in the bubble (the user reads this).
   text: string;
@@ -54,6 +75,8 @@ export interface SenpaiChatReply {
     cached: number;
     cacheCreated?: number;
   };
+  // Present only when the model asked to mutate the user's macros/goals.
+  action?: SenpaiChatAction;
 }
 
 export interface SenpaiChatError {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Modal, View, Text, StyleSheet, Animated, Dimensions} from 'react-native';
+  Modal, View, Text, Image, StyleSheet, Animated, Dimensions} from 'react-native';
 import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,11 +10,17 @@ import { borderRadius } from '../theme';
 const TUTORIAL_KEY = '@zenki_tutorial_v2_completed';
 const { width: SW, height: SH } = Dimensions.get('window');
 
+// Senpai chibi shown in bubbles flagged `mascot: true` — the persona-led
+// onboarding tour (item 6).
+const SENPAI_AVATAR = require('../assets/senpai/senpai_idle.png');
+
 export interface CoachmarkStep {
   /** Screen-space rect of the UI element to highlight. null = centered, no arrow. */
   target: { x: number; y: number; width: number; height: number } | null;
   title: string;
   body: string;
+  /** Show the Senpai chibi in this bubble — for the persona-led onboarding tour. */
+  mascot?: boolean;
 }
 
 interface Props {
@@ -165,6 +171,10 @@ export function CoachmarkTutorial({ visible, steps, onDone }: Props) {
             </SoundPressable>
           </View>
 
+          {step.mascot && (
+            <Image source={SENPAI_AVATAR} style={styles.mascotAvatar} resizeMode="contain" />
+          )}
+
           <Text style={[styles.title, { color: colors.textPrimary }]}>{step.title}</Text>
           <Text style={[styles.body, { color: colors.textSecondary }]}>{step.body}</Text>
 
@@ -264,6 +274,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  mascotAvatar: {
+    width: 54,
+    height: 54,
+    alignSelf: 'center',
+    marginBottom: 8,
+  },
   title: {
     fontSize: 17,
     fontWeight: '800',
