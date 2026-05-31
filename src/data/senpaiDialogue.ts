@@ -55,25 +55,48 @@ export const SENPAI_DIALOGUE = {
     "Senpai is thinking deeply...",
     "I'll wait for Senpai forever \u2661",
   ],
-  // Single-tap on the chibi while idle. EVERY line teaches the
-  // hold-to-talk gesture in senpai's voice \u2014 a tap doesn't open the
-  // mic (intentional, prevents accidental sessions), and without a
-  // hint here users were getting stuck. Tone: chaotic, possessive,
-  // bilingual where it lands. Hearts as punctuation, not garnish.
+  // Played when the user TAPS the chibi to START a voice session (tap =
+  // mic on, tap again = mic off). These are her "I'm listening now"
+  // greetings: chaotic, possessive, bilingual where it lands. Hearts as
+  // punctuation, not garnish.
   mascotTap: [
-    "tap?? lazy \ud83d\udc95 HOLD me 2 sec to talk senpai",
-    "press AND hold senpai \ud83d\udc95 2 sec, don't be shy",
-    "\u306d\u3047 senpai!! hold me down to talk, ne \ud83d\udc95",
-    "you have to HOLD me senpai \ud83d\udc95 2 whole seconds",
-    "tap doesn't open my ears \ud83d\udc95 hold for 2 sec",
-    "\u3082\u3063\u3068\u9577\u304f!! 2 sec hold = mic on \ud83d\udc95",
-    "HOLD me senpai, I want to hear your voice \ud83d\udc95",
-    "2 second hold for talk, 3 second hold for stop \ud83d\udc95 got it??",
+    "mic's ON senpai!! talk to me \ud83d\udc95",
+    "ok ok I'm listening \ud83d\udc95 go ahead senpai~",
+    "\u306d\u3047 senpai!! \u805e\u3044\u3066\u308b\u3088\u301c \u8a71\u3057\u3066 \ud83d\udc95",
+    "tapped me?? bold \ud83d\udc95 I'm listening now",
+    "ears OPEN senpai \ud83d\udc95 say something cute",
+    "\u805e\u3053\u3048\u3066\u308b\u3088\u301c!! talk to me senpai \ud83d\udc95",
+    "I'm all yours senpai \ud83d\udc95 speak~",
+    "mic on \ud83d\udc95 tap me again when you're done",
   ],
   nutritionLog: [
     "Senpai is eating healthy! Good!",
     "Protein! Senpai needs protein!",
     "Balanced diet = strong Senpai!",
+  ],
+  // Spoken by senpai after she logs/removes food or sets a goal for the user
+  // (item 4). Appended to a concrete summary line, so keep these short.
+  foodLogged: [
+    "your tracker is THRIVING 💕",
+    "fuel for the machine, sasuga senpai ✨",
+    "logged and loved 💕 don't skip protein ne",
+    "the spreadsheet remembers everything 💕",
+  ],
+  foodRemoved: [
+    "poof. never happened 💕",
+    "undone, like your last skipped set 💕",
+    "erased~ I'll pretend I didn't see it ✨",
+  ],
+  goalSet: [
+    "new targets locked IN 💕 go get them",
+    "ambitious senpai!! I respect it ✨",
+    "the bar is set 💕 now clear it",
+  ],
+  actionCancelled: [
+    "fine, nevermind then 💕",
+    "cancelled~ you change your mind a lot, ne 💕",
+    "ok ok, forget I asked ✨",
+    "rude but ok 💕 nothing logged",
   ],
   morning: [
     "Ohayo, Senpai~!",

@@ -23,9 +23,10 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeStorageSet } from '../utils/safeStorage';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,8 +38,11 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { useSenpaiChat, type ChatThreadMessage } from '../hooks/useSenpaiChat';
 import { stopSenpaiAudio } from '../services/senpaiAudio';
+import { KeyboardView } from './KeyboardView';
 
 const DISCLAIMER_KEY = '@senpai_chat_disclaimer_v1';
+const INPUT_MODE_KEY = '@zenki_senpai_input_mode';
+type InputMode = 'voice' | 'keyboard';
 
 interface Props {
   visible: boolean;
@@ -89,6 +93,7 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
     lastArrivedId,
     voiceEnabled,
     setVoiceEnabled,
+    ttsPlaying,
     send,
     clear,
   } = useSenpaiChat();
@@ -103,6 +108,35 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
   const reArmedAfterRef = useRef<string | null>(null);
   // Mic-on pulse for the big talk button.
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const insets = useSafeAreaInsets();
+  // Voice ⇄ keyboard input mode (item 5). Persisted so the modal reopens in
+  // the user's last-used mode.
+  const [inputMode, setInputModeState] = useState<InputMode>('voice');
+  const [draft, setDraft] = useState('');
+  useEffect(() => {
+    AsyncStorage.getItem(INPUT_MODE_KEY).then((v) => {
+      if (v === 'voice' || v === 'keyboard') setInputModeState(v);
+    });
+  }, []);
+  const setInputMode = (mode: InputMode) => {
+    setInputModeState(mode);
+    safeStorageSet(INPUT_MODE_KEY, mode, '[SenpaiChatModal]');
+    if (mode === 'keyboard') {
+      // Leaving voice — stop the mic so it isn't listening behind the keyboard.
+      try {
+        ExpoSpeechRecognitionModule.stop();
+      } catch {
+        /* ignore */
+      }
+      setRecording(false);
+    }
+  };
+  const handleSendDraft = () => {
+    const t = draft.trim();
+    if (!t || loading) return;
+    send(t);
+    setDraft('');
+  };
 
   // Live STT events from expo-speech-recognition. These hooks are no-ops
   // until ExpoSpeechRecognitionModule.start() is called.
@@ -150,6 +184,20 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
     }
   }, [visible]);
 
+  // Hard stop on unmount. The mascot mounts this modal only while open, so
+  // unmount IS the close — without this the mic/TTS could outlive the modal
+  // and keep listening behind the floating bubble.
+  useEffect(() => {
+    return () => {
+      try {
+        ExpoSpeechRecognitionModule.stop();
+      } catch {
+        /* ignore */
+      }
+      stopSenpaiAudio();
+    };
+  }, []);
+
   // Pulse the big talk button while recording.
   useEffect(() => {
     if (!recording) {
@@ -173,8 +221,9 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
       if (!perms.granted) {
         Alert.alert(
           'Mic access needed',
-          'Senpai needs microphone + speech-recognition permission to hear you. Enable both in Settings → Zenki Dojo.',
+          'No mic access — switching to keyboard so you can still chat. Enable microphone + speech recognition in Settings → Zenki Dojo to talk out loud.',
         );
+        setInputMode('keyboard');
         return;
       }
       transcriptRef.current = '';
@@ -187,7 +236,8 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
       });
     } catch (e: any) {
       setRecording(false);
-      Alert.alert('Mic trouble', e?.message ?? 'Could not start recording.');
+      Alert.alert('Mic trouble', e?.message ?? 'Could not start recording — switching to keyboard.');
+      setInputMode('keyboard');
     }
   };
 
@@ -218,9 +268,10 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
   }, [messages]);
 
   useEffect(() => {
-    if (!visible || showDisclaimer || recording || loading) return;
+    if (!visible || showDisclaimer || recording || loading || inputMode !== 'voice') return;
     // Force voice on for walkie-talkie mode — the user is interacting by
-    // speech only, hearing the reply is the whole point.
+    // speech only, hearing the reply is the whole point. (Keyboard mode
+    // leaves voiceEnabled alone — TTS is optional there.)
     if (!voiceEnabled) setVoiceEnabled(true);
     if (!lastFinalAssistant) {
       // First open, no replies yet — start listening immediately.
@@ -231,15 +282,18 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
       return;
     }
     if (reArmedAfterRef.current !== lastFinalAssistant.id) {
+      // Re-arm the mic the moment senpai stops talking (ttsPlaying flips
+      // false), instead of a fixed 4.5s guess — the item-1 "re-arm on TTS-end"
+      // latency win. If voice is off there's no TTS to wait on. The 300ms is
+      // just to let the audio session settle so STT doesn't catch the tail.
+      if (voiceEnabled && ttsPlaying) return; // still talking — wait for her
       reArmedAfterRef.current = lastFinalAssistant.id;
-      // Small delay so TTS audio gets a chance to start before the mic re-opens
-      // (otherwise we'd hear ourselves and STT would pick up senpai's voice).
       const t = setTimeout(() => {
         if (visible) startRecording();
-      }, 4500);
+      }, 300);
       return () => clearTimeout(t);
     }
-  }, [visible, showDisclaimer, lastFinalAssistant, recording, loading, voiceEnabled, setVoiceEnabled]);
+  }, [visible, showDisclaimer, lastFinalAssistant, recording, loading, voiceEnabled, setVoiceEnabled, inputMode, ttsPlaying]);
 
   // Disclaimer gate — show on first open until accepted
   useEffect(() => {
@@ -279,76 +333,129 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
           <View style={styles.headerTitleWrap}>
             <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Senpai</Text>
             <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>
-              {loading ? 'thinking...' : recording ? 'listening...' : 'always tired'}
+              {loading
+                ? 'thinking...'
+                : inputMode === 'voice'
+                ? recording
+                  ? 'listening...'
+                  : 'always tired'
+                : 'type to me'}
             </Text>
           </View>
-          <Pressable onPress={handleClear} hitSlop={12} style={styles.headerBtn}>
+          <Pressable
+            onPress={() => setVoiceEnabled(!voiceEnabled)}
+            hitSlop={10}
+            style={styles.headerBtn}
+            accessibilityRole="button"
+            accessibilityLabel={voiceEnabled ? 'Mute Senpai voice' : 'Unmute Senpai voice'}
+          >
+            <Ionicons name={voiceEnabled ? 'volume-high' : 'volume-mute'} size={20} color={colors.textMuted} />
+          </Pressable>
+          <Pressable
+            onPress={() => setInputMode(inputMode === 'voice' ? 'keyboard' : 'voice')}
+            hitSlop={10}
+            style={styles.headerBtn}
+            accessibilityRole="button"
+            accessibilityLabel={inputMode === 'voice' ? 'Switch to keyboard' : 'Switch to voice'}
+          >
+            <Ionicons name={inputMode === 'voice' ? 'keypad-outline' : 'mic-outline'} size={20} color={colors.gold} />
+          </Pressable>
+          <Pressable onPress={handleClear} hitSlop={10} style={styles.headerBtn} accessibilityLabel="Clear chat">
             <Ionicons name="trash-outline" size={22} color={colors.textMuted} />
           </Pressable>
         </View>
 
-        {/* Thread */}
-        {messages.length === 0 ? (
-          <View style={styles.emptyWrap}>
-            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>...hi.</Text>
-            <Text style={[styles.emptyBody, { color: colors.textMuted }]}>
-              {recording ? 'I\'m listening.' : 'Tap and talk. I\'ll respond.'}
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={inverted}
-            keyExtractor={(m) => m.id}
-            renderItem={renderMessage}
-            inverted
-            contentContainerStyle={styles.threadContent}
-          />
-        )}
+        {/* Body — thread + input. KeyboardView lifts the input row above the
+            keyboard in keyboard mode (offset clears the header + top inset). */}
+        <KeyboardView style={styles.body} offset={insets.top + 52}>
+          {/* Thread */}
+          {messages.length === 0 ? (
+            <View style={styles.emptyWrap}>
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>...hi.</Text>
+              <Text style={[styles.emptyBody, { color: colors.textMuted }]}>
+                {inputMode === 'voice'
+                  ? recording
+                    ? "I'm listening."
+                    : "Tap and talk. I'll respond."
+                  : "Type below. I'll respond."}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={inverted}
+              keyExtractor={(m) => m.id}
+              renderItem={renderMessage}
+              inverted
+              contentContainerStyle={styles.threadContent}
+              keyboardShouldPersistTaps="handled"
+            />
+          )}
 
-        {/* Error toast */}
-        {error && (
-          <View style={[styles.errorBar, { backgroundColor: colors.error + '20', borderColor: colors.error }]}>
-            <Text style={[styles.errorText, { color: colors.error }]}>{error.message}</Text>
-          </View>
-        )}
+          {/* Error toast */}
+          {error && (
+            <View style={[styles.errorBar, { backgroundColor: colors.error + '20', borderColor: colors.error }]}>
+              <Text style={[styles.errorText, { color: colors.error }]}>{error.message}</Text>
+            </View>
+          )}
 
-        {/* Walkie-talkie button — voice-only, no keyboard. The button shows
-            current state (listening / thinking / talking / idle); tapping
-            toggles the mic. Modal also auto-arms the mic on open and after
-            each senpai reply. */}
-        <View style={styles.talkRow}>
-          <Text style={[styles.statusText, { color: colors.textMuted }]}>
-            {loading
-              ? 'thinking...'
-              : recording
-              ? 'listening — tap to send'
-              : 'tap to talk'}
-          </Text>
-          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-            <Pressable
-              onPress={toggleRecording}
-              disabled={loading}
-              accessibilityLabel={recording ? 'Stop and send' : 'Start talking'}
-              style={[
-                styles.talkBtn,
-                {
-                  backgroundColor: recording
-                    ? '#FF2E51'
-                    : loading
-                    ? colors.surfaceSecondary
-                    : colors.gold,
-                  borderColor: recording ? '#FF2E51' : colors.gold,
-                },
-              ]}
-            >
-              <Ionicons
-                name={recording ? 'mic' : loading ? 'hourglass-outline' : 'mic-outline'}
-                size={48}
-                color={recording ? '#FFF' : loading ? colors.textMuted : '#000'}
+          {/* Input — voice (walkie-talkie) or keyboard, toggled in the header. */}
+          {inputMode === 'voice' ? (
+            <View style={styles.talkRow}>
+              <Text style={[styles.statusText, { color: colors.textMuted }]}>
+                {loading ? 'thinking...' : recording ? 'listening — tap to send' : 'tap to talk'}
+              </Text>
+              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                <Pressable
+                  onPress={toggleRecording}
+                  disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel={recording ? 'Stop and send' : 'Start talking'}
+                  style={[
+                    styles.talkBtn,
+                    {
+                      backgroundColor: recording ? '#FF2E51' : loading ? colors.surfaceSecondary : colors.gold,
+                      borderColor: recording ? '#FF2E51' : colors.gold,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={recording ? 'mic' : loading ? 'hourglass-outline' : 'mic-outline'}
+                    size={48}
+                    color={recording ? '#FFF' : loading ? colors.textMuted : '#000'}
+                  />
+                </Pressable>
+              </Animated.View>
+            </View>
+          ) : (
+            <View style={[styles.inputRow, { borderTopColor: colors.border }]}>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  { color: colors.textPrimary, backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+                placeholder="type to senpai..."
+                placeholderTextColor={colors.textMuted}
+                value={draft}
+                onChangeText={setDraft}
+                multiline
+                editable={!loading}
+                accessibilityLabel="Message Senpai"
               />
-            </Pressable>
-          </Animated.View>
-        </View>
+              <Pressable
+                onPress={handleSendDraft}
+                disabled={loading || !draft.trim()}
+                accessibilityRole="button"
+                accessibilityLabel="Send message"
+                style={[
+                  styles.sendBtn,
+                  { backgroundColor: draft.trim() && !loading ? colors.gold : colors.surfaceSecondary },
+                ]}
+              >
+                <Ionicons name="arrow-up" size={22} color={draft.trim() && !loading ? '#000' : colors.textMuted} />
+              </Pressable>
+            </View>
+          )}
+        </KeyboardView>
 
         {/* Disclaimer overlay (first open only) */}
         {showDisclaimer && (
@@ -427,6 +534,7 @@ function ChatBubble({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  body: { flex: 1 },
 
   header: {
     flexDirection: 'row',
@@ -502,6 +610,35 @@ const styles = StyleSheet.create({
     // Soft glow on iOS
     // @ts-ignore — boxShadow web-only on RN
     boxShadow: '0 0 30px rgba(212,160,23,0.35)',
+  },
+
+  // Keyboard-mode input row
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  textInput: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 120,
+    borderWidth: 1,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingTop: 11,
+    paddingBottom: 11,
+    fontSize: 15,
+  },
+  sendBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   disclaimerOverlay: {
