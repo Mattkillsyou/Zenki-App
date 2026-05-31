@@ -43,14 +43,17 @@ type Outcomes = Partial<Record<PermissionId, Outcome>>;
 
 // Speech recognition is a separate native package; we lazy-require so the
 // JS bundle still builds if the user hasn't done a fresh native build.
-function requestSpeechPermission(): Promise<{ granted: boolean }> {
+function requestSpeechPermission(): Promise<{ granted: boolean; unavailable?: boolean }> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { ExpoSpeechRecognitionModule } = require('expo-speech-recognition');
     return ExpoSpeechRecognitionModule.requestPermissionsAsync();
   } catch (e) {
+    // Module isn't present in this build — that's "unavailable", NOT "denied".
+    // The user was never asked, so callers must not later tell them to
+    // "re-enable in Settings" (the feature simply isn't installed).
     console.warn('[PermissionsOnboarding] expo-speech-recognition unavailable:', e);
-    return Promise.resolve({ granted: false });
+    return Promise.resolve({ granted: false, unavailable: true });
   }
 }
 
@@ -62,8 +65,10 @@ interface PermissionStep {
   /** Whether this step should be shown on the current platform. */
   enabled?: () => boolean;
   /**
-   * Trigger the system permission dialog. Returns the outcome for storage.
-   * Don't return 'skipped' — that's reserved for the Skip button.
+   * Trigger the system permission dialog and return the REAL outcome.
+   * May return 'skipped' when a permission can't be requested here (iOS
+   * Bluetooth has no pre-scan API) or the feature is unavailable — we never
+   * report 'granted' for something the user didn't actually grant.
    */
   request: () => Promise<Outcome>;
 }
@@ -88,7 +93,10 @@ const STEPS: PermissionStep[] = [
       'Used for talking to Senpai in the chat. Audio is transcribed on-device and never uploaded.',
     request: async () => {
       const r = await requestSpeechPermission();
-      return r.granted ? 'granted' : 'denied';
+      if (r.granted) return 'granted';
+      // Feature-unavailable (module missing) is recorded as 'skipped', not
+      // 'denied', so we don't show a misleading "re-enable in Settings" hint.
+      return r.unavailable ? 'skipped' : 'denied';
     },
   },
   {
@@ -107,11 +115,12 @@ const STEPS: PermissionStep[] = [
     icon: 'bluetooth-outline',
     title: 'Bluetooth',
     description:
-      'Used to connect to a Bluetooth heart-rate monitor during training. iOS will ask the next time you start a workout — granting now just confirms intent.',
-    // iOS doesn't expose a direct "request bluetooth" API outside of an
-    // active scan. Mark intent as granted; the real prompt fires on first
-    // BLE scan via react-native-ble-plx.
-    request: async () => 'granted',
+      "Used to connect a Bluetooth heart-rate monitor during training. iOS asks for Bluetooth the first time you start a heart-rate workout — there's nothing to grant here yet.",
+    // iOS exposes NO pre-scan Bluetooth permission API, so we cannot request it
+    // here. Return 'skipped' (not 'granted') so the onboarding outcome stays
+    // honest — we never claim a permission the user hasn't actually granted.
+    // The real system prompt fires on the first BLE scan (react-native-ble-plx).
+    request: async () => 'skipped',
   },
   {
     id: 'notifications',

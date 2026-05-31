@@ -250,14 +250,47 @@ export function SignInScreen({ navigation }: any) {
   };
 
   const handleVerifyInvite = async () => {
-    if (inviteCode.toLowerCase().trim() === INVITE_CODE) {
-      await AsyncStorage.setItem(INVITE_VERIFIED_KEY, 'true');
-      setShowInviteGate(false);
-      setErrorMsg(null);
-      // Stay on SignIn after verification — user picks "Sign In"
-      // (existing account) or "Create Account" (new signup → Onboarding).
-    } else {
-      setErrorMsg('Please enter a valid invite code.');
+    const code = inviteCode.toLowerCase().trim();
+    if (!code) {
+      setErrorMsg('Please enter your invite code.');
+      return;
+    }
+    setLoading(true);
+    try {
+      // Validate server-side against the Firestore invite allow-list
+      // (validateInviteCode Cloud Function). Stays on SignIn after success —
+      // the user then picks "Sign In" or "Create Account" → Onboarding.
+      const { AI_FUNCTION_BASE_URL } = await import('../../config/api');
+      const res = await fetch(`${AI_FUNCTION_BASE_URL}/validateInviteCode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      if (res.ok) {
+        await AsyncStorage.setItem(INVITE_VERIFIED_KEY, 'true');
+        setShowInviteGate(false);
+        setErrorMsg(null);
+        return;
+      }
+      if (res.status === 400 || res.status === 403) {
+        setErrorMsg('Please enter a valid invite code.');
+        return;
+      }
+      throw new Error(`invite-validate-${res.status}`); // 5xx → offline fallback
+    } catch {
+      // Function unreachable / not deployed / server error → fall back to the
+      // legacy local check so members aren't locked out before the backend is
+      // live. (A definitive 403 above does NOT reach here, so server rejections
+      // still win once validateInviteCode is deployed.)
+      if (code === INVITE_CODE) {
+        await AsyncStorage.setItem(INVITE_VERIFIED_KEY, 'true');
+        setShowInviteGate(false);
+        setErrorMsg(null);
+      } else {
+        setErrorMsg('Please enter a valid invite code.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -360,7 +393,9 @@ export function SignInScreen({ navigation }: any) {
                   ? 'An account already exists for this email — but the password you typed isn\'t the one Firebase has. Tap "Forgot password?" to reset.'
                   : code === 'member-record-missing'
                     ? "Sign-in worked, but we couldn't find your member profile. Ask the dojo admin to confirm your account."
-                    : "Hmm, that username or password doesn't look right.";
+                    : code === 'firebase-unavailable'
+                      ? "Sign-in is temporarily unavailable — the app couldn't reach the server. Check your connection and try again."
+                      : "Hmm, that username or password doesn't look right.";
       setErrorMsg(userMessage);
     } finally {
       setLoading(false);

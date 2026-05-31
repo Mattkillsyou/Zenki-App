@@ -119,6 +119,21 @@ export function WorkoutSessionScreen({ navigation }: any) {
 
   const handleStart = () => {
     if (!user) return;
+    // This screen records heart rate / calories / strain — all of which come
+    // from a connected monitor. Without one, the session would silently record
+    // nothing and save no session (since demo HR was removed). Prompt to connect
+    // instead of starting a dead-end session.
+    if (bleStatus !== 'connected') {
+      Alert.alert(
+        'Connect a heart-rate monitor',
+        "No monitor is connected, so this session can't record heart rate, calories, or strain. Pair a Bluetooth monitor to track your workout.",
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Scan for monitor', onPress: () => { scanAndConnect().catch(() => {}); } },
+        ],
+      );
+      return;
+    }
     setElapsed(0);
     setLiveCalories(0);
     setLiveStrain(0);

@@ -12,6 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
 import { FadeInView } from '../components';
+import { AiExtractedBanner } from '../components/AiExtractedBanner';
 
 function formatDate(iso: string): string {
   const d = new Date(iso + 'T12:00:00');
@@ -96,6 +97,8 @@ export function DexaScanDetailScreen({ route, navigation }: any) {
           <Ionicons name="trash-outline" size={18} color={colors.textPrimary} />
         </SoundPressable>
       </View>
+
+      <AiExtractedBanner kind="DEXA scan" />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <FadeInView>

@@ -126,8 +126,12 @@ export async function firebaseSignInOrSeedAccount(
     // auth/email-already-in-use, which then masquerades as a generic sign-in
     // failure. Letting the original error propagate gives the SignInScreen
     // catch a chance to show a real "wrong password" message instead.
-    if (error?.code === 'auth/user-not-found') {
-      // Seed the Firebase account on first sign-in
+    if (error?.code === 'auth/user-not-found' && __DEV__) {
+      // DEV-ONLY seed: auto-create the Firebase account on first sign-in for the
+      // hardcoded seed/test members. In PRODUCTION this is disabled — auto-
+      // creating an account for any typed username + password is an account-
+      // squatting hole, so we let auth/user-not-found propagate instead. Seed
+      // and App-Review accounts must be pre-provisioned in the prod project.
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await setDoc(doc(db, 'users', cred.user.uid), {
         displayName: `${member.firstName} ${member.lastName}`.trim(),

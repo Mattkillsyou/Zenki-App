@@ -12,6 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
 import { FadeInView } from '../components';
+import { AiExtractedBanner } from '../components/AiExtractedBanner';
 import { BiomarkerStatus, StoredBiomarker, BiomarkerCategory } from '../types/bloodwork';
 import { CATEGORY_ORDER, lookupBiomarkerRef } from '../data/biomarkers';
 
@@ -104,6 +105,8 @@ export function BloodworkReportDetailScreen({ route, navigation }: any) {
           <Ionicons name="trash-outline" size={18} color={colors.textPrimary} />
         </SoundPressable>
       </View>
+
+      <AiExtractedBanner kind="bloodwork report" />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <FadeInView>

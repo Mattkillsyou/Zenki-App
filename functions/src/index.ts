@@ -31,6 +31,10 @@ export { adminActionReport } from './adminActionReport';
 // Re-export the Zenki-branded password-reset email endpoint (Resend).
 export { sendPasswordReset } from './sendPasswordReset';
 
+// Server-side invite-code validation (launch report P2-2). Public endpoint —
+// the invite gate runs pre-auth; validates against the inviteCodes collection.
+export { validateInviteCode } from './validateInviteCode';
+
 // DEBUG ONLY — temporary triage endpoint, remove after the post pipeline is
 // confirmed end-to-end on TestFlight.
 export { diagPostsCount } from './diagPostsCount';

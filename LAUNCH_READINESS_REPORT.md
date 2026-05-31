@@ -5,14 +5,33 @@ _Method: read → trace each suspect end-to-end → record evidence → prioriti
 
 ## Summary
 
+_Update: every non-Senpai finding has now been **fixed in code**. The detailed sections below describe each issue + the fix; the list here is the at-a-glance status._
+
 | Severity | Count | Status |
 |---|---|---|
-| **P0 — launch blocker** | 1 | ✅ **fixed in this change** |
-| **P1 — should-fix before launch** | 5 | proposed (3 app-side, 2 Senpai-owned) |
-| **P2 — post-launch** | 4 | proposed |
-| Verified clean | 8 areas | no action |
+| **P0 — launch blocker** | 1 | ✅ fixed |
+| **P1 — should-fix before launch** | 6 | ✅ 5 fixed · 1 Senpai-owned (separate effort) |
+| **P2 — post-launch** | 4 | ✅ 3 fixed · 1 was a non-issue (verified clean) |
+| Verified clean | 9 areas | no action |
 
-**Scope note:** Senpai (`functions/src/senpaiChat.ts` etc.) is being worked on in a **separate effort**, so Senpai findings below are **documented but intentionally NOT edited here** to avoid conflicting changes. They're tagged **[Senpai workstream]**.
+**Scope note:** Senpai (`functions/src/senpaiChat.ts` etc.) is owned by a **separate effort**, so the Senpai SYSTEM_PROMPT drift (P1-6) is **documented but NOT edited here**. Everything else is fixed.
+
+### Fixes applied in this change
+- **P0-1** HR demo fabrication removed — `HeartRateContext.tsx`.
+- **P1-1** Store orders persist now — local receipt + best-effort Firestore (`orders` collection) + confirmation (`StoreScreen.tsx`, new `src/types/orders.ts` + `src/services/orderSync.ts` + `orders` rule). Also fixed a latent bug: checkout now charges the promo-discounted total it displays.
+- **P1-2** WorkoutSession prompts to connect a monitor instead of a silent dead-end — `WorkoutSessionScreen.tsx`.
+- **P1-3** Onboarding Bluetooth no longer reports 'granted' without asking — `PermissionsOnboardingScreen.tsx`.
+- **P1-4** AI-extracted caveat banner on DEXA + Bloodwork — new `src/components/AiExtractedBanner.tsx` + both detail screens.
+- **P1-5 / P2-1** Seed-account auto-create hard-disabled in production (`firebaseAuth.ts`); clear sign-in error when Firebase is unavailable (`SignInScreen.tsx`).
+- **P2-2** Server-side invite allow-list — new `functions/src/validateInviteCode.ts` (+ export), `inviteCodes` rule, client validates via the function with a legacy-code fallback so nobody is locked out pre-deploy.
+- **P2-3** Onboarding speech distinguishes 'unavailable' from 'denied' — `PermissionsOnboardingScreen.tsx`.
+- **P2-4** Not a bug — hydration persists via `DrinkTrackerContext` (`@zenki_drink_tracker`); moved to Verified clean.
+
+### ⚠️ Deployment required (these do nothing until deployed)
+- **Firestore rules:** `firebase deploy --only firestore:rules` — activates the new `orders` + `inviteCodes` rules.
+- **Cloud Function:** `cd functions && npm run build && firebase deploy --only functions:validateInviteCode`.
+- **Invite codes:** until an admin adds docs to the `inviteCodes` collection, the gate accepts the legacy code (`dragon`); add real codes to tighten it. Until the function is deployed, the client falls back to the legacy local check (no lockout).
+- **Seed / App-Review accounts** must now be **pre-provisioned** in the production Firebase project (auto-create is dev-only after the P1-5 fix).
 
 ---
 
@@ -72,7 +91,7 @@ _Method: read → trace each suspect end-to-end → record evidence → prioriti
 - **P2-1 — Silent backend no-ops when unconfigured.** `FIREBASE_CONFIGURED` (`src/config/firebase.ts:73`) gates many calls; if Firebase init fails / `SHEETS_PROXY_URL` is unset, some flows fail without surfacing an error (e.g. `handleSignIn` doesn't null-check `auth`). Add a null-`auth` guard + user-facing error; confirm the release build injects real config.
 - **P2-2 — Invite gate is client-side only.** `INVITE_CODE = 'dragon'` (`SignInScreen.tsx:32`) + an AsyncStorage flag — discoverable and clearable, so it's UX friction, not access control. For real beta gating use a Firebase Auth email allow-list / server flag.
 - **P2-3 — Speech permission "denied" vs "unavailable".** `PermissionsOnboardingScreen.tsx:46-55` returns `{granted:false}` when the speech module isn't installed, surfaced as `denied` → the later "re-enable in Settings" hint misleads (the feature is unavailable, not denied). Distinguish the two states.
-- **P2-4 — Hydration persistence unconfirmed.** No dedicated persisted water/hydration write was found in the `NutritionContext` sweep; confirm the Hydration tab actually persists (or document it as ephemeral).
+- **P2-4 — Hydration persistence — ✅ RESOLVED (non-issue).** Re-verified: the Hydration tab is `DrinkScreen`, backed by `DrinkTrackerContext`, which **does** persist to AsyncStorage (`@zenki_drink_tracker`, including the `water` drink type). The original flag was a false positive from the `NutritionContext`-only sweep (hydration lives in a separate context). No change needed.
 
 ---
 

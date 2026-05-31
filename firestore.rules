@@ -289,6 +289,24 @@ service cloud.firestore {
       allow update: if false;
     }
 
+    // Store orders — a member creates their own order at checkout (doc carries
+    // firebaseUid); the owner and admins can read it. No client update/delete —
+    // fulfillment-status changes are admin-only (audit trail).
+    match /orders/{orderId} {
+      allow read: if isAdmin()
+                  || (isSignedIn() && resource.data.firebaseUid == request.auth.uid);
+      allow create: if isSignedIn()
+                    && request.resource.data.firebaseUid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // Invite codes — validated server-side by the validateInviteCode Cloud
+    // Function (Admin SDK, bypasses rules). Admins manage codes from the app;
+    // clients never read this collection directly (no pre-auth read needed).
+    match /inviteCodes/{codeId} {
+      allow read, write: if isAdmin();
+    }
+
     // Default deny — anything not listed above is locked.
     match /{document=**} {
       allow read, write: if false;

@@ -23,6 +23,10 @@ import { useProducts } from '../context/ProductContext';
 import { useGamification } from '../context/GamificationContext';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { Order } from '../types/orders';
+import { appendLocalOrder, saveOrderToFirestore } from '../services/orderSync';
+import { generateId } from '../utils/generateId';
 
 const WISHLIST_KEY = '@zenki_wishlist';
 
@@ -42,6 +46,7 @@ export function StoreScreen({ navigation }: any) {
   const { play } = useSound();
   useScreenSoundTheme('store');
   const { cart, cartCount, cartTotal, addToCart: cartAdd, removeFromCart, clearCart } = useCart();
+  const { user } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [showCart, setShowCart] = useState(false);
   const [usePoints, setUsePoints] = useState(false);
@@ -333,26 +338,69 @@ export function StoreScreen({ navigation }: any) {
 
               <TouchableOpacity
                 style={[styles.checkoutButton, { backgroundColor: colors.red }]}
-                onPress={() => {
+                onPress={async () => {
                   const pointsDiscount = usePoints ? Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal) : 0;
-                  const finalTotal = Math.max(0, cartTotal - pointsDiscount);
-                  if (usePoints && pointsDiscount > 0) {
-                    redeemPoints(Math.floor(pointsDiscount * POINTS_PER_DOLLAR));
+                  const promoDiscount = appliedPromo ? cartTotal * (appliedPromo.discountPercent / 100) : 0;
+                  // Charge the SAME total shown to the user. (The old handler
+                  // ignored the promo discount in finalTotal — fixed here.)
+                  const finalTotal = Math.max(0, cartTotal - pointsDiscount - promoDiscount);
+                  const pointsUsed = usePoints && pointsDiscount > 0 ? Math.floor(pointsDiscount * POINTS_PER_DOLLAR) : 0;
+
+                  // Build the order record — checkout previously left NO trace
+                  // (P1-1): points were spent but no order/receipt persisted.
+                  const order: Order = {
+                    id: generateId('order'),
+                    memberId: user?.id ?? 'unknown',
+                    items: cart.map((ci) => ({
+                      productId: ci.product.id,
+                      productName: ci.product.name,
+                      quantity: ci.quantity,
+                      selectedSize: ci.selectedSize,
+                      unitPrice: ci.product.memberPrice ?? ci.product.price,
+                    })),
+                    subtotal: cartTotal,
+                    pointsUsed,
+                    pointsValueUsd: pointsDiscount,
+                    promoLabel: appliedPromo?.label,
+                    promoDiscountUsd: promoDiscount,
+                    balanceDueUsd: finalTotal,
+                    status: finalTotal === 0 ? 'paid' : 'reserved',
+                    createdAt: new Date().toISOString(),
+                  };
+
+                  // 1) Record locally FIRST — only charge points if it stuck,
+                  //    so points and the order record never diverge.
+                  try {
+                    await appendLocalOrder(order);
+                  } catch {
+                    Alert.alert('Checkout failed', "We couldn't record your order. Please try again.");
+                    return;
                   }
+                  // 2) Safe to deduct points + count the purchase now.
+                  if (pointsUsed > 0) redeemPoints(pointsUsed);
                   for (let i = 0; i < cartCount; i++) recordGearPurchase();
+                  // 3) Best-effort cloud sync so the dojo/admin sees the order;
+                  //    the local record stands regardless of network/Firebase.
+                  saveOrderToFirestore(order).then((ok) => {
+                    if (!ok) console.warn('[Store] order kept locally; cloud sync pending:', order.id);
+                  });
+
+                  const shortId = order.id.slice(-6).toUpperCase();
                   const balanceMsg = finalTotal === 0
-                    ? `Your order was paid in full with ${Math.floor(pointsDiscount * POINTS_PER_DOLLAR).toLocaleString()} Dojo Points. No balance due.`
-                    : `Balance due at the dojo: $${finalTotal.toFixed(2)}. We'll set your items aside for pickup.`;
-                  Alert.alert('Order Reserved', balanceMsg);
+                    ? `Order #${shortId} — paid in full with ${pointsUsed.toLocaleString()} Dojo Points. We'll set your items aside for pickup.`
+                    : `Order #${shortId} reserved. Balance due at the dojo: $${finalTotal.toFixed(2)}. We'll set your items aside for pickup.`;
+                  Alert.alert('Order placed', balanceMsg);
                   clearCart();
                   setShowCart(false);
                   setUsePoints(false);
+                  setAppliedPromo(null);
                 }}
               >
                 <Text style={styles.checkoutText}>
                   {(() => {
                     const pointsDiscount = usePoints ? Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal) : 0;
-                    const finalTotal = Math.max(0, cartTotal - pointsDiscount);
+                    const promoDiscount = appliedPromo ? cartTotal * (appliedPromo.discountPercent / 100) : 0;
+                    const finalTotal = Math.max(0, cartTotal - pointsDiscount - promoDiscount);
                     return finalTotal === 0 ? 'CONFIRM · FREE WITH POINTS' : `RESERVE · PAY $${finalTotal.toFixed(2)} AT DOJO`;
                   })()}
                 </Text>
