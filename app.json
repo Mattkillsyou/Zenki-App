@@ -173,7 +173,7 @@
         "projectId": "5ece9429-9575-4d43-9417-dba1d8313855"
       },
       "GOOGLE_CLIENT_ID": "277160279219-8fjejem0ols7tstu26sf4o42b5vf3rks.apps.googleusercontent.com",
-      "STRIPE_PUBLISHABLE_KEY": "",
+      "STRIPE_PUBLISHABLE_KEY": "pk_live_ukdKnW9EmvKh4WK1BUCYhFHq",
       "STRIPE_MERCHANT_ID": "merchant.com.zenkidojo.app"
     },
     "owner": "mattbrowntheemail"
