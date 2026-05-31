@@ -76,7 +76,11 @@ export function CoachmarkTutorial({ visible, steps, onDone }: Props) {
   const targetCenterX = target ? target.x + target.width / 2 : SW / 2;
   const bubbleWidth = Math.min(SW - 32, 340);
   const bubbleLeft = Math.max(16, Math.min(SW - bubbleWidth - 16, targetCenterX - bubbleWidth / 2));
-  const arrowLeftWithinBubble = Math.max(16, Math.min(bubbleWidth - 16, targetCenterX - bubbleLeft - ARROW_SIZE / 2));
+  // The arrow triangle is 2*ARROW_SIZE wide (borderLeft + borderRight), so its
+  // visual tip is ARROW_SIZE in from `left`. Subtract the full ARROW_SIZE (not
+  // half) so the tip lands exactly on the target center; clamp to keep the whole
+  // triangle inside the bubble.
+  const arrowLeftWithinBubble = Math.max(12, Math.min(bubbleWidth - ARROW_SIZE * 2 - 12, targetCenterX - bubbleLeft - ARROW_SIZE));
 
   return (
     <Modal visible animationType="fade" transparent onRequestClose={finish} statusBarTranslucent>
