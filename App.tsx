@@ -3,6 +3,8 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { StripeProvider } from '@stripe/stripe-react-native';
+import { STRIPE_PUBLISHABLE_KEY, STRIPE_MERCHANT_ID, STRIPE_CONFIGURED } from './src/config/env';
 import { View, Platform, StyleSheet, LogBox } from 'react-native';
 
 // Silence dev-mode redboxes that only surface on local sim builds.
@@ -191,6 +193,21 @@ const webStyles = StyleSheet.create({
   },
 });
 
+/**
+ * Mounts Stripe only when configured. StripeProvider rejects an empty
+ * publishable key, and an unconfigured build shouldn't initialize Stripe at
+ * all — so when STRIPE_CONFIGURED is false we pass children through and the
+ * stores fall back to reserve / settle-in-person. See APPLE_PAY_SETUP.md.
+ */
+function MaybeStripeProvider({ children }: { children: React.ReactNode }) {
+  if (!STRIPE_CONFIGURED) return <>{children}</>;
+  return (
+    <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY} merchantIdentifier={STRIPE_MERCHANT_ID}>
+      <>{children}</>
+    </StripeProvider>
+  );
+}
+
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -202,6 +219,7 @@ export default function App() {
       })}
     >
       <SafeAreaProvider>
+        <MaybeStripeProvider>
         <AuthProvider>
         <BlocksProvider>
         <MotionProvider>
@@ -252,6 +270,7 @@ export default function App() {
         </BlocksProvider>
         </AuthProvider>
         <OfflineBanner />
+        </MaybeStripeProvider>
       </SafeAreaProvider>
     </ErrorBoundary>
     </GestureHandlerRootView>

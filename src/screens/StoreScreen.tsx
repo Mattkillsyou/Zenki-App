@@ -26,6 +26,8 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { Order } from '../types/orders';
 import { appendLocalOrder, saveOrderToFirestore } from '../services/orderSync';
+import { isApplePayAvailable, payWithApplePay } from '../services/payments';
+import { STRIPE_CONFIGURED } from '../config/env';
 import { generateId } from '../utils/generateId';
 
 const WISHLIST_KEY = '@zenki_wishlist';
@@ -346,6 +348,25 @@ export function StoreScreen({ navigation }: any) {
                   const finalTotal = Math.max(0, cartTotal - pointsDiscount - promoDiscount);
                   const pointsUsed = usePoints && pointsDiscount > 0 ? Math.floor(pointsDiscount * POINTS_PER_DOLLAR) : 0;
 
+                  // If there's a balance due and Apple Pay is available (Stripe
+                  // configured + device supports it), charge it in-app; else fall
+                  // back to reserve-and-pay-at-the-dojo.
+                  let paymentMethod: 'apple_pay' | 'pay_at_dojo' = 'pay_at_dojo';
+                  let paymentIntentId: string | undefined;
+                  if (finalTotal > 0 && (await isApplePayAvailable())) {
+                    const pay = await payWithApplePay({
+                      amountCents: Math.round(finalTotal * 100),
+                      label: 'Zenki Dojo order',
+                      kind: 'order',
+                    });
+                    if (!pay.ok) {
+                      if (!pay.canceled) Alert.alert('Payment failed', pay.error ?? 'Please try again.');
+                      return; // keep the cart; charge nothing; deduct nothing
+                    }
+                    paymentMethod = 'apple_pay';
+                    paymentIntentId = pay.paymentIntentId;
+                  }
+
                   // Build the order record — checkout previously left NO trace
                   // (P1-1): points were spent but no order/receipt persisted.
                   const order: Order = {
@@ -363,8 +384,10 @@ export function StoreScreen({ navigation }: any) {
                     pointsValueUsd: pointsDiscount,
                     promoLabel: appliedPromo?.label,
                     promoDiscountUsd: promoDiscount,
-                    balanceDueUsd: finalTotal,
-                    status: finalTotal === 0 ? 'paid' : 'reserved',
+                    balanceDueUsd: paymentMethod === 'apple_pay' ? 0 : finalTotal,
+                    status: (finalTotal === 0 || paymentMethod === 'apple_pay') ? 'paid' : 'reserved',
+                    paymentMethod,
+                    paymentIntentId,
                     createdAt: new Date().toISOString(),
                   };
 
@@ -386,10 +409,12 @@ export function StoreScreen({ navigation }: any) {
                   });
 
                   const shortId = order.id.slice(-6).toUpperCase();
-                  const balanceMsg = finalTotal === 0
-                    ? `Order #${shortId} — paid in full with ${pointsUsed.toLocaleString()} Dojo Points. We'll set your items aside for pickup.`
-                    : `Order #${shortId} reserved. Balance due at the dojo: $${finalTotal.toFixed(2)}. We'll set your items aside for pickup.`;
-                  Alert.alert('Order placed', balanceMsg);
+                  const balanceMsg = paymentMethod === 'apple_pay'
+                    ? `Order #${shortId} — paid $${finalTotal.toFixed(2)} with Apple Pay. We'll set your items aside for pickup.`
+                    : finalTotal === 0
+                      ? `Order #${shortId} — paid in full with ${pointsUsed.toLocaleString()} Dojo Points. We'll set your items aside for pickup.`
+                      : `Order #${shortId} reserved. Balance due at the dojo: $${finalTotal.toFixed(2)}. We'll set your items aside for pickup.`;
+                  Alert.alert(paymentMethod === 'apple_pay' ? 'Payment complete' : 'Order placed', balanceMsg);
                   clearCart();
                   setShowCart(false);
                   setUsePoints(false);
@@ -401,7 +426,10 @@ export function StoreScreen({ navigation }: any) {
                     const pointsDiscount = usePoints ? Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal) : 0;
                     const promoDiscount = appliedPromo ? cartTotal * (appliedPromo.discountPercent / 100) : 0;
                     const finalTotal = Math.max(0, cartTotal - pointsDiscount - promoDiscount);
-                    return finalTotal === 0 ? 'CONFIRM · FREE WITH POINTS' : `RESERVE · PAY $${finalTotal.toFixed(2)} AT DOJO`;
+                    if (finalTotal === 0) return 'CONFIRM · FREE WITH POINTS';
+                    return STRIPE_CONFIGURED
+                      ? `PAY $${finalTotal.toFixed(2)} WITH APPLE PAY`
+                      : `RESERVE · PAY $${finalTotal.toFixed(2)} AT DOJO`;
                   })()}
                 </Text>
               </TouchableOpacity>

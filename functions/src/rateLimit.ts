@@ -7,7 +7,7 @@
 
 import * as admin from 'firebase-admin';
 
-type Endpoint = 'recognizeFood' | 'extractDexa' | 'parseBloodwork' | 'senpaiChat' | 'senpaiSpeak';
+type Endpoint = 'recognizeFood' | 'extractDexa' | 'parseBloodwork' | 'senpaiChat' | 'senpaiSpeak' | 'createPaymentIntent';
 
 const LIMITS: Record<Endpoint, number> = {
   recognizeFood: 30,  // up to 30 food photos/day
@@ -15,6 +15,7 @@ const LIMITS: Record<Endpoint, number> = {
   parseBloodwork: 5,  // 5 bloodwork uploads/day
   senpaiChat: 50,     // 50 chat turns/day with Senpai (~$0.05/user/day worst case on Haiku)
   senpaiSpeak: 60,    // a little headroom over senpaiChat (cap ≠ chat cap so rage-tapping replay doesn't burn ElevenLabs chars)
+  createPaymentIntent: 30, // up to 30 checkout/payment attempts per day (abuse guard)
 };
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;

@@ -35,6 +35,10 @@ export { sendPasswordReset } from './sendPasswordReset';
 // the invite gate runs pre-auth; validates against the inviteCodes collection.
 export { validateInviteCode } from './validateInviteCode';
 
+// Stripe PaymentIntent creation for in-app Apple Pay / card checkout
+// (clothing store + drink tab). Bearer-token auth + per-UID rate limiting.
+export { createPaymentIntent } from './createPaymentIntent';
+
 // DEBUG ONLY — temporary triage endpoint, remove after the post pipeline is
 // confirmed end-to-end on TestFlight.
 export { diagPostsCount } from './diagPostsCount';

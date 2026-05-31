@@ -32,6 +32,10 @@ export interface Order {
   /** Balance due at pickup, USD (0 = paid in full with points). */
   balanceDueUsd: number;
   status: OrderStatus;
+  /** How the order was paid. */
+  paymentMethod: 'apple_pay' | 'pay_at_dojo';
+  /** Stripe PaymentIntent id, when paid in-app via Apple Pay. */
+  paymentIntentId?: string;
   /** ISO timestamp. */
   createdAt: string;
 }

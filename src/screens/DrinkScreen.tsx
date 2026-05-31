@@ -5,6 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useMotion } from '../context/MotionContext';
 import { useDrinkTracker } from '../context/DrinkTrackerContext';
+import { useAuth } from '../context/AuthContext';
+import { isApplePayAvailable, payWithApplePay } from '../services/payments';
 import { DRINK_DEFINITIONS } from '../data/drinks';
 import { DrinkType } from '../types/drinks';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
@@ -72,6 +74,7 @@ export function DrinkScreen() {
     unpaidTotal, payAllUnpaid,
     getAllMonths,
   } = useDrinkTracker();
+  const { user } = useAuth();
   const [showMonthly, setShowMonthly] = useState(false);
 
   return (
@@ -235,16 +238,36 @@ export function DrinkScreen() {
           <TouchableOpacity
             style={[styles.bottomPayBtn, { backgroundColor: unpaidTotal > 0 ? colors.gold : colors.surfaceSecondary }]}
             disabled={unpaidTotal === 0}
-            onPress={() => {
+            onPress={async () => {
+              const memberName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Member';
+              const amount = unpaidTotal; // capture before payAllUnpaid zeroes it
+              // Apple Pay path (Stripe configured + device supports it): charge
+              // the tab, then mark the drinks paid on success.
+              if (await isApplePayAvailable()) {
+                const pay = await payWithApplePay({
+                  amountCents: Math.round(amount * 100),
+                  label: 'Zenki Dojo drinks',
+                  kind: 'drinks',
+                });
+                if (!pay.ok) {
+                  if (!pay.canceled) Alert.alert('Payment failed', pay.error ?? 'Please try again.');
+                  return;
+                }
+                await payAllUnpaid(memberName);
+                Alert.alert('Tab paid', `Paid $${amount.toFixed(2)} with Apple Pay. Your drink tab is clear.`);
+                return;
+              }
+              // Fallback (Stripe not configured / Apple Pay unavailable):
+              // in-person settle, same as before.
               Alert.alert(
                 'Settle drink tab',
-                `Mark $${unpaidTotal.toFixed(2)} as settled? Payment is handled in person at the dojo — this just clears your in-app tab once you've paid the front desk.`,
+                `Mark $${amount.toFixed(2)} as settled? Payment is handled in person at the dojo — this just clears your in-app tab once you've paid the front desk.`,
                 [
                   { text: 'Cancel', style: 'cancel' },
                   {
                     text: 'Mark settled',
                     onPress: async () => {
-                      await payAllUnpaid();
+                      await payAllUnpaid(memberName);
                       Alert.alert('Tab cleared', 'Your drink charges have been marked settled.');
                     },
                   },

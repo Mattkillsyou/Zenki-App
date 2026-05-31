@@ -72,6 +72,13 @@
           "microphonePermission": "Zenki Dojo records your voice when you talk to Senpai in the chat — audio is transcribed on-device and not stored or uploaded.",
           "speechRecognitionPermission": "Zenki Dojo transcribes your voice on-device when you talk to Senpai in the chat — the audio never leaves your phone."
         }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.zenkidojo.app",
+          "enableGooglePay": false
+        }
       ]
     ],
     "ios": {
@@ -104,6 +111,9 @@
         "com.apple.developer.healthkit.access": [],
         "com.apple.developer.applesignin": [
           "Default"
+        ],
+        "com.apple.developer.in-app-payments": [
+          "merchant.com.zenkidojo.app"
         ]
       },
       "privacyManifests": {
@@ -162,7 +172,9 @@
       "eas": {
         "projectId": "5ece9429-9575-4d43-9417-dba1d8313855"
       },
-      "GOOGLE_CLIENT_ID": "277160279219-8fjejem0ols7tstu26sf4o42b5vf3rks.apps.googleusercontent.com"
+      "GOOGLE_CLIENT_ID": "277160279219-8fjejem0ols7tstu26sf4o42b5vf3rks.apps.googleusercontent.com",
+      "STRIPE_PUBLISHABLE_KEY": "",
+      "STRIPE_MERCHANT_ID": "merchant.com.zenkidojo.app"
     },
     "owner": "mattbrowntheemail"
   }
