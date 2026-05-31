@@ -1339,9 +1339,11 @@ export function HomeScreen({ navigation }: any) {
             body: 'Tap Profile \u2192 Help any time to replay this tutorial or browse the FAQ.',
           },
         ];
-        // Only open once we've measured at least the first couple of targets.
-        const measuredCount = ['edit', 'training', 'foodActions'].filter((k) => coachRects[k]).length;
-        const ready = measuredCount >= 2;
+        // Gate on the FIRST step's target (the Edit pill) specifically — opening
+        // before it's measured made step 1 ("Customize your home") flash
+        // centered / mis-placed on iPad until the measurement landed. Also
+        // require one content target so layout has settled.
+        const ready = !!coachRects.edit && (!!coachRects.training || !!coachRects.foodActions);
         return (
           <CoachmarkTutorial
             visible={coachmarksOpen && ready}
