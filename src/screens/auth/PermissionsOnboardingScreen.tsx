@@ -18,7 +18,7 @@ import * as ExpoCalendar from 'expo-calendar';
 import { SoundPressable } from '../../components/SoundPressable';
 import { FadeInView } from '../../components';
 import { useTheme } from '../../context/ThemeContext';
-import { spacing, borderRadius } from '../../theme';
+import { spacing, borderRadius, MAX_FORM_WIDTH } from '../../theme';
 import { safeStorageSet } from '../../utils/safeStorage';
 import { initHealthKit, ALL_HEALTH_CATEGORIES } from '../../services/healthKit';
 import { registerForPushNotifications, savePushTokenToFirestore } from '../../services/pushNotifications';
@@ -371,6 +371,9 @@ const styles = StyleSheet.create({
   buttons: {
     paddingBottom: spacing.lg,
     gap: spacing.sm,
+    width: '100%',
+    maxWidth: MAX_FORM_WIDTH,
+    alignSelf: 'center',
   },
   allowBtn: {
     paddingVertical: 16,

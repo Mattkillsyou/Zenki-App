@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SoundPressable } from '../components/SoundPressable';
 import { KeyboardView } from '../components';
 import { useTheme } from '../context/ThemeContext';
-import { spacing, typography } from '../theme';
+import { spacing, typography, MAX_CONTENT_WIDTH } from '../theme';
 import { Comment, addComment, listComments } from '../services/firebasePosts';
 
 export function CommentsScreen({ navigation, route }: any) {
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   },
   title: { ...typography.h2, fontSize: 17, fontWeight: '700' },
   kav: { flex: 1 },
-  list: { paddingVertical: spacing.md, paddingHorizontal: spacing.md },
+  list: { paddingVertical: spacing.md, paddingHorizontal: spacing.md, width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' },
   row: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
   avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 15, fontWeight: '700' },

@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParseJSON } from '../utils/safeStorage';
 import { useTheme } from '../context/ThemeContext';
-import { typography, spacing, borderRadius } from '../theme';
+import { typography, spacing, borderRadius, MAX_CONTENT_WIDTH } from '../theme';
 import { CATEGORIES, Product } from '../data/products';
 import { useProducts } from '../context/ProductContext';
 import { useGamification } from '../context/GamificationContext';
@@ -454,7 +454,7 @@ export function StoreScreen({ navigation }: any) {
       ) : (
         /* Products — paginated: 4 products per page, horizontal swipe */
         <View
-          style={{ flex: 1 }}
+          style={{ flex: 1, width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' }}
           onLayout={(e) => setPageWidth(e.nativeEvent.layout.width)}
         >
           <ScrollView
@@ -570,6 +570,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: spacing.md,
     paddingBottom: spacing.xxl * 2,
+    width: '100%',
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignSelf: 'center',
   },
   productRow: {
     justifyContent: 'space-between',

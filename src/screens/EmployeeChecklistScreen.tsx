@@ -12,7 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useEmployeeTasks } from '../context/EmployeeTaskContext';
 import { spacing } from '../theme';
-import { FadeInView, KeyboardAwareScrollView } from '../components';
+import { FadeInView, KeyboardAwareScrollView, ScreenContainer } from '../components';
 
 export function EmployeeChecklistScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -61,6 +61,7 @@ export function EmployeeChecklistScreen({ navigation }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+        <ScreenContainer maxWidth="content">
           {/* Header */}
           <View style={styles.header}>
             <SoundPressable
@@ -218,6 +219,7 @@ export function EmployeeChecklistScreen({ navigation }: any) {
               )}
             </View>
           </FadeInView>
+        </ScreenContainer>
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );

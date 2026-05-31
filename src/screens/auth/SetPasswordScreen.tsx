@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../../theme';
-import { Button, KeyboardAwareScrollView } from '../../components';
+import { Button, KeyboardAwareScrollView, ScreenContainer } from '../../components';
 import { useAuth } from '../../context/AuthContext';
 import { MEMBERS, CREDENTIALS } from '../../data/members';
 import { FIREBASE_CONFIGURED } from '../../config/firebase';
@@ -97,6 +97,7 @@ export function SetPasswordScreen({ navigation, route }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAwareScrollView outerStyle={styles.inner}>
+        <ScreenContainer maxWidth="form">
         <View style={styles.header}>
           <SoundPressable onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
@@ -164,6 +165,7 @@ export function SetPasswordScreen({ navigation, route }: any) {
             style={{ marginTop: spacing.md }}
           />
         </View>
+        </ScreenContainer>
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );

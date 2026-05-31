@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../../theme';
-import { Button, KeyboardAwareScrollView } from '../../components';
+import { Button, KeyboardAwareScrollView, ScreenContainer } from '../../components';
 import { FIREBASE_CONFIGURED } from '../../config/firebase';
 import { firebaseSendPasswordReset } from '../../services/firebaseAuth';
 
@@ -61,6 +61,7 @@ export function ForgotPasswordScreen({ navigation }: any) {
       </View>
 
       <KeyboardAwareScrollView contentContainerStyle={styles.content}>
+        <ScreenContainer maxWidth="form">
         {sent ? (
           <View style={styles.successState}>
             <View style={[styles.successIcon, { backgroundColor: colors.goldMuted }]}>
@@ -108,6 +109,7 @@ export function ForgotPasswordScreen({ navigation }: any) {
             />
           </>
         )}
+        </ScreenContainer>
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );

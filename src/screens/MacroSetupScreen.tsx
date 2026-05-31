@@ -14,7 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { todayDateString } from '../utils/dates';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, KeyboardView } from '../components';
+import { FadeInView, KeyboardView, ScreenContainer } from '../components';
 import {
   Sex,
   ActivityLevel,
@@ -157,6 +157,7 @@ export function MacroSetupScreen({ navigation }: any) {
           automaticallyAdjustKeyboardInsets
           contentInsetAdjustmentBehavior="automatic"
         >
+          <ScreenContainer maxWidth="form">
           {/* Header */}
           <View style={styles.header}>
             <SoundPressable
@@ -414,6 +415,7 @@ export function MacroSetupScreen({ navigation }: any) {
               </StepWrap>
             )}
           </FadeInView>
+          </ScreenContainer>
         </ScrollView>
 
         {/* Bottom CTA */}

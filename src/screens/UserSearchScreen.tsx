@@ -11,7 +11,7 @@ import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { spacing } from '../theme';
+import { spacing, MAX_CONTENT_WIDTH } from '../theme';
 import { getAllMembers, MemberProfile } from '../services/firebaseUsers';
 import { getOrCreateConversation } from '../services/firebaseMessages';
 
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 14 },
 
-  list: { paddingHorizontal: spacing.lg, paddingTop: 8, paddingBottom: 40 },
+  list: { paddingHorizontal: spacing.lg, paddingTop: 8, paddingBottom: 40, width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

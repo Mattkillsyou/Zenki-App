@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { SoundPressable } from '../components/SoundPressable';
+import { ScreenContainer } from '../components';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
 import { getLocalOrders } from '../services/orderSync';
@@ -62,6 +63,7 @@ export function OrderHistoryScreen({ navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+        <ScreenContainer maxWidth="content">
         {orders === null ? null : orders.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="receipt-outline" size={48} color={colors.textMuted} />
@@ -110,6 +112,7 @@ export function OrderHistoryScreen({ navigation }: any) {
             </View>
           ))
         )}
+        </ScreenContainer>
       </ScrollView>
     </SafeAreaView>
   );

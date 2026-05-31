@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useGamification } from '../context/GamificationContext';
-import { AchievementGrid } from '../components';
+import { AchievementGrid, ScreenContainer } from '../components';
 import { spacing } from '../theme';
 
 export function AchievementsScreen({ navigation }: any) {
@@ -64,7 +64,9 @@ export function AchievementsScreen({ navigation }: any) {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <AchievementGrid achievements={state.achievements} />
+        <ScreenContainer maxWidth="content">
+          <AchievementGrid achievements={state.achievements} />
+        </ScreenContainer>
       </ScrollView>
     </SafeAreaView>
   );

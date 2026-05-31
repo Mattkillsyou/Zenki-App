@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useBlocks } from '../context/BlocksContext';
-import { spacing } from '../theme';
+import { spacing, MAX_CONTENT_WIDTH } from '../theme';
 import { PostCard } from '../components/PostCard';
 import { AnimatedLogo } from '../components/AnimatedLogo';
 import { Post, getFeed, likePost, unlikePost } from '../services/firebasePosts';
@@ -185,7 +185,7 @@ export function CommunityScreen({ navigation }: any) {
           keyExtractor={(item) => item.id}
           ListHeaderComponent={renderHeader}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 120 }}
+          contentContainerStyle={{ paddingBottom: 120, width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.gold} />
           }

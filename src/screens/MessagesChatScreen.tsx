@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useBlocks } from '../context/BlocksContext';
-import { spacing } from '../theme';
+import { spacing, MAX_CONTENT_WIDTH } from '../theme';
 import {
   Message,
   sendMessage,
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
   headerAvatarImg: { width: '100%', height: '100%' },
   headerName: { fontSize: 15, fontWeight: '700', maxWidth: 180 },
 
-  list: { paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: 4, flexGrow: 1 },
+  list: { paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: 4, flexGrow: 1, width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' },
   bubbleRow: { flexDirection: 'row', marginVertical: 2 },
   bubble: {
     maxWidth: '76%',

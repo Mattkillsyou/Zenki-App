@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView } from '../components';
+import { FadeInView, ScreenContainer } from '../components';
 import { AiExtractedBanner } from '../components/AiExtractedBanner';
 import { BiomarkerStatus, StoredBiomarker, BiomarkerCategory } from '../types/bloodwork';
 import { CATEGORY_ORDER, lookupBiomarkerRef } from '../data/biomarkers';
@@ -109,6 +109,7 @@ export function BloodworkReportDetailScreen({ route, navigation }: any) {
       <AiExtractedBanner kind="bloodwork report" />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+        <ScreenContainer maxWidth="content">
         <FadeInView>
           <View style={[styles.dateCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.dateLabel, { color: colors.textMuted }]}>TEST DATE</Text>
@@ -162,6 +163,7 @@ export function BloodworkReportDetailScreen({ route, navigation }: any) {
             );
           })}
         </FadeInView>
+        </ScreenContainer>
       </ScrollView>
     </SafeAreaView>
   );

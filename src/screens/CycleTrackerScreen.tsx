@@ -9,7 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useCycleTracker } from '../context/CycleTrackerContext';
 import { spacing } from '../theme';
-import { FadeInView, KeyboardAwareScrollView } from '../components';
+import { FadeInView, KeyboardAwareScrollView, ScreenContainer } from '../components';
 import {
   CycleSymptom, FlowIntensity, SYMPTOM_LABELS, SYMPTOM_ICONS,
   PHASE_LABELS, PHASE_COLORS, PHASE_ICONS, PHASE_RECOMMENDATIONS,
@@ -102,6 +102,7 @@ export function CycleTrackerScreen({ navigation }: any) {
       </View>
 
       <KeyboardAwareScrollView offset={64} contentContainerStyle={styles.scroll}>
+        <ScreenContainer maxWidth="content">
         {/* ── TRACK TAB ── */}
         {tab === 'track' && (
           <>
@@ -344,6 +345,7 @@ export function CycleTrackerScreen({ navigation }: any) {
         )}
 
         <View style={{ height: 40 }} />
+        </ScreenContainer>
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );

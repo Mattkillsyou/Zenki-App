@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
 import { resetCoachmarks } from '../components/CoachmarkTutorial';
+import { ScreenContainer } from '../components';
 import { PRIVACY_URL, SUPPORT_URL } from '../config/api';
 
 const APP_VERSION = '1.0.0';
@@ -83,6 +84,7 @@ export function HelpScreen({ navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScreenContainer maxWidth="content">
 
         {/* Quick actions */}
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>QUICK ACTIONS</Text>
@@ -197,6 +199,7 @@ export function HelpScreen({ navigation }: any) {
         </View>
 
         <View style={{ height: 24 }} />
+        </ScreenContainer>
       </ScrollView>
     </SafeAreaView>
   );

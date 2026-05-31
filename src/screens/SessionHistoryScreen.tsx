@@ -9,6 +9,7 @@ import { useHeartRate } from '../context/HeartRateContext';
 import { ACTIVITY_LABELS } from '../types/heartRate';
 import { zoneColor, strainColor, strainLabel, formatDuration } from '../utils/heartRate';
 import { spacing } from '../theme';
+import { ScreenContainer } from '../components';
 
 export function SessionHistoryScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -48,6 +49,7 @@ export function SessionHistoryScreen({ navigation }: any) {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <ScreenContainer maxWidth="content">
           {sessions.map((s) => {
             const date = new Date(s.startedAt);
             const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -137,6 +139,7 @@ export function SessionHistoryScreen({ navigation }: any) {
             );
           })}
           <View style={{ height: 40 }} />
+          </ScreenContainer>
         </ScrollView>
       )}
     </SafeAreaView>

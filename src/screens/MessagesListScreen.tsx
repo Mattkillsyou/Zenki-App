@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useBlocks } from '../context/BlocksContext';
-import { spacing } from '../theme';
+import { spacing, MAX_CONTENT_WIDTH } from '../theme';
 import { Conversation, fetchUserProfile, subscribeToInbox } from '../services/firebaseMessages';
 
 export function MessagesListScreen({ navigation }: any) {
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
 
-  list: { paddingHorizontal: spacing.lg, paddingTop: 8, paddingBottom: 40 },
+  list: { paddingHorizontal: spacing.lg, paddingTop: 8, paddingBottom: 40, width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

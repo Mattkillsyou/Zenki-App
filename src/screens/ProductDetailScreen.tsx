@@ -12,7 +12,7 @@ import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { typography, spacing, borderRadius } from '../theme';
+import { typography, spacing, borderRadius, MAX_CONTENT_WIDTH } from '../theme';
 import { Button } from '../components';
 import { getProductImages } from '../data/products';
 import { useProducts } from '../context/ProductContext';
@@ -99,7 +99,7 @@ export function ProductDetailScreen({ navigation, route }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' }}>
         {/* Header */}
         <View style={styles.header}>
           <SoundPressable

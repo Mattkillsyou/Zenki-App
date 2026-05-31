@@ -10,7 +10,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useMedicationTracker, DailyMedicationItem, CalendarDay } from '../context/MedicationTrackerContext';
 import { spacing } from '../theme';
-import { FadeInView, KeyboardAwareScrollView } from '../components';
+import { FadeInView, KeyboardAwareScrollView, ScreenContainer } from '../components';
 import {
   MedicationEntry, MedicationCategory, FrequencyType, RouteOfAdministration,
   DrugSearchResult, INJECTION_SITES,
@@ -240,6 +240,7 @@ export function MedicationTrackerScreen({ navigation }: any) {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
+        <ScreenContainer maxWidth="content">
         {tab === 'today' && (
           <>
             {/* Calendar strip */}
@@ -441,6 +442,7 @@ export function MedicationTrackerScreen({ navigation }: any) {
         )}
 
         <View style={{ height: 32 }} />
+        </ScreenContainer>
       </ScrollView>
 
       {/* Add/edit modal */}

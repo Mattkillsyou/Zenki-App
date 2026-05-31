@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAttendance } from '../context/AttendanceContext';
-import { FadeInView } from '../components';
+import { FadeInView, ScreenContainer } from '../components';
 import { spacing, borderRadius } from '../theme';
 import { getTodayString } from '../utils/location';
 
@@ -60,6 +60,7 @@ export function AttendanceHistoryScreen({ navigation }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
+        <ScreenContainer maxWidth="content">
         {/* Header */}
         <View style={styles.header}>
           <SoundPressable
@@ -138,6 +139,7 @@ export function AttendanceHistoryScreen({ navigation }: any) {
         </FadeInView>
 
         <View style={{ height: 120 }} />
+        </ScreenContainer>
       </ScrollView>
     </SafeAreaView>
   );

@@ -11,7 +11,7 @@ import { DRINK_DEFINITIONS } from '../data/drinks';
 import { DrinkType } from '../types/drinks';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { useGamification } from '../context/GamificationContext';
-import { typography, spacing, borderRadius } from '../theme';
+import { typography, spacing, borderRadius, MAX_CONTENT_WIDTH } from '../theme';
 import { FadeInView } from '../components';
 
 // Interpolate color from white → gold → red as total approaches $100
@@ -124,7 +124,7 @@ export function DrinkScreen() {
                   </Text>
                 </View>
               ) : (
-                <ScrollView showsVerticalScrollIndicator={false}>
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' }}>
                   {DRINK_DEFINITIONS.filter((d) => pendingCounts[d.type] > 0).map((d) => (
                     <View key={d.type} style={[styles.cartItemRow, { borderBottomColor: colors.divider }]}>
                       <Ionicons name={d.icon as any} size={20} color={d.color} />
@@ -176,7 +176,7 @@ export function DrinkScreen() {
         </View>
       ) : (
         /* ═════ Monthly view — scrollable history ═════ */
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' }}>
           <FadeInView delay={60} slideUp={14}>
             <View style={styles.section}>
               <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>MONTHLY CHARGES</Text>

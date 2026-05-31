@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { spacing } from '../theme';
-import { KeyboardAwareScrollView } from '../components';
+import { KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { submitSupportMessage, flushSupportQueue, SupportCategory } from '../services/supportMessages';
 
 const CATEGORIES: { value: SupportCategory; label: string; icon: keyof typeof import('@expo/vector-icons').Ionicons.glyphMap; color: string }[] = [
@@ -129,6 +129,7 @@ export function ContactSupportScreen({ navigation }: any) {
       </View>
 
       <KeyboardAwareScrollView contentContainerStyle={styles.scroll}>
+        <ScreenContainer maxWidth="form">
           <Text style={[styles.intro, { color: colors.textSecondary }]}>
             Report a bug, share an idea, or ask us anything. Your message is sent
             directly to the Zenki IT team. We get an instant alert.
@@ -220,6 +221,7 @@ export function ContactSupportScreen({ navigation }: any) {
               </>
             )}
           </SoundPressable>
+        </ScreenContainer>
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );

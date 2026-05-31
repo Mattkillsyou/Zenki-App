@@ -14,7 +14,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useMotion } from '../../context/MotionContext';
 import { useAuth } from '../../context/AuthContext';
 import { useNutrition } from '../../context/NutritionContext';
-import { typography, spacing, borderRadius } from '../../theme';
+import { typography, spacing, borderRadius, MAX_FORM_WIDTH } from '../../theme';
 import { BELT_ORDER, BELT_DISPLAY_COLORS, BELT_LABELS, BeltLevel, Member } from '../../data/members';
 import { suggestNickname } from '../../utils/nickname';
 import { BeltDisplay } from '../../components/BeltDisplay';
@@ -1031,13 +1031,13 @@ const reqStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  progressContainer: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  progressContainer: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, width: '100%', maxWidth: MAX_FORM_WIDTH, alignSelf: 'center' },
   progressBg: { height: 5, borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 3 },
   progressDots: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm, paddingHorizontal: spacing.sm },
   progressDot: { width: 10, height: 10, borderRadius: 5 },
   stepScrollContent: { flexGrow: 1, justifyContent: 'center' },
-  stepContainer: { paddingHorizontal: spacing.lg, paddingVertical: spacing.lg },
+  stepContainer: { paddingHorizontal: spacing.lg, paddingVertical: spacing.lg, width: '100%', maxWidth: MAX_FORM_WIDTH, alignSelf: 'center' },
   stepContent: { alignItems: 'center', gap: spacing.lg },
   stepTitle: { ...typography.sectionTitle, fontSize: 24, textTransform: 'none', letterSpacing: 0, textAlign: 'center' },
   stepSubtitle: { ...typography.body, textAlign: 'center', lineHeight: 22, paddingHorizontal: spacing.md },
@@ -1204,6 +1204,7 @@ const styles = StyleSheet.create({
   navRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: spacing.lg, paddingBottom: spacing.md,
+    width: '100%', maxWidth: MAX_FORM_WIDTH, alignSelf: 'center',
   },
   navButton: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   navButtonPrimary: {

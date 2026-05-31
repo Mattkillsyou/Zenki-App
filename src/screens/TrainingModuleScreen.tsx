@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
+import { ScreenContainer } from '../components';
 import {
   TRAINING_MODULES,
   TrainingAccentToken,
@@ -97,6 +98,7 @@ export function TrainingModuleScreen({ navigation, route }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScreenContainer maxWidth="content">
 
         {/* Hero */}
         <View style={[styles.hero, { backgroundColor: accent + '1A', borderColor: accent + '55' }]}>
@@ -159,6 +161,7 @@ export function TrainingModuleScreen({ navigation, route }: Props) {
         </View>
 
         <View style={{ height: spacing.xl }} />
+        </ScreenContainer>
       </ScrollView>
     </SafeAreaView>
   );

@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { Button, KeyboardAwareScrollView } from '../../components';
+import { Button, KeyboardAwareScrollView, ScreenContainer } from '../../components';
 import { MEMBERS, CREDENTIALS } from '../../data/members';
 import { spacing, borderRadius } from '../../theme';
 import { FIREBASE_CONFIGURED } from '../../config/firebase';
@@ -462,6 +462,7 @@ export function SignInScreen({ navigation }: any) {
       </Modal>
 
       <KeyboardAwareScrollView contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
+        <ScreenContainer maxWidth="form">
 
           {/* Logo */}
           <View style={styles.logoSection}>
@@ -577,6 +578,7 @@ export function SignInScreen({ navigation }: any) {
               <Text style={[styles.footerLink, { color: colors.gold }]}>Create Account</Text>
             </SoundPressable>
           </View>
+        </ScreenContainer>
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );

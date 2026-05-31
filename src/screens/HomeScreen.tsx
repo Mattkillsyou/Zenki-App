@@ -34,7 +34,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { spacing, borderRadius } from '../theme';
+import { spacing, borderRadius, MAX_CONTENT_WIDTH } from '../theme';
 import { AnimatedLogo, FadeInView, TimeClock, PointsBadge, CelebrationModal } from '../components';
 import { SoundPressable } from '../components/SoundPressable';
 import { ReorderableSections, ReorderableItem } from '../components/ReorderableSections';
@@ -1312,65 +1312,31 @@ export function HomeScreen({ navigation }: any) {
 
       {/* First-run coachmark tutorial (one time; can be replayed via Settings → Secret Lab or Profile → Help) */}
       {(() => {
-        // Senpai-led onboarding tour (item 6). Scripted in her persona \u2014 zero
-        // model cost. Reuses the existing first-run coachmark gating
-        // (@zenki_tutorial_v2_completed); skippable + resumable via Profile \u2192
-        // Help. Covers Home/macros, the training + food log, the new tap-to-talk
-        // mascot, voice \u21c4 keyboard chat, and asking Senpai to log food.
         const steps: CoachmarkStep[] = [
           {
-            target: null,
-            title: 'hi hi hi!! \ud83d\udc95',
-            body: "I'm Senpai \u2014 I LIVE here now, in the corner of your phone. lemme show you around MY app real quick, ne~",
-            mascot: true,
-          },
-          {
             target: coachRects.edit ?? null,
-            title: 'make it yours',
-            body: 'Tap Edit to drag your home sections around, or hide the ones you ignore. your layout, your rules \ud83d\udc95',
-            mascot: true,
+            title: 'Customize your home',
+            body: 'Tap Edit to drag sections into the order you want, or hide anything you don\u2019t use. Your layout, your way.',
           },
           {
             target: coachRects.training ?? null,
-            title: 'the training toolkit',
-            body: 'EVERYTHING lives here \u2014 HR sessions, workouts, weight, timers, body lab, GPS, your weekly report. go get strong for me \u2728',
-            mascot: true,
+            title: 'Your training toolkit',
+            body: 'Every training tool lives here \u2014 heart-rate sessions, workouts, weight, timers, body lab, GPS, weekly report.',
           },
           {
             target: coachRects.foodActions ?? null,
-            title: 'log food 3 ways',
-            body: 'Search a food, Scan a barcode, or snap a Photo and let the AI guess the macros. fuel the machine \ud83d\udc95',
-            mascot: true,
+            title: 'Log food three ways',
+            body: 'Search for a food by name, Scan a barcode, or snap a Photo and let AI estimate the macros.',
           },
           ...(coachRects.spinFab ? [{
             target: coachRects.spinFab,
-            title: 'free daily spin',
-            body: 'one free spin a day for bonus points. don\u2019t leave free stuff on the table, senpai \ud83d\udc95',
-            mascot: true,
+            title: 'Free daily spin',
+            body: 'Every day get a free spin for bonus points. Tap the wheel to see today\u2019s prizes.',
           }] : []),
           {
             target: null,
-            title: 'tap me to talk \ud83d\udc95',
-            body: "see me floating around? TAP me once and I start listening \u2014 talk, and I talk back. tap again to stop. (no more holding, you\u2019re welcome)",
-            mascot: true,
-          },
-          {
-            target: null,
-            title: 'type OR talk, your call',
-            body: 'hit the \u201c\ud83d\udcac chat\u201d pill on me for the full chat \u2014 there\u2019s a voice \u21c4 keyboard switch up top, so you can type when you\u2019re somewhere quiet \ud83d\udc95',
-            mascot: true,
-          },
-          {
-            target: null,
-            title: 'I\u2019ll log food FOR you',
-            body: 'just tell me \u201cadd a ham sandwich\u201d or \u201clog 2 eggs\u201d \u2014 I pull the REAL macros and drop it in your tracker. you confirm, I do the work \ud83d\udc95',
-            mascot: true,
-          },
-          {
-            target: null,
-            title: 'you\u2019re all set, senpai \u2728',
-            body: 'replay this anytime from Profile \u2192 Help. now go. I\u2019ll be watching \ud83d\udc95',
-            mascot: true,
+            title: 'You\u2019re all set',
+            body: 'Tap Profile \u2192 Help any time to replay this tutorial or browse the FAQ.',
           },
         ];
         // Only open once we've measured at least the first couple of targets.
@@ -1390,7 +1356,7 @@ export function HomeScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scrollContent: { paddingBottom: 120 },
+  scrollContent: { paddingBottom: 120, width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' },
 
   // Header — single row split into two clusters with the iPhone Dynamic
   // Island sitting in the empty middle. Sits flush against the safe-area

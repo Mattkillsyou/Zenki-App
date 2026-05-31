@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../../theme';
-import { Button, KeyboardAwareScrollView } from '../../components';
+import { Button, KeyboardAwareScrollView, ScreenContainer } from '../../components';
 
 export function ContactScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -43,6 +43,7 @@ export function ContactScreen({ navigation }: any) {
       </View>
 
       <KeyboardAwareScrollView offset={64} contentContainerStyle={styles.scrollContent}>
+        <ScreenContainer maxWidth="form">
         {sent ? (
           <View style={styles.successState}>
             <View style={[styles.successIcon, { backgroundColor: colors.goldMuted }]}>
@@ -174,6 +175,7 @@ export function ContactScreen({ navigation }: any) {
         )}
 
         <View style={{ height: spacing.xxl * 2 }} />
+        </ScreenContainer>
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );

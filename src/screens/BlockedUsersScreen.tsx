@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useBlocks } from '../context/BlocksContext';
 import { fetchUserProfile } from '../services/firebaseMessages';
-import { spacing, borderRadius } from '../theme';
+import { spacing, borderRadius, MAX_CONTENT_WIDTH } from '../theme';
 
 interface BlockedRow {
   uid: string;
@@ -113,7 +113,7 @@ export function BlockedUsersScreen({ navigation }: any) {
           data={rows}
           keyExtractor={(r) => r.uid}
           renderItem={renderItem}
-          contentContainerStyle={{ padding: spacing.lg, gap: spacing.xs }}
+          contentContainerStyle={{ padding: spacing.lg, gap: spacing.xs, width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' }}
         />
       )}
     </SafeAreaView>

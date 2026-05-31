@@ -7,6 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useGamification } from '../context/GamificationContext';
 import { Achievement, difficultyColor, getCurrentValue, getAchievementProgress } from '../types/gamification';
 import { spacing } from '../theme';
+import { ScreenContainer } from '../components';
 
 export function AchievementDetailScreen({ navigation, route }: any) {
   const { colors } = useTheme();
@@ -64,6 +65,7 @@ export function AchievementDetailScreen({ navigation, route }: any) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScreenContainer maxWidth="content" style={{ alignItems: 'center' }}>
         {/* Giant icon */}
         <View
           style={[
@@ -147,6 +149,7 @@ export function AchievementDetailScreen({ navigation, route }: any) {
         )}
 
         <View style={{ height: 40 }} />
+        </ScreenContainer>
       </ScrollView>
     </SafeAreaView>
   );

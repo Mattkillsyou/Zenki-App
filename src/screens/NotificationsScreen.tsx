@@ -9,6 +9,7 @@ import { useAppointments } from '../context/AppointmentContext';
 import { useAuth } from '../context/AuthContext';
 import { useGamification } from '../context/GamificationContext';
 import { spacing } from '../theme';
+import { ScreenContainer } from '../components';
 
 interface NotificationItem {
   id: string;
@@ -126,6 +127,7 @@ export function NotificationsScreen({ navigation }: any) {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <ScreenContainer maxWidth="content">
           {items.map((item) => (
             <SoundPressable
               key={item.id}
@@ -150,6 +152,7 @@ export function NotificationsScreen({ navigation }: any) {
             </SoundPressable>
           ))}
           <View style={{ height: 32 }} />
+          </ScreenContainer>
         </ScrollView>
       )}
     </SafeAreaView>
