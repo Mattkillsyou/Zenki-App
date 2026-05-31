@@ -13,7 +13,7 @@ import { SoundPressable } from './SoundPressable';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { spacing, borderRadius } from '../theme';
+import { spacing, borderRadius, MAX_CONTENT_WIDTH } from '../theme';
 import { searchFoods } from '../services/foodSearch';
 import { FoodSearchResult, FoodMacros } from '../types/food';
 
@@ -103,6 +103,7 @@ export function FoodSearchModal({ visible, onClose, onSelect, recentFoods = [], 
       <SafeAreaProvider>
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <View style={{ flex: 1, width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' }}>
           {/* Header */}
           <View style={styles.header}>
             <SoundPressable
@@ -223,6 +224,7 @@ export function FoodSearchModal({ visible, onClose, onSelect, recentFoods = [], 
               </SoundPressable>
             </View>
           )}
+          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
       </SafeAreaProvider>
