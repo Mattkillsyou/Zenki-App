@@ -51,6 +51,7 @@ import { EmployeeChecklistScreen } from '../screens/EmployeeChecklistScreen';
 import { AdminEmployeeTasksScreen } from '../screens/AdminEmployeeTasksScreen';
 import { AdminReportsScreen } from '../screens/AdminReportsScreen';
 import { WeightTrackerScreen } from '../screens/WeightTrackerScreen';
+import { OrderHistoryScreen } from '../screens/OrderHistoryScreen';
 import { MacroTrackerScreen } from '../screens/MacroTrackerScreen';
 import { MacroSetupScreen } from '../screens/MacroSetupScreen';
 import { BarcodeScannerScreen } from '../screens/BarcodeScannerScreen';
@@ -255,6 +256,7 @@ export function RootNavigator() {
       <Stack.Screen name="AdminEmployeeTasks" component={withErrorBoundary(AdminEmployeeTasksScreen, 'Employee Tasks')} options={pushTransition} />
       <Stack.Screen name="AdminReports" component={withErrorBoundary(AdminReportsScreen, 'Reports')} options={pushTransition} />
       <Stack.Screen name="WeightTracker" component={withErrorBoundary(WeightTrackerScreen, 'Weight Tracker')} options={pushTransition} />
+      <Stack.Screen name="OrderHistory" component={withErrorBoundary(OrderHistoryScreen, 'My Orders')} options={pushTransition} />
       <Stack.Screen name="MacroTracker" component={withErrorBoundary(MacroTrackerScreen, 'Macro Tracker')} options={pushTransition} />
       <Stack.Screen name="MacroSetup" component={withErrorBoundary(MacroSetupScreen, 'Macro Setup')} options={modalTransition} />
       <Stack.Screen name="BarcodeScanner" component={withErrorBoundary(BarcodeScannerScreen, 'Barcode Scanner')} options={modalTransition} />

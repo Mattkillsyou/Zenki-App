@@ -71,7 +71,7 @@ export function DrinkScreen() {
   const {
     pending, pendingCounts, pendingTotal,
     addToPending, removeFromPending, clearPending, commitPending,
-    unpaidTotal, payAllUnpaid,
+    unpaidTotal, unpaidEntries, payAllUnpaid,
     getAllMonths,
   } = useDrinkTracker();
   const { user } = useAuth();
@@ -244,10 +244,15 @@ export function DrinkScreen() {
               // Apple Pay path (Stripe configured + device supports it): charge
               // the tab, then mark the drinks paid on success.
               if (await isApplePayAvailable()) {
+                // Aggregate the unpaid tab by drink type so the server can
+                // re-validate the exact amount against its own price map.
+                const drinkCounts: Record<string, number> = {};
+                for (const e of unpaidEntries) drinkCounts[e.type] = (drinkCounts[e.type] ?? 0) + 1;
                 const pay = await payWithApplePay({
                   amountCents: Math.round(amount * 100),
                   label: 'Zenki Dojo drinks',
                   kind: 'drinks',
+                  drinks: Object.entries(drinkCounts).map(([type, count]) => ({ type, count })),
                 });
                 if (!pay.ok) {
                   if (!pay.canceled) Alert.alert('Payment failed', pay.error ?? 'Please try again.');

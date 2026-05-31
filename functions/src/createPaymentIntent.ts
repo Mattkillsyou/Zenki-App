@@ -17,6 +17,16 @@ import { enforceRateLimit } from './rateLimit';
 
 const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
 
+/** Server-authoritative drink prices (mirror of src/data/drinks.ts). Drinks have
+ *  no points/promo discounts, so a drink-tab charge is FULLY validated against
+ *  this map. Keep in sync with the client catalog. */
+const DRINK_PRICES: Record<string, number> = {
+  water: 2.0, protein: 5.0, electrolytes: 3.0, bcaa: 4.0, coffee: 3.0,
+  energy: 4.0, kombucha: 4.5, juice: 5.5, tea: 3.5,
+};
+
+const MAX_CHARGE_CENTS = 1_000_00; // $1,000 hard ceiling (abuse/typo guard)
+
 export const createPaymentIntent = onRequest(
   { secrets: [STRIPE_SECRET_KEY], cors: true, region: 'us-central1' },
   async (req, res) => {
@@ -49,7 +59,56 @@ export const createPaymentIntent = onRequest(
     const amountCents = Math.round(Number(req.body?.amountCents));
     const currency = String(req.body?.currency ?? 'usd').toLowerCase();
     const kind = String(req.body?.kind ?? 'order').slice(0, 32);
+    const items: any[] = Array.isArray(req.body?.items) ? req.body.items : [];
+    const drinks: any[] = Array.isArray(req.body?.drinks) ? req.body.drinks : [];
     if (!Number.isFinite(amountCents) || amountCents < 50) {
+      res.status(400).json({ error: 'invalid-amount' });
+      return;
+    }
+
+    // ── Amount validation ──
+    // chargeCents is what we actually charge. We make it server-authoritative
+    // where we can (drinks); for orders we bound it (see note) and keep an
+    // audit trail in metadata.
+    let chargeCents = amountCents;
+    const metadata: Record<string, string> = { uid, kind };
+
+    if (kind === 'drinks') {
+      // Fully server-validated: recompute from the server price map.
+      let total = 0;
+      for (const d of drinks) {
+        const price = DRINK_PRICES[String(d?.type)];
+        if (price == null) { res.status(400).json({ error: 'unknown-drink' }); return; }
+        total += price * Math.max(0, Math.floor(Number(d?.count) || 0));
+      }
+      const serverCents = Math.round(total * 100);
+      if (serverCents < 50) { res.status(400).json({ error: 'invalid-amount' }); return; }
+      if (Math.abs(serverCents - amountCents) > 1) {
+        logger.warn('[createPaymentIntent] drink amount mismatch', { uid, amountCents, serverCents });
+        res.status(400).json({ error: 'amount-mismatch' });
+        return;
+      }
+      chargeCents = serverCents; // authoritative
+      metadata.drinks = drinks.map((d) => `${d?.type}x${d?.count}`).join(',').slice(0, 450);
+    } else {
+      // Orders: built-in product prices + points/promo discounts live on the
+      // CLIENT (see APPLE_PAY_SETUP.md "server-side amount validation"), so we
+      // can't fully recompute the total here yet. Guard against gross tampering:
+      // the charge may not EXCEED the client-sent item subtotal (discounts only
+      // reduce it), and record the line items for the dojo's audit trail.
+      const subtotalCents = Math.round(
+        items.reduce((s, it) =>
+          s + (Number(it?.unitPrice) || 0) * Math.max(0, Math.floor(Number(it?.quantity) || 0)), 0) * 100,
+      );
+      if (items.length > 0 && subtotalCents > 0 && amountCents > subtotalCents + 1) {
+        logger.warn('[createPaymentIntent] order amount exceeds items', { uid, amountCents, subtotalCents });
+        res.status(400).json({ error: 'amount-exceeds-items' });
+        return;
+      }
+      metadata.items = items.map((it) => `${it?.quantity}x ${String(it?.name ?? '').slice(0, 24)}`).join('; ').slice(0, 450);
+    }
+
+    if (!Number.isFinite(chargeCents) || chargeCents < 50 || chargeCents > MAX_CHARGE_CENTS) {
       res.status(400).json({ error: 'invalid-amount' });
       return;
     }
@@ -57,12 +116,12 @@ export const createPaymentIntent = onRequest(
     try {
       const stripe = new Stripe(STRIPE_SECRET_KEY.value());
       const intent = await stripe.paymentIntents.create({
-        amount: amountCents,
+        amount: chargeCents,
         currency,
         automatic_payment_methods: { enabled: true },
-        metadata: { uid, kind },
+        metadata,
       });
-      logger.info('[createPaymentIntent] created', { uid, amountCents, kind, id: intent.id });
+      logger.info('[createPaymentIntent] created', { uid, chargeCents, kind, id: intent.id });
       res.status(200).json({ clientSecret: intent.client_secret, paymentIntentId: intent.id });
     } catch (e) {
       logger.error('[createPaymentIntent] stripe error', e);

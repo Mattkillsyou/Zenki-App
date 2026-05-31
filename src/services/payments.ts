@@ -40,6 +40,10 @@ export async function payWithApplePay(params: {
   amountCents: number;
   label: string;
   kind: 'order' | 'drinks';
+  /** Order line items — for the server's amount validation + audit trail. */
+  items?: Array<{ name: string; unitPrice: number; quantity: number }>;
+  /** Drink-tab breakdown — the server fully re-validates the amount from this. */
+  drinks?: Array<{ type: string; count: number }>;
 }): Promise<ApplePayResult> {
   if (!STRIPE_CONFIGURED) return { ok: false, error: 'Payments are not configured yet.' };
   const amountCents = Math.round(params.amountCents);
@@ -64,7 +68,10 @@ export async function payWithApplePay(params: {
     const res = await fetch(`${AI_FUNCTION_BASE_URL}/createPaymentIntent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ amountCents, currency: 'usd', kind: params.kind }),
+      body: JSON.stringify({
+        amountCents, currency: 'usd', kind: params.kind,
+        items: params.items, drinks: params.drinks,
+      }),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({} as any));

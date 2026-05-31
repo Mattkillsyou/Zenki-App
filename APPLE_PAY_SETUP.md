@@ -43,8 +43,12 @@ npx expo run:ios             # or: eas build --profile preview --platform ios
 ## How the gate behaves
 - `STRIPE_CONFIGURED = Boolean(STRIPE_PUBLISHABLE_KEY)` (`src/config/env.ts`). When false: `StripeProvider` isn't mounted, `isApplePayAvailable()` returns false, and both stores fall back to today's reserve/settle-in-person flow. When true: Apple Pay is the checkout path (with the reserve fallback if a device lacks Apple Pay).
 
+## Server-side amount validation (partially implemented)
+`createPaymentIntent` validates the charge per store:
+- **Drinks — fully validated.** The server recomputes the tab from its own price map (`DRINK_PRICES`, a mirror of `src/data/drinks.ts`) using the `{type,count}` the client sends, and rejects any mismatch (drinks have no discounts). **Keep `DRINK_PRICES` in sync** with the client catalog.
+- **Orders — bounded + audited, not fully validated yet.** Built-in product prices live in client static data (`src/data/products.ts`) and points/promo discounts are client-side gamification (AsyncStorage), so the server can't recompute the order total. It enforces: the charge may not exceed the client-sent item subtotal, a $1,000 ceiling, and records the line items in the PaymentIntent metadata for the dojo's audit trail. **To fully validate orders**, move the product catalog + points server-side (e.g. sync built-in products to Firestore + a server-side points balance) and recompute the total there.
+
 ## Follow-ups (not in this scaffold)
-- **Server-side amount validation:** `createPaymentIntent` currently trusts the client `amountCents`. Recompute from a trusted cart/tab before going live (prevents tampering).
 - **Stripe webhook** (`payment_intent.succeeded`) to reconcile fulfillment server-side (don't rely solely on the client confirm).
-- **Refunds / order status management** (admin).
+- **Refunds / order status management** (admin). Orders are now viewable in the **My orders** screen (Store header → receipt icon), backed by local history + the Firestore `orders` collection.
 - **Google Pay** (`enableGooglePay` is currently false) if/when Android launches.

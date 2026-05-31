@@ -195,18 +195,28 @@ export function StoreScreen({ navigation }: any) {
           <Text style={[styles.title, { color: colors.textPrimary }]}>ZENKI GEAR</Text>
           <Text style={[styles.tagline, { color: colors.textSecondary }]}>FORGED FOR THE MAT · WORN WITH PRIDE</Text>
         </View>
-        <TouchableOpacity
-          style={[styles.cartButton, { backgroundColor: '#000', borderColor: colors.red }]}
-          onPress={() => setShowCart(!showCart)}
-          activeOpacity={0.75}
-        >
-          <Ionicons name={showCart ? 'close' : 'bag-outline'} size={22} color="#FFF" />
-          {cartCount > 0 && (
-            <View style={[styles.cartBadge, { backgroundColor: colors.red }]}>
-              <Text style={styles.cartBadgeText}>{cartCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity
+            style={[styles.cartButton, { backgroundColor: '#000', borderColor: colors.border }]}
+            onPress={() => navigation.navigate('OrderHistory')}
+            activeOpacity={0.75}
+            accessibilityLabel="My orders"
+          >
+            <Ionicons name="receipt-outline" size={20} color="#FFF" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.cartButton, { backgroundColor: '#000', borderColor: colors.red }]}
+            onPress={() => setShowCart(!showCart)}
+            activeOpacity={0.75}
+          >
+            <Ionicons name={showCart ? 'close' : 'bag-outline'} size={22} color="#FFF" />
+            {cartCount > 0 && (
+              <View style={[styles.cartBadge, { backgroundColor: colors.red }]}>
+                <Text style={styles.cartBadgeText}>{cartCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Categories */}
@@ -358,6 +368,11 @@ export function StoreScreen({ navigation }: any) {
                       amountCents: Math.round(finalTotal * 100),
                       label: 'Zenki Dojo order',
                       kind: 'order',
+                      items: cart.map((ci) => ({
+                        name: ci.product.name,
+                        unitPrice: ci.product.memberPrice ?? ci.product.price,
+                        quantity: ci.quantity,
+                      })),
                     });
                     if (!pay.ok) {
                       if (!pay.canceled) Alert.alert('Payment failed', pay.error ?? 'Please try again.');
