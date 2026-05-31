@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Modal, View, Text, StyleSheet, Animated, Dimensions} from 'react-native';
+  Modal, View, Text, StyleSheet, Animated, useWindowDimensions } from 'react-native';
 import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,7 +8,6 @@ import { useTheme } from '../context/ThemeContext';
 import { borderRadius } from '../theme';
 
 const TUTORIAL_KEY = '@zenki_tutorial_v2_completed';
-const { width: SW, height: SH } = Dimensions.get('window');
 
 export interface CoachmarkStep {
   /** Screen-space rect of the UI element to highlight. null = centered, no arrow. */
@@ -29,6 +28,10 @@ const ARROW_SIZE = 14;
 
 export function CoachmarkTutorial({ visible, steps, onDone }: Props) {
   const { colors } = useTheme();
+  // Live viewport — must NOT be a module-load Dimensions snapshot, or bubbles
+  // mis-position on iPad (and after rotation). The target rects are measured in
+  // absolute screen coords by the parent, so these stay in the same space.
+  const { width: SW, height: SH } = useWindowDimensions();
   const [stepIdx, setStepIdx] = useState(0);
   const fade = useRef(new Animated.Value(0)).current;
 
