@@ -8,7 +8,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../theme';
 import { createPost, createTextPost } from '../services/firebasePosts';
-import { screenText } from '../services/contentFilter';
 
 export type MediaOrientation = 'portrait' | 'landscape' | 'square';
 
@@ -86,11 +85,6 @@ export function CreatePostScreen({ navigation }: any) {
   const handlePost = async () => {
     const friendlyError = (err: any): { title: string; body: string } => {
       const code = err?.code || err?.message || '';
-      // Belt-and-suspenders: the service also throws this, but if it slips
-      // through, show the reason after the `content-blocked: ` prefix.
-      if (typeof code === 'string' && code.startsWith('content-blocked:')) {
-        return { title: 'Content not allowed', body: code.replace('content-blocked: ', '') };
-      }
       if (code === 'not-signed-in') {
         return {
           title: "Couldn't post",
@@ -111,15 +105,6 @@ export function CreatePostScreen({ navigation }: any) {
       }
       return { title: 'Error', body: 'Failed to post. Please try again.' };
     };
-
-    // Proactive objectionable-content screen (Apple 1.2) before any upload or
-    // write. Belt-and-suspenders with the service-layer throw in createPost /
-    // createTextPost; this gives instant feedback without spending an upload.
-    const screen = screenText(caption);
-    if (!screen.ok) {
-      Alert.alert('Content not allowed', screen.reason ?? 'This content isn’t allowed.');
-      return;
-    }
 
     if (mode === 'text') {
       if (!caption.trim()) return;

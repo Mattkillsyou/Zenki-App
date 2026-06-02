@@ -143,7 +143,7 @@ export async function getFollowingCount(userId): Promise<number>; // read users.
 - Keep default-deny terminal. Remove the dead `/follows` legacy block only if nothing references it (leave if uncertain — additive-safe).
 
 ## 8. Apple UGC additions (Wave 1)
-- **Content filter:** `screenText` at every create site (post, text post, comment, DM). Justified client-side method; blocks the obvious objectionable terms with a friendly message.
+- **Content filter:** ~~`screenText` at every create site~~ **REMOVED** at the product owner's direction — Zenki is a small, adults-only, members-only club, so proactive pre-publish text screening isn't warranted. UGC safety rests on **Report + Block + Mute + ≤24h admin review + the zero-tolerance EULA**. (Easily re-addable as a `contentFilter` util if a future App Review asks for proactive filtering.)
 - **Report comments:** CommentsScreen long-press/menu → `ReportModal targetType="comment" parentId={postId}`; admin can now delete via the fixed CF.
 - **Mute:** reachable from PostCard ••• and UserProfile; managed in BlockedUsersScreen.
 - **EULA:** OnboardingScreen create-account step gains a required "I agree to the Community Guidelines (zero tolerance for objectionable content & abusive users)" checkbox + link; persists `acceptedTermsAt`/`Version` to `/users`; account creation blocked until checked.

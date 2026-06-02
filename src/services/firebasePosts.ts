@@ -6,7 +6,6 @@ import {
 import type { QueryDocumentSnapshot } from 'firebase/firestore';
 import { getCurrentUid } from './firebaseAuth';
 import { uploadMedia } from './firebaseStorage';
-import { assertCleanText } from './contentFilter';
 import { deletePostCascadeViaFunction } from './firebaseModeration';
 
 export interface Post {
@@ -28,10 +27,6 @@ export async function createPost(mediaUri: string, mediaType: 'photo' | 'video',
   if (!FIREBASE_CONFIGURED || !db) throw new Error('firebase-not-configured');
   const uid = getCurrentUid();
   if (!uid) throw new Error('not-signed-in');
-
-  // Proactive objectionable-content gate (Apple 1.2). Throws
-  // Error('content-blocked: <reason>') before any upload/write happens.
-  assertCleanText(caption);
 
   const mediaUrl = await uploadMedia(mediaUri, mediaType);
   const userDoc = await getDoc(doc(db, 'users', uid));
@@ -70,10 +65,6 @@ export async function createTextPost(caption: string): Promise<Post | null> {
   const uid = getCurrentUid();
   if (!uid) throw new Error('not-signed-in');
   if (!caption.trim()) return null;
-
-  // Proactive objectionable-content gate (Apple 1.2). Throws
-  // Error('content-blocked: <reason>') before the write.
-  assertCleanText(caption);
 
   const userDoc = await getDoc(doc(db, 'users', uid));
   const userData = userDoc.data();
@@ -341,10 +332,6 @@ export async function addComment(postId: string, text: string): Promise<Comment 
   if (!uid) throw new Error('not-signed-in');
   const trimmed = text.trim();
   if (!trimmed) return null;
-
-  // Proactive objectionable-content gate (Apple 1.2). Throws
-  // Error('content-blocked: <reason>') before the write.
-  assertCleanText(trimmed);
 
   const userDoc = await getDoc(doc(db, 'users', uid));
   const userData = userDoc.data();

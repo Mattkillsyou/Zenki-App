@@ -106,15 +106,8 @@ export function MessagesChatScreen({ navigation, route }: any) {
     try {
       await sendMessage(conversationId, text);
     } catch (err: any) {
-      const msg = String(err?.message || '');
-      if (msg.startsWith('content-blocked:')) {
-        // Objectionable content was rejected before send. Surface the reason
-        // and DON'T restore the draft — the message can't be sent as-is.
-        Alert.alert('Message not sent', msg.replace('content-blocked: ', ''));
-      } else {
-        // Transient/other failure — restore the draft so it isn't lost.
-        setDraft(text);
-      }
+      // Restore the draft so it isn't lost on a transient failure.
+      setDraft(text);
     } finally {
       setSending(false);
     }

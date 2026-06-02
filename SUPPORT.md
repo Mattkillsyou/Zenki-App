@@ -59,7 +59,7 @@ Tap the **•••** menu on the post (or on a **comment**, or in a conversatio
 Open the conversation, tap **•••** in the header → **Block user**. They'll vanish from your feed and messages. Alternatively, from their profile tap **•••** → **Block user**. To undo: Settings → Privacy & Safety → **Blocked & Muted** → **Unblock** / **Unmute**.
 
 ### Community Guidelines (zero tolerance)
-Zenki has **zero tolerance for objectionable content and abusive behavior** — including harassment, hate speech, threats, sexual or violent content, and impersonation. Content is screened at the moment you post, and members can report anything they see. **Reports are reviewed and actioned (content removed, repeat/severe offenders banned) within 24 hours.** Posting prohibited content or abusing other members results in content removal and may permanently disable your account. You accept these guidelines when you create an account.
+Zenki is an adults-only, members-only club and has **zero tolerance for objectionable content and abusive behavior** — including harassment, hate speech, threats, sexual or violent content, and impersonation. Members can report anything they see, and **reports are reviewed and actioned (content removed, repeat/severe offenders banned) within 24 hours.** Posting prohibited content or abusing other members results in content removal and may permanently disable your account. You accept these guidelines when you create an account.
 
 ### I uploaded a bloodwork or DEXA scan — who sees it?
 Only you. Admins cannot view your health uploads without explicit consent. Images are processed by Anthropic Claude AI to extract biomarker values; the image itself is not retained by Anthropic.

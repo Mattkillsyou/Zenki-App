@@ -72,13 +72,6 @@ export function CommentsScreen({ navigation, route }: any) {
       }
     } catch (err: any) {
       const code = err?.code || err?.message || '';
-      // Content filter rejection (P0-6) — addComment throws
-      // Error('content-blocked: <reason>') when the text hits the banned-term
-      // list. Surface the friendly reason rather than the generic retry copy.
-      if (typeof code === 'string' && code.startsWith('content-blocked:')) {
-        Alert.alert('Comment not allowed', code.replace('content-blocked:', '').trim());
-        return;
-      }
       Alert.alert(
         "Couldn't post comment",
         code === 'not-signed-in'

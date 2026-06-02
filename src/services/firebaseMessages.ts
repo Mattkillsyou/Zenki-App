@@ -16,7 +16,6 @@ import {
 } from 'firebase/firestore';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import { getCurrentUid } from './firebaseAuth';
-import { assertCleanText } from './contentFilter';
 
 export interface Message {
   id: string;
@@ -101,10 +100,6 @@ export async function sendMessage(conversationId: string, text: string): Promise
   if (!me) return null;
   const trimmed = text.trim();
   if (!trimmed) return null;
-
-  // Proactive objectionable-content gate (Apple 1.2). Throws
-  // Error('content-blocked: <reason>') which the chat screen surfaces.
-  assertCleanText(trimmed);
 
   // Load conversation to determine recipient
   const convSnap = await getDoc(doc(db, 'conversations', conversationId));
