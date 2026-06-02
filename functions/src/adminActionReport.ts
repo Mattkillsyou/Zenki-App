@@ -39,6 +39,8 @@ interface Report {
   targetUserId: string;
   reason: string;
   context?: string;
+  /** For 'comment': the parent postId. For 'message': the conversationId. */
+  parentId?: string;
   status: 'open' | 'dismissed' | 'actioned';
 }
 
@@ -124,44 +126,30 @@ export const adminActionReport = onRequest(
     // 1. Delete target content if we know how
     try {
       if (report.targetType === 'post') {
-        await db.doc(`posts/${report.targetId}`).delete();
+        // Cascade: post doc + likes/comments subcollections.
+        await db.recursiveDelete(db.doc(`posts/${report.targetId}`));
         affected.postDeleted = true;
       } else if (report.targetType === 'comment') {
-        // Comments might live under posts/{postId}/comments — best-effort
-        // Look for it in a flat `comments` collection if it exists
-        const commentRef = db.doc(`comments/${report.targetId}`);
-        const commentSnap = await commentRef.get();
-        if (commentSnap.exists) {
-          await commentRef.delete();
+        // Real comments live at posts/{parentId}/comments/{commentId}. The
+        // report carries parentId (the postId) so we can delete the right doc.
+        if (report.parentId) {
+          await db.doc(`posts/${report.parentId}/comments/${report.targetId}`).delete();
           affected.commentDeleted = true;
         }
       } else if (report.targetType === 'message') {
-        // Messages live under threads/{threadId}/messages/{msgId}.
-        // targetId should be the composite "{threadId}_{msgId}" from the report
-        // input, but we weren't strict about that — try a redact-by-query
-        // approach: search all messages-by-sender in every thread and redact
-        // the one matching targetId. Only if we find it; else skip.
-        // This is a best-effort path; production should ship a structured
-        // message targetId shape.
-        const threads = await db
-          .collection('threads')
-          .where('participants', 'array-contains', report.targetUserId)
-          .get();
-        for (const t of threads.docs) {
-          const msgRef = t.ref.collection('messages').doc(report.targetId);
+        // Messages live under conversations/{conversationId}/messages/{msgId}.
+        // The report's parentId carries the conversationId.
+        if (report.parentId) {
+          const msgRef = db.doc(`conversations/${report.parentId}/messages/${report.targetId}`);
           const msgSnap = await msgRef.get();
           if (msgSnap.exists) {
-            await msgRef.update({
-              body: '',
-              redacted: true,
-              redactedReason: 'moderator_action',
-            });
+            await msgRef.update({ text: '', redacted: true, redactedReason: 'moderator_action' });
             affected.messageRedacted = true;
-            break;
           }
         }
       }
-      // 'user' targets — no content to delete; just block + mark actioned
+      // 'user' targets — no content to delete; block + mark actioned (use the
+      // separate banUser function to eject the user entirely).
     } catch (e) {
       logger.warn('Removal of target content failed — continuing with block', e);
     }
