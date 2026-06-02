@@ -71,6 +71,7 @@ import { ProductDetailScreen } from '../screens/ProductDetailScreen';
 import { CreatePostScreen } from '../screens/CreatePostScreen';
 import { CommentsScreen } from '../screens/CommentsScreen';
 import { UserProfileScreen } from '../screens/UserProfileScreen';
+import { FollowRequestsScreen } from '../screens/FollowRequestsScreen';
 import { AchievementsScreen } from '../screens/AchievementsScreen';
 import { AchievementDetailScreen } from '../screens/AchievementDetailScreen';
 import { ContactSupportScreen } from '../screens/ContactSupportScreen';
@@ -237,6 +238,7 @@ export function RootNavigator() {
       {/* Modals — slide up */}
       <Stack.Screen name="Settings" component={withErrorBoundary(SettingsScreen, 'Settings')} options={modalTransition} />
       <Stack.Screen name="BlockedUsers" component={withErrorBoundary(BlockedUsersScreen, 'Blocked Users')} options={pushTransition} />
+      <Stack.Screen name="FollowRequests" component={withErrorBoundary(FollowRequestsScreen, 'Follow Requests')} options={pushTransition} />
       <Stack.Screen name="BluetoothDevices" component={withErrorBoundary(BluetoothDevicesScreen, 'Bluetooth Devices')} options={pushTransition} />
       <Stack.Screen name="Help" component={withErrorBoundary(HelpScreen, 'Help')} options={pushTransition} />
       <Stack.Screen name="TrainingHome" component={withErrorBoundary(TrainingHomeScreen, 'Training')} options={pushTransition} />

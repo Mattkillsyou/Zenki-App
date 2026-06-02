@@ -41,6 +41,15 @@ If you have questions, email us at **mattbrowntheemail@gmail.com**.
 - Direct messages with other members
 - Support messages you send to admins
 - Likes, follows, comments
+- Your acceptance of the Community Guidelines (recorded at signup)
+
+### Acceptable use & objectionable content — zero tolerance
+Zenki Dojo is a community space and enforces a **zero-tolerance policy for objectionable content and abusive users**. You agree not to post or send content that is harassing, hateful, threatening, sexually explicit, violent, or impersonating, or to abuse other members. To enforce this we:
+- **Screen content at creation** for prohibited terms before it is published;
+- Provide **Report** on every post, comment, message, and profile, plus **Block** and **Mute** controls;
+- **Review reports and remove violating content and offending accounts within 24 hours**, and may permanently disable accounts that violate these terms.
+
+You accept these terms when you create an account; continued use constitutes ongoing acceptance.
 
 ### Device and usage
 - Firebase user ID (unique per account)
