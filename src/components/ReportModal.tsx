@@ -19,6 +19,8 @@ interface Props {
   targetType: ReportTargetType;
   targetId: string;
   targetUserId: string;
+  /** For a comment report, the parent post id (so admins can delete it). */
+  parentId?: string;
   /** Shown in the modal header so the user knows what they're reporting. */
   targetPreview?: string;
   /** Called after a successful report so the parent can e.g. hide the item. */
@@ -30,7 +32,7 @@ const REASONS: ReportReason[] = [
   'violence', 'self_harm', 'impersonation', 'other',
 ];
 
-export function ReportModal({ visible, onClose, targetType, targetId, targetUserId, targetPreview, onReported }: Props) {
+export function ReportModal({ visible, onClose, targetType, targetId, targetUserId, parentId, targetPreview, onReported }: Props) {
   const { colors } = useTheme();
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [context, setContext] = useState('');
@@ -57,6 +59,7 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
       targetUserId,
       reason,
       context,
+      ...(parentId ? { parentId } : {}),
     });
     setSubmitting(false);
     if (ok) {

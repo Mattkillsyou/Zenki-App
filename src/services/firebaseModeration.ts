@@ -16,7 +16,49 @@ import {
   collection, addDoc, deleteDoc, doc, setDoc, getDocs, getDoc,
   query, where, orderBy,
 } from 'firebase/firestore';
-import { getCurrentUid } from './firebaseAuth';
+import { getCurrentUid, getCurrentIdToken } from './firebaseAuth';
+import { AI_FUNCTION_BASE_URL } from '../config/api';
+
+// ─────────────────────────────────────────────
+// Cloud Function helpers (Admin-SDK power: cascade delete, ban)
+// ─────────────────────────────────────────────
+
+/** POST to a Cloud Function with the caller's Firebase ID token. */
+async function callFunction(name: string, body: Record<string, unknown>): Promise<{ ok: boolean; error?: string; data?: any }> {
+  const token = await getCurrentIdToken();
+  if (!token) return { ok: false, error: 'not-signed-in' };
+  try {
+    const res = await fetch(`${AI_FUNCTION_BASE_URL}/${name}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: data?.error || `http-${res.status}` };
+    return { ok: true, data };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'network-error' };
+  }
+}
+
+/**
+ * Delete a post WITH its likes/comments subcollections and Storage media via
+ * the deletePostCascade Cloud Function. Firestore doesn't cascade subcollections
+ * and a client can't delete other users' like/comment docs, so this must run
+ * server-side. Used by both the author's own delete and admin moderation.
+ */
+export async function deletePostCascadeViaFunction(postId: string): Promise<{ ok: boolean; error?: string }> {
+  return callFunction('deletePostCascade', { postId });
+}
+
+/**
+ * Ban (eject) a user — admin only. Disables their Firebase Auth account so
+ * they can no longer sign in or mint tokens, and flags users/{uid}.banned.
+ * Required for Apple 1.2 "eject offending users".
+ */
+export async function banUserViaFunction(targetUid: string): Promise<{ ok: boolean; error?: string }> {
+  return callFunction('banUser', { targetUid });
+}
 
 // ─────────────────────────────────────────────
 // Blocks
@@ -80,6 +122,67 @@ export async function isUserBlocked(blockedUid: string): Promise<boolean> {
 }
 
 // ─────────────────────────────────────────────
+// Mutes — soft-hide a user's content from your feed/comments without blocking.
+// Lighter than block: the muted user is never notified and can still interact;
+// you simply stop seeing them. Stored at /mutes/{uid}/muted/{mutedUid}.
+// ─────────────────────────────────────────────
+
+/** Mute another user. Idempotent. */
+export async function muteUser(mutedUid: string): Promise<boolean> {
+  if (!FIREBASE_CONFIGURED || !db) return false;
+  const uid = getCurrentUid();
+  if (!uid || uid === mutedUid) return false;
+  try {
+    await setDoc(doc(db, 'mutes', uid, 'muted', mutedUid), { mutedAt: new Date().toISOString() });
+    return true;
+  } catch (e) {
+    console.warn('[Moderation] muteUser failed:', e);
+    return false;
+  }
+}
+
+/** Unmute a user. */
+export async function unmuteUser(mutedUid: string): Promise<boolean> {
+  if (!FIREBASE_CONFIGURED || !db) return false;
+  const uid = getCurrentUid();
+  if (!uid) return false;
+  try {
+    await deleteDoc(doc(db, 'mutes', uid, 'muted', mutedUid));
+    return true;
+  } catch (e) {
+    console.warn('[Moderation] unmuteUser failed:', e);
+    return false;
+  }
+}
+
+/** Fetch the set of UIDs this user has muted. */
+export async function getMutedUserIds(): Promise<Set<string>> {
+  if (!FIREBASE_CONFIGURED || !db) return new Set();
+  const uid = getCurrentUid();
+  if (!uid) return new Set();
+  try {
+    const snap = await getDocs(collection(db, 'mutes', uid, 'muted'));
+    return new Set(snap.docs.map((d) => d.id));
+  } catch (e) {
+    console.warn('[Moderation] getMutedUserIds failed:', e);
+    return new Set();
+  }
+}
+
+/** Whether the current user has muted {uid}. */
+export async function isUserMuted(mutedUid: string): Promise<boolean> {
+  if (!FIREBASE_CONFIGURED || !db) return false;
+  const uid = getCurrentUid();
+  if (!uid) return false;
+  try {
+    const snap = await getDoc(doc(db, 'mutes', uid, 'muted', mutedUid));
+    return snap.exists();
+  } catch {
+    return false;
+  }
+}
+
+// ─────────────────────────────────────────────
 // Reports
 // ─────────────────────────────────────────────
 
@@ -115,6 +218,12 @@ export interface ReportInput {
   reason: ReportReason;
   /** Optional freeform detail. */
   context?: string;
+  /**
+   * For a `comment` report, the parent post id — so an admin can delete
+   * posts/{parentId}/comments/{targetId}. For a `message` report, the
+   * conversation id. Ignored for post/user targets.
+   */
+  parentId?: string;
 }
 
 /**
@@ -133,6 +242,8 @@ export async function submitReport(input: ReportInput): Promise<boolean> {
       targetUserId: input.targetUserId,
       reason: input.reason,
       context: (input.context ?? '').slice(0, 500),
+      // Only include parentId when present — Firestore rejects `undefined`.
+      ...(input.parentId ? { parentId: input.parentId } : {}),
       status: 'open',
       createdAt: new Date().toISOString(),
     });
@@ -189,13 +300,14 @@ export async function listOpenReports(): Promise<Report[]> {
  *                       the offender for the reporter, mark report actioned
  *
  * Per-target behavior:
- *   - 'post'    : `/posts/{targetId}` is deleted (rules allow admin delete).
- *   - 'message' : we don't store the parent threadId on the report, so the
- *                 message itself is left in place but the report is still
- *                 resolved + the offender blocked from the reporter.
- *   - 'user'    : nothing to delete — there's no concept of removing a
- *                 user from /users at this tier; the block is the action.
- *   - 'comment' : no comments collection wired yet; behaves like 'user'.
+ *   - 'post'    : deleted WITH its likes/comments subcollections + Storage media
+ *                 via the deletePostCascade Cloud Function.
+ *   - 'comment' : deleted at posts/{parentId}/comments/{targetId} (the report
+ *                 carries parentId). Admins have delete rights via the rule.
+ *   - 'message' : left in place here; the block + status flip is the action.
+ *                 (Server-side redaction needs a structured conversation id.)
+ *   - 'user'    : nothing to delete; the block is the action. To fully eject a
+ *                 user, use the Ban action (banUserViaFunction).
  */
 export async function adminActionReport(
   reportId: string,
@@ -220,18 +332,30 @@ export async function adminActionReport(
       return { ok: true };
     }
 
-    // 'removeAndBlock' — best-effort delete of content + always block + mark actioned.
+    // 'removeAndBlock' — delete the target content + always block + mark actioned.
     let deleteWarning: string | undefined;
     if (r.targetType === 'post' && r.targetId) {
+      // Cascade via Cloud Function so the post's likes/comments subcollections
+      // and Storage media are removed too (not just the top-level doc).
+      const res = await deletePostCascadeViaFunction(r.targetId);
+      if (!res.ok) {
+        deleteWarning = `Couldn't delete post (${res.error ?? 'unknown'}); offender still blocked.`;
+        console.warn('[Moderation] post cascade delete failed:', res.error);
+      }
+    } else if (r.targetType === 'comment' && r.targetId && r.parentId) {
+      // Real comments live at posts/{parentId}/comments/{commentId}; the report
+      // now carries parentId so we can actually remove it (admins have delete
+      // rights via the comment rule).
       try {
-        await deleteDoc(doc(db, 'posts', r.targetId));
+        await deleteDoc(doc(db, 'posts', r.parentId, 'comments', r.targetId));
       } catch (e: any) {
-        deleteWarning = `Couldn't delete post (${e?.code ?? 'unknown'}); offender still blocked.`;
-        console.warn('[Moderation] post delete failed:', e);
+        deleteWarning = `Couldn't delete comment (${e?.code ?? 'unknown'}); offender still blocked.`;
+        console.warn('[Moderation] comment delete failed:', e);
       }
     }
-    // 'message' / 'user' / 'comment' don't have a deletable Firestore path
-    // at this tier — the block + status flip is the meaningful action.
+    // 'message' / 'user' targets have no client-deletable path at this tier —
+    // the block + status flip is the meaningful action. (Message redaction is
+    // handled server-side when a structured conversation/message id is present.)
 
     if (r.reporterId && r.targetUserId && r.reporterId !== r.targetUserId) {
       try {

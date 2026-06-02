@@ -55,9 +55,12 @@ export async function uploadMedia(uri: string, type: 'photo' | 'video'): Promise
   if (!uid) throw new Error('Not authenticated');
 
   const ext = inferExtension(uri, type);
-  // Path must live under `users/{uid}/` to satisfy storage.rules — the
-  // top-level `posts/` namespace is default-deny.
-  const filename = `users/${uid}/posts/${Date.now()}.${ext}`;
+  // Post media goes under `postMedia/{uid}/` which storage.rules makes readable
+  // to ANY signed-in member (the community feed shows other users' media). The
+  // old `users/{uid}/posts/` path was owner-only-read, so cross-user feed media
+  // worked only as long as the download token survived — fragile. The owner
+  // still controls writes to their own prefix.
+  const filename = `postMedia/${uid}/${Date.now()}.${ext}`;
   const storageRef = ref(storage, filename);
 
   const blob = await uriToBlob(uri);
