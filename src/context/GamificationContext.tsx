@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParseJSON } from '../utils/safeStorage';
 import { todayDateString as todayISO } from '../utils/dates';
@@ -9,8 +9,21 @@ import {
   getCurrentValue,
 } from '../types/gamification';
 import { createInitialAchievements } from '../data/achievements';
+import { useAuth } from './AuthContext';
 
-const STORAGE_KEY = '@zenki_gamification';
+// Legacy single-user global key. Kept for one-time migration into the
+// per-user key so the original member's progress isn't lost.
+const LEGACY_STORAGE_KEY = '@zenki_gamification';
+
+// Gamification state is a single flat blob (not a memberId-filterable list),
+// so — unlike NutritionContext/WorkoutContext which key on memberId inside the
+// data — we scope persistence by namespacing the storage key on the user id.
+// This keeps each member's xp/streak/points/achievements separate on a shared
+// device. Signed-out fallback keeps the legacy key so pre-auth progress, if any,
+// survives until the user signs in (then it migrates into their per-user key).
+function storageKeyFor(userId?: string): string {
+  return userId ? `@zenki_gamification_${userId}` : LEGACY_STORAGE_KEY;
+}
 
 const XP_PER_SESSION = 25;
 const XP_PER_BOOKING = 10;
@@ -157,37 +170,80 @@ function previousWeekISO(fromISOWeek: string): string {
   return isoWeek(weekStart);
 }
 
+/** Hydrate a saved (possibly partial) blob into a full GamificationState,
+ *  reconciling persisted achievement unlock flags against the current catalog. */
+function hydrateState(saved: Partial<GamificationState>): GamificationState {
+  const initial = createInitialAchievements();
+  const merged = initial.map((a) => {
+    const existing = saved.achievements?.find((e: any) => e.id === a.id);
+    if (!existing) return a;
+    return {
+      ...a,
+      unlocked: !!existing.unlocked,
+      unlockedAt: existing.unlockedAt,
+    };
+  });
+  return { ...defaultState, ...saved, achievements: merged };
+}
+
 export function GamificationProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<GamificationState>(defaultState);
   const [loaded, setLoaded] = useState(false);
+  const { user } = useAuth();
+  // The storage key the current `state` was hydrated from. Persist only fires
+  // when this matches the active user's key, so a stale write from the previous
+  // member can't clobber the new member's key while a switch is in flight.
+  const loadedKeyRef = useRef<string | null>(null);
 
+  // Re-read (or initialize) per-user gamification whenever the signed-in user
+  // changes, so on a shared device member B never sees/overwrites member A's
+  // progress. On first load for a user whose per-user key is empty, migrate the
+  // legacy global blob once; a brand-new member with no data starts fresh.
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      const saved = safeParseJSON<Partial<GamificationState> | null>(raw, null, (v) =>
-        typeof v === 'object' && v !== null && !Array.isArray(v),
-      );
-      if (saved) {
-        const initial = createInitialAchievements();
-        const merged = initial.map((a) => {
-          const existing = saved.achievements?.find((e: any) => e.id === a.id);
-          if (!existing) return a;
-          return {
-            ...a,
-            unlocked: !!existing.unlocked,
-            unlockedAt: existing.unlockedAt,
-          };
-        });
-        setState({ ...defaultState, ...saved, achievements: merged });
+    let cancelled = false;
+    const key = storageKeyFor(user?.id);
+    setLoaded(false);
+    (async () => {
+      try {
+        let raw = await AsyncStorage.getItem(key);
+        // One-time migration: if this user has no per-user data yet, fall back
+        // to the legacy global key (and copy it into the per-user key) so the
+        // pre-existing single user's progress carries over instead of resetting.
+        if (raw == null && key !== LEGACY_STORAGE_KEY) {
+          const legacyRaw = await AsyncStorage.getItem(LEGACY_STORAGE_KEY);
+          if (legacyRaw != null) {
+            raw = legacyRaw;
+            await AsyncStorage.setItem(key, legacyRaw);
+          }
+        }
+        if (cancelled) return;
+        const saved = safeParseJSON<Partial<GamificationState> | null>(raw, null, (v) =>
+          typeof v === 'object' && v !== null && !Array.isArray(v),
+        );
+        // Reset to a fresh initial state when a member with no data signs in.
+        setState(saved ? hydrateState(saved) : { ...defaultState, achievements: createInitialAchievements() });
+      } catch {
+        if (!cancelled) setState({ ...defaultState, achievements: createInitialAchievements() });
+      } finally {
+        if (!cancelled) {
+          loadedKeyRef.current = key;
+          setLoaded(true);
+        }
       }
-      setLoaded(true);
-    });
-  }, []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
-    if (loaded) {
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const key = storageKeyFor(user?.id);
+    // Guard against persisting the previous user's state to the new user's key:
+    // only write once the active user's hydrate has completed for this key.
+    if (loaded && loadedKeyRef.current === key) {
+      AsyncStorage.setItem(key, JSON.stringify(state));
     }
-  }, [state, loaded]);
+  }, [state, loaded, user?.id]);
 
   const updateStreak = useCallback((prev: GamificationState): GamificationState => {
     const today = todayISO();

@@ -226,7 +226,11 @@ export function WeightTrackerScreen({ navigation }: any) {
   }
 
   function handleSaveGoal() {
-    if (!user || !latest) return;
+    if (!user) return;
+    if (!latest) {
+      Alert.alert('Log a weight first', 'Add your current weight before setting a goal.');
+      return;
+    }
     const target = parseFloat(goalTarget);
     if (!Number.isFinite(target) || target <= 0) {
       Alert.alert('Enter a target weight');

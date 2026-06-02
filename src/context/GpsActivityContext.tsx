@@ -187,6 +187,24 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
           setLiveSpeed(point.speed || 0);
           updateStats();
         }, 3000);
+      } else {
+        // Native watch failed to start — do NOT proceed as if tracking began.
+        // Without a watch the session would tick but record 0 GPS points and be
+        // silently lost on stop. Clean up and return false so the caller can
+        // surface an error (ActivityTrackerScreen.handleStart alerts on false).
+        cleanupTimers();
+        metaRef.current = null;
+        routeRef.current = [];
+        setIsTracking(false);
+        setIsPaused(false);
+        isPausedRef.current = false;
+        setCurrentPosition(null);
+        setLiveDistance(0);
+        setLiveDuration(0);
+        setLivePace(0);
+        setLiveElevGain(0);
+        setLiveSpeed(0);
+        return false;
       }
     }
 

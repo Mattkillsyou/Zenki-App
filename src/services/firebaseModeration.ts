@@ -233,6 +233,7 @@ export async function adminActionReport(
     // 'message' / 'user' / 'comment' don't have a deletable Firestore path
     // at this tier — the block + status flip is the meaningful action.
 
+    let blockWarning: string | undefined;
     if (r.reporterId && r.targetUserId && r.reporterId !== r.targetUserId) {
       try {
         await setDoc(
@@ -240,7 +241,8 @@ export async function adminActionReport(
           { blockedAt: new Date().toISOString(), via: 'admin-report', reportId },
           { merge: true },
         );
-      } catch (e) {
+      } catch (e: any) {
+        blockWarning = `User actioned but the block could not be applied (${e?.code ?? 'unknown'}).`;
         console.warn('[Moderation] block write failed:', e);
       }
     }
@@ -251,7 +253,8 @@ export async function adminActionReport(
       { merge: true },
     );
 
-    return deleteWarning ? { ok: true, error: deleteWarning } : { ok: true };
+    const warning = [deleteWarning, blockWarning].filter(Boolean).join(' ');
+    return warning ? { ok: true, error: warning } : { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message || e?.code || 'unknown' };
   }

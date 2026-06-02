@@ -25,6 +25,7 @@ import {
 } from '../utils/heartRate';
 import { spacing } from '../theme';
 import { useSenpai } from '../context/SenpaiContext';
+import { useGamification } from '../context/GamificationContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 
 const ACTIVITY_OPTIONS: ActivityType[] = [
@@ -46,6 +47,7 @@ export function WorkoutSessionScreen({ navigation }: any) {
   } = useHeartRate();
   const { profileFor, latestWeight } = useNutrition();
   const { state: senpaiState, triggerReaction: senpaiTrigger, shouldReact: senpaiShouldReact } = useSenpai();
+  const { recordHRSession } = useGamification();
 
   // Pull real user profile data for accurate calculations
   const profile = user ? profileFor(user.id) : null;
@@ -159,6 +161,8 @@ export function WorkoutSessionScreen({ navigation }: any) {
                 'Nothing to save',
                 "No heart-rate data was recorded, so this session wasn't saved.",
               );
+            } else {
+              recordHRSession();
             }
             navigation.goBack();
           },

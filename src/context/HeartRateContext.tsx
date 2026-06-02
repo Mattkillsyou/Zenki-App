@@ -270,6 +270,19 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
       dropRetryCountRef.current += 1;
       dropTimerRef.current = setTimeout(() => {
         dropTimerRef.current = null;
+        // Only fire the post-drop backoff reconnect if the adapter is actually
+        // usable. If Bluetooth was turned off mid-session the adapter is still
+        // PoweredOff ~2s later, so reconnectSaved would just waste an attempt and
+        // flicker status from the honest 'Bluetooth is off' to 'Connecting…' and
+        // back. Skip and leave status as-is; the onStateChange 'PoweredOn' handler
+        // will drive the reconnect when Bluetooth comes back. (Gate lives HERE,
+        // not in reconnectSaved — that path is invoked by onStateChange before
+        // bleAdapterStateRef updates, so guarding it there would break power-on
+        // reconnect.)
+        if (bleAdapterStateRef.current !== 'PoweredOn') {
+          dropReconnectingRef.current = false;
+          return;
+        }
         const p = reconnectSavedRef.current?.();
         if (p && typeof p.finally === 'function') {
           p.finally(() => { dropReconnectingRef.current = false; });
@@ -708,6 +721,13 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
   // ── Forget the saved device entirely (disconnect + wipe storage).
   const forgetDevice = useCallback(async (): Promise<void> => {
     disconnect();
+    // Null the ref SYNCHRONOUSLY (not just via setSavedDevice, which the
+    // ref-sync effect mirrors only on the NEXT render). The onStateChange
+    // 'PoweredOn' handler, the AppState-foreground listener, and reconnectSaved's
+    // entry all read savedDeviceRef.current; if one fires in the window before
+    // the ref syncs it would reconnect to — and re-persist — the just-forgotten
+    // device. Setting the ref here closes that window.
+    savedDeviceRef.current = null;
     setSavedDevice(null);
     setLastConnectedAt(null);
     try { await AsyncStorage.removeItem(BLE_DEVICE_KEY); } catch { /* ignore */ }
