@@ -223,14 +223,23 @@ export async function getFeed(
 
 export async function getUserPosts(userId: string, max = 30): Promise<Post[]> {
   if (!FIREBASE_CONFIGURED || !db) return [];
-  const q = query(
-    collection(db, 'posts'),
-    where('userId', '==', userId),
-    orderBy('createdAt', 'desc'),
-    limit(max),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Post));
+  try {
+    const q = query(
+      collection(db, 'posts'),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc'),
+      limit(max),
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Post));
+  } catch (err) {
+    // A private author's posts are rule-denied to non-approved-followers (the
+    // single-author query can't satisfy the per-doc authorIsPrivate branch), so
+    // getDocs throws permission-denied. Treat it as "no visible posts" rather
+    // than letting it reject the caller's profile load.
+    console.warn('[getUserPosts] read failed (likely private/not-following):', err);
+    return [];
+  }
 }
 
 export async function likePost(postId: string) {

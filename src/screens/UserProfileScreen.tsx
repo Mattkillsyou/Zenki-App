@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useBlocks } from '../context/BlocksContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { getUserProfile, updateProfile, followUser, unfollowUser, isFollowing, getFollowerCount, getFollowingCount, listFollowRequests, UserProfile } from '../services/firebaseFollow';
+import { getUserProfile, updateProfile, followUser, unfollowUser, isFollowing, getFollowerCount, getFollowingCount, listFollowRequests, hasRequestedFollow, cancelFollowRequest, UserProfile } from '../services/firebaseFollow';
 import { getUserPosts, Post } from '../services/firebasePosts';
 import { getCurrentUid } from '../services/firebaseAuth';
 import { ReportModal } from '../components/ReportModal';
@@ -26,6 +26,7 @@ export function UserProfileScreen({ navigation, route }: any) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [following, setFollowing] = useState(false);
+  const [requested, setRequested] = useState(false);
   const [followers, setFollowers] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -91,18 +92,31 @@ export function UserProfileScreen({ navigation, route }: any) {
   }, [userId]);
 
   const loadProfile = async () => {
-    const [p, userPosts, isFollow, fCount, fgCount] = await Promise.all([
+    // Load the profile + relationship first. These reads are always permitted
+    // (/users, /following, /followers are signed-in-readable). Posts are loaded
+    // SEPARATELY and only when allowed, because a private author's posts are
+    // rule-denied to non-followers — issuing that query here used to reject the
+    // whole Promise.all and leave the screen on a blank, anonymous PUBLIC view.
+    const [p, isFollow, fCount, fgCount] = await Promise.all([
       getUserProfile(userId),
-      getUserPosts(userId),
       isFollowing(userId),
       getFollowerCount(userId),
       getFollowingCount(userId),
     ]);
     setProfile(p);
-    setPosts(userPosts);
     setFollowing(isFollow);
     setFollowers(fCount);
     setFollowingCount(fgCount);
+
+    // Only fetch posts when the viewer may see them (own / public author /
+    // approved follower). getUserPosts is also try/catch-safe as a backstop.
+    const maySeePosts = isOwnProfile || (!!p && !p.isPrivate) || isFollow;
+    setPosts(maySeePosts ? await getUserPosts(userId) : []);
+
+    // Pending outbound follow request (private targets you've requested).
+    if (!isOwnProfile && !isFollow) {
+      setRequested(await hasRequestedFollow(userId).catch(() => false));
+    }
 
     // Own profile only: surface a pending-follow-request count for the inbox
     // entry. Guarded so a transient failure never blocks the profile render.
@@ -125,11 +139,15 @@ export function UserProfileScreen({ navigation, route }: any) {
       await unfollowUser(userId);
       setFollowing(false);
       setFollowers((p) => p - 1);
+    } else if (requested) {
+      // Tap "Requested" to withdraw a pending request to a private account.
+      await cancelFollowRequest(userId);
+      setRequested(false);
     } else {
       const result = await followUser(userId);
       if (result === 'requested') {
-        Alert.alert('Request Sent', 'Follow request sent. Waiting for approval.');
-      } else {
+        setRequested(true);
+      } else if (result === 'followed') {
         setFollowing(true);
         setFollowers((p) => p + 1);
       }
@@ -144,7 +162,10 @@ export function UserProfileScreen({ navigation, route }: any) {
   };
 
   const initials = profile?.displayName?.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() || '?';
-  const canSeePosts = isOwnProfile || !profile?.isPrivate || following;
+  // Fail CLOSED when the profile hasn't loaded (profile === null): treat as
+  // not-visible rather than `!undefined === true`, which previously rendered a
+  // private account as a blank public profile.
+  const canSeePosts = isOwnProfile || (!!profile && !profile.isPrivate) || following;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -260,12 +281,12 @@ export function UserProfileScreen({ navigation, route }: any) {
           ) : (
             <View style={styles.ownButtonsRow}>
               <SoundPressable
-                style={[styles.actionButton, { backgroundColor: following ? colors.surface : colors.red, borderColor: colors.border, borderWidth: following ? 1 : 0, flex: 1 }]}
+                style={[styles.actionButton, { backgroundColor: (following || requested) ? colors.surface : colors.red, borderColor: colors.border, borderWidth: (following || requested) ? 1 : 0, flex: 1 }]}
                 onPress={handleFollow}
                 disabled={userBlocked}
               >
-                <Text style={[styles.actionButtonText, { color: following ? colors.textPrimary : '#FFF', opacity: userBlocked ? 0.4 : 1 }]}>
-                  {following ? 'Following' : 'Follow'}
+                <Text style={[styles.actionButtonText, { color: (following || requested) ? colors.textPrimary : '#FFF', opacity: userBlocked ? 0.4 : 1 }]}>
+                  {following ? 'Following' : requested ? 'Requested' : 'Follow'}
                 </Text>
               </SoundPressable>
               <SoundPressable

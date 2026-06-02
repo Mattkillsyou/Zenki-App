@@ -53,6 +53,25 @@ export async function updateProfile(updates: Partial<Pick<UserProfile, 'displayN
       await batch.commit();
     }
   }
+
+  // When display identity changes, refresh this user's entry in the
+  // denormalized participantProfiles map on every conversation they're in, so
+  // chat headers / inbox rows don't show a stale name or avatar.
+  if (typeof updates.displayName === 'string' || 'avatar' in updates) {
+    const meSnap = await getDoc(doc(db, 'users', uid));
+    const me = meSnap.exists() ? meSnap.data() : {};
+    const profile = { displayName: me.displayName || 'Member', avatar: me.avatar ?? null };
+    const convSnap = await getDocs(query(collection(db, 'conversations'), where('participants', 'array-contains', uid)));
+    const CHUNK = 400;
+    const cdocs = convSnap.docs;
+    for (let i = 0; i < cdocs.length; i += CHUNK) {
+      const batch = writeBatch(db);
+      for (const c of cdocs.slice(i, i + CHUNK)) {
+        batch.update(c.ref, { [`participantProfiles.${uid}`]: profile });
+      }
+      await batch.commit();
+    }
+  }
 }
 
 export async function followUser(targetId: string): Promise<'followed' | 'requested' | ''> {
@@ -113,6 +132,23 @@ export async function declineFollowRequest(requesterId: string): Promise<void> {
   const uid = getCurrentUid();
   if (!uid) return;
   await deleteDoc(doc(db, 'followRequests', uid, 'requests', requesterId));
+}
+
+/** Whether the current user has a pending follow request OUT to `targetId`. */
+export async function hasRequestedFollow(targetId: string): Promise<boolean> {
+  if (!db) return false;
+  const uid = getCurrentUid();
+  if (!uid) return false;
+  const snap = await getDoc(doc(db, 'followRequests', targetId, 'requests', uid));
+  return snap.exists();
+}
+
+/** The requester cancels their own pending follow request to `targetId`. */
+export async function cancelFollowRequest(targetId: string): Promise<void> {
+  if (!db) return;
+  const uid = getCurrentUid();
+  if (!uid) return;
+  await deleteDoc(doc(db, 'followRequests', targetId, 'requests', uid));
 }
 
 export async function isFollowing(targetId: string): Promise<boolean> {
