@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParseJSON } from '../utils/safeStorage';
 import { todayDateString as todayISO } from '../utils/dates';
 import {
+  Achievement,
   GamificationState,
   Celebration,
   getLevelFromXP,
@@ -289,27 +290,40 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     let bonusXP = 0;
     let flamesEarned = 0;
 
-    const achievements = prev.achievements.map((a) => {
-      if (a.unlocked) return a;
-      const current = getCurrentValue(a.requirement.type, prev);
-      if (current >= a.requirement.value) {
-        const flame = a.flameReward ?? 1;
-        bonusXP += a.xpReward;
-        flamesEarned += flame;
-        // Don't clobber a higher-priority celebration already pending (e.g. a level_up).
-        if (celebrationPriority({ type: 'achievement' } as Celebration) >= celebrationPriority(newCelebration)) {
-          newCelebration = {
-            type: 'achievement',
-            title: a.title,
-            subtitle: `${a.description} · +${flame} 🔥`,
-            xpGained: a.xpReward,
-            icon: a.icon,
-          };
+    // One unlock pass over `list`, evaluating each still-locked achievement
+    // against `evalState`. Mutates the closed-over reward/celebration tallies
+    // and returns the updated achievement array. Already-unlocked entries are
+    // skipped, so re-running this is safe (no double rewards).
+    const runPass = (list: Achievement[], evalState: GamificationState): Achievement[] =>
+      list.map((a) => {
+        if (a.unlocked) return a;
+        const current = getCurrentValue(a.requirement.type, evalState);
+        if (current >= a.requirement.value) {
+          const flame = a.flameReward ?? 1;
+          bonusXP += a.xpReward;
+          flamesEarned += flame;
+          // Don't clobber a higher-priority celebration already pending (e.g. a level_up).
+          if (celebrationPriority({ type: 'achievement' } as Celebration) >= celebrationPriority(newCelebration)) {
+            newCelebration = {
+              type: 'achievement',
+              title: a.title,
+              subtitle: `${a.description} · +${flame} 🔥`,
+              xpGained: a.xpReward,
+              icon: a.icon,
+            };
+          }
+          return { ...a, unlocked: true, unlockedAt: new Date().toISOString() };
         }
-        return { ...a, unlocked: true, unlockedAt: new Date().toISOString() };
-      }
-      return a;
-    });
+        return a;
+      });
+
+    // First pass evaluates against `prev`. A second pass evaluates against the
+    // already-updated list so count-of-unlocked achievements (completionist)
+    // sees this pass's unlocks and can fire in the same action instead of
+    // lagging a cycle. One extra pass suffices: completionist is the only
+    // achievement whose value derives from other achievements' unlock state.
+    let achievements = runPass(prev.achievements, prev);
+    achievements = runPass(achievements, { ...prev, achievements });
 
     return {
       ...prev,

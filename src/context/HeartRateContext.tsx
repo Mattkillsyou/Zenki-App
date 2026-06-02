@@ -565,6 +565,12 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     connectingRef.current = true;
     setBleStatus('connecting');
     setBleReason('none');
+    // Tear down ANY existing connection BEFORE attempting the new one, so a
+    // failed strap-switch can't leave the old device silently streaming BPM
+    // (and recording ghost samples into an active session). Safe no-op when
+    // there's no previous device. Every failure path below now ends honestly
+    // disconnected because the old link is already gone.
+    clearConnectionState(true);
     try {
       const device = await manager.connectToDevice(deviceId);
       return await finalizeConnection(device);
@@ -575,7 +581,7 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     } finally {
       connectingRef.current = false;
     }
-  }, [ensureManager, stopScan, cancelPendingDropReconnect, finalizeConnection]);
+  }, [ensureManager, stopScan, cancelPendingDropReconnect, finalizeConnection, clearConnectionState]);
 
   // ── Silent reconnect to the saved device (no dialog if it already exists).
   const reconnectSaved = useCallback(async (): Promise<boolean> => {
@@ -600,6 +606,10 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     connectingRef.current = true;
     setBleStatus('connecting');
     setBleReason('none');
+    // Tear down ANY existing connection BEFORE the new attempt, so no failure
+    // path can leave a previous device streaming. Safe no-op when there's no
+    // previous device (so reconnect-after-drop is unaffected).
+    clearConnectionState(true);
     try {
       const device = await manager.connectToDevice(saved.id);
       return await finalizeConnection(device);
@@ -623,7 +633,7 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     } finally {
       connectingRef.current = false;
     }
-  }, [ensureManager, cancelPendingDropReconnect, finalizeConnection]);
+  }, [ensureManager, cancelPendingDropReconnect, finalizeConnection, clearConnectionState]);
   useEffect(() => { reconnectSavedRef.current = reconnectSaved; }, [reconnectSaved]);
 
   // ── BLE scan + connect (COMPAT — WorkoutSessionScreen depends on this).
@@ -696,6 +706,10 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
           scanTimeoutRef.current = null;
           cancelPendingDropReconnect();
           setBleStatus('connecting');
+          // Tear down ANY existing connection BEFORE the new attempt, so a
+          // failed switch can't leave a previous device streaming. Safe no-op
+          // when there's no previous device.
+          clearConnectionState(true);
           try {
             const connected = await device.connect();
             const ok = await finalizeConnection(connected);
@@ -714,7 +728,7 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
         }
       });
     });
-  }, [ensureManager, reconnectSaved, cancelPendingDropReconnect, finalizeConnection]);
+  }, [ensureManager, reconnectSaved, cancelPendingDropReconnect, finalizeConnection, clearConnectionState]);
 
   // ── User-initiated disconnect (keeps the saved device — just drops the link).
   const disconnect = useCallback(() => {
