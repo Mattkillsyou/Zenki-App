@@ -154,6 +154,11 @@ export function subscribeToInbox(onUpdate: (convs: Conversation[]) => void): Uns
     });
     convs.sort((a, b) => (b.lastMessageAt || '').localeCompare(a.lastMessageAt || ''));
     onUpdate(convs);
+  }, (err) => {
+    console.warn('[Messages Firestore] Inbox subscribe failed:', err);
+    // Degrade gracefully so the consumer's loading state clears and it shows
+    // an empty inbox instead of hanging on its spinner.
+    onUpdate([]);
   });
 }
 
@@ -178,6 +183,11 @@ export function subscribeToThread(conversationId: string, onUpdate: (msgs: Messa
       });
     });
     onUpdate(list);
+  }, (err) => {
+    console.warn('[Messages Firestore] Thread subscribe failed:', err);
+    // Degrade gracefully so the consumer's loading state clears and it shows
+    // an empty thread instead of hanging on its spinner.
+    onUpdate([]);
   });
 }
 

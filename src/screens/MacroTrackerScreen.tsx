@@ -894,6 +894,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
             protein: scaledMacros.protein,
             carbs: scaledMacros.carbs,
             fat: scaledMacros.fat,
+            mealType,
           });
           rememberFood(user.id, food);
         }}

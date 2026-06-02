@@ -34,6 +34,10 @@ const BATTERY_CHAR = '00002A19-0000-1000-8000-00805f9b34fb';
 const SCAN_TIMEOUT_MS = 12000;
 /** Poll interval for live signal-strength reads while connected (ms). */
 const RSSI_POLL_MS = 5000;
+/** Consecutive readRSSI() rejections that count as a silent link death.
+ *  Acts as a liveness watchdog for drops that never fire onDisconnected.
+ *  4 × RSSI_POLL_MS ≈ 20s — long enough that transient hiccups never trip it. */
+const MAX_RSSI_FAILURES = 4;
 /** One-shot backoff delay before auto-retrying after an unexpected drop (ms). */
 const DROP_RECONNECT_DELAY_MS = 2000;
 /** Max consecutive auto-reconnect attempts after drops before giving up. */
@@ -170,6 +174,10 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
   // Consecutive auto-reconnect attempts since the last successful/user connect.
   // Caps the post-drop retry loop so a flapping link can't reconnect forever.
   const dropRetryCountRef = useRef(0);
+  // Consecutive readRSSI() rejections on the live poll. Liveness watchdog for
+  // links that die WITHOUT firing onDisconnected; resets on any successful
+  // RSSI read, any real BPM notification, and on (re)connect.
+  const rssiFailCountRef = useRef(0);
 
   // Ref mirrors so BLE callbacks (state-change, disconnect, AppState) read fresh
   // values instead of values captured at the time the callback was registered.
@@ -217,6 +225,38 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     }
     connectedDeviceRef.current = null;
   }, []);
+
+  // ── Shared unexpected-drop handler. Invoked by device.onDisconnected AND by
+  // the RSSI liveness watchdog (a link can die silently without firing
+  // onDisconnected). Performs the teardown/transition and one guarded backoff
+  // reconnect, capped at MAX_DROP_RETRIES so a flapping link can't loop forever.
+  // Centralised so both callers share the SAME single reconnect loop/refs.
+  const handleDrop = useCallback(() => {
+    clearConnectionState(false);
+    setCurrentBpm(0);
+    setConnectedDeviceName(null);
+    setBatteryLevel(null);
+    setSignalRssi(null);
+    setBleStatus('disconnected');
+    setBleReason('dropped');
+    // One guarded backoff reconnect to ride out brief dropouts. Capped at
+    // MAX_DROP_RETRIES consecutive attempts so a flapping link can't loop
+    // forever; the counter resets on a successful or user-initiated connect.
+    if (dropRetryCountRef.current >= MAX_DROP_RETRIES) return;
+    if (savedDeviceRef.current && !dropReconnectingRef.current) {
+      dropReconnectingRef.current = true;
+      dropRetryCountRef.current += 1;
+      dropTimerRef.current = setTimeout(() => {
+        dropTimerRef.current = null;
+        const p = reconnectSavedRef.current?.();
+        if (p && typeof p.finally === 'function') {
+          p.finally(() => { dropReconnectingRef.current = false; });
+        } else {
+          dropReconnectingRef.current = false;
+        }
+      }, DROP_RECONNECT_DELAY_MS);
+    }
+  }, [clearConnectionState]);
 
   // ── Lazily create the single BleManager. CRITICAL: never call this on mount
   // or in a mount effect. Constructing `new BleManager()` synthesizes a
@@ -328,6 +368,10 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
             : bytes.charCodeAt(1);
           if (hr > 0 && hr < 250) {
             setCurrentBpm(hr);
+            // A live BPM notification proves the link is alive — clear any RSSI
+            // watchdog strikes so transient readRSSI hiccups can't trip a drop
+            // on a healthy, actively-streaming strap.
+            rssiFailCountRef.current = 0;
             // Use ref (not state) to avoid stale closure
             if (isRecordingRef.current) {
               samplesRef.current.push({ bpm: hr, timestamp: Date.now() });
@@ -341,30 +385,7 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     disconnectSubscriptionRef.current = device.onDisconnected(() => {
       // Ignore if this device is no longer the active one (e.g. we replaced it).
       if (connectedDeviceRef.current && connectedDeviceRef.current !== device) return;
-      clearConnectionState(false);
-      setCurrentBpm(0);
-      setConnectedDeviceName(null);
-      setBatteryLevel(null);
-      setSignalRssi(null);
-      setBleStatus('disconnected');
-      setBleReason('dropped');
-      // One guarded backoff reconnect to ride out brief dropouts. Capped at
-      // MAX_DROP_RETRIES consecutive attempts so a flapping link can't loop
-      // forever; the counter resets on a successful or user-initiated connect.
-      if (dropRetryCountRef.current >= MAX_DROP_RETRIES) return;
-      if (savedDeviceRef.current && !dropReconnectingRef.current) {
-        dropReconnectingRef.current = true;
-        dropRetryCountRef.current += 1;
-        dropTimerRef.current = setTimeout(() => {
-          dropTimerRef.current = null;
-          const p = reconnectSavedRef.current?.();
-          if (p && typeof p.finally === 'function') {
-            p.finally(() => { dropReconnectingRef.current = false; });
-          } else {
-            dropReconnectingRef.current = false;
-          }
-        }, DROP_RECONNECT_DELAY_MS);
-      }
+      handleDrop();
     });
 
     // Battery — best effort; many straps don't expose 0x180F.
@@ -381,15 +402,33 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     // creating an orphaned RSSI interval. (Re-checked again before 'connected'.)
     if (connectedDeviceRef.current !== device) return false;
 
-    // Live RSSI poll (~5s). Stored in a ref; cleared on teardown.
+    // Live RSSI poll (~5s) doubling as a liveness watchdog. Stored in a ref;
+    // cleared on teardown. Fresh connection → reset the failure counter.
     setSignalRssi(null);
+    rssiFailCountRef.current = 0;
     if (rssiIntervalRef.current) clearInterval(rssiIntervalRef.current);
     rssiIntervalRef.current = setInterval(() => {
       const dev = connectedDeviceRef.current;
       if (!dev) return;
       dev.readRSSI()
-        .then((d: any) => { if (typeof d?.rssi === 'number') setSignalRssi(d.rssi); })
-        .catch(() => { /* transient; keep last value */ });
+        .then((d: any) => {
+          // Successful read → link is alive; clear strikes + publish RSSI.
+          rssiFailCountRef.current = 0;
+          if (typeof d?.rssi === 'number') setSignalRssi(d.rssi);
+        })
+        .catch(() => {
+          // A single rejection is usually transient (keep last value). But a run
+          // of consecutive failures means the link silently died without firing
+          // onDisconnected — treat it as a drop via the SAME shared handler.
+          rssiFailCountRef.current += 1;
+          if (rssiFailCountRef.current >= MAX_RSSI_FAILURES) {
+            // Re-check identity: another teardown may have already cleared this
+            // device/interval. Guard so a late strike can't clobber fresh state.
+            if (connectedDeviceRef.current !== dev) return;
+            rssiFailCountRef.current = 0;
+            handleDrop();
+          }
+        });
     }, RSSI_POLL_MS);
 
     await persistSavedDevice(device.id, name);
@@ -412,7 +451,7 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     setBleStatus('connected');
     setBleReason('none');
     return true;
-  }, [clearConnectionState, persistSavedDevice]);
+  }, [clearConnectionState, persistSavedDevice, handleDrop]);
 
   // ── Stop an in-progress scan (clear timeout + tell the manager to stop).
   const stopScan = useCallback(() => {

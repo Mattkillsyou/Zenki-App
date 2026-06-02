@@ -211,7 +211,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
 
     if (route.length < 2) return null;
 
-    const durationSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
+    const durationSeconds = Math.max(0, Math.floor((Date.now() - startTimeRef.current - pausedTimeRef.current) / 1000));
     const distanceMeters = totalDistance(route);
     const elevationGainMeters = totalElevationGain(route);
     const avgPace = paceSecsPerKm(distanceMeters, durationSeconds);

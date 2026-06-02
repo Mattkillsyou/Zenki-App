@@ -156,11 +156,15 @@ function offProductToResult(code: string | undefined, p: any): FoodSearchResult 
     return null;
   }
 
-  const servingGrams: number | undefined = typeof p.serving_quantity === 'number'
+  const rawServingGrams: number | undefined = typeof p.serving_quantity === 'number'
     ? p.serving_quantity
     : typeof p.serving_quantity === 'string'
       ? parseFloat(p.serving_quantity) || undefined
       : undefined;
+  // Treat non-positive / non-finite serving sizes as absent so the 100g
+  // fallback fires (OFF sometimes returns serving_quantity === 0).
+  const servingGrams: number | undefined =
+    rawServingGrams && rawServingGrams > 0 ? rawServingGrams : undefined;
 
   const servingLabel: string =
     (typeof p.serving_size === 'string' && p.serving_size.trim()) ||
