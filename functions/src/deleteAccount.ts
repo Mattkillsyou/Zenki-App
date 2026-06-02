@@ -164,16 +164,27 @@ export const deleteAccount = onRequest(
 
       // 6. The user's likes + comments on OTHER people's posts.
       const myLikes = await db.collectionGroup('likes').where('uid', '==', uid).get().catch(() => null);
-      deleted.likes = myLikes ? await (async () => {
-        let n = 0;
+      let likesDeleted = 0;
+      if (myLikes) {
+        // Delete the like-docs in batches...
         for (let i = 0; i < myLikes.docs.length; i += BATCH_SIZE) {
+          const slice = myLikes.docs.slice(i, i + BATCH_SIZE);
           const batch = db.batch();
-          myLikes.docs.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+          slice.forEach((d) => batch.delete(d.ref));
           await batch.commit();
-          n += Math.min(BATCH_SIZE, myLikes.docs.length - i);
+          likesDeleted += slice.length;
         }
-        return n;
-      })() : 0;
+        // ...and decrement each liked post's denormalized `likes` counter so it
+        // isn't left inflated. `update` (not set-merge) throws NOT_FOUND for an
+        // already-deleted post, which we swallow — never resurrect a dead post.
+        for (const d of myLikes.docs) {
+          const postRef = d.ref.parent.parent;
+          if (postRef) {
+            await postRef.update({ likes: admin.firestore.FieldValue.increment(-1) }).catch(() => {});
+          }
+        }
+      }
+      deleted.likes = likesDeleted;
       deleted.comments = await deleteByQuery(db.collectionGroup('comments').where('userId', '==', uid));
 
       // 7. Conversations the user participates in — redact their messages, then
