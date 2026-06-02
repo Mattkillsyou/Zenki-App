@@ -21,6 +21,7 @@ import { ALL_THEMES } from '../theme/themes';
 import type { ThemeDefinition } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import { useHealthKit } from '../context/HealthKitContext';
+import { useHeartRate } from '../context/HeartRateContext';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { useSenpai } from '../context/SenpaiContext';
 import { useSenpaiChat } from '../hooks/useSenpaiChat';
@@ -80,6 +81,32 @@ export function SettingsScreen({ navigation }: any) {
   // Apple HealthKit — controls a clearly-labeled section so users (and
   // App Review) can see exactly what HealthKit data this app touches.
   const healthKit = useHealthKit();
+
+  // Heart-rate monitor (BLE) — drives the DEVICES section's live status
+  // subtitle. Reads only; the full picker lives in BluetoothDevicesScreen.
+  const {
+    bleStatus,
+    bleReason,
+    connectedDeviceName,
+    currentBpm,
+    batteryLevel,
+  } = useHeartRate();
+
+  // Dynamic subtitle — shared status copy from BLE_CONTRACT.md.
+  const bleSubtitle = ((): string => {
+    if (bleStatus === 'connected') {
+      const base = `Connected — ${connectedDeviceName ?? 'Monitor'} · ${currentBpm > 0 ? `${currentBpm} bpm` : '— bpm'}`;
+      return batteryLevel != null ? `${base} · ${batteryLevel}%` : base;
+    }
+    if (bleStatus === 'scanning') return 'Scanning…';
+    if (bleStatus === 'connecting') return 'Connecting…';
+    if (bleReason === 'poweredOff') return 'Bluetooth is off';
+    if (bleReason === 'unauthorized') return 'Permission needed';
+    if (bleReason === 'unsupported' || bleStatus === 'unavailable') return 'Not available on this device';
+    if (bleReason === 'noDeviceFound') return 'No monitor found';
+    if (bleReason === 'dropped') return 'Monitor disconnected';
+    return 'Not connected';
+  })();
 
   // ── Real sign-out: clear local state + Firebase Auth session ──
   const handleSignOut = () => {
@@ -643,6 +670,35 @@ export function SettingsScreen({ navigation }: any) {
                   </View>
                 </>
               )}
+            </View>
+          </>
+        )}
+
+        {/* Devices — live heart-rate-monitor status + full picker. Mirrors
+            the Apple Health section's structure (sectionCard + a status row
+            with a dynamic subtitle). Hidden on web, where BLE is unavailable. */}
+        {Platform.OS !== 'web' && (
+          <>
+            {renderSectionHeader('DEVICES')}
+            <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
+              <View style={styles.healthRow}>
+                <View style={styles.healthRowLeft}>
+                  <Ionicons
+                    name={bleStatus === 'connected' ? 'bluetooth' : 'bluetooth-outline'}
+                    size={22}
+                    color={bleStatus === 'connected' ? colors.success : colors.gold}
+                  />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={[styles.healthRowTitle, { color: colors.textPrimary }]}>
+                      Heart-Rate Monitor
+                    </Text>
+                    <Text style={[styles.healthRowSubtitle, { color: colors.textMuted }]}>
+                      {bleSubtitle}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              {renderNavRow('bluetooth-outline', 'Manage Devices', () => navigation.navigate('BluetoothDevices'))}
             </View>
           </>
         )}

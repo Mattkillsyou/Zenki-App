@@ -61,3 +61,27 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
 
 /** BLE connection state. */
 export type BLEStatus = 'disconnected' | 'scanning' | 'connecting' | 'connected' | 'unavailable';
+
+/** WHY we are in the current status — drives actionable UI copy. */
+export type BLEReason =
+  | 'none'           // nominal: connected, or idle before first use
+  | 'poweredOff'     // adapter off            → "Turn on Bluetooth"
+  | 'unauthorized'   // BLE permission denied  → "Allow Bluetooth in Settings"
+  | 'unsupported'    // no BLE (web/simulator) → "Bluetooth isn't available on this device"
+  | 'noDeviceFound'  // scan timed out empty   → "No monitor found. Bring the strap closer / wet the contacts"
+  | 'dropped'        // unexpected disconnect  → "Monitor disconnected"
+  | 'failed';        // connect attempt failed → "Couldn't connect. Try again."
+
+/** A nearby HR monitor seen during a scan. */
+export interface BLEDeviceInfo {
+  id: string;
+  name: string;        // device.name || device.localName || 'HR Monitor'
+  rssi: number | null; // dBm; null if unknown
+}
+
+/** The last-used monitor, persisted across launches. */
+export interface SavedBLEDevice {
+  id: string;
+  name: string | null;
+  lastConnectedAt: number | null; // Date.now()
+}
