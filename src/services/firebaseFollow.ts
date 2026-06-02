@@ -14,9 +14,14 @@ export interface UserProfile {
 
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   if (!FIREBASE_CONFIGURED || !db) return null;
-  const snap = await getDoc(doc(db, 'users', userId));
-  if (!snap.exists()) return null;
-  return { uid: snap.id, ...snap.data() } as UserProfile;
+  try {
+    const snap = await getDoc(doc(db, 'users', userId));
+    if (!snap.exists()) return null;
+    return { uid: snap.id, ...snap.data() } as UserProfile;
+  } catch (err) {
+    console.warn('[getUserProfile] failed:', err);
+    return null;
+  }
 }
 
 export async function updateProfile(updates: Partial<Pick<UserProfile, 'displayName' | 'bio' | 'isPrivate' | 'avatar'>>) {
@@ -68,20 +73,35 @@ export async function isFollowing(targetId: string): Promise<boolean> {
   if (!db) return false;
   const uid = getCurrentUid();
   if (!uid) return false;
-  const snap = await getDoc(doc(db, 'following', uid, 'follows', targetId));
-  return snap.exists();
+  try {
+    const snap = await getDoc(doc(db, 'following', uid, 'follows', targetId));
+    return snap.exists();
+  } catch (err) {
+    console.warn('[isFollowing] failed:', err);
+    return false;
+  }
 }
 
 export async function getFollowerCount(userId: string): Promise<number> {
   if (!db) return 0;
-  const snap = await getDocs(collection(db, 'followers', userId, 'followers'));
-  return snap.size;
+  try {
+    const snap = await getDocs(collection(db, 'followers', userId, 'followers'));
+    return snap.size;
+  } catch (err) {
+    console.warn('[getFollowerCount] failed:', err);
+    return 0;
+  }
 }
 
 export async function getFollowingCount(userId: string): Promise<number> {
   if (!db) return 0;
-  const snap = await getDocs(collection(db, 'following', userId, 'follows'));
-  return snap.size;
+  try {
+    const snap = await getDocs(collection(db, 'following', userId, 'follows'));
+    return snap.size;
+  } catch (err) {
+    console.warn('[getFollowingCount] failed:', err);
+    return 0;
+  }
 }
 
 export async function getAllUsers(): Promise<UserProfile[]> {

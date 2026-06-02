@@ -114,11 +114,19 @@ export async function parseBloodwork(
 // Transport
 // ─────────────────────────────────────────────
 
+// Hard cap on a single vision round-trip. Without this, a stalled Cloud
+// Function response leaves the analyzing spinner (recognizeFood/extractDexa/
+// parseBloodwork) stuck until the OS socket timeout. The aborted request is
+// classified as `no_network`, the same as a fetch rejection.
+const REQUEST_TIMEOUT_MS = 35_000;
+
 async function callFunction<T>(
   endpoint: string,
   body: { imageBase64: string; mimeType: string; userHint?: string },
   idToken?: string,
 ): Promise<AIResult<T>> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
@@ -127,6 +135,7 @@ async function callFunction<T>(
       method: 'POST',
       headers,
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
 
     if (res.status === 401 || res.status === 403) {
@@ -142,9 +151,16 @@ async function callFunction<T>(
     const json = await res.json();
     return { ok: true, data: json as T };
   } catch (e: any) {
+    // AbortError from our timeout. Without this branch, a hung fetch would
+    // leave the analyzing spinner stuck until the OS socket timeout.
+    if (e?.name === 'AbortError') {
+      return { ok: false, error: { code: 'no_network', message: 'Request timed out. Try again.' } };
+    }
     if (e?.message?.includes('Network') || e?.message?.includes('fetch')) {
       return { ok: false, error: { code: 'no_network', message: 'No internet connection.' } };
     }
     return { ok: false, error: { code: 'parse_error', message: e?.message ?? 'Unknown error' } };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }

@@ -214,6 +214,20 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
     };
   }, []);
 
+  // Stop tracking whenever the signed-in member changes (including logout → null).
+  // The polling interval captures `checkLocation`, which is bound to the previous
+  // `user`. Without this teardown, a stale interval keeps recording visits for the
+  // logged-out member, and `isTracking` stays true so a newly-logged-in user is never
+  // tracked. Using the cleanup form: React runs this stop (clear interval + reset
+  // isTracking) for the previous member BEFORE the auto-start effect's body for the new
+  // member, so the stale closure is discarded and tracking restarts with the fresh
+  // checkLocation binding — without ever leaving two intervals running.
+  useEffect(() => {
+    return () => {
+      stopTracking();
+    };
+  }, [user?.id, stopTracking]);
+
   // Pause/resume tracking on app state changes
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {

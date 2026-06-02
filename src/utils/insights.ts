@@ -146,7 +146,7 @@ export function generateInsights(input: InsightInput): Insight[] {
   }
   if (input.daysActiveThisWeek >= 5) {
     add({ module: 'overall', type: 'positive', icon: 'checkmark-circle', title: 'Crushing It', message: `${input.daysActiveThisWeek} active days this week. You're in the top tier of Zenki members.`, priority: 1 });
-  } else if (input.daysActiveThisWeek <= 1) {
+  } else if (input.daysActiveThisWeek === 1) {
     add({ module: 'overall', type: 'warning', icon: 'alert-circle', title: 'Time to Move', message: 'Only 1 active day so far this week. Your body and mind need training. Even 20 minutes counts.', priority: 1 });
   }
 

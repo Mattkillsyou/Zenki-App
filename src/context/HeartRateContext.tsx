@@ -604,8 +604,21 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
       const device = await manager.connectToDevice(saved.id);
       return await finalizeConnection(device);
     } catch {
-      // Leave status disconnected; do NOT clobber an existing blocking reason.
+      // We optimistically set reason 'none' on entry, so the honest blocking
+      // reason (Bluetooth off / permission / unsupported) is gone by now. The
+      // failure usually IS the adapter being unusable (e.g. tapping the manual
+      // Reconnect button while Bluetooth is off), so re-derive an honest reason
+      // from the adapter state at catch time rather than leaving a misleading
+      // 'Not connected' (honest-status invariant). Only fall back to 'failed'
+      // when the adapter looks usable and the connect failed for another reason.
       setBleStatus('disconnected');
+      const adapter = bleAdapterStateRef.current;
+      setBleReason(
+        adapter === 'PoweredOff' ? 'poweredOff'
+        : adapter === 'Unauthorized' ? 'unauthorized'
+        : adapter === 'Unsupported' ? 'unsupported'
+        : 'failed',
+      );
       return false;
     } finally {
       connectingRef.current = false;
@@ -622,6 +635,16 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
       setBleReason('unsupported');
       return false;
     }
+    // In-flight guard: at most one connect attempt ever runs at a time. If an
+    // auto-reconnect (AppState-foreground / onStateChange:PoweredOn / post-drop
+    // backoff) is already connecting, a scanAndConnect tap must no-op rather than
+    // race — otherwise reconnectSaved below bails on its own connectingRef guard,
+    // this misreads that as 'reconnect failed', and we'd start a concurrent scan
+    // ('scanning' over the in-flight 'connecting'). Bail BEFORE any state change /
+    // cancelPendingDropReconnect so we don't disturb the in-flight attempt.
+    // Note: don't set connectingRef here — reconnectSaved bails if it's already
+    // true, so let each phase manage its own guard.
+    if (connectingRef.current) return false;
     // A new connect supersedes any pending post-drop reconnect — cancel its
     // timer (Race #1) before starting, so it can't tear down the new link ~2s in.
     cancelPendingDropReconnect();

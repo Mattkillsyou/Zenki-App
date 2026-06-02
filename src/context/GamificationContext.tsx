@@ -162,11 +162,14 @@ function previousWeekISO(fromISOWeek: string): string {
   if (!match) return '';
   const year = parseInt(match[1], 10);
   const week = parseInt(match[2], 10);
-  // Reconstruct a date at the start of that week, subtract 7 days
-  const jan4 = new Date(Date.UTC(year, 0, 4));
-  const jan4Dow = jan4.getUTCDay() || 7;
+  // Reconstruct a date at the start of that week, subtract 7 days. Build and
+  // advance the date with LOCAL accessors so the value round-trips through
+  // isoWeek (which reads getFullYear/getMonth/getDate) in the same zone;
+  // using UTC here would shift back an extra week in UTC-behind timezones.
+  const jan4 = new Date(year, 0, 4);
+  const jan4Dow = jan4.getDay() || 7;
   const weekStart = new Date(jan4);
-  weekStart.setUTCDate(jan4.getUTCDate() - (jan4Dow - 1) + (week - 1) * 7 - 7);
+  weekStart.setDate(jan4.getDate() - (jan4Dow - 1) + (week - 1) * 7 - 7);
   return isoWeek(weekStart);
 }
 

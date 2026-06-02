@@ -618,7 +618,7 @@ export function HomeScreen({ navigation }: any) {
     }
 
     return stats;
-  }, [user?.id, gamState.streak, hrSessions]);
+  }, [user?.id, gamState.streak, hrSessions, memberActivities]);
 
   // ── Cycle Phase (female users only) ──
   const { memberCycleInfo, settings: cycleSettings } = useCycleTracker();
