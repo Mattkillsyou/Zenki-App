@@ -286,10 +286,14 @@ export function reconcileExpenditure({
   }
 
   const weightChangeKg = latestWeightKg - earliestWeightKg;
-  // observedTdee = (sumIntake - weightChangeKg * 7700) / daysWithIntake
-  // Rationale: sumIntake - weightChangeKg * 7700 = total expenditure over those days.
-  const totalExpenditure = sumIntake - weightChangeKg * KCAL_PER_KG_MASS_CHANGE;
-  const rawObservedTdee = totalExpenditure / Math.max(1, daysWithIntake);
+  // observedTdee = (sumIntake / daysWithIntake) - (weightChangeKg * 7700 / windowDays)
+  // Rationale: intake is averaged over the days we actually logged, but the
+  // weight-energy term must be amortized over the full calendar span the weight
+  // change spans (windowDays) — not daysWithIntake — otherwise imperfect logging
+  // mis-amortizes the weight term and biases TDEE.
+  const avgIntakePerDay = sumIntake / Math.max(1, daysWithIntake);
+  const weightEnergyPerDay = (weightChangeKg * KCAL_PER_KG_MASS_CHANGE) / Math.max(1, windowDays);
+  const rawObservedTdee = avgIntakePerDay - weightEnergyPerDay;
 
   // Damp delta to ±MAX_TDEE_DELTA_KCAL
   const rawDelta = rawObservedTdee - priorTdee;

@@ -213,6 +213,18 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     return next;
   }, []);
 
+  // Higher number wins. Level-ups are rarest/most notable, then achievements,
+  // then streak milestones. A single celebration slot can only be overwritten
+  // by an equal-or-higher priority celebration within the same update.
+  const celebrationPriority = (c: Celebration | null): number => {
+    switch (c?.type) {
+      case 'level_up':         return 3;
+      case 'achievement':      return 2;
+      case 'streak_milestone': return 1;
+      default:                 return 0;
+    }
+  };
+
   const checkAchievements = useCallback((prev: GamificationState): GamificationState => {
     let newCelebration: Celebration | null = prev.pendingCelebration;
     let bonusXP = 0;
@@ -225,13 +237,16 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         const flame = a.flameReward ?? 1;
         bonusXP += a.xpReward;
         flamesEarned += flame;
-        newCelebration = {
-          type: 'achievement',
-          title: a.title,
-          subtitle: `${a.description} · +${flame} 🔥`,
-          xpGained: a.xpReward,
-          icon: a.icon,
-        };
+        // Don't clobber a higher-priority celebration already pending (e.g. a level_up).
+        if (celebrationPriority({ type: 'achievement' } as Celebration) >= celebrationPriority(newCelebration)) {
+          newCelebration = {
+            type: 'achievement',
+            title: a.title,
+            subtitle: `${a.description} · +${flame} 🔥`,
+            xpGained: a.xpReward,
+            icon: a.icon,
+          };
+        }
         return { ...a, unlocked: true, unlockedAt: new Date().toISOString() };
       }
       return a;
@@ -302,7 +317,13 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           xpGained: XP_PER_SESSION + streakBonus,
         };
       }
-      if (updated.streak !== prev.streak && [7, 14, 30, 100].includes(updated.streak)) {
+      // Streak milestone is the lowest priority — only show it if a higher-priority
+      // celebration (e.g. the level_up above) wasn't already set this session.
+      if (
+        updated.streak !== prev.streak &&
+        [7, 14, 30, 100].includes(updated.streak) &&
+        celebrationPriority({ type: 'streak_milestone' } as Celebration) >= celebrationPriority(updated.pendingCelebration)
+      ) {
         updated.pendingCelebration = {
           type: 'streak_milestone',
           title: `${updated.streak}-Day Streak!`,

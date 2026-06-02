@@ -210,7 +210,7 @@ export function DexaUploadScreen({ navigation }: any) {
     addDexaScan({
       memberId: user.id,
       source: 'ai',
-      scanDate: e.scanDate ?? todayISO(),
+      scanDate: e.scanDate?.trim() || todayISO(),
       totalBodyFatPct: e.totalBodyFatPct,
       fatMassKg: e.fatMassKg,
       leanMassKg: e.leanMassKg,

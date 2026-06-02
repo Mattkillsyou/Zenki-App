@@ -106,6 +106,13 @@ export function HealthKitProvider({ children }: { children: React.ReactNode }) {
   // In-memory cache of synced ids (mirrors AsyncStorage). Mutated on push.
   const syncedRef = useRef<SyncedSet>({});
 
+  // In-flight guard: only one push/sync may run at a time. The initial-sync
+  // effect and the debounced-push effect both fire on the same
+  // [authorized, enabled] transition; without this lock the second batch reads
+  // an id as not-yet-synced while the first is still mid-flight (check-then-act
+  // with sequential awaits) and pushes the same sample to Health twice.
+  const syncingRef = useRef(false);
+
   // ── Load enabled flag + synced cache ──
   useEffect(() => {
     (async () => {
@@ -254,12 +261,21 @@ export function HealthKitProvider({ children }: { children: React.ReactNode }) {
       const ok = await authorize();
       if (!ok) return;
     }
-    await Promise.all([
-      pushPendingWeights(),
-      pushPendingFood(),
-      pushPendingWorkouts(),
-    ]);
-    await refreshFromHK();
+    // Skip if a push/sync is already running — prevents the initial-sync and
+    // debounced-push effects from double-writing the same samples. A later sync
+    // still runs: the debounced effect re-fires on subsequent data changes.
+    if (syncingRef.current) return;
+    syncingRef.current = true;
+    try {
+      await Promise.all([
+        pushPendingWeights(),
+        pushPendingFood(),
+        pushPendingWorkouts(),
+      ]);
+      await refreshFromHK();
+    } finally {
+      syncingRef.current = false;
+    }
   }, [enabled, available, authorized, authorize, pushPendingWeights, pushPendingFood, pushPendingWorkouts, refreshFromHK]);
 
   // ─────────────────────────────────────────────────
@@ -279,10 +295,18 @@ export function HealthKitProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!authorized || !enabled) return;
     if (pushDebounce.current) clearTimeout(pushDebounce.current);
-    pushDebounce.current = setTimeout(() => {
-      pushPendingWeights();
-      pushPendingFood();
-      pushPendingWorkouts();
+    pushDebounce.current = setTimeout(async () => {
+      // Skip if a push/sync (e.g. the initial syncNow) is already in flight —
+      // otherwise we'd re-read the same not-yet-marked ids and double-push.
+      if (syncingRef.current) return;
+      syncingRef.current = true;
+      try {
+        await pushPendingWeights();
+        await pushPendingFood();
+        await pushPendingWorkouts();
+      } finally {
+        syncingRef.current = false;
+      }
     }, 1500);
     return () => {
       if (pushDebounce.current) clearTimeout(pushDebounce.current);

@@ -169,6 +169,13 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
   const scanFoundRef = useRef<Map<string, BLEDeviceInfo>>(new Map());
   // Guards the single post-drop reconnect so a flapping link can't loop forever
   const dropReconnectingRef = useRef(false);
+  // In-flight connect guard. True from the moment a connect attempt starts
+  // (connectToDevice / reconnectSaved / a scanAndConnect device-found callback)
+  // until it settles. Ensures AT MOST ONE connect is ever in flight, so an
+  // AppState-foreground reconnect, an onStateChange:PoweredOn reconnect, and a
+  // user tap can't run concurrent connects that cancel each other. Cleared on
+  // every settle path and on disconnect()/handleDrop so a drop frees the guard.
+  const connectingRef = useRef(false);
   // Handle for the post-drop backoff reconnect timer, so it can be cancelled.
   const dropTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Consecutive auto-reconnect attempts since the last successful/user connect.
@@ -226,12 +233,27 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     connectedDeviceRef.current = null;
   }, []);
 
+  // ── Cancel any pending post-drop backoff reconnect. Clears the dropTimerRef
+  // (so a queued reconnect ~2s out can't tear down a link the user just made)
+  // and releases the drop-reconnect guard. Called at the entry of every new
+  // connect path BEFORE a fresh attempt, and from handleDrop's own scheduler.
+  const cancelPendingDropReconnect = useCallback(() => {
+    if (dropTimerRef.current) {
+      clearTimeout(dropTimerRef.current);
+      dropTimerRef.current = null;
+    }
+    dropReconnectingRef.current = false;
+  }, []);
+
   // ── Shared unexpected-drop handler. Invoked by device.onDisconnected AND by
   // the RSSI liveness watchdog (a link can die silently without firing
   // onDisconnected). Performs the teardown/transition and one guarded backoff
   // reconnect, capped at MAX_DROP_RETRIES so a flapping link can't loop forever.
   // Centralised so both callers share the SAME single reconnect loop/refs.
   const handleDrop = useCallback(() => {
+    // A drop ends any in-flight connect — free the guard so the backoff
+    // reconnect (and any later user tap) isn't blocked by a stale flag.
+    connectingRef.current = false;
     clearConnectionState(false);
     setCurrentBpm(0);
     setConnectedDeviceName(null);
@@ -518,11 +540,16 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
 
   // ── Connect to a specific device id chosen from the picker.
   const connectToDevice = useCallback(async (deviceId: string): Promise<boolean> => {
+    // In-flight guard: at most one connect attempt ever runs at a time.
+    if (connectingRef.current) return false;
     const manager = ensureManager();
     if (!manager) return false;
     stopScan();
-    dropReconnectingRef.current = false;
+    // A new user connect supersedes any pending post-drop reconnect — cancel its
+    // timer (Race #1) so it can't tear down the link we're about to make.
+    cancelPendingDropReconnect();
     dropRetryCountRef.current = 0; // user-initiated connect → reset drop cap
+    connectingRef.current = true;
     setBleStatus('connecting');
     setBleReason('none');
     try {
@@ -532,20 +559,32 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
       setBleStatus('disconnected');
       setBleReason('failed');
       return false;
+    } finally {
+      connectingRef.current = false;
     }
-  }, [ensureManager, stopScan, finalizeConnection]);
+  }, [ensureManager, stopScan, cancelPendingDropReconnect, finalizeConnection]);
 
   // ── Silent reconnect to the saved device (no dialog if it already exists).
   const reconnectSaved = useCallback(async (): Promise<boolean> => {
     const saved = savedDeviceRef.current;
     if (!saved) return false;
+    // In-flight guard (Race #3): AppState-foreground + onStateChange:PoweredOn +
+    // a user tap can all fire reconnectSaved at once. Bail if one is already
+    // running so concurrent reconnects can't cancel each other.
+    if (connectingRef.current) return false;
     const manager = ensureManager();
     if (!manager) return false;
-    // Reset the drop cap only for genuinely user-initiated reconnects. When the
-    // post-drop backoff timer calls us, dropReconnectingRef is still true — don't
-    // reset then, or a flapping link would never hit MAX_DROP_RETRIES.
-    if (!dropReconnectingRef.current) dropRetryCountRef.current = 0;
-    dropReconnectingRef.current = false;
+    // Capture whether this is a post-drop backoff reconnect BEFORE we cancel the
+    // pending timer/guard. Reset the drop cap only for genuinely user-initiated
+    // reconnects; when the backoff timer calls us, dropReconnectingRef is still
+    // true — don't reset then, or a flapping link would never hit MAX_DROP_RETRIES.
+    const isPostDropReconnect = dropReconnectingRef.current;
+    if (!isPostDropReconnect) dropRetryCountRef.current = 0;
+    // Cancel any still-pending post-drop reconnect timer (Race #1). When the
+    // backoff timer itself invoked us it already nulled the timer, so this just
+    // clears the guard — matching the prior dropReconnectingRef reset.
+    cancelPendingDropReconnect();
+    connectingRef.current = true;
     setBleStatus('connecting');
     setBleReason('none');
     try {
@@ -555,8 +594,10 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
       // Leave status disconnected; do NOT clobber an existing blocking reason.
       setBleStatus('disconnected');
       return false;
+    } finally {
+      connectingRef.current = false;
     }
-  }, [ensureManager, finalizeConnection]);
+  }, [ensureManager, cancelPendingDropReconnect, finalizeConnection]);
   useEffect(() => { reconnectSavedRef.current = reconnectSaved; }, [reconnectSaved]);
 
   // ── BLE scan + connect (COMPAT — WorkoutSessionScreen depends on this).
@@ -568,6 +609,9 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
       setBleReason('unsupported');
       return false;
     }
+    // A new connect supersedes any pending post-drop reconnect — cancel its
+    // timer (Race #1) before starting, so it can't tear down the new link ~2s in.
+    cancelPendingDropReconnect();
     // Try the saved monitor first.
     if (savedDeviceRef.current) {
       const ok = await reconnectSaved();
@@ -605,30 +649,43 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         if (device) {
+          // Re-entrancy guard (Race #2): two device-found events in one scan
+          // batch must not both run connect()+finalizeConnection. Bail if this
+          // attempt is already settled or another connect is in flight.
+          if (settled || connectingRef.current) return;
+          connectingRef.current = true;
           // First match wins.
           try { manager.stopDeviceScan(); } catch { /* ignore */ }
           clearTimeout(timeout);
           scanTimeoutRef.current = null;
-          dropReconnectingRef.current = false;
+          cancelPendingDropReconnect();
           setBleStatus('connecting');
           try {
             const connected = await device.connect();
             const ok = await finalizeConnection(connected);
             finish(ok);
           } catch {
-            setBleStatus('disconnected');
-            setBleReason('failed');
-            finish(false);
+            // Only flip to failed if THIS attempt is still the active one — a
+            // settled sibling may have already succeeded; don't clobber it.
+            if (!settled) {
+              setBleStatus('disconnected');
+              setBleReason('failed');
+              finish(false);
+            }
+          } finally {
+            connectingRef.current = false;
           }
         }
       });
     });
-  }, [ensureManager, reconnectSaved, finalizeConnection]);
+  }, [ensureManager, reconnectSaved, cancelPendingDropReconnect, finalizeConnection]);
 
   // ── User-initiated disconnect (keeps the saved device — just drops the link).
   const disconnect = useCallback(() => {
     // Suppress the drop-recovery path; this is intentional.
     dropReconnectingRef.current = true;
+    // A user disconnect cancels any in-flight connect attempt — free the guard.
+    connectingRef.current = false;
     // User-initiated disconnect — reset the post-drop retry cap for next time.
     dropRetryCountRef.current = 0;
     // Cancel any pending post-drop auto-reconnect (e.g. tapping Disconnect

@@ -209,6 +209,15 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     const meta = metaRef.current;
     metaRef.current = null;
 
+    // Always reset live UI state so a short/zero-point route doesn't leave a
+    // stale position marker, polyline, or stats behind.
+    setCurrentPosition(null);
+    setLiveDistance(0);
+    setLiveDuration(0);
+    setLivePace(0);
+    setLiveElevGain(0);
+    setLiveSpeed(0);
+
     if (route.length < 2) return null;
 
     const durationSeconds = Math.max(0, Math.floor((Date.now() - startTimeRef.current - pausedTimeRef.current) / 1000));
@@ -237,12 +246,6 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     };
 
     setActivities((prev) => [activity, ...prev].slice(0, 100));
-    setCurrentPosition(null);
-    setLiveDistance(0);
-    setLiveDuration(0);
-    setLivePace(0);
-    setLiveElevGain(0);
-    setLiveSpeed(0);
 
     return activity;
   }, [cleanupTimers]);

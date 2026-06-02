@@ -104,7 +104,16 @@ function Flicker({ intensity }: { intensity: number }) {
   const opacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    // Mirror the guarded SheikahRune pattern: a `cancelled` flag bails the
+    // recursion after unmount, and a single tracked timer handle covers both
+    // the initial schedule and every reschedule so cleanup always clears the
+    // pending timeout. Without this an [intensity] change starts a second
+    // overlapping loop and unmount leaves the loop re-queuing .start() on a
+    // detached Animated.Value forever (no GC).
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
     const flickerLoop = () => {
+      if (cancelled) return;
       const dip = intensity + Math.random() * (1 - intensity);
       const dur = 50 + Math.random() * 200;
       Animated.sequence([
@@ -119,12 +128,16 @@ function Flicker({ intensity }: { intensity: number }) {
           useNativeDriver: true,
         }),
       ]).start(() => {
+        if (cancelled) return;
         // Random pause between flickers
-        setTimeout(flickerLoop, 500 + Math.random() * 3000);
+        timer = setTimeout(flickerLoop, 500 + Math.random() * 3000);
       });
     };
-    const timer = setTimeout(flickerLoop, 1000);
-    return () => clearTimeout(timer);
+    timer = setTimeout(flickerLoop, 1000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [intensity]);
 
   return (

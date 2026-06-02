@@ -403,6 +403,15 @@ function IntervalTimer({ onBeep, onComplete, presets, onSavePreset }: {
           }
           setRunning(false);
           setPhase('done');
+          onComplete?.({
+            id: 'tl_' + Date.now().toString(36),
+            memberId: '',
+            type: 'interval',
+            totalDurationSeconds: rounds * (workSec + restSec),
+            roundsCompleted: rounds,
+            roundsTarget: rounds,
+            date: new Date().toISOString(),
+          });
           return 0;
         } else if (phase === 'rest') {
           if (currentRound < rounds) {
@@ -412,6 +421,15 @@ function IntervalTimer({ onBeep, onComplete, presets, onSavePreset }: {
           }
           setRunning(false);
           setPhase('done');
+          onComplete?.({
+            id: 'tl_' + Date.now().toString(36),
+            memberId: '',
+            type: 'interval',
+            totalDurationSeconds: rounds * (workSec + restSec),
+            roundsCompleted: rounds,
+            roundsTarget: rounds,
+            date: new Date().toISOString(),
+          });
           return 0;
         }
         return 0;

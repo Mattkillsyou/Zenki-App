@@ -154,9 +154,13 @@ export function WorkoutSessionScreen({ navigation }: any) {
           style: 'destructive',
           onPress: () => {
             const session = stopSession(age, weightKg, isMale);
-            if (session) {
-              navigation.goBack();
+            if (!session) {
+              Alert.alert(
+                'Nothing to save',
+                "No heart-rate data was recorded, so this session wasn't saved.",
+              );
             }
+            navigation.goBack();
           },
         },
       ],
