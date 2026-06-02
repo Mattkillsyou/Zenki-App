@@ -1,11 +1,13 @@
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import {
-  collection, addDoc, deleteDoc, doc, getDoc, getDocFromServer, getDocs,
-  query, where, orderBy, limit, updateDoc, increment,
-  setDoc,
+  collection, addDoc, doc, getDoc, getDocFromServer, getDocs,
+  query, where, orderBy, limit, startAfter, runTransaction,
 } from 'firebase/firestore';
+import type { QueryDocumentSnapshot } from 'firebase/firestore';
 import { getCurrentUid } from './firebaseAuth';
 import { uploadMedia } from './firebaseStorage';
+import { assertCleanText } from './contentFilter';
+import { deletePostCascadeViaFunction } from './firebaseModeration';
 
 export interface Post {
   id: string;
@@ -27,6 +29,10 @@ export async function createPost(mediaUri: string, mediaType: 'photo' | 'video',
   const uid = getCurrentUid();
   if (!uid) throw new Error('not-signed-in');
 
+  // Proactive objectionable-content gate (Apple 1.2). Throws
+  // Error('content-blocked: <reason>') before any upload/write happens.
+  assertCleanText(caption);
+
   const mediaUrl = await uploadMedia(mediaUri, mediaType);
   const userDoc = await getDoc(doc(db, 'users', uid));
   const userData = userDoc.data();
@@ -35,6 +41,9 @@ export async function createPost(mediaUri: string, mediaType: 'photo' | 'video',
     userId: uid,
     displayName: userData?.displayName || 'Member',
     avatar: userData?.avatar || null,
+    // Denormalized author-privacy flag so the feed list-query can be satisfied
+    // by the public branch of the posts rule (see SOCIAL_CONTRACT §10).
+    authorIsPrivate: !!userData?.isPrivate,
     mediaUrl,
     mediaType,
     caption,
@@ -62,6 +71,10 @@ export async function createTextPost(caption: string): Promise<Post | null> {
   if (!uid) throw new Error('not-signed-in');
   if (!caption.trim()) return null;
 
+  // Proactive objectionable-content gate (Apple 1.2). Throws
+  // Error('content-blocked: <reason>') before the write.
+  assertCleanText(caption);
+
   const userDoc = await getDoc(doc(db, 'users', uid));
   const userData = userDoc.data();
 
@@ -69,6 +82,8 @@ export async function createTextPost(caption: string): Promise<Post | null> {
     userId: uid,
     displayName: userData?.displayName || 'Member',
     avatar: userData?.avatar || null,
+    // Denormalized author-privacy flag — see createPost / SOCIAL_CONTRACT §10.
+    authorIsPrivate: !!userData?.isPrivate,
     mediaUrl: null,
     mediaType: null,
     caption: caption.trim(),
@@ -92,13 +107,28 @@ export async function createTextPost(caption: string): Promise<Post | null> {
   return { id: docRef.id, ...postData };
 }
 
-export async function getFeed(maxPosts = 50): Promise<Post[]> {
-  if (!FIREBASE_CONFIGURED || !db) return [];
+export interface FeedPage {
+  posts: Post[];
+  /** `createdAt` (ISO) of the last returned post, or null. Pass back as
+   *  `opts.cursor` to fetch the next page via startAfter. */
+  cursor: string | null;
+  /** True when this page came back full (returned count === pageSize), i.e.
+   *  there may be more to load. */
+  hasMore: boolean;
+}
+
+export async function getFeed(
+  opts?: { cursor?: string | null; pageSize?: number },
+): Promise<FeedPage> {
+  const pageSize = opts?.pageSize ?? 15;
+  const cursor = opts?.cursor ?? null;
+  const empty: FeedPage = { posts: [], cursor: null, hasMore: false };
+  if (!FIREBASE_CONFIGURED || !db) return empty;
   // Capture `db` as a non-null local so TypeScript preserves narrowing
   // inside Promise.all closures below.
   const firestore = db;
   const uid = getCurrentUid();
-  if (!uid) return [];
+  if (!uid) return empty;
 
   // Read the user's followed-set. If the rule rejects (e.g. no rule for
   // /following/{uid}/follows yet), treat it as an empty follow list so the
@@ -116,34 +146,52 @@ export async function getFeed(maxPosts = 50): Promise<Post[]> {
   // Per-post liked check that never throws — defaults to false if the rule
   // for /posts/{postId}/likes/{uid} hasn't been added or the read fails for
   // any other reason. Without this, ONE missing-rule error short-circuited
-  // the whole feed render.
+  // the whole feed render. Resolved in parallel for the returned page only.
   const safeIsLiked = async (postId: string): Promise<boolean> => {
     try { return await isLiked(postId); } catch { return false; }
   };
+
+  // Resolve `liked` for an already-filtered, already-paged set of docs in
+  // parallel (never N sequential gets) and drop malformed docs so a single
+  // bad doc can't crash FlatList.
+  const hydrate = async (
+    docs: QueryDocumentSnapshot[],
+  ): Promise<Post[]> => {
+    const posts = await Promise.all(docs.map(async (d) => {
+      const liked = await safeIsLiked(d.id);
+      return { id: d.id, ...d.data(), liked } as Post;
+    }));
+    return posts.filter(
+      (p) => typeof p.createdAt === 'string' && typeof p.displayName === 'string',
+    );
+  };
+
+  const makePage = (posts: Post[]): FeedPage => ({
+    posts,
+    cursor: posts.length > 0 ? posts[posts.length - 1].createdAt : null,
+    // hasMore is keyed off the raw page fill (returned count === pageSize),
+    // not the post-filter count, so a page that's entirely malformed/private
+    // still advances rather than dead-ending pagination.
+    hasMore: posts.length === pageSize,
+  });
 
   // If the user follows nobody, querying only their own posts gives an empty
   // feed for new accounts — bad first impression. Fall back to "all recent
   // posts" so the feed is populated and the user has something to scroll
   // through right away. Once they follow someone, the followed-only query
-  // takes over.
+  // takes over. The public-author filter (authorIsPrivate == false) is
+  // required so the feed list-query is satisfied by the rule's public branch
+  // (SOCIAL_CONTRACT §10).
   if (followedIds.length === 0) {
-    const q = query(
-      collection(db, 'posts'),
+    const constraints = [
+      where('authorIsPrivate', '==', false),
       orderBy('createdAt', 'desc'),
-      limit(maxPosts),
-    );
-    const snap = await getDocs(q);
-    const fallback = await Promise.all(snap.docs.map(async (d) => {
-      const liked = await safeIsLiked(d.id);
-      return { id: d.id, ...d.data(), liked } as Post;
-    }));
-    // Drop malformed docs — without this, a single missing-displayName post
-    // takes down the whole Community tab when PostCard's initials math
-    // calls `.split(' ')` on undefined. The followed-batches path below
-    // already filters; the fallback path was missing it (BUG: feed crash).
-    return fallback.filter(
-      (p) => typeof p.createdAt === 'string' && typeof p.displayName === 'string',
-    );
+      ...(cursor ? [startAfter(cursor)] : []),
+      limit(pageSize),
+    ];
+    const snap = await getDocs(query(collection(db, 'posts'), ...constraints));
+    const posts = await hydrate(snap.docs);
+    return { ...makePage(posts), hasMore: snap.docs.length === pageSize };
   }
 
   followedIds.push(uid);
@@ -153,38 +201,42 @@ export async function getFeed(maxPosts = 50): Promise<Post[]> {
     batches.push(followedIds.slice(i, i + 30));
   }
 
-  // Run batch queries AND per-post `isLiked` lookups in parallel. The
-  // previous version awaited each `safeIsLiked` sequentially inside the
-  // loop — a 50-post feed meant 50 round-trips back-to-back. Under weak
-  // networks that stalled the Community tab long enough to look like a
-  // crash on iPad (BUG-007).
+  // Run batch queries in parallel. Each batch is a separate page-sized
+  // window starting after the cursor; the union is then sorted desc and the
+  // top `pageSize` taken, which is the correct next global page because
+  // startAfter guarantees no batch returns anything newer-or-equal to the
+  // cursor. The public-author filter keeps every branch on the rule's public
+  // path (SOCIAL_CONTRACT §10).
   const batchSnaps = await Promise.all(batches.map((batch) => {
-    const q = query(
-      collection(firestore, 'posts'),
+    const constraints = [
       where('userId', 'in', batch),
+      where('authorIsPrivate', '==', false),
       orderBy('createdAt', 'desc'),
-      limit(maxPosts),
-    );
-    return getDocs(q);
+      ...(cursor ? [startAfter(cursor)] : []),
+      limit(pageSize),
+    ];
+    return getDocs(query(collection(firestore, 'posts'), ...constraints));
   }));
 
-  const allDocs = batchSnaps.flatMap((snap) => snap.docs);
-  const allPosts = await Promise.all(allDocs.map(async (d) => {
-    const liked = await safeIsLiked(d.id);
-    return { id: d.id, ...d.data(), liked } as Post;
-  }));
+  // Merge, sort desc, take the page window BEFORE hydrating like-state so we
+  // only resolve `liked` for the posts we actually return.
+  const merged = batchSnaps
+    .flatMap((snap) => snap.docs)
+    .filter((d) => typeof (d.data() as any).createdAt === 'string')
+    .sort((a, b) => (b.data() as any).createdAt.localeCompare((a.data() as any).createdAt))
+    .slice(0, pageSize);
 
-  // Filter out malformed posts so a single bad doc can't crash FlatList.
-  const valid = allPosts.filter((p) => typeof p.createdAt === 'string' && typeof p.displayName === 'string');
-  return valid.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, maxPosts);
+  const posts = await hydrate(merged);
+  return { ...makePage(posts), hasMore: merged.length === pageSize };
 }
 
-export async function getUserPosts(userId: string): Promise<Post[]> {
+export async function getUserPosts(userId: string, max = 30): Promise<Post[]> {
   if (!FIREBASE_CONFIGURED || !db) return [];
   const q = query(
     collection(db, 'posts'),
     where('userId', '==', userId),
     orderBy('createdAt', 'desc'),
+    limit(max),
   );
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Post));
@@ -192,18 +244,47 @@ export async function getUserPosts(userId: string): Promise<Post[]> {
 
 export async function likePost(postId: string) {
   if (!db) return;
+  const firestore = db;
   const uid = getCurrentUid();
   if (!uid) return;
-  await setDoc(doc(db, 'posts', postId, 'likes', uid), { at: new Date().toISOString() });
-  await updateDoc(doc(db, 'posts', postId), { likes: increment(1) });
+  // Atomic + idempotent: only count the like if the like-doc doesn't already
+  // exist, so a double-tap / retry can't double-count. We write an explicit
+  // `likes = current + 1` (not increment()) because the rule constrains a
+  // non-owner update to exactly oldLikes ± 1. `uid` is stored on the like-doc
+  // so deleteAccount can find it via collectionGroup.
+  await runTransaction(firestore, async (tx) => {
+    const likeRef = doc(firestore, 'posts', postId, 'likes', uid);
+    const postRef = doc(firestore, 'posts', postId);
+    const likeSnap = await tx.get(likeRef);
+    if (likeSnap.exists()) return; // already liked — no-op, no double count
+    const postSnap = await tx.get(postRef);
+    if (!postSnap.exists()) return;
+    const current = (postSnap.data()?.likes as number) || 0;
+    tx.set(likeRef, { at: new Date().toISOString(), uid });
+    tx.update(postRef, { likes: current + 1 });
+  });
 }
 
 export async function unlikePost(postId: string) {
   if (!db) return;
+  const firestore = db;
   const uid = getCurrentUid();
   if (!uid) return;
-  await deleteDoc(doc(db, 'posts', postId, 'likes', uid));
-  await updateDoc(doc(db, 'posts', postId), { likes: increment(-1) });
+  // Atomic + idempotent: only decrement when the like-doc actually exists, and
+  // clamp at 0 so the counter can never go negative. Explicit `current - 1`
+  // (not increment()) for the same rule reason as likePost.
+  await runTransaction(firestore, async (tx) => {
+    const likeRef = doc(firestore, 'posts', postId, 'likes', uid);
+    const postRef = doc(firestore, 'posts', postId);
+    const likeSnap = await tx.get(likeRef);
+    if (!likeSnap.exists()) return; // not liked — no-op
+    const postSnap = await tx.get(postRef);
+    const current = postSnap.exists() ? ((postSnap.data()?.likes as number) || 0) : 0;
+    tx.delete(likeRef);
+    if (postSnap.exists()) {
+      tx.update(postRef, { likes: Math.max(0, current - 1) });
+    }
+  });
 }
 
 async function isLiked(postId: string): Promise<boolean> {
@@ -214,9 +295,15 @@ async function isLiked(postId: string): Promise<boolean> {
   return snap.exists();
 }
 
-export async function deletePost(postId: string) {
-  if (!db) return;
-  await deleteDoc(doc(db, 'posts', postId));
+/**
+ * Delete a post AND its likes/comments subcollections + Storage media. A
+ * shallow deleteDoc orphans all of those (Firestore doesn't cascade, and a
+ * client can't delete other users' like/comment docs), so this goes through
+ * the deletePostCascade Cloud Function and surfaces its {ok,error}.
+ */
+export async function deletePost(postId: string): Promise<{ ok: boolean; error?: string }> {
+  if (!FIREBASE_CONFIGURED || !db) return { ok: false, error: 'firebase-not-configured' };
+  return deletePostCascadeViaFunction(postId);
 }
 
 // ─────────────────────────────────────────────────
@@ -254,6 +341,10 @@ export async function addComment(postId: string, text: string): Promise<Comment 
   if (!uid) throw new Error('not-signed-in');
   const trimmed = text.trim();
   if (!trimmed) return null;
+
+  // Proactive objectionable-content gate (Apple 1.2). Throws
+  // Error('content-blocked: <reason>') before the write.
+  assertCleanText(trimmed);
 
   const userDoc = await getDoc(doc(db, 'users', uid));
   const userData = userDoc.data();
