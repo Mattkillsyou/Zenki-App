@@ -21,4 +21,3 @@ export { EmptyState } from './EmptyState';
 export { ErrorBoundary } from './ErrorBoundary';
 export { KeyboardView, KeyboardAwareScrollView } from './KeyboardView';
 export { ScreenContainer } from './ScreenContainer';
-export { HealthKitBadge } from './HealthKitBadge';

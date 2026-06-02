@@ -666,11 +666,11 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     };
     setIsRecording(true);
 
-    // NOTE: no simulated/demo heart rate. Samples come ONLY from a real
-    // connected BLE monitor (monitorCharacteristicForService) or explicit
-    // manual entry (addManualSample, validated). Without either, the session
-    // records nothing and stopSession returns null — we never fabricate and
-    // persist heart-rate data as if it were a real reading.
+    // NOTE: heart-rate samples come ONLY from a real connected BLE monitor
+    // (monitorCharacteristicForService) or explicit manual entry
+    // (addManualSample, validated). Without either, the session records nothing
+    // and stopSession returns null — we never fabricate and persist heart-rate
+    // data as if it were a real reading.
   }, []);
 
   const stopSession = useCallback((

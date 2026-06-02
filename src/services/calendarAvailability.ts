@@ -30,7 +30,7 @@ const cache = new Map<string, CacheEntry>();
  * Fetch busy intervals on the owner's calendar for a given date.
  * Date format: YYYY-MM-DD.
  * Returns an empty array if the URL isn't configured (graceful fallback
- * so bookings still work in demo mode).
+ * so bookings still work without a configured calendar).
  */
 export async function fetchBusyIntervals(date: string): Promise<BusyInterval[]> {
   if (!CALENDAR_AVAILABILITY_URL) {

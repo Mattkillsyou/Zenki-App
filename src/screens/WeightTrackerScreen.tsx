@@ -22,7 +22,7 @@ import { useNutrition } from '../context/NutritionContext';
 import { useSenpai } from '../context/SenpaiContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, LineChart, KeyboardAwareScrollView, ScreenContainer, HealthKitBadge } from '../components';
+import { FadeInView, LineChart, KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { WeekCalendar, WeekDay, startOfWeek, addDays, todayIso } from '../components/WeekCalendar';
 import { WeightUnit } from '../types/nutrition';
 import { computeTrendWeight, trendChange, kgToLbs } from '../utils/nutrition';
@@ -282,7 +282,6 @@ export function WeightTrackerScreen({ navigation }: any) {
         </View>
 
         <KeyboardAwareScrollView contentContainerStyle={styles.scrollContent}>
-          <HealthKitBadge style={{ marginBottom: spacing.md }} />
           {/* Chart card — visualization first, per master prompt §9 */}
           <FadeInView>
             <View style={[styles.chartWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>

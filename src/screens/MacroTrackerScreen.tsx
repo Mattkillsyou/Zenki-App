@@ -18,7 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, KeyboardAwareScrollView, ScreenContainer, HealthKitBadge } from '../components';
+import { FadeInView, KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { FoodSearchModal } from '../components/FoodSearchModal';
 import { ReorderableSections, ReorderableItem } from '../components/ReorderableSections';
 import { WeekCalendar, WeekDay, startOfWeek, addDays } from '../components/WeekCalendar';
@@ -326,8 +326,6 @@ export function MacroTrackerScreen({ navigation, route }: any) {
               <Ionicons name="options-outline" size={20} color={colors.textPrimary} />
             </SoundPressable>
           </View>
-
-          <HealthKitBadge style={{ marginHorizontal: spacing.lg, marginBottom: spacing.md }} />
 
           {/* ─── Week strip (matches Medication tracker for visual consistency) ─── */}
           <FadeInView delay={40}>

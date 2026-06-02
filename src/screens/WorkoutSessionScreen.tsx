@@ -8,7 +8,7 @@ import {
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenContainer, HealthKitBadge } from '../components';
+import { ScreenContainer } from '../components';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useHeartRate } from '../context/HeartRateContext';
@@ -121,8 +121,8 @@ export function WorkoutSessionScreen({ navigation }: any) {
     if (!user) return;
     // This screen records heart rate / calories / strain — all of which come
     // from a connected monitor. Without one, the session would silently record
-    // nothing and save no session (since demo HR was removed). Prompt to connect
-    // instead of starting a dead-end session.
+    // nothing and save no session. Prompt to connect instead of starting a
+    // dead-end session.
     if (bleStatus !== 'connected') {
       Alert.alert(
         'Connect a heart-rate monitor',
@@ -195,7 +195,6 @@ export function WorkoutSessionScreen({ navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <HealthKitBadge style={{ marginBottom: spacing.md }} />
         {/* BLE status chip */}
         <SoundPressable
           style={[styles.bleChip, { backgroundColor: colors.surface, borderColor: colors.border }]}
@@ -215,7 +214,7 @@ export function WorkoutSessionScreen({ navigation }: any) {
             {bleStatus === 'connected' ? connectedDeviceName :
              bleStatus === 'scanning' ? 'Scanning…' :
              bleStatus === 'connecting' ? 'Connecting…' :
-             bleStatus === 'unavailable' ? 'Demo Mode (no BLE on web)' :
+             bleStatus === 'unavailable' ? 'Bluetooth unavailable' :
              'Tap to pair HR strap'}
           </Text>
         </SoundPressable>
