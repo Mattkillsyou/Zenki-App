@@ -55,6 +55,14 @@ export function zoneColor(zone: number): string {
 // Zone Breakdown
 // ─────────────────────────────────────────────────
 
+/**
+ * Max plausible interval (minutes) to attribute to a single sample.
+ * BLE samples arrive ~1s apart; a dropout can leave a multi-minute gap.
+ * Clamping prevents one gap from inflating zone-minutes / calories / strain.
+ * Used identically by computeZoneBreakdown and estimateCalories.
+ */
+const MAX_SAMPLE_GAP_MIN = 5 / 60; // 5 seconds
+
 /** Compute minutes spent in each zone from a list of HR samples.
  *  Assumes samples are ~1 second apart (BLE typical rate). */
 export function computeZoneBreakdown(samples: HRSample[], age: number): ZoneBreakdown {
@@ -62,7 +70,8 @@ export function computeZoneBreakdown(samples: HRSample[], age: number): ZoneBrea
   if (samples.length < 2) return breakdown;
 
   for (let i = 1; i < samples.length; i++) {
-    const dt = (samples[i].timestamp - samples[i - 1].timestamp) / 60000; // minutes
+    const rawDt = (samples[i].timestamp - samples[i - 1].timestamp) / 60000; // minutes
+    const dt = Math.min(rawDt, MAX_SAMPLE_GAP_MIN); // clamp BLE dropout gaps
     const zone = bpmToZone(samples[i].bpm, age);
     if (zone === 1) breakdown.zone1 += dt;
     else if (zone === 2) breakdown.zone2 += dt;
@@ -166,7 +175,8 @@ export function estimateCalories(
   if (samples.length < 2) return 0;
   let total = 0;
   for (let i = 1; i < samples.length; i++) {
-    const dt = (samples[i].timestamp - samples[i - 1].timestamp) / 60000; // minutes
+    const rawDt = (samples[i].timestamp - samples[i - 1].timestamp) / 60000; // minutes
+    const dt = Math.min(rawDt, MAX_SAMPLE_GAP_MIN); // clamp BLE dropout gaps
     total += caloriesPerMinute(samples[i].bpm, weightKg, age, isMale) * dt;
   }
   return Math.round(total);

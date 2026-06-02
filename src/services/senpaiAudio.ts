@@ -102,7 +102,15 @@ export async function playSenpaiAudio(
   // but currentTime never advances and no audio is actually emitted.
   // Calling .replace() with the same source forces a real load + reset
   // of the playhead, which fixes the no-audio bug on the sim.
-  const player = createAudioPlayer({ uri: fileUri });
+  let player: ReturnType<typeof createAudioPlayer>;
+  try {
+    player = createAudioPlayer({ uri: fileUri });
+  } catch (e) {
+    // createAudioPlayer threw before cleanup() existed — delete the
+    // just-written tempfile so it doesn't leak, then rethrow.
+    FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+    throw e;
+  }
   try {
     player.replace({ uri: fileUri });
   } catch (e) {

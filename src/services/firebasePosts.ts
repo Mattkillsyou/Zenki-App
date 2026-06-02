@@ -181,13 +181,18 @@ export async function getFeed(maxPosts = 50): Promise<Post[]> {
 
 export async function getUserPosts(userId: string): Promise<Post[]> {
   if (!FIREBASE_CONFIGURED || !db) return [];
-  const q = query(
-    collection(db, 'posts'),
-    where('userId', '==', userId),
-    orderBy('createdAt', 'desc'),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Post));
+  try {
+    const q = query(
+      collection(db, 'posts'),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc'),
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Post));
+  } catch (err) {
+    console.warn('[getUserPosts] failed:', err);
+    return [];
+  }
 }
 
 export async function likePost(postId: string) {

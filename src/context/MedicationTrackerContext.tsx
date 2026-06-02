@@ -425,9 +425,7 @@ export function MedicationTrackerProvider({ children }: { children: React.ReactN
           (l) => l.medicationId === medicationId &&
             new Date(l.scheduledFor).getTime() >= dayStart &&
             new Date(l.scheduledFor).getTime() < dayEnd &&
-            l.scheduledFor.includes(`T${slot.time}`) === false
-              ? Math.abs(new Date(l.scheduledFor).getTime() - slotTs) < 12 * 3600 * 1000
-              : true,
+            Math.abs(new Date(l.scheduledFor).getTime() - slotTs) < 12 * 3600 * 1000,
         );
         // Simpler match: any log whose scheduledFor day matches and time matches
         const exactLog = logs.find((l) =>

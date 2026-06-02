@@ -103,6 +103,9 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     if (durationTimerRef.current) { clearInterval(durationTimerRef.current); durationTimerRef.current = null; }
   }, []);
 
+  // Tear down any active watch/timers if the provider unmounts while tracking.
+  useEffect(() => () => { cleanupTimers(); }, []);
+
   const startTracking = useCallback(async (type: GpsActivityType, memberId: string): Promise<boolean> => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return false;

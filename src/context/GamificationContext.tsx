@@ -302,7 +302,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           xpGained: XP_PER_SESSION + streakBonus,
         };
       }
-      if ([7, 14, 30, 100].includes(updated.streak)) {
+      if (updated.streak !== prev.streak && [7, 14, 30, 100].includes(updated.streak)) {
         updated.pendingCelebration = {
           type: 'streak_milestone',
           title: `${updated.streak}-Day Streak!`,

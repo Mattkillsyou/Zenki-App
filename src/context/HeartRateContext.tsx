@@ -36,6 +36,8 @@ const SCAN_TIMEOUT_MS = 12000;
 const RSSI_POLL_MS = 5000;
 /** One-shot backoff delay before auto-retrying after an unexpected drop (ms). */
 const DROP_RECONNECT_DELAY_MS = 2000;
+/** Max consecutive auto-reconnect attempts after drops before giving up. */
+const MAX_DROP_RETRIES = 3;
 
 /** Max samples persisted per session to prevent AsyncStorage bloat.
  *  At 1 sample/sec, a 90-min session produces ~5400 samples.
@@ -165,6 +167,9 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
   const dropReconnectingRef = useRef(false);
   // Handle for the post-drop backoff reconnect timer, so it can be cancelled.
   const dropTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Consecutive auto-reconnect attempts since the last successful/user connect.
+  // Caps the post-drop retry loop so a flapping link can't reconnect forever.
+  const dropRetryCountRef = useRef(0);
 
   // Ref mirrors so BLE callbacks (state-change, disconnect, AppState) read fresh
   // values instead of values captured at the time the callback was registered.
@@ -301,8 +306,10 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
 
-    // Fresh connection — drop any previous one's listeners/poll first.
-    clearConnectionState(false);
+    // Fresh connection — cancel + drop any previous one's link/listeners/poll
+    // first (true), so switching straps via the picker doesn't leak the old
+    // device's connection. No-ops safely when there's no previous device.
+    clearConnectionState(true);
     connectedDeviceRef.current = device;
     const name = device.name || device.localName || 'HR Monitor';
     setConnectedDeviceName(name);
@@ -341,9 +348,13 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
       setSignalRssi(null);
       setBleStatus('disconnected');
       setBleReason('dropped');
-      // One guarded backoff reconnect to ride out brief dropouts.
+      // One guarded backoff reconnect to ride out brief dropouts. Capped at
+      // MAX_DROP_RETRIES consecutive attempts so a flapping link can't loop
+      // forever; the counter resets on a successful or user-initiated connect.
+      if (dropRetryCountRef.current >= MAX_DROP_RETRIES) return;
       if (savedDeviceRef.current && !dropReconnectingRef.current) {
         dropReconnectingRef.current = true;
+        dropRetryCountRef.current += 1;
         dropTimerRef.current = setTimeout(() => {
           dropTimerRef.current = null;
           const p = reconnectSavedRef.current?.();
@@ -365,6 +376,11 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
       }
     } catch { /* no battery service — leave null */ }
 
+    // If the device dropped during the battery await, its onDisconnected
+    // handler already tore down and set 'disconnected'/'dropped'. Bail before
+    // creating an orphaned RSSI interval. (Re-checked again before 'connected'.)
+    if (connectedDeviceRef.current !== device) return false;
+
     // Live RSSI poll (~5s). Stored in a ref; cleared on teardown.
     setSignalRssi(null);
     if (rssiIntervalRef.current) clearInterval(rssiIntervalRef.current);
@@ -377,6 +393,22 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     }, RSSI_POLL_MS);
 
     await persistSavedDevice(device.id, name);
+
+    // Identity guard: if the device dropped during the awaits above (battery
+    // read / persist), its onDisconnected handler already ran — nulling
+    // connectedDeviceRef and setting 'disconnected'/'dropped'. Don't clobber
+    // that with a stale 'connected', and clear the orphaned RSSI interval we
+    // just created. Leave the handler's status/reason intact.
+    if (connectedDeviceRef.current !== device) {
+      if (rssiIntervalRef.current) {
+        clearInterval(rssiIntervalRef.current);
+        rssiIntervalRef.current = null;
+      }
+      return false;
+    }
+
+    // Successful connection — reset the post-drop retry counter.
+    dropRetryCountRef.current = 0;
     setBleStatus('connected');
     setBleReason('none');
     return true;
@@ -451,6 +483,7 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     if (!manager) return false;
     stopScan();
     dropReconnectingRef.current = false;
+    dropRetryCountRef.current = 0; // user-initiated connect → reset drop cap
     setBleStatus('connecting');
     setBleReason('none');
     try {
@@ -469,6 +502,10 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     if (!saved) return false;
     const manager = ensureManager();
     if (!manager) return false;
+    // Reset the drop cap only for genuinely user-initiated reconnects. When the
+    // post-drop backoff timer calls us, dropReconnectingRef is still true — don't
+    // reset then, or a flapping link would never hit MAX_DROP_RETRIES.
+    if (!dropReconnectingRef.current) dropRetryCountRef.current = 0;
     dropReconnectingRef.current = false;
     setBleStatus('connecting');
     setBleReason('none');
@@ -553,6 +590,8 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
   const disconnect = useCallback(() => {
     // Suppress the drop-recovery path; this is intentional.
     dropReconnectingRef.current = true;
+    // User-initiated disconnect — reset the post-drop retry cap for next time.
+    dropRetryCountRef.current = 0;
     // Cancel any pending post-drop auto-reconnect (e.g. tapping Disconnect
     // within the ~2s backoff window).
     if (dropTimerRef.current) { clearTimeout(dropTimerRef.current); dropTimerRef.current = null; }

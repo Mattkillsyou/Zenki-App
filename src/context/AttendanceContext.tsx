@@ -60,6 +60,11 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
   // Firestore-synced data (admin-only)
   const [firestoreTodayVisitors, setFirestoreTodayVisitors] = useState<AttendanceVisit[]>([]);
   const [firestoreAllVisits, setFirestoreAllVisits] = useState<AttendanceVisit[]>([]);
+  // Track whether the live subscriptions have delivered their first snapshot.
+  // Gating on these (instead of `.length > 0`) lets an empty Firestore day
+  // render as an empty list rather than falling back to the admin's local visit.
+  const [firestoreTodayLoaded, setFirestoreTodayLoaded] = useState(false);
+  const [firestoreAllLoaded, setFirestoreAllLoaded] = useState(false);
 
   const isAdmin = user?.isAdmin === true;
   const useFirestore = FIREBASE_CONFIGURED && isAdmin;
@@ -116,6 +121,8 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
     ]);
     setFirestoreTodayVisitors(todayData);
     setFirestoreAllVisits(allData);
+    setFirestoreTodayLoaded(true);
+    setFirestoreAllLoaded(true);
   }, [useFirestore]);
 
   // Track the local date so the today-subscription re-arms after midnight.
@@ -134,8 +141,17 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     if (!useFirestore) return;
-    const unsubToday = subscribeToTodayAttendance(setFirestoreTodayVisitors);
-    const unsubAll = subscribeToAllAttendance(setFirestoreAllVisits);
+    // Re-arming (useFirestore flip or midnight todayKey change) re-gates on a
+    // fresh first snapshot so we never trust a stale "loaded" from a prior day.
+    setFirestoreTodayLoaded(false);
+    const unsubToday = subscribeToTodayAttendance((visits) => {
+      setFirestoreTodayVisitors(visits);
+      setFirestoreTodayLoaded(true);
+    });
+    const unsubAll = subscribeToAllAttendance((visits) => {
+      setFirestoreAllVisits(visits);
+      setFirestoreAllLoaded(true);
+    });
     return () => {
       unsubToday();
       unsubAll();
@@ -214,31 +230,31 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
   const today = getTodayString();
 
   const todayVisitors = useMemo(() => {
-    if (useFirestore && firestoreTodayVisitors.length > 0) {
+    if (useFirestore && firestoreTodayLoaded) {
       return firestoreTodayVisitors;
     }
     return state.visits.filter((v) => v.date === today);
-  }, [useFirestore, firestoreTodayVisitors, state.visits, today]);
+  }, [useFirestore, firestoreTodayLoaded, firestoreTodayVisitors, state.visits, today]);
 
   const allVisitsHistory = useMemo(() => {
-    if (useFirestore && firestoreAllVisits.length > 0) {
+    if (useFirestore && firestoreAllLoaded) {
       return firestoreAllVisits;
     }
     return [...state.visits].reverse();
-  }, [useFirestore, firestoreAllVisits, state.visits]);
+  }, [useFirestore, firestoreAllLoaded, firestoreAllVisits, state.visits]);
 
   const getVisitHistory = useCallback(
     (memberId?: string) => {
-      const source = useFirestore && firestoreAllVisits.length > 0
+      const source = useFirestore && firestoreAllLoaded
         ? firestoreAllVisits
         : [...state.visits].reverse();
       return memberId ? source.filter((v) => v.memberId === memberId) : source;
     },
-    [useFirestore, firestoreAllVisits, state.visits],
+    [useFirestore, firestoreAllLoaded, firestoreAllVisits, state.visits],
   );
 
   const getVisitCountByMember = useCallback(() => {
-    const source = useFirestore && firestoreAllVisits.length > 0
+    const source = useFirestore && firestoreAllLoaded
       ? firestoreAllVisits
       : state.visits;
     const counts: Record<string, { memberId: string; memberName: string; count: number }> = {};
@@ -249,7 +265,7 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
       counts[v.memberId].count++;
     });
     return Object.values(counts).sort((a, b) => b.count - a.count);
-  }, [useFirestore, firestoreAllVisits, state.visits]);
+  }, [useFirestore, firestoreAllLoaded, firestoreAllVisits, state.visits]);
 
   return (
     <AttendanceContext.Provider

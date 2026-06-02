@@ -154,7 +154,12 @@ function useSenpaiChatState() {
           AsyncStorage.getItem(VOICE_KEY),
         ]);
         const parsed = safeParseJSON<ChatThreadMessage[]>(historyRaw, [], Array.isArray);
-        if (parsed.length > 0) setMessages(parsed.slice(-MAX_PERSISTED_TURNS));
+        // Drop in-flight assistant placeholders (pending, empty content) that
+        // got persisted when the app closed mid-reply — otherwise a stuck
+        // "typing" bubble rehydrates forever. The user's real question is a
+        // separate non-pending message, so nothing is lost.
+        const restored = parsed.slice(-MAX_PERSISTED_TURNS).filter((m) => !m.pending);
+        if (restored.length > 0) setMessages(restored);
         // Now that initial state is `true`, only override on an
         // explicit 'false' (auto-disable or user toggle). 'true' or
         // null both mean "keep voice on."
