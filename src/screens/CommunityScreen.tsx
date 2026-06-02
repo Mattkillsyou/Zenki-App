@@ -39,6 +39,10 @@ export function CommunityScreen({ navigation }: any) {
   // without re-creating the callback (and re-binding the list) on every change.
   const cursorRef = useRef<string | null>(null);
   const loadingRef = useRef(false);
+  // Mirror of `posts` for synchronous reads (dedupe across load-more iterations
+  // and the like-toggle guard) without depending on a stale render closure.
+  const postsRef = useRef<Post[]>([]);
+  useEffect(() => { postsRef.current = posts; }, [posts]);
 
   // Load the FIRST page (mount + pull-to-refresh). Resets the cursor.
   const loadFeed = useCallback(async () => {
@@ -46,6 +50,7 @@ export function CommunityScreen({ navigation }: any) {
     loadingRef.current = true;
     try {
       const { posts: page, cursor, hasMore: more } = await getFeed();
+      postsRef.current = page;
       setPosts(page);
       cursorRef.current = cursor;
       setHasMore(more);
@@ -58,28 +63,36 @@ export function CommunityScreen({ navigation }: any) {
     }
   }, []);
 
-  // Load the NEXT page (infinite scroll). Guarded against concurrent loads and
-  // the no-more-pages case so we never hammer Firestore or duplicate posts.
+  // Load the NEXT page (infinite scroll). Keeps paging until it adds at least one
+  // VISIBLE (non-hidden, non-duplicate) post or runs out — otherwise a page that
+  // is entirely blocked/muted/duplicated wouldn't grow the rendered list, so
+  // onEndReached would never fire again and pagination would dead-end.
   const loadMore = useCallback(async () => {
     if (loadingRef.current || !hasMore || !cursorRef.current) return;
     loadingRef.current = true;
     setLoadingMore(true);
     try {
-      const { posts: page, cursor, hasMore: more } = await getFeed({ cursor: cursorRef.current });
-      setPosts((prev) => {
-        // De-dupe by id in case a post shifted across the page boundary.
-        const seen = new Set(prev.map((p) => p.id));
-        return [...prev, ...page.filter((p) => !seen.has(p.id))];
-      });
-      cursorRef.current = cursor;
-      setHasMore(more);
+      let guard = 0;
+      while (cursorRef.current && guard < 6) {
+        guard++;
+        const { posts: page, cursor, hasMore: more } = await getFeed({ cursor: cursorRef.current });
+        cursorRef.current = cursor;
+        const seen = new Set(postsRef.current.map((p) => p.id));
+        const fresh = page.filter((p) => !seen.has(p.id));
+        const next = [...postsRef.current, ...fresh];
+        postsRef.current = next;
+        setPosts(next);
+        setHasMore(more);
+        const addedVisible = fresh.filter((p) => !blockedIds.has(p.userId) && !mutedIds.has(p.userId)).length;
+        if (addedVisible > 0 || !more) break;
+      }
     } catch (error) {
       console.log('[Community] Load-more error:', error);
     } finally {
       loadingRef.current = false;
       setLoadingMore(false);
     }
-  }, [hasMore]);
+  }, [hasMore, blockedIds, mutedIds]);
 
   // Re-filter whenever the blocked/muted lists change so unblocks/unmutes show
   // instantly. filterHidden hides BOTH blocked and muted authors.
@@ -102,9 +115,14 @@ export function CommunityScreen({ navigation }: any) {
   };
 
   const handleLike = async (postId: string, liked: boolean) => {
+    // Guard: if the post is already in the desired liked state (e.g. a double-tap
+    // fired two like(true)s), do nothing — the like txn is idempotent server-side,
+    // so a second optimistic +1 would drift the count. Clamp ≥ 0 too.
+    const current = postsRef.current.find((p) => p.id === postId);
+    if (!current || current.liked === liked) return;
     setPosts((prev) =>
       prev.map((p) =>
-        p.id === postId ? { ...p, liked, likes: p.likes + (liked ? 1 : -1) } : p,
+        p.id === postId ? { ...p, liked, likes: Math.max(0, p.likes + (liked ? 1 : -1)) } : p,
       ),
     );
     try {
@@ -114,7 +132,7 @@ export function CommunityScreen({ navigation }: any) {
       // Revert on failure
       setPosts((prev) =>
         prev.map((p) =>
-          p.id === postId ? { ...p, liked: !liked, likes: p.likes + (liked ? -1 : 1) } : p,
+          p.id === postId ? { ...p, liked: !liked, likes: Math.max(0, p.likes + (liked ? -1 : 1)) } : p,
         ),
       );
     }

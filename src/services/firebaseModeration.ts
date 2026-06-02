@@ -60,6 +60,15 @@ export async function banUserViaFunction(targetUid: string): Promise<{ ok: boole
   return callFunction('banUser', { targetUid });
 }
 
+/**
+ * Redact an offender's messages in a reported conversation (DM "Remove & Block").
+ * A client can't redact another user's messages (rules forbid it), so this runs
+ * server-side with the Admin SDK.
+ */
+export async function redactDmMessagesViaFunction(conversationId: string, targetUserId: string): Promise<{ ok: boolean; error?: string }> {
+  return callFunction('redactDmMessages', { conversationId, targetUserId });
+}
+
 // ─────────────────────────────────────────────
 // Blocks
 // ─────────────────────────────────────────────
@@ -352,10 +361,18 @@ export async function adminActionReport(
         deleteWarning = `Couldn't delete comment (${e?.code ?? 'unknown'}); offender still blocked.`;
         console.warn('[Moderation] comment delete failed:', e);
       }
+    } else if (r.targetType === 'message' && r.targetId) {
+      // DM report is thread-level: targetId is the conversationId, targetUserId
+      // the offender. Redact their messages in that conversation via Cloud
+      // Function (a client can't redact another user's messages).
+      const res = await redactDmMessagesViaFunction(r.targetId, r.targetUserId);
+      if (!res.ok) {
+        deleteWarning = `Couldn't redact messages (${res.error ?? 'unknown'}); offender still blocked.`;
+        console.warn('[Moderation] DM redaction failed:', res.error);
+      }
     }
-    // 'message' / 'user' targets have no client-deletable path at this tier —
-    // the block + status flip is the meaningful action. (Message redaction is
-    // handled server-side when a structured conversation/message id is present.)
+    // 'user' targets have no content to delete — the block + status flip is the
+    // action; use Ban to eject the user entirely.
 
     if (r.reporterId && r.targetUserId && r.reporterId !== r.targetUserId) {
       try {

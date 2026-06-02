@@ -6,13 +6,15 @@
  * is the read/action side.
  *
  * Shows all reports with status === 'open', newest first.
- * Each row has two actions:
- *   - Dismiss
- *   - Remove & Block (deletes the content, auto-blocks the reporter from
- *     the offender)
+ * Each row has: Dismiss, Remove & Block, and Ban user.
  *
- * Both paths call the `adminActionReport` Cloud Function so the destructive
- * operation runs with the Admin SDK (bypassing client rules).
+ * Actions run through the CLIENT `adminActionReport` (firebaseModeration), which
+ * does the report status update + reporter-block directly under admin Firestore
+ * rules, and delegates destructive cross-user work to Cloud Functions:
+ *   - post target    → deletePostCascade (post + likes/comments + media)
+ *   - comment target → deleted at posts/{parentId}/comments/{id} (admin rule)
+ *   - message target → redactDmMessages (offender's messages in the thread)
+ * "Ban user" ejects the offender entirely via the banUser function.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
