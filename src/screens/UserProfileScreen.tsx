@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useBlocks } from '../context/BlocksContext';
 import { typography, spacing, borderRadius } from '../theme';
-import { getUserProfile, updateProfile, followUser, unfollowUser, isFollowing, getFollowerCount, getFollowingCount, UserProfile } from '../services/firebaseFollow';
+import { getUserProfile, updateProfile, followUser, unfollowUser, isFollowing, getFollowerCount, getFollowingCount, listFollowRequests, UserProfile } from '../services/firebaseFollow';
 import { getUserPosts, Post } from '../services/firebasePosts';
 import { getCurrentUid } from '../services/firebaseAuth';
 import { ReportModal } from '../components/ReportModal';
@@ -21,7 +21,7 @@ export function UserProfileScreen({ navigation, route }: any) {
   const { colors } = useTheme();
   const { userId } = route.params;
   const isOwnProfile = userId === getCurrentUid();
-  const { isBlocked, blockUser, unblockUser } = useBlocks();
+  const { isBlocked, blockUser, unblockUser, isMuted, muteUser, unmuteUser } = useBlocks();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -34,7 +34,24 @@ export function UserProfileScreen({ navigation, route }: any) {
   const [editTwitter, setEditTwitter] = useState('');
   const [editWebsite, setEditWebsite] = useState('');
   const [reportOpen, setReportOpen] = useState(false);
+  const [requestCount, setRequestCount] = useState(0);
   const userBlocked = !isOwnProfile && isBlocked(userId);
+  const userMuted = !isOwnProfile && isMuted(userId);
+
+  const handleMuteToggle = () => {
+    if (userMuted) {
+      unmuteUser(userId);
+    } else {
+      Alert.alert(
+        `Mute ${profile?.displayName ?? 'this user'}?`,
+        `Their posts and comments will be hidden from your feed. They won't be notified, and you can unmute anytime.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Mute', onPress: () => muteUser(userId) },
+        ],
+      );
+    }
+  };
 
   const handleBlockToggle = () => {
     if (userBlocked) {
@@ -86,6 +103,17 @@ export function UserProfileScreen({ navigation, route }: any) {
     setFollowing(isFollow);
     setFollowers(fCount);
     setFollowingCount(fgCount);
+
+    // Own profile only: surface a pending-follow-request count for the inbox
+    // entry. Guarded so a transient failure never blocks the profile render.
+    if (isOwnProfile) {
+      try {
+        const requests = await listFollowRequests();
+        setRequestCount(requests.length);
+      } catch (e) {
+        console.warn('[UserProfile] follow-requests count failed:', e);
+      }
+    }
   };
 
   const handleFollow = async () => {
@@ -192,27 +220,43 @@ export function UserProfileScreen({ navigation, route }: any) {
 
           {/* Follow / Edit Profile Buttons */}
           {isOwnProfile ? (
-            <View style={styles.ownButtonsRow}>
+            <>
+              <View style={styles.ownButtonsRow}>
+                <SoundPressable
+                  style={[styles.actionButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, flex: 1 }]}
+                  onPress={() => {
+                    setEditBio(profile?.bio || '');
+                    setEditInstagram((profile as any)?.socialLinks?.instagram || '');
+                    setEditTwitter((profile as any)?.socialLinks?.twitter || '');
+                    setEditWebsite((profile as any)?.socialLinks?.website || '');
+                    setShowEditProfile(!showEditProfile);
+                  }}
+                >
+                  <Ionicons name="create-outline" size={16} color={colors.textPrimary} />
+                  <Text style={[styles.actionButtonText, { color: colors.textPrimary }]}>Edit Profile</Text>
+                </SoundPressable>
+                <SoundPressable
+                  style={[styles.actionButton, { backgroundColor: profile?.isPrivate ? colors.goldMuted : colors.surface, borderColor: colors.border, borderWidth: 1 }]}
+                  onPress={handleTogglePrivate}
+                >
+                  <Ionicons name={profile?.isPrivate ? 'lock-closed' : 'lock-open-outline'} size={16} color={profile?.isPrivate ? colors.gold : colors.textMuted} />
+                </SoundPressable>
+              </View>
+              {/* Follow-request inbox entry (own profile). Route registered by the lead. */}
               <SoundPressable
-                style={[styles.actionButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, flex: 1 }]}
-                onPress={() => {
-                  setEditBio(profile?.bio || '');
-                  setEditInstagram((profile as any)?.socialLinks?.instagram || '');
-                  setEditTwitter((profile as any)?.socialLinks?.twitter || '');
-                  setEditWebsite((profile as any)?.socialLinks?.website || '');
-                  setShowEditProfile(!showEditProfile);
-                }}
+                style={[styles.requestsRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={() => navigation.navigate('FollowRequests')}
               >
-                <Ionicons name="create-outline" size={16} color={colors.textPrimary} />
-                <Text style={[styles.actionButtonText, { color: colors.textPrimary }]}>Edit Profile</Text>
+                <Ionicons name="person-add-outline" size={18} color={colors.textPrimary} />
+                <Text style={[styles.requestsLabel, { color: colors.textPrimary }]}>Follow requests</Text>
+                {requestCount > 0 && (
+                  <View style={[styles.requestsBadge, { backgroundColor: colors.red }]}>
+                    <Text style={styles.requestsBadgeText}>{requestCount}</Text>
+                  </View>
+                )}
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </SoundPressable>
-              <SoundPressable
-                style={[styles.actionButton, { backgroundColor: profile?.isPrivate ? colors.goldMuted : colors.surface, borderColor: colors.border, borderWidth: 1 }]}
-                onPress={handleTogglePrivate}
-              >
-                <Ionicons name={profile?.isPrivate ? 'lock-closed' : 'lock-open-outline'} size={16} color={profile?.isPrivate ? colors.gold : colors.textMuted} />
-              </SoundPressable>
-            </View>
+            </>
           ) : (
             <View style={styles.ownButtonsRow}>
               <SoundPressable
@@ -240,6 +284,7 @@ export function UserProfileScreen({ navigation, route }: any) {
                 style={[styles.actionButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, paddingHorizontal: spacing.sm }]}
                 onPress={() => {
                   Alert.alert(profile?.displayName || 'User', undefined, [
+                    { text: userMuted ? 'Unmute user' : 'Mute user', onPress: handleMuteToggle },
                     { text: userBlocked ? 'Unblock user' : 'Block user', style: userBlocked ? 'default' : 'destructive', onPress: handleBlockToggle },
                     { text: 'Report user', onPress: () => setReportOpen(true) },
                     { text: 'Cancel', style: 'cancel' },
@@ -446,6 +491,28 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
+  requestsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    alignSelf: 'stretch',
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+  requestsLabel: { ...typography.button, fontSize: 13, flex: 1 },
+  requestsBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  requestsBadgeText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
   editSection: {
     marginBottom: spacing.md,
   },
