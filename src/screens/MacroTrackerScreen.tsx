@@ -888,7 +888,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
           if (!user) return;
           addMacroEntry({
             memberId: user.id,
-            date: today,
+            date: selectedDate,
             name: food.brand ? `${food.brand} · ${food.name}` : food.name,
             calories: scaledMacros.calories,
             protein: scaledMacros.protein,

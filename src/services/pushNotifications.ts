@@ -145,7 +145,29 @@ export async function broadcastPushNotification(
         body: JSON.stringify(messages),
       });
       if (response.ok) {
-        sent += batch.length;
+        // Expo returns HTTP 200 even when individual tickets fail. The body is
+        // { data: [ { status: 'ok' | 'error', ... } ] }; stale/invalid tokens
+        // come back as per-ticket status: 'error'. Count only 'ok' as sent.
+        try {
+          const json = await response.json();
+          const tickets = json?.data;
+          if (Array.isArray(tickets) && tickets.length > 0) {
+            for (let i = 0; i < batch.length; i++) {
+              const ticket = tickets[i];
+              if (ticket && ticket.status === 'ok') {
+                sent += 1;
+              } else {
+                errors += 1;
+              }
+            }
+          } else {
+            // Missing/short data array — fall back to counting the batch as sent.
+            sent += batch.length;
+          }
+        } catch (parseErr) {
+          console.warn('[Push] Parse response failed:', parseErr);
+          errors += batch.length;
+        }
       } else {
         errors += batch.length;
       }

@@ -2,7 +2,7 @@ import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import {
   collection, addDoc, deleteDoc, doc, getDoc, getDocFromServer, getDocs,
   query, where, orderBy, limit, updateDoc, increment,
-  setDoc,
+  setDoc, runTransaction,
 } from 'firebase/firestore';
 import { getCurrentUid } from './firebaseAuth';
 import { uploadMedia } from './firebaseStorage';
@@ -192,18 +192,36 @@ export async function getUserPosts(userId: string): Promise<Post[]> {
 
 export async function likePost(postId: string) {
   if (!db) return;
+  const firestore = db;
   const uid = getCurrentUid();
   if (!uid) return;
-  await setDoc(doc(db, 'posts', postId, 'likes', uid), { at: new Date().toISOString() });
-  await updateDoc(doc(db, 'posts', postId), { likes: increment(1) });
+  const likeRef = doc(firestore, 'posts', postId, 'likes', uid);
+  const postRef = doc(firestore, 'posts', postId);
+  // Idempotent: only increment when the like doc doesn't already exist, so
+  // repeated likes / multi-device taps can't skew the counter.
+  await runTransaction(firestore, async (tx) => {
+    const likeSnap = await tx.get(likeRef);
+    if (likeSnap.exists()) return;
+    tx.set(likeRef, { at: new Date().toISOString() });
+    tx.update(postRef, { likes: increment(1) });
+  });
 }
 
 export async function unlikePost(postId: string) {
   if (!db) return;
+  const firestore = db;
   const uid = getCurrentUid();
   if (!uid) return;
-  await deleteDoc(doc(db, 'posts', postId, 'likes', uid));
-  await updateDoc(doc(db, 'posts', postId), { likes: increment(-1) });
+  const likeRef = doc(firestore, 'posts', postId, 'likes', uid);
+  const postRef = doc(firestore, 'posts', postId);
+  // Idempotent: only decrement when the like doc actually exists, so the
+  // counter can't go negative from repeated unlikes / multi-device desync.
+  await runTransaction(firestore, async (tx) => {
+    const likeSnap = await tx.get(likeRef);
+    if (!likeSnap.exists()) return;
+    tx.delete(likeRef);
+    tx.update(postRef, { likes: increment(-1) });
+  });
 }
 
 async function isLiked(postId: string): Promise<boolean> {

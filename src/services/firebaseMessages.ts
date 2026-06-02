@@ -2,7 +2,6 @@ import {
   collection,
   doc,
   setDoc,
-  addDoc,
   getDoc,
   query,
   where,
@@ -13,6 +12,7 @@ import {
   serverTimestamp,
   Unsubscribe,
   increment,
+  writeBatch,
 } from 'firebase/firestore';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import { getCurrentUid } from './firebaseAuth';
@@ -89,7 +89,12 @@ export async function sendMessage(conversationId: string, text: string): Promise
     text: trimmed,
     createdAt: new Date().toISOString(),
   };
-  const ref = await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
+
+  // Write the message and the conversation summary atomically so a failure
+  // between them can't leave the inbox preview/unread count stale.
+  const batch = writeBatch(db);
+  const msgRef = doc(collection(db, 'conversations', conversationId, 'messages'));
+  batch.set(msgRef, {
     ...msgData,
     serverTs: serverTimestamp(),
   });
@@ -101,9 +106,11 @@ export async function sendMessage(conversationId: string, text: string): Promise
     lastMessageAt: msgData.createdAt,
   };
   if (recipient) unreadUpdate[`unreadFor.${recipient}`] = increment(1);
-  await updateDoc(doc(db, 'conversations', conversationId), unreadUpdate);
+  batch.update(doc(db, 'conversations', conversationId), unreadUpdate);
 
-  return { id: ref.id, ...msgData };
+  await batch.commit();
+
+  return { id: msgRef.id, ...msgData };
 }
 
 /** Mark all unread messages in a conversation as read by current user. */

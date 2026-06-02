@@ -1,5 +1,5 @@
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
-import { doc, setDoc, deleteDoc, getDoc, getDocs, collection, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, getDoc, getDocs, collection, updateDoc, writeBatch } from 'firebase/firestore';
 import { getCurrentUid } from './firebaseAuth';
 
 export interface UserProfile {
@@ -37,8 +37,11 @@ export async function followUser(targetId: string): Promise<string> {
     return 'requested';
   }
 
-  await setDoc(doc(db, 'following', uid, 'follows', targetId), { at: new Date().toISOString() });
-  await setDoc(doc(db, 'followers', targetId, 'followers', uid), { at: new Date().toISOString() });
+  const batch = writeBatch(db);
+  const stamp = new Date().toISOString();
+  batch.set(doc(db, 'following', uid, 'follows', targetId), { at: stamp });
+  batch.set(doc(db, 'followers', targetId, 'followers', uid), { at: stamp });
+  await batch.commit();
   return 'followed';
 }
 
@@ -46,8 +49,10 @@ export async function unfollowUser(targetId: string) {
   if (!db) return;
   const uid = getCurrentUid();
   if (!uid) return;
-  await deleteDoc(doc(db, 'following', uid, 'follows', targetId));
-  await deleteDoc(doc(db, 'followers', targetId, 'followers', uid));
+  const batch = writeBatch(db);
+  batch.delete(doc(db, 'following', uid, 'follows', targetId));
+  batch.delete(doc(db, 'followers', targetId, 'followers', uid));
+  await batch.commit();
 }
 
 export async function acceptFollowRequest(requesterId: string) {

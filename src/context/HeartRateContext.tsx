@@ -163,6 +163,8 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
   const scanFoundRef = useRef<Map<string, BLEDeviceInfo>>(new Map());
   // Guards the single post-drop reconnect so a flapping link can't loop forever
   const dropReconnectingRef = useRef(false);
+  // Handle for the post-drop backoff reconnect timer, so it can be cancelled.
+  const dropTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Ref mirrors so BLE callbacks (state-change, disconnect, AppState) read fresh
   // values instead of values captured at the time the callback was registered.
@@ -295,6 +297,7 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     } catch {
       setBleStatus('disconnected');
       setBleReason('failed');
+      try { device.cancelConnection(); } catch {}
       return false;
     }
 
@@ -341,7 +344,8 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
       // One guarded backoff reconnect to ride out brief dropouts.
       if (savedDeviceRef.current && !dropReconnectingRef.current) {
         dropReconnectingRef.current = true;
-        setTimeout(() => {
+        dropTimerRef.current = setTimeout(() => {
+          dropTimerRef.current = null;
           const p = reconnectSavedRef.current?.();
           if (p && typeof p.finally === 'function') {
             p.finally(() => { dropReconnectingRef.current = false; });
@@ -549,6 +553,9 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
   const disconnect = useCallback(() => {
     // Suppress the drop-recovery path; this is intentional.
     dropReconnectingRef.current = true;
+    // Cancel any pending post-drop auto-reconnect (e.g. tapping Disconnect
+    // within the ~2s backoff window).
+    if (dropTimerRef.current) { clearTimeout(dropTimerRef.current); dropTimerRef.current = null; }
     clearConnectionState(true);
     setConnectedDeviceName(null);
     setCurrentBpm(0);
@@ -616,6 +623,7 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     return () => {
       if (scanTimeoutRef.current) { clearTimeout(scanTimeoutRef.current); scanTimeoutRef.current = null; }
+      if (dropTimerRef.current) { clearTimeout(dropTimerRef.current); dropTimerRef.current = null; }
       clearConnectionState(true);
       try { stateSubscriptionRef.current?.remove(); } catch { /* ignore */ }
       stateSubscriptionRef.current = null;

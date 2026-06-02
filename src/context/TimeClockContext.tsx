@@ -76,7 +76,11 @@ export function TimeClockProvider({
         if (saved.currentPeriod.startDate !== current.startDate) {
           setState({
             currentEntry: saved.currentEntry, // preserve if still clocked in
-            currentPeriod: { ...current, entries: [] },
+            // Carry the still-open shift into the new period so clockOut (which
+            // only .maps existing entries) can find it and its hours/pay count.
+            // The old period's history copy keeps the same entry with a null
+            // clockOut, which getPeriodTotals skips — so no double-counting.
+            currentPeriod: { ...current, entries: saved.currentEntry ? [saved.currentEntry] : [] },
             history: [...saved.history, saved.currentPeriod],
           });
         } else {
@@ -152,10 +156,11 @@ export function TimeClockProvider({
         paidMinutes: paid,
         mealDeductionMinutes: mealDeduction,
       };
-      // Update the entry in the period
-      const entries = prev.currentPeriod.entries.map((e) =>
-        e.id === completed.id ? completed : e,
-      );
+      // Update the entry in the period (append if not already present, e.g.
+      // after a biweekly rollover, so its hours/pay aren't dropped).
+      const entries = prev.currentPeriod.entries.some((e) => e.id === completed.id)
+        ? prev.currentPeriod.entries.map((e) => (e.id === completed.id ? completed : e))
+        : [...prev.currentPeriod.entries, completed];
 
       // Fire and forget Sheets sync
       pushTimeEntry(completed, employeeName, hourlyRate, prev.currentPeriod.startDate, prev.currentPeriod.endDate).then((ok) => {
@@ -189,9 +194,9 @@ export function TimeClockProvider({
         currentEntry: updated,
         currentPeriod: {
           ...prev.currentPeriod,
-          entries: prev.currentPeriod.entries.map((e) =>
-            e.id === updated.id ? updated : e,
-          ),
+          entries: prev.currentPeriod.entries.some((e) => e.id === updated.id)
+            ? prev.currentPeriod.entries.map((e) => (e.id === updated.id ? updated : e))
+            : [...prev.currentPeriod.entries, updated],
         },
       };
     });
@@ -206,9 +211,9 @@ export function TimeClockProvider({
         currentEntry: updated,
         currentPeriod: {
           ...prev.currentPeriod,
-          entries: prev.currentPeriod.entries.map((e) =>
-            e.id === updated.id ? updated : e,
-          ),
+          entries: prev.currentPeriod.entries.some((e) => e.id === updated.id)
+            ? prev.currentPeriod.entries.map((e) => (e.id === updated.id ? updated : e))
+            : [...prev.currentPeriod.entries, updated],
         },
       };
     });

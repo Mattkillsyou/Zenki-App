@@ -202,7 +202,7 @@ export function BodyLabScreen({ navigation }: any) {
             {bloodwork.length > 0 && (() => {
               const latest = bloodwork[0];
               const flagged = latest.biomarkers?.filter((b: any) => b.status === 'out_of_range') || [];
-              const optimal = latest.biomarkers?.filter((b: any) => b.status === 'optimal' || b.status === 'normal') || [];
+              const optimal = latest.biomarkers?.filter((b: any) => b.status === 'optimal' || b.status === 'sufficient') || [];
               return (
                 <FadeInView delay={60}>
                   <View style={[styles.bioSummary, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -269,18 +269,18 @@ export function BodyLabScreen({ navigation }: any) {
                   <SoundPressable
                     key={scan.id}
                     style={[styles.listCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                    onPress={() => navigation.navigate('DexaScanDetail', { scanId: scan.id })}
+                    onPress={() => navigation.navigate('DexaScanDetail', { id: scan.id })}
                   >
                     <View style={[styles.listIcon, { backgroundColor: colors.goldMuted }]}>
                       <Ionicons name="body" size={18} color={colors.gold} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.listTitle, { color: colors.textPrimary }]}>
-                        {new Date(scan.date || scan.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {new Date(scan.scanDate || scan.addedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </Text>
-                      {scan.bodyFatPct != null && (
+                      {scan.totalBodyFatPct != null && (
                         <Text style={[styles.listSub, { color: colors.textMuted }]}>
-                          {scan.bodyFatPct.toFixed(1)}% body fat · {scan.leanMassKg?.toFixed(1) || '—'} kg lean
+                          {scan.totalBodyFatPct.toFixed(1)}% body fat · {scan.leanMassKg?.toFixed(1) || '—'} kg lean
                         </Text>
                       )}
                     </View>
@@ -321,14 +321,14 @@ export function BodyLabScreen({ navigation }: any) {
                     <SoundPressable
                       key={report.id}
                       style={[styles.listCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                      onPress={() => navigation.navigate('BloodworkReportDetail', { reportId: report.id })}
+                      onPress={() => navigation.navigate('BloodworkReportDetail', { id: report.id })}
                     >
                       <View style={[styles.listIcon, { backgroundColor: flagged > 0 ? colors.redMuted : colors.goldMuted }]}>
                         <Ionicons name="flask" size={18} color={flagged > 0 ? colors.red : colors.gold} />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.listTitle, { color: colors.textPrimary }]}>
-                          {new Date(report.date || report.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {new Date(report.testDate || report.addedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </Text>
                         <Text style={[styles.listSub, { color: colors.textMuted }]}>
                           {report.biomarkers?.length || 0} biomarkers{flagged > 0 ? ` · ${flagged} flagged` : ' · all normal'}
