@@ -32,12 +32,33 @@ service cloud.firestore {
              && exists(/databases/$(database)/documents/followers/$(authorUid)/followers/$(request.auth.uid));
     }
 
+    // True if the target account is NOT private. Used to stop a user from
+    // self-adding as a follower of a PRIVATE account (which would otherwise make
+    // isApprovedFollowerOf() true and expose that account's private posts).
+    function isPublicAccount(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data.get('isPrivate', false) != true;
+    }
+
     // A non-admin member write must not grant itself privileged fields. Admins
     // provision employees/admins through the isAdmin() branch instead.
+    // CREATE guard: a self-created member doc must not grant itself privileged
+    // fields (no isAdmin/isEmployee true, no hourlyRate). `resource` is null on
+    // create, so this only inspects the incoming doc.
     function memberWriteNotElevating() {
       return !('isAdmin' in request.resource.data && request.resource.data.isAdmin == true)
           && !('isEmployee' in request.resource.data && request.resource.data.isEmployee == true)
           && !('hourlyRate' in request.resource.data);
+    }
+
+    // UPDATE guard: a self-update must not CHANGE privileged fields from their
+    // existing values. (request.resource.data is the post-merge doc, so checking
+    // `not present` like the create guard wrongly blocks every self-edit by a
+    // member whose stored doc already carries isEmployee/hourlyRate — e.g. an
+    // employee changing their avatar. Compare to resource.data instead.)
+    function memberUpdateNotElevating() {
+      return request.resource.data.get('isAdmin', false) == resource.data.get('isAdmin', false)
+          && request.resource.data.get('isEmployee', false) == resource.data.get('isEmployee', false)
+          && request.resource.data.get('hourlyRate', 0) == resource.data.get('hourlyRate', 0);
     }
 
     // Member profiles keyed by Firebase Auth uid.
@@ -90,7 +111,7 @@ service cloud.firestore {
       allow update: if isAdmin()
                     || (isSignedIn()
                         && request.resource.data.firebaseUid == request.auth.uid
-                        && memberWriteNotElevating()
+                        && memberUpdateNotElevating()
                         && (
                           resource.data.firebaseUid == request.auth.uid
                           || (!('firebaseUid' in resource.data)
@@ -202,12 +223,14 @@ service cloud.firestore {
     // by profile screens to show follow counts).
     match /following/{followerUid}/follows/{followedUid} {
       allow read: if isSignedIn();
-      // The follower owns their own follows list. The followed user may also
-      // create this edge — but ONLY when there is a pending follow request from
-      // the follower (i.e. acceptFollowRequest). Without that gate, anyone could
-      // fabricate "X follows me" and inflate counts. (Rules see pre-batch state,
-      // so the request still exists while accept's batch also deletes it.)
-      allow create: if isOwner(followerUid)
+      // The follower may create their own edge ONLY to a PUBLIC account (a
+      // private account is followable only via an approved request — see the
+      // followedUid branch). Without the isPublicAccount() gate a user could
+      // self-add as a follower of a private account and thereby read its private
+      // posts. The followed user may create the edge when approving a pending
+      // request (acceptFollowRequest); rules see pre-batch state, so the request
+      // still exists while accept's batch also deletes it.
+      allow create: if (isOwner(followerUid) && isPublicAccount(followedUid))
                     || (isOwner(followedUid)
                         && exists(/databases/$(database)/documents/followRequests/$(followedUid)/requests/$(followerUid)));
       allow update, delete: if isOwner(followerUid) || isOwner(followedUid);
@@ -220,10 +243,11 @@ service cloud.firestore {
     // follower counts and the private-account approval flow.
     match /followers/{followedUid}/followers/{followerUid} {
       allow read: if isSignedIn();
-      // Follower creates their own edge on a public follow. The followed user
-      // may create it only when approving a pending request (same gate as
-      // /following above) — blocks fabricated "X follows me" count inflation.
-      allow create: if isOwner(followerUid)
+      // Follower may self-create this edge ONLY for a PUBLIC target (private
+      // accounts require an approved request — the followedUid branch). This is
+      // the key gate that stops a non-follower from reading a private account's
+      // posts by fabricating their own approved-follower edge.
+      allow create: if (isOwner(followerUid) && isPublicAccount(followedUid))
                     || (isOwner(followedUid)
                         && exists(/databases/$(database)/documents/followRequests/$(followedUid)/requests/$(followerUid)));
       allow delete: if isOwner(followerUid) || isOwner(followedUid);
