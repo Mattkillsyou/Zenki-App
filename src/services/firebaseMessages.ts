@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import { getCurrentUid } from './firebaseAuth';
+import { assertCleanText } from './contentFilter';
 
 export interface Message {
   id: string;
@@ -25,6 +26,12 @@ export interface Message {
   createdAt: string;
 }
 
+/** Denormalized per-participant profile snapshot stored on the conversation doc. */
+export interface ParticipantProfile {
+  displayName: string;
+  avatar: string | null;
+}
+
 export interface Conversation {
   id: string;                      // deterministic, sorted-UIDs joined with '_'
   participants: string[];
@@ -32,7 +39,9 @@ export interface Conversation {
   lastSenderId: string;
   lastMessageAt: string;
   unreadFor: Record<string, number>;
-  // Enriched client-side for display
+  // Denormalized so the inbox needs no per-snapshot profile fetch.
+  participantProfiles?: Record<string, ParticipantProfile>;
+  // Enriched client-side for display (sourced from participantProfiles).
   otherUserId?: string;
   otherUserName?: string;
   otherUserAvatar?: string | null;
@@ -55,12 +64,28 @@ export async function getOrCreateConversation(otherUid: string): Promise<string 
   const ref = doc(db, 'conversations', id);
   const snap = await getDoc(ref);
   if (!snap.exists()) {
+    // Denormalize both participants' display profiles onto the conversation so
+    // the inbox renders without a per-snapshot profile fetch (kills the N+1).
+    const [meProfile, otherProfile] = await Promise.all([
+      fetchUserProfile(me),
+      fetchUserProfile(otherUid),
+    ]);
     await setDoc(ref, {
       participants: [me, otherUid].sort(),
       lastMessage: '',
       lastSenderId: '',
       lastMessageAt: new Date().toISOString(),
       unreadFor: { [me]: 0, [otherUid]: 0 },
+      participantProfiles: {
+        [me]: {
+          displayName: meProfile?.displayName || 'Member',
+          avatar: meProfile?.avatar || null,
+        },
+        [otherUid]: {
+          displayName: otherProfile?.displayName || 'Member',
+          avatar: otherProfile?.avatar || null,
+        },
+      },
       createdAt: serverTimestamp(),
     });
   }
@@ -76,6 +101,10 @@ export async function sendMessage(conversationId: string, text: string): Promise
   if (!me) return null;
   const trimmed = text.trim();
   if (!trimmed) return null;
+
+  // Proactive objectionable-content gate (Apple 1.2). Throws
+  // Error('content-blocked: <reason>') which the chat screen surfaces.
+  assertCleanText(trimmed);
 
   // Load conversation to determine recipient
   const convSnap = await getDoc(doc(db, 'conversations', conversationId));
@@ -101,6 +130,17 @@ export async function sendMessage(conversationId: string, text: string): Promise
     lastMessageAt: msgData.createdAt,
   };
   if (recipient) unreadUpdate[`unreadFor.${recipient}`] = increment(1);
+  // Best-effort: refresh the sender's own denormalized profile so inbox names
+  // stay fresh. Within the rules update key-allowlist (participantProfiles).
+  try {
+    const myProfile = await fetchUserProfile(me);
+    if (myProfile) {
+      unreadUpdate[`participantProfiles.${me}`] = {
+        displayName: myProfile.displayName || 'Member',
+        avatar: myProfile.avatar || null,
+      };
+    }
+  } catch { /* non-fatal — summary update still proceeds */ }
   await updateDoc(doc(db, 'conversations', conversationId), unreadUpdate);
 
   return { id: ref.id, ...msgData };
@@ -126,15 +166,23 @@ export function subscribeToInbox(onUpdate: (convs: Conversation[]) => void): Uns
   if (!FIREBASE_CONFIGURED || !db) return () => {};
   const me = getCurrentUid();
   if (!me) return () => {};
+  // Ordered + bounded server-side (composite index: participants array-contains
+  // + lastMessageAt DESC). Profiles arrive denormalized on the doc, so the
+  // snapshot handler does NO per-conversation profile fetch (kills the N+1).
   const q = query(
     collection(db, 'conversations'),
     where('participants', 'array-contains', me),
+    orderBy('lastMessageAt', 'desc'),
+    limit(50),
   );
   return onSnapshot(q, (snap) => {
     const convs: Conversation[] = [];
     snap.forEach((d) => {
       const data = d.data() as any;
       const other = (data.participants || []).find((p: string) => p !== me);
+      // Read the denormalized profile written at create/refresh on send.
+      // Fallback to 'Member'/null for legacy conversations without the map.
+      const otherProfile = other ? data.participantProfiles?.[other] : undefined;
       convs.push({
         id: d.id,
         participants: data.participants || [],
@@ -142,10 +190,12 @@ export function subscribeToInbox(onUpdate: (convs: Conversation[]) => void): Uns
         lastSenderId: data.lastSenderId || '',
         lastMessageAt: data.lastMessageAt || '',
         unreadFor: data.unreadFor || {},
+        participantProfiles: data.participantProfiles || undefined,
         otherUserId: other,
+        otherUserName: otherProfile?.displayName || 'Member',
+        otherUserAvatar: otherProfile?.avatar ?? null,
       });
     });
-    convs.sort((a, b) => (b.lastMessageAt || '').localeCompare(a.lastMessageAt || ''));
     onUpdate(convs);
   });
 }

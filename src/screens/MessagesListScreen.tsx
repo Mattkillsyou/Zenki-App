@@ -12,7 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useBlocks } from '../context/BlocksContext';
 import { spacing, MAX_CONTENT_WIDTH } from '../theme';
-import { Conversation, fetchUserProfile, subscribeToInbox } from '../services/firebaseMessages';
+import { Conversation, subscribeToInbox } from '../services/firebaseMessages';
 
 export function MessagesListScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -24,20 +24,10 @@ export function MessagesListScreen({ navigation }: any) {
   const visibleConvs = convs.filter((c) => !c.otherUserId || !isBlocked(c.otherUserId));
 
   useEffect(() => {
-    const unsub = subscribeToInbox(async (list) => {
-      // Enrich with each other user's profile for display
-      const enriched = await Promise.all(
-        list.map(async (c) => {
-          if (!c.otherUserId) return c;
-          const profile = await fetchUserProfile(c.otherUserId);
-          return {
-            ...c,
-            otherUserName: profile?.displayName || 'Member',
-            otherUserAvatar: profile?.avatar || null,
-          };
-        }),
-      );
-      setConvs(enriched);
+    // Conversations arrive already enriched with otherUserName/otherUserAvatar
+    // from the doc's denormalized participantProfiles — no per-snapshot fetch.
+    const unsub = subscribeToInbox((list) => {
+      setConvs(list);
       setLoading(false);
     });
     return () => unsub();
