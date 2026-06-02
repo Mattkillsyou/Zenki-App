@@ -22,7 +22,7 @@ import { useNutrition } from '../context/NutritionContext';
 import { useSenpai } from '../context/SenpaiContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, LineChart, KeyboardAwareScrollView, ScreenContainer } from '../components';
+import { FadeInView, LineChart, KeyboardAwareScrollView, ScreenContainer, AppleHealthFootnote } from '../components';
 import { WeekCalendar, WeekDay, startOfWeek, addDays, todayIso } from '../components/WeekCalendar';
 import { WeightUnit } from '../types/nutrition';
 import { computeTrendWeight, trendChange, kgToLbs } from '../utils/nutrition';
@@ -636,6 +636,8 @@ export function WeightTrackerScreen({ navigation }: any) {
               {invalidCount} entry{invalidCount === 1 ? '' : 'ies'} excluded — open History to review.
             </Text>
           )}
+
+          <AppleHealthFootnote />
         </KeyboardAwareScrollView>
       </ScreenContainer>
 

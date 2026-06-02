@@ -8,7 +8,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing } from '../theme';
-import { FadeInView, ScreenContainer } from '../components';
+import { FadeInView, ScreenContainer, AppleHealthFootnote } from '../components';
 
 type Tab = 'dashboard' | 'dexa' | 'bloodwork' | 'info';
 
@@ -388,6 +388,7 @@ export function BodyLabScreen({ navigation }: any) {
           </>
         )}
 
+        <AppleHealthFootnote />
         <View style={{ height: 40 }} />
         </ScreenContainer>
       </ScrollView>

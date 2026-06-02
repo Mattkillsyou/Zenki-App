@@ -18,7 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, KeyboardAwareScrollView, ScreenContainer } from '../components';
+import { FadeInView, KeyboardAwareScrollView, ScreenContainer, AppleHealthFootnote } from '../components';
 import { FoodSearchModal } from '../components/FoodSearchModal';
 import { ReorderableSections, ReorderableItem } from '../components/ReorderableSections';
 import { WeekCalendar, WeekDay, startOfWeek, addDays } from '../components/WeekCalendar';
@@ -795,6 +795,8 @@ export function MacroTrackerScreen({ navigation, route }: any) {
               );
             })() : null}
           </FadeInView>
+
+          <AppleHealthFootnote />
       </KeyboardAwareScrollView>
       </ScreenContainer>
 

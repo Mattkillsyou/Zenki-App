@@ -16,7 +16,7 @@ import { useAuth } from '../context/AuthContext';
 import { useWorkouts } from '../context/WorkoutContext';
 import { useGamification } from '../context/GamificationContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, KeyboardAwareScrollView, ScreenContainer } from '../components';
+import { FadeInView, KeyboardAwareScrollView, ScreenContainer, AppleHealthFootnote } from '../components';
 import { WORKOUT_FORMAT_LABEL, WodResult, WorkoutFormat } from '../types/workout';
 import {
   EXERCISES,
@@ -128,6 +128,8 @@ export function WorkoutScreen({ navigation }: any) {
               weekStreak={gamState.weekStreak || 0}
             />
           )}
+
+          <AppleHealthFootnote />
       </KeyboardAwareScrollView>
       </ScreenContainer>
     </SafeAreaView>

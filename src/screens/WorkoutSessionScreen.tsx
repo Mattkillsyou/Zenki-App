@@ -8,7 +8,7 @@ import {
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenContainer } from '../components';
+import { ScreenContainer, AppleHealthFootnote } from '../components';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useHeartRate } from '../context/HeartRateContext';
@@ -316,6 +316,8 @@ export function WorkoutSessionScreen({ navigation }: any) {
             ))}
           </View>
         )}
+
+        <AppleHealthFootnote />
       </ScrollView>
 
       {/* ── Start / Stop button ── */}
