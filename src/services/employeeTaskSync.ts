@@ -3,6 +3,10 @@ import {
   doc,
   deleteDoc,
   onSnapshot,
+  query,
+  where,
+  Query,
+  DocumentData,
   Unsubscribe,
 } from 'firebase/firestore';
 import { auth, db, FIREBASE_CONFIGURED } from '../config/firebase';
@@ -87,11 +91,25 @@ export async function deleteCompletionFromFirestore(
   }
 }
 
-export function subscribeToCompletions(cb: (cs: TaskCompletion[]) => void): Unsubscribe {
+export function subscribeToCompletions(
+  isAdmin: boolean,
+  cb: (cs: TaskCompletion[]) => void,
+): Unsubscribe {
   if (!FIREBASE_CONFIGURED || !db) return noopUnsubscribe;
   try {
+    // taskCompletions are owner-scoped (each carries firebaseUid). Admins read
+    // the whole collection (the admin task view needs every member's records);
+    // a regular member reads only their own — matching the security rule, which
+    // would permission-deny an unfiltered collection read for non-admins.
+    const col = collection(db, 'taskCompletions');
+    let q: Query<DocumentData> = col;
+    if (!isAdmin) {
+      const uid = auth?.currentUser?.uid;
+      if (!uid) return noopUnsubscribe; // signed out → nothing to read
+      q = query(col, where('firebaseUid', '==', uid));
+    }
     return onSnapshot(
-      collection(db, 'taskCompletions'),
+      q,
       (snap) => {
         const items: TaskCompletion[] = snap.docs.map((d) => d.data() as TaskCompletion);
         cb(items);

@@ -432,7 +432,11 @@ service cloud.firestore {
     // `firebaseUid` so rules can verify against the auth uid.
     // No updates (audit trail).
     match /taskCompletions/{compId} {
-      allow read: if isSignedIn();
+      // Owner-or-admin: each completion is a per-member "who did what when"
+      // record. A member reads only their own (EmployeeTaskContext scopes the
+      // listener to where firebaseUid == uid for non-admins); admins read all.
+      allow read: if isAdmin()
+                  || (isSignedIn() && resource.data.firebaseUid == request.auth.uid);
       allow create: if isSignedIn()
                     && request.resource.data.firebaseUid == request.auth.uid;
       allow delete: if isSignedIn()
