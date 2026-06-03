@@ -253,6 +253,20 @@ export const deleteAccount = onRequest(
         logger.warn('Storage cleanup failed (non-fatal)', e);
       }
 
+      // 13. Finally, delete the Firebase Auth user itself. The Admin SDK has no
+      //     recent-login requirement, so doing it server-side here can't strand
+      //     a still-loginable account whose data is already gone (the bug when
+      //     the client did user.delete() AFTER this cascade and hit
+      //     auth/requires-recent-login). The client no longer deletes the Auth
+      //     user; it just signs out after this returns ok.
+      try {
+        await admin.auth().deleteUser(uid);
+        deleted.authUser = 1;
+      } catch (e) {
+        logger.error('deleteAccount: Auth user delete failed for uid=' + uid, e);
+        deleted.authUser = 0;
+      }
+
       res.json({ ok: true, uid, deleted });
     } catch (e: any) {
       logger.error('deleteAccount failed for uid=' + uid, e);

@@ -310,8 +310,11 @@ service cloud.firestore {
     // Waivers — submit-only. No one reads from client (admin reads server-side).
     match /waivers/{waiverId} {
       allow read: if false;
+      // Was `memberId == auth.uid`, but the waiver carries the app's INTERNAL
+      // member id (not the auth uid), so every signed waiver was rejected and
+      // none ever persisted. waiverSync now stamps `firebaseUid`.
       allow create: if isSignedIn()
-                    && request.resource.data.memberId == request.auth.uid;
+                    && request.resource.data.firebaseUid == request.auth.uid;
       allow update, delete: if false;
     }
 
@@ -382,7 +385,11 @@ service cloud.firestore {
     // `auth.currentUser.uid`) because the app's `memberId` is an internal
     // id ('1','2',…), not the Firebase Auth uid.
     match /appointments/{apptId} {
-      allow read: if isSignedIn();
+      // Read restricted to the owner + admins — appointments carry personal
+      // booking info; the old `if isSignedIn()` let every member download every
+      // other member's appointments (cross-member PII leak).
+      allow read: if isAdmin()
+                  || (isSignedIn() && resource.data.firebaseUid == request.auth.uid);
       allow create: if isAdmin()
                     || (isSignedIn()
                         && request.resource.data.firebaseUid == request.auth.uid);

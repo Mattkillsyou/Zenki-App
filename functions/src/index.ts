@@ -66,10 +66,6 @@ export { validateInviteCode } from './validateInviteCode';
 // (clothing store + drink tab). Bearer-token auth + per-UID rate limiting.
 export { createPaymentIntent } from './createPaymentIntent';
 
-// DEBUG ONLY — temporary triage endpoint, remove after the post pipeline is
-// confirmed end-to-end on TestFlight.
-export { diagPostsCount } from './diagPostsCount';
-
 // Senpai AI chat endpoint — Daria-meets-DDLC chibi mascot powered by Haiku 4.5.
 // See SENPAI_AI_CHAT_PROMPT.md for design + persona reference.
 export { senpaiChat } from './senpaiChat';
