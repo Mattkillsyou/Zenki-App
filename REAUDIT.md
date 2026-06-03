@@ -57,20 +57,23 @@ prior PRs held up; the only "hallucination" finding was a stale doc comment.
 
 ## Deferred / needs owner decision
 
-- **`taskCompletions` / `employeeTasks` cross-user read** (firestore.rules) —
-  any signed-in member can read others' chore-completion records / personal
-  tasks. Real but low-sensitivity. **Not fixed here** because tightening the rule
-  requires scoping the client listener too (EmployeeTaskContext subscribes to the
-  whole collection for every member) — the same rule+listener co-change that
-  regressed appointments in PR #2, so it deserves its own focused change +
-  verification. Recipe: scope `taskCompletions` read to `isAdmin() || owner`,
-  pass uid+isAdmin into `subscribeToCompletions`, and have non-admins query
-  `where('firebaseUid','==',uid)` (admins keep the full listener).
-- **Demo/seed data that may be real people** — `members.ts` seeds
-  `sensei.tim` with round-number placeholder stats (5000 sessions, 52-week
-  streak, since 1997); confirm he's a real member and reset to honest values (or
-  remove). `ContactScreen.tsx` shows a fictitious `(323) 555-1997` phone — replace
-  with the real dojo number or remove the row.
+- ✅ **`taskCompletions` cross-user read — FIXED.** Scoped the rule to
+  `isAdmin() || owner` and co-scoped the client listener: EmployeeTaskContext now
+  passes `isAdmin`, and `subscribeToCompletions` queries
+  `where('firebaseUid','==',uid)` for non-admin members (admins keep the full
+  listener) so the read isn't permission-denied. (`employeeTasks` left open — it's
+  the intentionally shared task board; personal-task visibility among club members
+  is a documented low-severity residual.)
+- ✅ **Fabricated content — REMOVED.** Zeroed the placeholder
+  `totalSessions`/`weekStreak` on `sensei.tim` (5000/52) and `matt.b` (156/12);
+  replaced the fictitious `(323) 555-1997` contact number with the real dojo line
+  `323-953-8131`; removed the "Senpai Outfit · more coming soon" placeholder
+  settings row. A full inventory confirmed the rest of the app is real (dojo
+  address, instructors, products, reference data).
+  - **Residual owner call:** the seed `memberSince` dates were left as-is —
+    `matt.b` = `2024-01-15` (plausibly your real join) and `sensei.tim` = `1997`
+    (may be dojo lore). Set them to real join dates if you want; they render as
+    "Member since {year}" on the profile.
 - **Kept intentionally:** the `admin` + `reviewer` seed accounts and
   `seedReviewerData.ts` (local-only demo data for the Apple reviewer) — required
   for App Review; remove only after the app clears review.
