@@ -281,8 +281,12 @@ export async function unlikePost(postId: string) {
     const postSnap = await tx.get(postRef);
     const current = postSnap.exists() ? ((postSnap.data()?.likes as number) || 0) : 0;
     tx.delete(likeRef);
-    if (postSnap.exists()) {
-      tx.update(postRef, { likes: Math.max(0, current - 1) });
+    // Only touch the post counter when it actually decreases. If the counter has
+    // drifted to 0, writing `likes: 0` is a no-op that the non-owner posts rule
+    // rejects (it requires new likes === old±1), which would fail the whole tx and
+    // leave the like-doc undeleted — stranding the user as "liked".
+    if (postSnap.exists() && current > 0) {
+      tx.update(postRef, { likes: current - 1 });
     }
   });
 }

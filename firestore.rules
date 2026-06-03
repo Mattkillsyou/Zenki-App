@@ -190,7 +190,19 @@ service cloud.firestore {
                     && request.auth.uid in resource.data.participants
                     && request.resource.data.participants == resource.data.participants
                     && request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['lastMessage', 'lastSenderId', 'lastMessageAt', 'unreadFor', 'participantProfiles']);
+                         .hasOnly(['lastMessage', 'lastSenderId', 'lastMessageAt', 'unreadFor', 'participantProfiles'])
+                    // A writer may only mutate their OWN participantProfiles entry —
+                    // hasOnly() above checks only top-level keys, so without this a
+                    // participant could overwrite the other party's denormalized
+                    // name/avatar. (Escape hatch for legacy convos introducing the
+                    // field; the legit per-message write only touches the sender's
+                    // own entry, so it still passes.)
+                    && (
+                      !('participantProfiles' in resource.data)
+                      || request.resource.data.participantProfiles
+                           .diff(resource.data.participantProfiles).affectedKeys()
+                           .hasOnly([request.auth.uid])
+                    );
 
       match /messages/{messageId} {
         allow read: if isSignedIn()
