@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParseJSON } from '../utils/safeStorage';
 import { Platform } from 'react-native';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db, FIREBASE_CONFIGURED } from '../config/firebase';
+import { auth, db, FIREBASE_CONFIGURED } from '../config/firebase';
 
 const QUEUE_KEY = '@zenki_support_queue';
 
@@ -39,10 +39,16 @@ export async function submitSupportMessage(input: SupportMessageInput): Promise<
     timestamp: new Date().toISOString(),
   };
 
-  if (FIREBASE_CONFIGURED && db) {
+  // The supportMessages rule requires senderId == auth.uid, so a direct write
+  // only works for a signed-in user. Unauthenticated (prospect) inquiries can't
+  // write the gated collection — they queue and flush once the device is signed
+  // in (flushSupportQueue stamps the current uid).
+  const senderId = auth?.currentUser?.uid;
+  if (FIREBASE_CONFIGURED && db && senderId) {
     try {
       const ref = await addDoc(collection(db, 'supportMessages'), {
         ...payload,
+        senderId,
         createdAt: serverTimestamp(),
       });
       return { ok: true, id: ref.id };
@@ -63,6 +69,10 @@ export async function submitSupportMessage(input: SupportMessageInput): Promise<
  */
 export async function flushSupportQueue(): Promise<number> {
   if (!FIREBASE_CONFIGURED || !db) return 0;
+  // The create rule requires senderId == auth.uid, so the queue can only flush
+  // while signed in; stamp the current uid on each write.
+  const senderId = auth?.currentUser?.uid;
+  if (!senderId) return 0;
   const queue = await readQueue();
   if (queue.length === 0) return 0;
 
@@ -81,6 +91,7 @@ export async function flushSupportQueue(): Promise<number> {
         appVersion: msg.appVersion,
         status: 'new',
         timestamp: msg.timestamp,
+        senderId,
         createdAt: serverTimestamp(),
       });
       flushed++;
