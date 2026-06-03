@@ -24,7 +24,7 @@
  *   pushTokens/{uid}
  *   collectionGroup likes where uid == uid       (the user's likes on others' posts)
  *   collectionGroup comments where userId == uid (the user's comments on others' posts)
- *   attendance / waivers / supportMessages / bloodworkReports / dexaScans / aiRateLimits/{uid}
+ *   attendance / waivers / supportMessages / aiRateLimits/{uid}
  *   Storage users/{uid}/**  and  postMedia/{uid}/**
  *
  * Returns { ok: true, deleted: { collection: count } }.
@@ -231,8 +231,7 @@ export const deleteAccount = onRequest(
       deleted.attendance = await deleteByQuery(db.collection('attendance').where('firebaseUid', '==', uid));
       deleted.waivers = await deleteByQuery(db.collection('waivers').where('firebaseUid', '==', uid));
       deleted.supportMessages = await deleteByQuery(db.collection('supportMessages').where('senderId', '==', uid));
-      deleted.bloodworkReports = await deleteByQuery(db.collection('bloodworkReports').where('memberId', '==', uid));
-      deleted.dexaScans = await deleteByQuery(db.collection('dexaScans').where('memberId', '==', uid));
+      // DEXA scans + bloodwork are local-only (AsyncStorage via NutritionContext), never server-persisted — nothing to delete here.
       deleted.aiRateLimits = await deleteDocDeep(db.collection('aiRateLimits').doc(uid));
 
       // 10. Member doc(s). Prefer the id resolved from the profile; also sweep

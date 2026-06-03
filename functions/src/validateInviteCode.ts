@@ -32,7 +32,12 @@ export const validateInviteCode = onRequest(
     }
 
     // Throttle per client IP — the gate is pre-auth and otherwise brute-forceable.
-    const ip = (req.get('x-forwarded-for') || (req as any).ip || '').split(',')[0].trim() || 'unknown';
+    // On Cloud Run the trustworthy client IP is the LAST entry the platform
+    // appends to X-Forwarded-For; a caller can spoof entries to the LEFT, so
+    // taking split(',')[0] let an attacker get a fresh bucket per request and
+    // bypass the cap. Use the rightmost (platform-appended) entry instead.
+    const xff = (req.get('x-forwarded-for') || '').split(',').map((s) => s.trim()).filter(Boolean);
+    const ip = (xff.length ? xff[xff.length - 1] : ((req as any).ip || '')) || 'unknown';
     const rl = await enforceRateLimit(ip, 'validateInviteCode');
     if (!rl.ok) {
       res.status(429).json({ error: 'rate-limited' });

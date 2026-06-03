@@ -25,7 +25,7 @@ export const OFF_BASE_URL = 'https://world.openfoodfacts.org';
  * See `functions/` at project root for the source code of these endpoints.
  *
  * Format: https://{region}-{projectId}.cloudfunctions.net
- * Live (verified): `recognizeFood` returns HTTP 401 to unauthenticated calls.
+ * Auth: endpoints require a Firebase ID token (Bearer); unauthenticated calls receive HTTP 401.
  */
 export const AI_FUNCTION_BASE_URL =
   'https://us-central1-zenki-dojo.cloudfunctions.net';

@@ -203,39 +203,32 @@ export function TimeClockProvider({
   }, []);
 
   const clockOut = useCallback(async () => {
+    // Capture the completed entry and period bounds outside the updater so the
+    // payroll Sheets write fires exactly once. The updater must stay pure —
+    // React may invoke it more than once for a single logical update.
+    let completed: TimeEntry | null = null;
+    let periodStart = '';
+    let periodEnd = '';
     setState((prev) => {
       if (!prev.currentEntry) return prev;
       const now = new Date().toISOString();
       const raw = calculateRawMinutes(prev.currentEntry.clockIn, now);
       const paid = calculatePaidMinutes(prev.currentEntry.clockIn, now);
       const mealDeduction = getAutoMealDeductionMinutes(raw);
-      const completed: TimeEntry = {
+      completed = {
         ...prev.currentEntry,
         clockOut: now,
         totalMinutes: raw,
         paidMinutes: paid,
         mealDeductionMinutes: mealDeduction,
       };
+      periodStart = prev.currentPeriod.startDate;
+      periodEnd = prev.currentPeriod.endDate;
       // Update the entry in the period (append if not already present, e.g.
       // after a biweekly rollover, so its hours/pay aren't dropped).
-      const entries = prev.currentPeriod.entries.some((e) => e.id === completed.id)
-        ? prev.currentPeriod.entries.map((e) => (e.id === completed.id ? completed : e))
+      const entries = prev.currentPeriod.entries.some((e) => e.id === completed!.id)
+        ? prev.currentPeriod.entries.map((e) => (e.id === completed!.id ? completed! : e))
         : [...prev.currentPeriod.entries, completed];
-
-      // Fire and forget Sheets sync
-      pushTimeEntry(completed, effectiveEmployeeName, effectiveHourlyRate, prev.currentPeriod.startDate, prev.currentPeriod.endDate).then((ok) => {
-        if (ok) {
-          setState((s) => ({
-            ...s,
-            currentPeriod: {
-              ...s.currentPeriod,
-              entries: s.currentPeriod.entries.map((e) =>
-                e.id === completed.id ? { ...e, synced: true } : e,
-              ),
-            },
-          }));
-        }
-      });
 
       return {
         ...prev,
@@ -243,6 +236,25 @@ export function TimeClockProvider({
         currentPeriod: { ...prev.currentPeriod, entries },
       };
     });
+
+    // After setState — fire the payroll Sheets sync exactly once, then flip the
+    // matching entry to synced:true via a single follow-up setState.
+    if (completed) {
+      const synced: TimeEntry = completed;
+      pushTimeEntry(synced, effectiveEmployeeName, effectiveHourlyRate, periodStart, periodEnd).then((ok) => {
+        if (ok) {
+          setState((s) => ({
+            ...s,
+            currentPeriod: {
+              ...s.currentPeriod,
+              entries: s.currentPeriod.entries.map((e) =>
+                e.id === synced.id ? { ...e, synced: true } : e,
+              ),
+            },
+          }));
+        }
+      });
+    }
   }, [effectiveEmployeeName, effectiveHourlyRate]);
 
   const markLunchTaken = useCallback(() => {

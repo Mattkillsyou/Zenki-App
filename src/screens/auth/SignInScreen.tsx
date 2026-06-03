@@ -31,6 +31,11 @@ WebBrowser.maybeCompleteAuthSession();
 
 const INVITE_CODE = 'dragon';
 const INVITE_VERIFIED_KEY = '@zenki_invite_verified';
+// TEMPORARY (owner request): invite gate disabled until validateInviteCode is
+// deployed + the inviteCodes collection is seeded. While false, everyone reaches
+// the sign-in screen with no code — the gate UI + verification logic below stay
+// intact and simply unreached. Flip back to true to re-enable. See OWNER_ACTIONS.md.
+const INVITE_GATE_ENABLED = false;
 const LAST_USERNAME_KEY = '@zenki_last_username';
 
 export function SignInScreen({ navigation }: any) {
@@ -47,6 +52,8 @@ export function SignInScreen({ navigation }: any) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    // Gate disabled → never show the invite screen; go straight to sign-in.
+    if (!INVITE_GATE_ENABLED) { setCheckingInvite(false); return; }
     AsyncStorage.getItem(INVITE_VERIFIED_KEY).then((val) => {
       if (val !== 'true') setShowInviteGate(true);
       setCheckingInvite(false);
@@ -278,16 +285,19 @@ export function SignInScreen({ navigation }: any) {
       }
       throw new Error(`invite-validate-${res.status}`); // 5xx → offline fallback
     } catch {
-      // Function unreachable / not deployed / server error → fall back to the
-      // legacy local check so members aren't locked out before the backend is
-      // live. (A definitive 403 above does NOT reach here, so server rejections
-      // still win once validateInviteCode is deployed.)
-      if (code === INVITE_CODE) {
+      // Function unreachable / not deployed / server error. In DEVELOPMENT we
+      // allow the local legacy code so the gate works without the backend. In
+      // PRODUCTION we FAIL CLOSED — no hardcoded backdoor — so the only way in
+      // is a real code validated by the deployed validateInviteCode function.
+      // (The function itself still accepts the legacy code ONLY while the
+      // inviteCodes collection is empty, so launch isn't blocked; once an admin
+      // seeds real codes, only those work.) validateInviteCode MUST be deployed.
+      if (__DEV__ && code === INVITE_CODE) {
         await AsyncStorage.setItem(INVITE_VERIFIED_KEY, 'true');
         setShowInviteGate(false);
         setErrorMsg(null);
       } else {
-        setErrorMsg('Please enter a valid invite code.');
+        setErrorMsg('Couldn’t verify your invite code right now. Please check your connection and try again, or contact the dojo.');
       }
     } finally {
       setLoading(false);

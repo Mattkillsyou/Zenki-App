@@ -278,14 +278,22 @@ service cloud.firestore {
       allow write: if isOwner(uid);
     }
 
-    // Attendance — any member can see class attendance; can only check
-    // themselves in. The doc carries `firebaseUid` (stamped at write time)
-    // because the app's internal `memberId` is not the auth uid. No updates
-    // or deletes (audit trail).
+    // Attendance — owner-or-admin read only (each doc carries member presence
+    // PII: memberName, date, checkInTime). A signed-in member can read only
+    // their OWN visits; admins (AttendanceContext only subscribes for admins)
+    // read all. A member can only check THEMSELVES in, and the create is
+    // field-validated so a forged row can't inject arbitrary name/date/time.
+    // The doc carries `firebaseUid` (stamped at write) because the app's
+    // internal `memberId` is not the auth uid. No updates or deletes (audit).
     match /attendance/{docId} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin()
+                  || (isSignedIn() && resource.data.firebaseUid == request.auth.uid);
       allow create: if isSignedIn()
-                    && request.resource.data.firebaseUid == request.auth.uid;
+                    && request.resource.data.firebaseUid == request.auth.uid
+                    && request.resource.data.memberName is string
+                    && request.resource.data.memberName.size() <= 80
+                    && request.resource.data.date is string
+                    && request.resource.data.checkInTime is string;
       allow update, delete: if false;
     }
 
@@ -424,7 +432,11 @@ service cloud.firestore {
     // `firebaseUid` so rules can verify against the auth uid.
     // No updates (audit trail).
     match /taskCompletions/{compId} {
-      allow read: if isSignedIn();
+      // Owner-or-admin: each completion is a per-member "who did what when"
+      // record. A member reads only their own (EmployeeTaskContext scopes the
+      // listener to where firebaseUid == uid for non-admins); admins read all.
+      allow read: if isAdmin()
+                  || (isSignedIn() && resource.data.firebaseUid == request.auth.uid);
       allow create: if isSignedIn()
                     && request.resource.data.firebaseUid == request.auth.uid;
       allow delete: if isSignedIn()
@@ -448,6 +460,14 @@ service cloud.firestore {
     // clients never read this collection directly (no pre-auth read needed).
     match /inviteCodes/{codeId} {
       allow read, write: if isAdmin();
+    }
+
+    // Stripe payment records — written ONLY by the stripeWebhook Cloud Function
+    // (Admin SDK, bypasses rules) as the server-authoritative record that a
+    // charge succeeded. Admins read for reconciliation; clients never touch it.
+    match /payments/{paymentIntentId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // Default deny — anything not listed above is locked.

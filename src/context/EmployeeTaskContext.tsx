@@ -13,6 +13,7 @@ import {
   deleteCompletionFromFirestore,
 } from '../services/employeeTaskSync';
 import { syncOrAlert } from '../utils/syncOrAlert';
+import { useAuth } from './AuthContext';
 
 const TASKS_KEY = '@zenki_employee_tasks';
 const COMPLETIONS_KEY = '@zenki_task_completions';
@@ -62,6 +63,8 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
   const [tasks, setTasks] = useState<EmployeeTask[]>([]);
   const [completions, setCompletions] = useState<TaskCompletion[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = user?.isAdmin === true;
 
   // AsyncStorage cache hydrate. Firestore subscription overwrites once it
   // fires; this just covers the offline cold-boot window.
@@ -89,7 +92,7 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
       setTasks(items);
       safeStorageSet(TASKS_KEY, items, '[EmployeeTasks tasks]');
     });
-    const unsubCompletions = subscribeToCompletions((items) => {
+    const unsubCompletions = subscribeToCompletions(isAdmin, (items) => {
       setCompletions(items);
       safeStorageSet(COMPLETIONS_KEY, items, '[EmployeeTasks completions]');
     });
@@ -97,7 +100,7 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
       unsubTasks();
       unsubCompletions();
     };
-  }, []);
+  }, [isAdmin, user?.id]);
 
   useEffect(() => {
     if (loaded) safeStorageSet(TASKS_KEY, tasks, '[EmployeeTasks tasks]');

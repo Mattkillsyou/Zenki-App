@@ -56,6 +56,11 @@ export { backfillFollowCounts } from './backfillFollowCounts';
 // bookings (F25). Run once after deploying the tightened rule.
 export { backfillAppointmentOwners } from './backfillAppointmentOwners';
 
+// Stripe webhook — server-authoritative payment reconciliation (records every
+// succeeded/failed PaymentIntent in payments/{id}). Owner sets STRIPE_WEBHOOK_SECRET
+// + registers the endpoint; inert until then.
+export { stripeWebhook } from './stripeWebhook';
+
 // Admin moderation — redact an offender's messages in a reported conversation
 // (DM "Remove & Block"). Client can't redact other users' messages.
 export { redactDmMessages } from './redactDmMessages';

@@ -881,26 +881,6 @@ export function SettingsScreen({ navigation }: any) {
               {/* Chat is now always-on via hold-to-talk on the mascot
                   herself \u2014 no toggle needed. The character IS the chat. */}
 
-              {/* Outfit picker — placeholder */}
-              <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-                <View style={styles.settingInfo}>
-                  <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Senpai Outfit</Text>
-                  <Text style={[styles.settingDesc, { color: colors.textMuted }]}>
-                    {'Default uniform \u00B7 more coming soon'}
-                  </Text>
-                </View>
-                <View style={{
-                  backgroundColor: 'rgba(255, 46, 81, 0.12)',
-                  borderWidth: 1,
-                  borderColor: 'rgba(255, 46, 81, 0.25)',
-                  paddingHorizontal: 10,
-                  paddingVertical: 4,
-                  borderRadius: 10,
-                }}>
-                  <Text style={{ color: '#FF2E51', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 }}>1 / 1</Text>
-                </View>
-              </View>
-
               {/* Memory log entry */}
               <TouchableOpacity
                 style={[styles.settingRow, { borderBottomColor: colors.border }]}
