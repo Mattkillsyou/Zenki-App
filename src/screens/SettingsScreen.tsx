@@ -32,7 +32,6 @@ import { AI_FUNCTION_BASE_URL } from '../config/api';
 import { FIREBASE_CONFIGURED, auth as firebaseAuth } from '../config/firebase';
 import { resetCoachmarks } from '../components/CoachmarkTutorial';
 import {
-  firebaseDeleteCurrentUser,
   getCurrentIdToken,
   emailForMember,
 } from '../services/firebaseAuth';
@@ -142,40 +141,56 @@ export function SettingsScreen({ navigation }: any) {
       'Delete',
       async () => {
             try {
-              // Ask the server to cascade-delete Firestore docs + Storage
+              // The server `deleteAccount` Cloud Function is the single source
+              // of truth for deletion: it cascade-deletes the user's Firestore
+              // docs + Storage AND deletes the Firebase Auth user itself via the
+              // Admin SDK (admin.auth().deleteUser) as its final step. The Admin
+              // SDK has no recent-login requirement, so we no longer attempt a
+              // client-side user.delete() (which threw auth/requires-recent-login
+              // AFTER the server had already wiped the data, leaving a
+              // re-loginable account with zero data — Apple 5.1.1(v) failure).
+              //
+              // We therefore gate local cleanup + sign-out on the CF actually
+              // succeeding. If it can't be reached or returns an error, we abort
+              // WITHOUT touching local state so the user can retry on a real
+              // account rather than being signed out of a half-deleted one.
               if (FIREBASE_CONFIGURED) {
                 const token = await getCurrentIdToken();
-                if (token) {
-                  try {
-                    await fetch(`${AI_FUNCTION_BASE_URL}/deleteAccount`, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`,
-                      },
-                      body: JSON.stringify({}),
-                    });
-                  } catch {
-                    /* network failure — still proceed with local cleanup */
-                  }
+                if (!token) {
+                  Alert.alert(
+                    'Sign in again',
+                    'Your session has expired. Please sign out and back in, then try deleting your account again.',
+                  );
+                  return;
                 }
-
-                // Client-side Firebase Auth user deletion
+                let res: Response;
                 try {
-                  await firebaseDeleteCurrentUser();
-                } catch (e: any) {
-                  if (e?.code === 'auth/requires-recent-login') {
-                    Alert.alert(
-                      'Sign in again',
-                      'For security, please sign out and sign back in, then try deleting your account again.',
-                    );
-                    return;
-                  }
-                  // Other errors — continue with local cleanup anyway
+                  res = await fetch(`${AI_FUNCTION_BASE_URL}/deleteAccount`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({}),
+                  });
+                } catch {
+                  Alert.alert(
+                    'Could not delete account',
+                    "We couldn't reach the server. Check your connection and try again.",
+                  );
+                  return;
+                }
+                if (!res.ok) {
+                  Alert.alert(
+                    'Could not delete account',
+                    'The server could not complete the deletion. Please try again or contact support.',
+                  );
+                  return;
                 }
               }
 
-              // Local wipe — clear every stored @zenki_* key
+              // Server confirmed (or Firebase isn't configured at all) — safe to
+              // wipe every stored @zenki_* key and clear the local session.
               try {
                 const keys = await AsyncStorage.getAllKeys();
                 const zenkiKeys = keys.filter((k) => k.startsWith('@zenki_'));

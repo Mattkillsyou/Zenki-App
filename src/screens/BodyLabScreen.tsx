@@ -15,16 +15,30 @@ type Tab = 'dashboard' | 'dexa' | 'bloodwork' | 'info';
 export function BodyLabScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { myDexaScans, myBloodworkReports, biomarkerSeries, latestWeight } = useNutrition();
+  const { myDexaScans, myBloodworkReports, biomarkerSeries, latestWeight, profileFor } = useNutrition();
   const [tab, setTab] = useState<Tab>('dashboard');
 
   const dexaScans = user ? myDexaScans(user.id) : [];
   const bloodwork = user ? myBloodworkReports(user.id) : [];
 
-  // Health score computation
+  // Health score computation.
+  //
+  // Returns null when the user has contributed NO real data (no DEXA body-fat,
+  // no bloodwork, no logged weight) so the UI renders a "--" / "not enough
+  // data" state instead of a fabricated baseline. The score only exists once at
+  // least one real factor feeds it.
   const healthScore = useMemo(() => {
     if (!user) return null;
-    let score = 50; // baseline
+
+    // Sex-aware optimal body-fat band (from the nutrition profile when set;
+    // default to the wider male band when unspecified rather than skewing
+    // female users with a male-calibrated band).
+    const sex = profileFor(user.id)?.sex;
+    const bfBand = sex === 'female'
+      ? { optimalLo: 18, optimalHi: 28, lowEdge: 14, highEdge: 38 }
+      : { optimalLo: 10, optimalHi: 20, lowEdge: 8, highEdge: 35 };
+
+    let score = 50; // neutral starting point (only surfaced once factors > 0)
     let factors = 0;
 
     // Body fat contribution (if DEXA available)
@@ -32,9 +46,8 @@ export function BodyLabScreen({ navigation }: any) {
       const latest = dexaScans[0];
       const bf = latest.totalBodyFatPct;
       if (bf != null) {
-        // Optimal male: 10-20%, female: 18-28%
-        const optimal = bf >= 10 && bf <= 25;
-        score += optimal ? 15 : bf < 10 || bf > 35 ? -5 : 5;
+        const optimal = bf >= bfBand.optimalLo && bf <= bfBand.optimalHi;
+        score += optimal ? 15 : bf < bfBand.lowEdge || bf > bfBand.highEdge ? -5 : 5;
         factors++;
       }
     }
@@ -44,9 +57,13 @@ export function BodyLabScreen({ navigation }: any) {
       const latest = bloodwork[0];
       const total = latest.biomarkers?.length || 0;
       const flagged = latest.biomarkers?.filter((b: any) => b.status === 'out_of_range').length || 0;
-      const optimalPct = total > 0 ? ((total - flagged) / total) * 100 : 50;
-      score += Math.round((optimalPct / 100) * 20);
-      factors++;
+      // Only count bloodwork as a factor when it actually carries biomarkers;
+      // an empty panel shouldn't move (or fabricate) the score.
+      if (total > 0) {
+        const optimalPct = ((total - flagged) / total) * 100;
+        score += Math.round((optimalPct / 100) * 20);
+        factors++;
+      }
     }
 
     // Weight logging consistency
@@ -56,9 +73,12 @@ export function BodyLabScreen({ navigation }: any) {
       factors++;
     }
 
+    // No real inputs → no score. Render "--" / upload-to-start, never a fake 50.
+    if (factors === 0) return null;
+
     // Normalize to 0-100
-    return Math.max(0, Math.min(100, score + (factors === 0 ? 0 : factors * 3)));
-  }, [user, dexaScans, bloodwork, latestWeight]);
+    return Math.max(0, Math.min(100, score + factors * 3));
+  }, [user, dexaScans, bloodwork, latestWeight, profileFor]);
 
   // Insights
   const bodyInsights = useMemo(() => {

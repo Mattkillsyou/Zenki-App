@@ -180,7 +180,16 @@ function LogTab({
     setNotes('');
     setFormat('FOR_TIME');
     setShowForm(false);
-    Alert.alert('Nice work', '+25 Diamonds earned. Your streak counts.');
+    // The session reward (Diamonds + streak) is granted once per day, on the
+    // first log. `loggedToday` is the pre-save value, so when it's already true
+    // this extra log is saved but earns no further Diamonds — say so honestly
+    // instead of promising a fixed "+25" that no longer matches the real grant.
+    Alert.alert(
+      'Nice work',
+      loggedToday
+        ? 'Workout logged. You already earned today’s Diamonds — keep the streak going.'
+        : 'Workout logged — Diamonds earned and your streak counts.',
+    );
   };
 
   return (

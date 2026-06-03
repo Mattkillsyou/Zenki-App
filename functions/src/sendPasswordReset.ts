@@ -32,6 +32,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
 import { Resend } from 'resend';
+import { enforceRateLimit } from './rateLimit';
 
 const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
 
@@ -63,6 +64,15 @@ export const sendPasswordReset = onRequest(
     // probe the registered-email set by watching for differential errors.
     if (!email || !email.includes('@')) {
       logger.info('[sendPasswordReset] empty / invalid email; returning ok', { rawEmail });
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    // Throttle per email so the endpoint can't be used to email-bomb a victim.
+    // Over the cap we silently return ok (no send) — preserves anti-enumeration.
+    const rl = await enforceRateLimit(email, 'sendPasswordReset');
+    if (!rl.ok) {
+      logger.info('[sendPasswordReset] rate-limited; dropping', { email });
       res.status(200).json({ ok: true });
       return;
     }

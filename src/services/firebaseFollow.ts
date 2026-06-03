@@ -1,7 +1,7 @@
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import {
   doc, setDoc, deleteDoc, getDoc, getDocs, collection, updateDoc,
-  writeBatch, getCountFromServer, query, where,
+  writeBatch, getCountFromServer, query, where, limit,
 } from 'firebase/firestore';
 import { getCurrentUid } from './firebaseAuth';
 
@@ -200,8 +200,9 @@ export async function getFollowingCount(userId: string): Promise<number> {
   }
 }
 
-export async function getAllUsers(): Promise<UserProfile[]> {
+export async function getAllUsers(max = 500): Promise<UserProfile[]> {
   if (!db) return [];
-  const snap = await getDocs(collection(db, 'users'));
+  // Bounded — never scan the entire users collection unbounded (F44).
+  const snap = await getDocs(query(collection(db, 'users'), limit(max)));
   return snap.docs.map((d) => ({ uid: d.id, ...d.data() } as UserProfile));
 }

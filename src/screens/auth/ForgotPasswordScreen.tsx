@@ -4,7 +4,8 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  Alert} from 'react-native';
+  Alert,
+  Linking} from 'react-native';
 import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,16 +15,40 @@ import { Button, KeyboardAwareScrollView, ScreenContainer } from '../../componen
 import { FIREBASE_CONFIGURED } from '../../config/firebase';
 import { firebaseSendPasswordReset } from '../../services/firebaseAuth';
 
+// Domains we synthesize for accounts that have no real email on file:
+//   username-only members  → `${username}@zenkidojo.app`   (emailForMember)
+//   OAuth w/ hidden email  → `${uid}@oauth.zenkidojo.app`   (emailForOAuthMember)
+// A password-reset email sent to either is undeliverable — nobody owns that
+// inbox — so we must NOT show the "check your email" success state for them.
+const NO_INBOX_EMAIL_DOMAINS = ['@zenkidojo.app', '@oauth.zenkidojo.app'];
+
+function isUndeliverableSynthesizedEmail(email: string): boolean {
+  const lower = email.toLowerCase();
+  return NO_INBOX_EMAIL_DOMAINS.some((d) => lower.endsWith(d));
+}
+
 export function ForgotPasswordScreen({ navigation }: any) {
   const { colors } = useTheme();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  // Distinct terminal state from `sent`: the account has no real email, so a
+  // reset link can't reach them — show honest "contact the dojo" copy instead
+  // of the (false) success screen.
+  const [noEmailOnFile, setNoEmailOnFile] = useState(false);
 
   const handleReset = async () => {
     const trimmed = email.trim();
     if (!trimmed) {
       Alert.alert('Error', 'Please enter your email address');
+      return;
+    }
+    // Username-only / OAuth-hidden accounts have a synthesized address nobody
+    // controls. Sending a reset there silently goes into the void while the UI
+    // claims success — leaving the user permanently locked out with no signal.
+    // Route them to the admin/support path with honest copy instead.
+    if (isUndeliverableSynthesizedEmail(trimmed)) {
+      setNoEmailOnFile(true);
       return;
     }
     setLoading(true);
@@ -62,7 +87,32 @@ export function ForgotPasswordScreen({ navigation }: any) {
 
       <KeyboardAwareScrollView contentContainerStyle={styles.content}>
         <ScreenContainer maxWidth="form">
-        {sent ? (
+        {noEmailOnFile ? (
+          <View style={styles.successState}>
+            <View style={[styles.successIcon, { backgroundColor: colors.goldMuted }]}>
+              <Ionicons name="person-circle-outline" size={40} color={colors.gold} />
+            </View>
+            <Text style={[styles.heading, { color: colors.textPrimary }]}>No Email on File</Text>
+            <Text style={[styles.subheading, { color: colors.textSecondary }]}>
+              This account doesn't have an email address we can send a reset link
+              to. Contact the dojo and we'll reset your password for you.
+            </Text>
+            <Button
+              title="Email the Dojo"
+              onPress={() => Linking.openURL('mailto:info@zenkidojo.com?subject=Password%20reset%20request')}
+              fullWidth
+              size="lg"
+              style={{ marginTop: spacing.lg }}
+            />
+            <Button
+              title="Back to Sign In"
+              onPress={() => navigation.goBack()}
+              variant="outline"
+              fullWidth
+              style={{ marginTop: spacing.sm }}
+            />
+          </View>
+        ) : sent ? (
           <View style={styles.successState}>
             <View style={[styles.successIcon, { backgroundColor: colors.goldMuted }]}>
               <Ionicons name="mail-outline" size={40} color={colors.gold} />

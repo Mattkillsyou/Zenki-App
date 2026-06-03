@@ -7,6 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useGpsActivity } from '../context/GpsActivityContext';
+import { useNutrition } from '../context/NutritionContext';
+import { useGamification } from '../context/GamificationContext';
 import { useSenpai } from '../context/SenpaiContext';
 import { useTheme } from '../context/ThemeContext';
 import { randomDialogue } from '../data/senpaiDialogue';
@@ -62,6 +64,8 @@ function CleanActivityTrackerScreen({ navigation }: any) {
     liveDistance, liveDuration, livePace, liveElevGain, liveSpeed,
     currentPosition, startTracking, stopTracking, memberActivities,
   } = useGpsActivity();
+  const { latestWeight } = useNutrition();
+  const { recordSession } = useGamification();
   const { state: senpaiState, triggerReaction: senpaiTrigger, shouldReact: senpaiShouldReact } = useSenpai();
 
   const [selectedType, setSelectedType] = useState<GpsActivityType>('run');
@@ -110,8 +114,19 @@ function CleanActivityTrackerScreen({ navigation }: any) {
           text: 'End',
           style: 'destructive',
           onPress: () => {
-            const activity = stopTracking();
+            // Use the user's real tracked weight for the MET calorie estimate
+            // instead of the hardcoded 80 kg fallback. WeightEntry stores the
+            // value in the unit the user logged; convert lb → kg here. Falls
+            // back to stopTracking's 80 kg default only when no weigh-in exists.
+            const w = user ? latestWeight(user.id) : null;
+            const weightKg = w
+              ? (w.unit === 'kg' ? w.weight : w.weight / 2.20462)
+              : undefined;
+            const activity = stopTracking(weightKg);
             if (activity) {
+              // Count the GPS activity toward sessions/streak + Diamonds, like
+              // HR-tracked and logged workouts (F11 — GPS used to not count).
+              recordSession();
               Alert.alert('Activity saved', `${formatDistance(activity.distanceMeters)} ${distanceUnit()} recorded.`);
               setRouteCoords([]);
               if (senpaiState.enabled && senpaiShouldReact()) {
@@ -286,6 +301,8 @@ function TrackPanel({
           <Ionicons name="stop" size={18} color="#FFF" />
           <Text style={styles.primaryBtnText}>End Activity</Text>
         </Pressable>
+
+        <ForegroundOnlyNotice />
       </View>
     );
   }
@@ -331,6 +348,32 @@ function TrackPanel({
           Start {GPS_ACTIVITY_LABELS[selectedType]}
         </Text>
       </Pressable>
+
+      <ForegroundOnlyNotice />
+    </View>
+  );
+}
+
+// ═════════════════════════════════════════════════════
+// Honest foreground-only tracking notice
+//
+// GPS recording uses a When-In-Use foreground location watch, which iOS/Android
+// suspend when the app is backgrounded or the screen locks. We do NOT do
+// background location tracking, so we tell the user plainly to keep the app
+// open rather than implying the route keeps recording in their pocket.
+// FLAG: true background tracking needs the `location` background mode +
+// requestBackgroundPermissionsAsync + a TaskManager task (see APP_AUDIT F17).
+// ═════════════════════════════════════════════════════
+
+function ForegroundOnlyNotice() {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.noticeRow}>
+      <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+      <Text style={[styles.noticeText, { color: colors.textMuted }]}>
+        Keep this screen open while tracking — recording pauses if the app is
+        backgrounded or the phone locks.
+      </Text>
     </View>
   );
 }
@@ -668,6 +711,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.4,
+  },
+
+  // ── Foreground-only tracking notice ──
+  noticeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: 12,
+    paddingHorizontal: 2,
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '500',
   },
 
   // ── History rows ──

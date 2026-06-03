@@ -15,9 +15,26 @@ export const GOOGLE_CLIENT_ID: string =
 export const GOOGLE_SHEETS_SCRIPT_URL: string =
   extra.GOOGLE_SHEETS_SCRIPT_URL || process.env.EXPO_PUBLIC_SHEETS_URL || '';
 
-/** USDA FoodData Central API key */
+/**
+ * Shared secret sent with every timeclock payroll write so the Apps Script can
+ * reject anonymous POSTs (the deployment URL is otherwise an unauthenticated
+ * public write into the master timesheet — see APP_AUDIT.md F43).
+ *
+ * MUST be provisioned via EAS (never hardcoded here, or it ships in the bundle):
+ *   eas secret:create --name EXPO_PUBLIC_SHEETS_PROXY_TOKEN --value "<random>"
+ * and the Apps Script must compare `e.parameter`/body `token` against the same
+ * value stored in a Script Property, rejecting mismatches. Empty until set —
+ * `pushTimeEntry` still sends the field (blank) so the script can fail closed.
+ */
+export const SHEETS_PROXY_TOKEN: string =
+  extra.SHEETS_PROXY_TOKEN || process.env.EXPO_PUBLIC_SHEETS_PROXY_TOKEN || '';
+
+/** USDA FoodData Central API key. Falls back to USDA's public `DEMO_KEY` (low
+ *  rate limits) so food search works out of the box; set EXPO_PUBLIC_USDA_API_KEY
+ *  via EAS for production limits. foodSearch degrades to Open Food Facts if the
+ *  key is rate-limited/rejected. */
 export const USDA_API_KEY: string =
-  extra.USDA_API_KEY || process.env.EXPO_PUBLIC_USDA_API_KEY || '';
+  extra.USDA_API_KEY || process.env.EXPO_PUBLIC_USDA_API_KEY || 'DEMO_KEY';
 
 /** Stripe publishable key (client-side). Set in app.json `extra` or as the
  *  EAS/EXPO_PUBLIC env var. Empty until configured — see APPLE_PAY_SETUP.md. */

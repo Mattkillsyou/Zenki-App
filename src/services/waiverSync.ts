@@ -1,6 +1,7 @@
 import { collection, addDoc } from 'firebase/firestore';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import { WaiverSignature, renderWaiverText } from '../data/waiver';
+import { getCurrentUid } from './firebaseAuth';
 
 // ─────────────────────────────────────────────────
 // Google Sheets — Apps Script endpoint
@@ -46,7 +47,11 @@ export async function pushWaiverToFirestore(signature: WaiverSignature): Promise
   }
 
   try {
-    await addDoc(collection(db, 'waivers'), signature);
+    // Stamp the Firebase Auth uid so the waivers rule (firebaseUid == auth.uid)
+    // accepts the write. signature.memberId is the app's INTERNAL member id, not
+    // the auth uid, so the old rule rejected every waiver and none ever persisted.
+    const uid = getCurrentUid();
+    await addDoc(collection(db, 'waivers'), { ...signature, firebaseUid: uid });
     return true;
   } catch (err) {
     console.warn('[Waiver Firestore] Write failed:', err);

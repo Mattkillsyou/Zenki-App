@@ -96,11 +96,22 @@ export const createPaymentIntent = onRequest(
       // can't fully recompute the total here yet. Guard against gross tampering:
       // the charge may not EXCEED the client-sent item subtotal (discounts only
       // reduce it), and record the line items for the dojo's audit trail.
+      // Require line items so the bound below ALWAYS applies — an order with no
+      // items would otherwise skip validation entirely and let a buyer charge an
+      // arbitrary amount.
+      if (items.length === 0) {
+        res.status(400).json({ error: 'items-required' });
+        return;
+      }
       const subtotalCents = Math.round(
         items.reduce((s, it) =>
           s + (Number(it?.unitPrice) || 0) * Math.max(0, Math.floor(Number(it?.quantity) || 0)), 0) * 100,
       );
-      if (items.length > 0 && subtotalCents > 0 && amountCents > subtotalCents + 1) {
+      if (subtotalCents <= 0) {
+        res.status(400).json({ error: 'invalid-items' });
+        return;
+      }
+      if (amountCents > subtotalCents + 1) {
         logger.warn('[createPaymentIntent] order amount exceeds items', { uid, amountCents, subtotalCents });
         res.status(400).json({ error: 'amount-exceeds-items' });
         return;

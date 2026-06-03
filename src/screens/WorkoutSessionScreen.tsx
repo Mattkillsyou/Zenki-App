@@ -47,7 +47,7 @@ export function WorkoutSessionScreen({ navigation }: any) {
   } = useHeartRate();
   const { profileFor, latestWeight } = useNutrition();
   const { state: senpaiState, triggerReaction: senpaiTrigger, shouldReact: senpaiShouldReact } = useSenpai();
-  const { recordHRSession } = useGamification();
+  const { recordHRSession, recordSession } = useGamification();
 
   // Pull real user profile data for accurate calculations
   const profile = user ? profileFor(user.id) : null;
@@ -163,6 +163,10 @@ export function WorkoutSessionScreen({ navigation }: any) {
               );
             } else {
               recordHRSession();
+              // An HR-tracked session is also a training session: count it toward
+              // totalSessions + the daily/weekly streak (and the session/streak
+              // achievements), matching the model claimed in data/achievements.ts.
+              recordSession();
             }
             navigation.goBack();
           },

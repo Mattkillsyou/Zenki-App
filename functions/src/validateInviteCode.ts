@@ -13,6 +13,7 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { logger } from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
+import { enforceRateLimit } from './rateLimit';
 
 const LEGACY_FALLBACK_CODE = 'dragon';
 
@@ -27,6 +28,14 @@ export const validateInviteCode = onRequest(
     const code = String(req.body?.code ?? '').trim().toLowerCase();
     if (!code) {
       res.status(400).json({ error: 'code-required' });
+      return;
+    }
+
+    // Throttle per client IP — the gate is pre-auth and otherwise brute-forceable.
+    const ip = (req.get('x-forwarded-for') || (req as any).ip || '').split(',')[0].trim() || 'unknown';
+    const rl = await enforceRateLimit(ip, 'validateInviteCode');
+    if (!rl.ok) {
+      res.status(429).json({ error: 'rate-limited' });
       return;
     }
 

@@ -161,9 +161,9 @@ export function SenpaiMemoryScreen({ navigation }: any) {
       ) : (
         <>
           <View style={styles.statsRow}>
-            <StatBadge label="Total" value={memories.length} icon="\u2661" color="#FF2E51" />
-            <StatBadge label="Celebrating" value={countByMood('celebrating')} icon="\uD83C\uDF8A" color="#D260FF" />
-            <StatBadge label="Impressed" value={countByMood('impressed')} icon="\u2726" color="#5158FF" />
+            <StatBadge label="Total" value={memories.length} icon={'\u2661'} color="#FF2E51" />
+            <StatBadge label="Celebrating" value={countByMood('celebrating')} icon={'\uD83C\uDF8A'} color="#D260FF" />
+            <StatBadge label="Impressed" value={countByMood('impressed')} icon={'\u2726'} color="#5158FF" />
           </View>
           <SectionList
             sections={sections}

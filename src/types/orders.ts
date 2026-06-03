@@ -14,8 +14,14 @@ export type OrderStatus = 'reserved' | 'paid';
 
 export interface Order {
   id: string;
+  /** What was purchased: the clothing/gear store (default) or the drink tab.
+   *  Lets OrderHistory / the admin reconcile a drink-tab charge separately from
+   *  a gear order. Absent on legacy records ⇒ treat as 'gear'. */
+  kind?: 'gear' | 'drinks';
   /** Local Member.id. */
   memberId: string;
+  /** Display name of the buyer (drink-tab charges carry it for reconciliation). */
+  memberName?: string;
   /** Firebase Auth uid — stamped on the cloud write for rules ownership. */
   firebaseUid?: string;
   items: OrderItem[];

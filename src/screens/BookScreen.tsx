@@ -8,18 +8,14 @@ import {
   ActivityIndicator} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { typography, spacing, borderRadius } from '../theme';
+import { typography, spacing } from '../theme';
 import { Button, ScreenContainer } from '../components';
 import { useAuth } from '../context/AuthContext';
 import { useAppointments } from '../context/AppointmentContext';
 import { useGamification } from '../context/GamificationContext';
-import * as AuthSession from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser';
 import { fetchBusyIntervals, isSlotBusy, BusyInterval } from '../services/calendarAvailability';
-
-WebBrowser.maybeCompleteAuthSession();
+import { addEventToCalendar } from '../services/calendarIntegration';
 
 // Generate today's date for display
 const getDisplayDate = () => {
@@ -27,10 +23,6 @@ const getDisplayDate = () => {
   const options: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
   return now.toLocaleDateString('en-US', options);
 };
-
-import { GOOGLE_CLIENT_ID } from '../config/env';
-// GOOGLE_CLIENT_ID loaded from Expo config extra or env vars — see src/config/env.ts
-const CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
 
 const INSTRUCTORS = [
   { name: 'Sensei Tim', specialty: 'Jiu-Jitsu, Kenpo', avatar: 'ST' },
@@ -83,7 +75,6 @@ export function BookScreen({ navigation }: any) {
   const [selectedInstructor, setSelectedInstructor] = useState(0);
   const [selectedType, setSelectedType] = useState(0);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [calendarLinked, setCalendarLinked] = useState(false);
   const [busyIntervals, setBusyIntervals] = useState<BusyInterval[]>([]);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -106,52 +97,31 @@ export function BookScreen({ navigation }: any) {
     return () => { cancelled = true; };
   }, [currentDateStr]);
 
-  const discovery = AuthSession.useAutoDiscovery('https://accounts.google.com');
-
-  const [, , promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: GOOGLE_CLIENT_ID,
-      scopes: CALENDAR_SCOPES,
-      redirectUri: AuthSession.makeRedirectUri({ scheme: 'zenkidojo' }),
-    },
-    discovery,
-  );
-
-  const linkGoogleCalendar = async () => {
-    try {
-      const result = await promptAsync();
-      if (result?.type === 'success') {
-        setCalendarLinked(true);
-        Alert.alert('Connected', 'Google Calendar linked. Bookings will sync automatically.');
-      }
-    } catch (e) {
-      Alert.alert('Error', 'Could not connect to Google Calendar.');
-    }
-  };
-
-  const addToGoogleCalendar = (instructor: string, sessionType: string, time: string) => {
-    // Create a Google Calendar event URL as a fallback
-    const title = encodeURIComponent(`Zenki Dojo · ${sessionType} with ${instructor}`);
-    const location = encodeURIComponent('Zenki Dojo, 1714 Hillhurst Ave, LA 90027');
-    const details = encodeURIComponent(`Private session at Zenki Dojo.\n\nInstructor: ${instructor}\nType: ${sessionType}\n\nPlease arrive 10 minutes early.`);
-
-    // Build date string from current date
-    const now = new Date();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const dateStr = `${now.getFullYear()}${month}${day}`;
-    const timeMap: Record<string, string> = {
-      '9:00 AM': '090000', '10:00 AM': '100000', '11:00 AM': '110000',
-      '1:00 PM': '130000', '2:00 PM': '140000', '3:00 PM': '150000',
-      '5:00 PM': '170000', '6:00 PM': '180000',
-    };
-    const startTime = timeMap[time] || '100000';
-    const endHour = (parseInt(startTime.substring(0, 2)) + 1).toString().padStart(2, '0');
-    const endTime = `${endHour}0000`;
-
-    const calUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dateStr}T${startTime}/${dateStr}T${endTime}&location=${location}&details=${details}`;
-
-    return calUrl;
+  // Offer to drop the booked session onto the member's own device calendar via
+  // the native calendar helper (Apple Calendar / Android, web link fallback).
+  // This is a real, on-device add — NOT a server-side two-way Google sync (that
+  // write-back is not built; see APP_AUDIT.md F26), so the copy stays honest.
+  const offerAddToCalendar = (sessionLabel: string, instructorName: string, startsAt: Date, durationMinutes: number) => {
+    Alert.alert(
+      'Add to your calendar?',
+      'Save this session to the calendar on this device so you get a reminder.',
+      [
+        { text: 'Not now', style: 'cancel', onPress: () => navigation.goBack() },
+        {
+          text: 'Add',
+          onPress: async () => {
+            await addEventToCalendar({
+              title: `Zenki Dojo · ${sessionLabel} with ${instructorName}`,
+              startsAt,
+              durationMinutes,
+              location: 'Zenki Dojo, 1714 Hillhurst Ave, LA 90027',
+              notes: `Private session at Zenki Dojo.\n\nInstructor: ${instructorName}\nType: ${sessionLabel}\n\nPlease arrive 10 minutes early.`,
+            });
+            navigation.goBack();
+          },
+        },
+      ],
+    );
   };
 
   const handleBooking = async () => {
@@ -192,7 +162,15 @@ export function BookScreen({ navigation }: any) {
         'Inquiry Sent',
         `Your request for ${sessionType.label} with ${instructor.name} at ${selectedTime} has been sent. ` +
         `We'll confirm by text or email. Payment is handled in person at the dojo.`,
-        [{ text: 'OK', onPress: () => navigation.goBack() }],
+        [{
+          text: 'OK',
+          onPress: () => offerAddToCalendar(
+            sessionType.label,
+            instructor.name,
+            slotDate,
+            parseDurationMinutes(sessionType.duration),
+          ),
+        }],
       );
     } catch (e) {
       Alert.alert('Error', 'Could not send your booking request. Please try again.');
@@ -204,7 +182,9 @@ export function BookScreen({ navigation }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScreenContainer>
-        {/* Header */}
+        {/* Header — no calendar "sync" chip: the app does not write to a remote
+            calendar. After a booking is requested we offer to add the session
+            to this device's own calendar (see offerAddToCalendar). */}
         <View style={styles.header}>
           <View>
             <Text style={[styles.title, { color: colors.textPrimary, fontSize: 24 }]}>Book Private</Text>
@@ -212,22 +192,6 @@ export function BookScreen({ navigation }: any) {
               By appointment only
             </Text>
           </View>
-          <SoundPressable
-            style={[
-              styles.calendarButton,
-              { backgroundColor: calendarLinked ? colors.goldMuted : colors.surface, borderColor: calendarLinked ? colors.gold : colors.border, borderWidth: 1.5 },
-            ]}
-            onPress={calendarLinked ? undefined : linkGoogleCalendar}
-          >
-            <Ionicons
-              name={calendarLinked ? 'checkmark-circle' : 'logo-google'}
-              size={16}
-              color={calendarLinked ? colors.gold : colors.textSecondary}
-            />
-            <Text style={[styles.calendarButtonText, { color: calendarLinked ? colors.gold : colors.textSecondary }]}>
-              {calendarLinked ? 'Synced' : 'Sync'}
-            </Text>
-          </SoundPressable>
         </View>
 
         {/* Select Instructor — horizontal chip row */}
@@ -432,18 +396,6 @@ const styles = StyleSheet.create({
   subtitle: {
     ...typography.bodySmall,
     marginTop: 4,
-  },
-  calendarButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-  },
-  calendarButtonText: {
-    ...typography.label,
-    fontSize: 11,
   },
   section: {
     paddingHorizontal: spacing.lg,

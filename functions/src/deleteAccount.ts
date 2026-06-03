@@ -9,7 +9,8 @@
  * "deleted" user kept their follow graph, DMs, push token, and member profile.
  *
  * Requires Firebase Auth ID token in Authorization header. The client then
- * calls currentUser.delete() to remove the Auth record itself.
+ * deletes the Firebase Auth record itself server-side (admin.auth().deleteUser)
+ * as the final step — the client just signs out after this returns.
  *
  * Purged:
  *   users/{uid}                                  (+ subcollections)
@@ -223,8 +224,12 @@ export const deleteAccount = onRequest(
       deleted.pushTokens = await deleteDocDeep(db.doc(`pushTokens/${uid}`));
 
       // 9. Other personal collections.
-      deleted.attendance = await deleteByQuery(db.collection('attendance').where('memberId', '==', uid));
-      deleted.waivers = await deleteByQuery(db.collection('waivers').where('memberId', '==', uid));
+      // attendance + waivers are stamped with the auth uid as `firebaseUid` (the
+      // app's `memberId` is an INTERNAL id, not the auth uid), so the old
+      // memberId==uid query never matched and these never got erased on account
+      // deletion — a GDPR gap. Query by firebaseUid.
+      deleted.attendance = await deleteByQuery(db.collection('attendance').where('firebaseUid', '==', uid));
+      deleted.waivers = await deleteByQuery(db.collection('waivers').where('firebaseUid', '==', uid));
       deleted.supportMessages = await deleteByQuery(db.collection('supportMessages').where('senderId', '==', uid));
       deleted.bloodworkReports = await deleteByQuery(db.collection('bloodworkReports').where('memberId', '==', uid));
       deleted.dexaScans = await deleteByQuery(db.collection('dexaScans').where('memberId', '==', uid));
@@ -251,6 +256,20 @@ export const deleteAccount = onRequest(
         deleted.storageFiles = filesDeleted;
       } catch (e) {
         logger.warn('Storage cleanup failed (non-fatal)', e);
+      }
+
+      // 13. Finally, delete the Firebase Auth user itself. The Admin SDK has no
+      //     recent-login requirement, so doing it server-side here can't strand
+      //     a still-loginable account whose data is already gone (the bug when
+      //     the client did user.delete() AFTER this cascade and hit
+      //     auth/requires-recent-login). The client no longer deletes the Auth
+      //     user; it just signs out after this returns ok.
+      try {
+        await admin.auth().deleteUser(uid);
+        deleted.authUser = 1;
+      } catch (e) {
+        logger.error('deleteAccount: Auth user delete failed for uid=' + uid, e);
+        deleted.authUser = 0;
       }
 
       res.json({ ok: true, uid, deleted });

@@ -51,6 +51,11 @@ export { backfillPostPrivacy } from './backfillPostPrivacy';
 // (increment on an absent field would otherwise initialize it to ±1). Run once.
 export { backfillFollowCounts } from './backfillFollowCounts';
 
+// One-shot admin migration — re-stamp each appointment's firebaseUid to the
+// booking member's uid so the owner-scoped read rule doesn't hide legacy
+// bookings (F25). Run once after deploying the tightened rule.
+export { backfillAppointmentOwners } from './backfillAppointmentOwners';
+
 // Admin moderation — redact an offender's messages in a reported conversation
 // (DM "Remove & Block"). Client can't redact other users' messages.
 export { redactDmMessages } from './redactDmMessages';
@@ -65,10 +70,6 @@ export { validateInviteCode } from './validateInviteCode';
 // Stripe PaymentIntent creation for in-app Apple Pay / card checkout
 // (clothing store + drink tab). Bearer-token auth + per-UID rate limiting.
 export { createPaymentIntent } from './createPaymentIntent';
-
-// DEBUG ONLY — temporary triage endpoint, remove after the post pipeline is
-// confirmed end-to-end on TestFlight.
-export { diagPostsCount } from './diagPostsCount';
 
 // Senpai AI chat endpoint — Daria-meets-DDLC chibi mascot powered by Haiku 4.5.
 // See SENPAI_AI_CHAT_PROMPT.md for design + persona reference.

@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../../theme';
 import { Button, KeyboardAwareScrollView, ScreenContainer } from '../../components';
+import { submitSupportMessage } from '../../services/supportMessages';
 
 export function ContactScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -22,16 +23,41 @@ export function ContactScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name || !email) {
       Alert.alert('Error', 'Please enter your name and email');
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      // Persist the inquiry to the same backend the in-app support form uses
+      // (Firestore `supportMessages`, with a local-queue fallback when offline)
+      // instead of the old setTimeout that silently discarded the message and
+      // then claimed it was sent. Contact details that don't map to support
+      // fields (phone) are folded into the message body so nothing is lost.
+      const detailLines = [
+        message.trim(),
+        '',
+        `— from the Contact Us form —`,
+        `Name: ${name.trim()}`,
+        `Email: ${email.trim()}`,
+        phone.trim() ? `Phone: ${phone.trim()}` : null,
+      ].filter((l) => l !== null);
+
+      await submitSupportMessage({
+        memberId: 'prospect',
+        memberName: name.trim(),
+        memberEmail: email.trim(),
+        category: 'general',
+        subject: `Membership inquiry from ${name.trim()}`,
+        message: detailLines.join('\n'),
+      });
       setSent(true);
-    }, 1500);
+    } catch (e: any) {
+      Alert.alert('Could not send', e?.message || 'Please try again shortly.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

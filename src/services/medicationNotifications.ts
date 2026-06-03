@@ -7,6 +7,7 @@
  */
 
 import { Platform } from 'react-native';
+import { SchedulableTriggerInputTypes } from 'expo-notifications';
 import { MedicationEntry, formatTimeLabel } from '../types/medication';
 
 // ─────────────────────────────────────────────────
@@ -93,13 +94,14 @@ async function scheduleDaily(
     const id = await Notifications.scheduleNotificationAsync({
       content: buildContent(med, hhmm),
       trigger: {
-        // expo-notifications SDK 52: calendar trigger with `repeats: true` and
-        // `hour`/`minute` is the documented daily form.
+        // expo-notifications SDK 55: triggers are strictly typed and require a
+        // `type`. The DAILY trigger repeats every day at hour/minute on its own
+        // (no `repeats` flag). `channelId` is Android-only.
+        type: SchedulableTriggerInputTypes.DAILY,
         hour: time.hour,
         minute: time.minute,
-        repeats: true,
         channelId: Platform.OS === 'android' ? 'medications' : undefined,
-      } as any,
+      },
     });
     return id as string;
   } catch (err) {
@@ -123,12 +125,14 @@ async function scheduleWeekly(
     const id = await Notifications.scheduleNotificationAsync({
       content: buildContent(med, hhmm),
       trigger: {
-        weekday, // 1 (Sunday) through 7 (Saturday)
+        // expo-notifications SDK 55: typed WEEKLY trigger repeats every week on
+        // the given weekday at hour/minute. weekday: 1 (Sunday)..7 (Saturday).
+        type: SchedulableTriggerInputTypes.WEEKLY,
+        weekday,
         hour: time.hour,
         minute: time.minute,
-        repeats: true,
         channelId: Platform.OS === 'android' ? 'medications' : undefined,
-      } as any,
+      },
     });
     return id as string;
   } catch (err) {
