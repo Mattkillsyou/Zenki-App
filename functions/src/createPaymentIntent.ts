@@ -57,7 +57,11 @@ export const createPaymentIntent = onRequest(
     }
 
     const amountCents = Math.round(Number(req.body?.amountCents));
-    const currency = String(req.body?.currency ?? 'usd').toLowerCase();
+    // Pin to USD — all price math (DRINK_PRICES, MAX_CHARGE_CENTS, the order
+    // subtotal bound) is USD-denominated, so honoring a client-supplied currency
+    // would let a zero-decimal currency like 'jpy' decouple the charged value
+    // from the validated amount. The real client always sends 'usd'.
+    const currency = 'usd';
     const kind = String(req.body?.kind ?? 'order').slice(0, 32);
     const items: any[] = Array.isArray(req.body?.items) ? req.body.items : [];
     const drinks: any[] = Array.isArray(req.body?.drinks) ? req.body.drinks : [];
