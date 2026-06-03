@@ -13,6 +13,8 @@ service cloud.firestore {
 
     function isSignedIn() { return request.auth != null; }
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    // The other member of a deterministic 2-party conversation (participants = [a, b]).
+    function otherParty(parts, me) { return parts[0] == me ? parts[1] : parts[0]; }
 
     // Admin check — either a custom claim (token.admin == true) or a seeded
     // doc at /admins/{uid}. The doc path is the easy bootstrap; wire custom
@@ -202,6 +204,18 @@ service cloud.firestore {
                       || request.resource.data.participantProfiles
                            .diff(resource.data.participantProfiles).affectedKeys()
                            .hasOnly([request.auth.uid])
+                    )
+                    // A writer may not LOWER the OTHER party's unread count (that
+                    // would hide their unread messages). Their own they may reset
+                    // on read; the other's they may only raise (send). Blocks the
+                    // unread-badge griefing the audit flagged, while passing the
+                    // legit send (increment other) + read (reset own) writes.
+                    && (
+                      !('unreadFor' in resource.data)
+                      || !(otherParty(resource.data.participants, request.auth.uid) in resource.data.unreadFor)
+                      || (otherParty(resource.data.participants, request.auth.uid) in request.resource.data.unreadFor
+                          && request.resource.data.unreadFor[otherParty(resource.data.participants, request.auth.uid)]
+                             >= resource.data.unreadFor[otherParty(resource.data.participants, request.auth.uid)])
                     );
 
       match /messages/{messageId} {
