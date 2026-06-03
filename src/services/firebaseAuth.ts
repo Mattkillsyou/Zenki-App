@@ -270,8 +270,13 @@ export async function getCurrentIdToken(forceRefresh = false): Promise<string | 
 }
 
 /**
- * Delete the current Firebase Auth user (client-side). Fires after the server
- * has cleaned up Firestore + Storage via the `deleteAccount` Cloud Function.
+ * Delete the current Firebase Auth user (client-side).
+ *
+ * NOTE: account deletion now runs entirely through the `deleteAccount` Cloud
+ * Function, which removes the Auth user via the Admin SDK (no recent-login
+ * requirement) as its final step — so SettingsScreen no longer calls this.
+ * Kept as a utility; client-side user.delete() throws auth/requires-recent-login
+ * on stale sessions, which is exactly why deletion was moved server-side.
  */
 export async function firebaseDeleteCurrentUser(): Promise<void> {
   const user = auth?.currentUser;

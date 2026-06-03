@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 import { Member, MEMBERS } from '../data/members';
-import { pushMemberToSheets, pushMemberToFirestore, subscribeToMember } from '../services/memberSync';
+import { pushMemberToSheets, pushMemberToFirestore, subscribeToMember, fetchMemberByCurrentUid } from '../services/memberSync';
 import { getMemberOverride, saveMemberOverride } from '../services/memberOverrides';
 import { registerForPushNotifications, savePushTokenToFirestore } from '../services/pushNotifications';
 import {
@@ -58,6 +58,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             typeof v === 'object' && v !== null && typeof (v as Member).id === 'string',
           );
           if (custom && custom.id === id) base = custom;
+        }
+        // Firestore fallback: if neither the seed array nor the local custom
+        // blob has this id but a live Firebase Auth session exists, rehydrate
+        // the member from /users/{uid} → /members/{memberId}. Covers OAuth
+        // users on a fresh device (or after a storage clear) whose member doc
+        // lives only in Firestore. Re-persist it locally so the next launch is
+        // fast and offline-safe.
+        if (!base && auth?.currentUser) {
+          const remote = await fetchMemberByCurrentUid().catch(() => null);
+          if (remote) {
+            base = remote;
+            try {
+              await AsyncStorage.setItem(CUSTOM_MEMBER_KEY, JSON.stringify(remote));
+              await AsyncStorage.setItem(STORAGE_KEY, remote.id);
+            } catch { /* non-fatal */ }
+          }
         }
         if (!base) return;
 
@@ -128,6 +144,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = useCallback(async (member: Member) => {
     setUser(member);
     await AsyncStorage.setItem(STORAGE_KEY, member.id);
+
+    // Persist the full member blob for any non-seed id so the session-restore
+    // path can rehydrate it. The restore logic resolves the user by
+    // MEMBERS.find(id) first, then falls back to CUSTOM_MEMBER_KEY. For a
+    // first-time OAuth (Apple/Google) sign-in the id is a freshly-generated
+    // `mem_…` that is NOT in the seed MEMBERS array, and CUSTOM_MEMBER_KEY was
+    // previously only written at the END of onboarding (inside createAccount).
+    // So an OAuth user who force-quit mid-onboarding was logged out on next
+    // launch despite a live Firebase Auth session, and their member record was
+    // never saved. Writing it here makes the session durable from the very
+    // first sign-in. createAccount later overwrites this with the firebaseUid-
+    // stamped record, so this is a safe lower bound.
+    const isSeedMember = MEMBERS.some((m) => m.id === member.id);
+    if (!isSeedMember) {
+      try {
+        await AsyncStorage.setItem(CUSTOM_MEMBER_KEY, JSON.stringify(member));
+      } catch (e) {
+        console.warn('[AuthContext] signIn CUSTOM_MEMBER_KEY persist failed (non-fatal)', e);
+      }
+    }
+
     // Seeds sample data on first sign-in for the App Review demo account.
     // No-op for everyone else. See utils/seedReviewerData.ts.
     seedReviewerDataIfNeeded(member).catch((e) =>
