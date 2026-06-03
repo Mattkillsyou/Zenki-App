@@ -252,6 +252,8 @@ export function DrinkScreen() {
                   amountCents: Math.round(amount * 100),
                   label: 'Zenki Dojo drinks',
                   kind: 'drinks',
+                  memberId: user?.id,
+                  memberName,
                   drinks: Object.entries(drinkCounts).map(([type, count]) => ({ type, count })),
                 });
                 if (!pay.ok) {
