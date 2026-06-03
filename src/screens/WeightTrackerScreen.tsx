@@ -22,7 +22,7 @@ import { useNutrition } from '../context/NutritionContext';
 import { useSenpai } from '../context/SenpaiContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, LineChart, KeyboardAwareScrollView, ScreenContainer } from '../components';
+import { FadeInView, LineChart, KeyboardAwareScrollView, ScreenContainer, AppleHealthFootnote } from '../components';
 import { WeekCalendar, WeekDay, startOfWeek, addDays, todayIso } from '../components/WeekCalendar';
 import { WeightUnit } from '../types/nutrition';
 import { computeTrendWeight, trendChange, kgToLbs } from '../utils/nutrition';
@@ -226,7 +226,11 @@ export function WeightTrackerScreen({ navigation }: any) {
   }
 
   function handleSaveGoal() {
-    if (!user || !latest) return;
+    if (!user) return;
+    if (!latest) {
+      Alert.alert('Log a weight first', 'Add your current weight before setting a goal.');
+      return;
+    }
     const target = parseFloat(goalTarget);
     if (!Number.isFinite(target) || target <= 0) {
       Alert.alert('Enter a target weight');
@@ -636,6 +640,8 @@ export function WeightTrackerScreen({ navigation }: any) {
               {invalidCount} entry{invalidCount === 1 ? '' : 'ies'} excluded — open History to review.
             </Text>
           )}
+
+          <AppleHealthFootnote />
         </KeyboardAwareScrollView>
       </ScreenContainer>
 

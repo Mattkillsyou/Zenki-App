@@ -1,16 +1,30 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParseJSON } from '../utils/safeStorage';
 import { todayDateString as todayISO } from '../utils/dates';
 import {
+  Achievement,
   GamificationState,
   Celebration,
   getLevelFromXP,
   getCurrentValue,
 } from '../types/gamification';
 import { createInitialAchievements } from '../data/achievements';
+import { useAuth } from './AuthContext';
 
-const STORAGE_KEY = '@zenki_gamification';
+// Legacy single-user global key. Kept for one-time migration into the
+// per-user key so the original member's progress isn't lost.
+const LEGACY_STORAGE_KEY = '@zenki_gamification';
+
+// Gamification state is a single flat blob (not a memberId-filterable list),
+// so — unlike NutritionContext/WorkoutContext which key on memberId inside the
+// data — we scope persistence by namespacing the storage key on the user id.
+// This keeps each member's xp/streak/points/achievements separate on a shared
+// device. Signed-out fallback keeps the legacy key so pre-auth progress, if any,
+// survives until the user signs in (then it migrates into their per-user key).
+function storageKeyFor(userId?: string): string {
+  return userId ? `@zenki_gamification_${userId}` : LEGACY_STORAGE_KEY;
+}
 
 const XP_PER_SESSION = 25;
 const XP_PER_BOOKING = 10;
@@ -149,45 +163,91 @@ function previousWeekISO(fromISOWeek: string): string {
   if (!match) return '';
   const year = parseInt(match[1], 10);
   const week = parseInt(match[2], 10);
-  // Reconstruct a date at the start of that week, subtract 7 days
-  const jan4 = new Date(Date.UTC(year, 0, 4));
-  const jan4Dow = jan4.getUTCDay() || 7;
+  // Reconstruct a date at the start of that week, subtract 7 days. Build and
+  // advance the date with LOCAL accessors so the value round-trips through
+  // isoWeek (which reads getFullYear/getMonth/getDate) in the same zone;
+  // using UTC here would shift back an extra week in UTC-behind timezones.
+  const jan4 = new Date(year, 0, 4);
+  const jan4Dow = jan4.getDay() || 7;
   const weekStart = new Date(jan4);
-  weekStart.setUTCDate(jan4.getUTCDate() - (jan4Dow - 1) + (week - 1) * 7 - 7);
+  weekStart.setDate(jan4.getDate() - (jan4Dow - 1) + (week - 1) * 7 - 7);
   return isoWeek(weekStart);
+}
+
+/** Hydrate a saved (possibly partial) blob into a full GamificationState,
+ *  reconciling persisted achievement unlock flags against the current catalog. */
+function hydrateState(saved: Partial<GamificationState>): GamificationState {
+  const initial = createInitialAchievements();
+  const merged = initial.map((a) => {
+    const existing = saved.achievements?.find((e: any) => e.id === a.id);
+    if (!existing) return a;
+    return {
+      ...a,
+      unlocked: !!existing.unlocked,
+      unlockedAt: existing.unlockedAt,
+    };
+  });
+  return { ...defaultState, ...saved, achievements: merged };
 }
 
 export function GamificationProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<GamificationState>(defaultState);
   const [loaded, setLoaded] = useState(false);
+  const { user } = useAuth();
+  // The storage key the current `state` was hydrated from. Persist only fires
+  // when this matches the active user's key, so a stale write from the previous
+  // member can't clobber the new member's key while a switch is in flight.
+  const loadedKeyRef = useRef<string | null>(null);
 
+  // Re-read (or initialize) per-user gamification whenever the signed-in user
+  // changes, so on a shared device member B never sees/overwrites member A's
+  // progress. On first load for a user whose per-user key is empty, migrate the
+  // legacy global blob once; a brand-new member with no data starts fresh.
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      const saved = safeParseJSON<Partial<GamificationState> | null>(raw, null, (v) =>
-        typeof v === 'object' && v !== null && !Array.isArray(v),
-      );
-      if (saved) {
-        const initial = createInitialAchievements();
-        const merged = initial.map((a) => {
-          const existing = saved.achievements?.find((e: any) => e.id === a.id);
-          if (!existing) return a;
-          return {
-            ...a,
-            unlocked: !!existing.unlocked,
-            unlockedAt: existing.unlockedAt,
-          };
-        });
-        setState({ ...defaultState, ...saved, achievements: merged });
+    let cancelled = false;
+    const key = storageKeyFor(user?.id);
+    setLoaded(false);
+    (async () => {
+      try {
+        let raw = await AsyncStorage.getItem(key);
+        // One-time migration: if this user has no per-user data yet, fall back
+        // to the legacy global key (and copy it into the per-user key) so the
+        // pre-existing single user's progress carries over instead of resetting.
+        if (raw == null && key !== LEGACY_STORAGE_KEY) {
+          const legacyRaw = await AsyncStorage.getItem(LEGACY_STORAGE_KEY);
+          if (legacyRaw != null) {
+            raw = legacyRaw;
+            await AsyncStorage.setItem(key, legacyRaw);
+          }
+        }
+        if (cancelled) return;
+        const saved = safeParseJSON<Partial<GamificationState> | null>(raw, null, (v) =>
+          typeof v === 'object' && v !== null && !Array.isArray(v),
+        );
+        // Reset to a fresh initial state when a member with no data signs in.
+        setState(saved ? hydrateState(saved) : { ...defaultState, achievements: createInitialAchievements() });
+      } catch {
+        if (!cancelled) setState({ ...defaultState, achievements: createInitialAchievements() });
+      } finally {
+        if (!cancelled) {
+          loadedKeyRef.current = key;
+          setLoaded(true);
+        }
       }
-      setLoaded(true);
-    });
-  }, []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
-    if (loaded) {
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const key = storageKeyFor(user?.id);
+    // Guard against persisting the previous user's state to the new user's key:
+    // only write once the active user's hydrate has completed for this key.
+    if (loaded && loadedKeyRef.current === key) {
+      AsyncStorage.setItem(key, JSON.stringify(state));
     }
-  }, [state, loaded]);
+  }, [state, loaded, user?.id]);
 
   const updateStreak = useCallback((prev: GamificationState): GamificationState => {
     const today = todayISO();
@@ -213,29 +273,57 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     return next;
   }, []);
 
+  // Higher number wins. Level-ups are rarest/most notable, then achievements,
+  // then streak milestones. A single celebration slot can only be overwritten
+  // by an equal-or-higher priority celebration within the same update.
+  const celebrationPriority = (c: Celebration | null): number => {
+    switch (c?.type) {
+      case 'level_up':         return 3;
+      case 'achievement':      return 2;
+      case 'streak_milestone': return 1;
+      default:                 return 0;
+    }
+  };
+
   const checkAchievements = useCallback((prev: GamificationState): GamificationState => {
     let newCelebration: Celebration | null = prev.pendingCelebration;
     let bonusXP = 0;
     let flamesEarned = 0;
 
-    const achievements = prev.achievements.map((a) => {
-      if (a.unlocked) return a;
-      const current = getCurrentValue(a.requirement.type, prev);
-      if (current >= a.requirement.value) {
-        const flame = a.flameReward ?? 1;
-        bonusXP += a.xpReward;
-        flamesEarned += flame;
-        newCelebration = {
-          type: 'achievement',
-          title: a.title,
-          subtitle: `${a.description} · +${flame} 🔥`,
-          xpGained: a.xpReward,
-          icon: a.icon,
-        };
-        return { ...a, unlocked: true, unlockedAt: new Date().toISOString() };
-      }
-      return a;
-    });
+    // One unlock pass over `list`, evaluating each still-locked achievement
+    // against `evalState`. Mutates the closed-over reward/celebration tallies
+    // and returns the updated achievement array. Already-unlocked entries are
+    // skipped, so re-running this is safe (no double rewards).
+    const runPass = (list: Achievement[], evalState: GamificationState): Achievement[] =>
+      list.map((a) => {
+        if (a.unlocked) return a;
+        const current = getCurrentValue(a.requirement.type, evalState);
+        if (current >= a.requirement.value) {
+          const flame = a.flameReward ?? 1;
+          bonusXP += a.xpReward;
+          flamesEarned += flame;
+          // Don't clobber a higher-priority celebration already pending (e.g. a level_up).
+          if (celebrationPriority({ type: 'achievement' } as Celebration) >= celebrationPriority(newCelebration)) {
+            newCelebration = {
+              type: 'achievement',
+              title: a.title,
+              subtitle: `${a.description} · +${flame} 🔥`,
+              xpGained: a.xpReward,
+              icon: a.icon,
+            };
+          }
+          return { ...a, unlocked: true, unlockedAt: new Date().toISOString() };
+        }
+        return a;
+      });
+
+    // First pass evaluates against `prev`. A second pass evaluates against the
+    // already-updated list so count-of-unlocked achievements (completionist)
+    // sees this pass's unlocks and can fire in the same action instead of
+    // lagging a cycle. One extra pass suffices: completionist is the only
+    // achievement whose value derives from other achievements' unlock state.
+    let achievements = runPass(prev.achievements, prev);
+    achievements = runPass(achievements, { ...prev, achievements });
 
     return {
       ...prev,
@@ -302,7 +390,13 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           xpGained: XP_PER_SESSION + streakBonus,
         };
       }
-      if ([7, 14, 30, 100].includes(updated.streak)) {
+      // Streak milestone is the lowest priority — only show it if a higher-priority
+      // celebration (e.g. the level_up above) wasn't already set this session.
+      if (
+        updated.streak !== prev.streak &&
+        [7, 14, 30, 100].includes(updated.streak) &&
+        celebrationPriority({ type: 'streak_milestone' } as Celebration) >= celebrationPriority(updated.pendingCelebration)
+      ) {
         updated.pendingCelebration = {
           type: 'streak_milestone',
           title: `${updated.streak}-Day Streak!`,

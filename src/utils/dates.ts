@@ -89,9 +89,9 @@ export function daysBetween(a: string, b: string): number {
 
 /** Add `n` days to a YYYY-MM-DD string. */
 export function addDays(date: string, n: number): string {
-  const d = new Date(date + 'T00:00:00');
-  d.setDate(d.getDate() + n);
-  return toDateString(d);
+  const d = new Date(date + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
 }
 
 /** ISO week identifier for a given Date — `YYYY-Www`. Used by Gamification's

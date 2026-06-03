@@ -24,7 +24,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, KeyboardAwareScrollView } from '../components';
+import { FadeInView, KeyboardAwareScrollView, AppleHealthFootnote } from '../components';
 import { parseBloodwork, BloodworkExtraction } from '../services/aiVision';
 import { getCurrentIdToken } from '../services/firebaseAuth';
 import { AI_IMAGE_MAX_DIMENSION } from '../config/api';
@@ -359,6 +359,8 @@ export function BloodworkUploadScreen({ navigation }: any) {
               </SoundPressable>
             </FadeInView>
           )}
+
+          <AppleHealthFootnote />
       </KeyboardAwareScrollView>
 
       <HealthDataConsentModal

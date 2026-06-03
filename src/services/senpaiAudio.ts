@@ -79,7 +79,26 @@ export async function playSenpaiAudio(
 ): Promise<{ stop: () => void }> {
   // Interrupt any prior clip — the prior clip's onEnded will fire too,
   // which is what we want (consumer's "TTS done" state goes false).
+  // This also aborts any previous call that is still in its async setup
+  // window (see the early `currentStop` registration below): that call's
+  // `cancelled` flag flips true so it neither plays nor leaks its tempfile.
   stopSenpaiAudio();
+
+  // Register an abortable stop handle BEFORE the awaits below so that a
+  // stopSenpaiAudio() during this setup window (e.g. from a cleanup /
+  // modal-close hook, or from a second playSenpaiAudio() above) is not a
+  // silent no-op. It flips `cancelled`, which we check before creating /
+  // starting the player so the clip never plays and the tempfile (if
+  // written) is removed. The real stop() replaces this handle once the
+  // player exists.
+  let cancelled = false;
+  let fileUri: string | null = null;
+  currentStop = () => {
+    cancelled = true;
+    if (fileUri) {
+      FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+    }
+  };
 
   await ensureAudioMode();
 
@@ -87,7 +106,7 @@ export async function playSenpaiAudio(
     throw new Error('expo-file-system cacheDirectory unavailable');
   }
   const filename = `senpai_${Date.now()}.mp3`;
-  const fileUri = FileSystem.cacheDirectory + filename;
+  fileUri = FileSystem.cacheDirectory + filename;
 
   try {
     await FileSystem.writeAsStringAsync(fileUri, audioBase64, {
@@ -97,14 +116,33 @@ export async function playSenpaiAudio(
     throw new Error(`failed to write audio tempfile: ${(err as Error)?.message}`);
   }
 
+  // If this call was cancelled during the awaits above (by stopSenpaiAudio
+  // or by a newer playSenpaiAudio), bail out now: don't create/start a
+  // player, and remove the tempfile we just wrote so it doesn't leak.
+  if (cancelled) {
+    FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+    return { stop: () => {} };
+  }
+  // Past the cancellation guard `fileUri` is a written tempfile; capture a
+  // non-null local for the player/cleanup path below.
+  const uri = fileUri;
+
   // Some expo-audio versions on iOS Simulator report `playing: true`
   // and a valid duration immediately after createAudioPlayer({uri}),
   // but currentTime never advances and no audio is actually emitted.
   // Calling .replace() with the same source forces a real load + reset
   // of the playhead, which fixes the no-audio bug on the sim.
-  const player = createAudioPlayer({ uri: fileUri });
+  let player: ReturnType<typeof createAudioPlayer>;
   try {
-    player.replace({ uri: fileUri });
+    player = createAudioPlayer({ uri });
+  } catch (e) {
+    // createAudioPlayer threw before cleanup() existed — delete the
+    // just-written tempfile so it doesn't leak, then rethrow.
+    FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+    throw e;
+  }
+  try {
+    player.replace({ uri });
   } catch (e) {
     // eslint-disable-next-line no-console
     console.warn('[senpaiAudio] player.replace threw:', e);
@@ -130,7 +168,7 @@ export async function playSenpaiAudio(
     } catch {
       /* ignore */
     }
-    FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+    FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
     try {
       onEnded?.();
     } catch {

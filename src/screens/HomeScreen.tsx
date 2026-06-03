@@ -496,7 +496,7 @@ export function HomeScreen({ navigation }: any) {
 
     const logs = myLogs(user.id).filter((l: any) => dateMatch(l.date ?? ''));
     const hrInRange = (hrSessions || [])
-      .filter((s: any) => s.memberId === user.id && dateMatch(s.date ?? ''));
+      .filter((s: any) => s.memberId === user.id && dateMatch(s.startedAt ?? ''));
     const gpsInRange = memberActivities(user.id)
       .filter((a) => dateMatch(a.startedAt?.slice(0, 10) ?? ''));
 
@@ -604,7 +604,7 @@ export function HomeScreen({ navigation }: any) {
     // 5. Weekly strain average
     const weekHR = (hrSessions || []).filter((s: any) => {
       if (s.memberId !== user.id) return false;
-      const d = new Date(s.date);
+      const d = new Date(s.startedAt);
       return (Date.now() - d.getTime()) / 86400000 <= 7;
     });
     if (weekHR.length > 0) {
@@ -618,7 +618,7 @@ export function HomeScreen({ navigation }: any) {
     }
 
     return stats;
-  }, [user?.id, gamState.streak, hrSessions]);
+  }, [user?.id, gamState.streak, hrSessions, memberActivities]);
 
   // ── Cycle Phase (female users only) ──
   const { memberCycleInfo, settings: cycleSettings } = useCycleTracker();

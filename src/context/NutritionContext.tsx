@@ -22,6 +22,7 @@ import { generateId } from '../utils/generateId';
 import { DexaScan } from '../types/dexa';
 import { BloodworkReport } from '../types/bloodwork';
 import { useAuth } from './AuthContext';
+import { useGamification } from './GamificationContext';
 
 const WEIGHT_KEY = '@zenki_weight_entries';
 const MACRO_KEY = '@zenki_macro_entries';
@@ -152,6 +153,7 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   const [bloodwork, setBloodwork] = useState<BloodworkReport[]>([]);
   const [loaded, setLoaded] = useState(false);
   const { user } = useAuth();
+  const { recordMealLogged, recordWeightLogged, recordDexaScan, recordBloodwork } = useGamification();
 
   // Re-read all slices from storage whenever the signed-in user changes.
   // This catches the case where another code path (e.g. seedReviewerData in
@@ -223,8 +225,9 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString(),
     };
     setWeights((prev) => [...prev, full]);
+    recordWeightLogged();
     return full;
-  }, []);
+  }, [recordWeightLogged]);
 
   const removeWeight = useCallback((id: string) => {
     setWeights((prev) => prev.filter((w) => w.id !== id));
@@ -271,8 +274,9 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString(),
     };
     setMacros((prev) => [...prev, full]);
+    recordMealLogged();
     return full;
-  }, []);
+  }, [recordMealLogged]);
 
   const removeMacroEntry = useCallback((id: string) => {
     setMacros((prev) => prev.filter((m) => m.id !== id));
@@ -553,9 +557,10 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
         addedAt: new Date().toISOString(),
       };
       setDexaScans((prev) => [...prev, full]);
+      recordDexaScan();
       return full;
     },
-    [],
+    [recordDexaScan],
   );
 
   const updateDexaScan = useCallback(
@@ -591,9 +596,10 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
         addedAt: new Date().toISOString(),
       };
       setBloodwork((prev) => [...prev, full]);
+      recordBloodwork();
       return full;
     },
-    [],
+    [recordBloodwork],
   );
 
   const removeBloodworkReport = useCallback((id: string) => {

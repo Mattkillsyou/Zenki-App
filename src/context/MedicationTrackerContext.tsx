@@ -413,6 +413,12 @@ export function MedicationTrackerProvider({ children }: { children: React.ReactN
 
       let taken = 0;
       let skipped = 0;
+      let missed = 0;
+      const nowTs = Date.now();
+      // Each log may be consumed by at most one slot, so a single real dose
+      // can't satisfy two nearby slots (e.g. 08:00 & 08:15) and let the other
+      // escape being counted as missed.
+      const consumedLogIds = new Set<string>();
 
       // Match logs to slots
       for (const slot of scheduledSlots) {
@@ -423,15 +429,15 @@ export function MedicationTrackerProvider({ children }: { children: React.ReactN
         const dayEnd = dayStart + 86400000;
         const log = logs.find(
           (l) => l.medicationId === medicationId &&
+            !consumedLogIds.has(l.id) &&
             new Date(l.scheduledFor).getTime() >= dayStart &&
             new Date(l.scheduledFor).getTime() < dayEnd &&
-            l.scheduledFor.includes(`T${slot.time}`) === false
-              ? Math.abs(new Date(l.scheduledFor).getTime() - slotTs) < 12 * 3600 * 1000
-              : true,
+            Math.abs(new Date(l.scheduledFor).getTime() - slotTs) < 12 * 3600 * 1000,
         );
         // Simpler match: any log whose scheduledFor day matches and time matches
         const exactLog = logs.find((l) =>
           l.medicationId === medicationId &&
+          !consumedLogIds.has(l.id) &&
           l.scheduledFor.startsWith(slot.date) &&
           (l.scheduledFor.includes(`T${slot.time}`) ||
             Math.abs(new Date(l.scheduledFor).getTime() - slotTs) < 30 * 60 * 1000),
@@ -439,25 +445,14 @@ export function MedicationTrackerProvider({ children }: { children: React.ReactN
 
         const matched = exactLog ?? log;
         if (matched) {
+          consumedLogIds.add(matched.id);
           if (matched.skipped) skipped++;
           else taken++;
+        } else if (slotTs < nowTs) {
+          // No log left for this slot and it's in the past → missed.
+          // (future slots are not counted as missed)
+          missed++;
         }
-      }
-
-      // Slots with no matching log AND in the past = missed
-      const nowTs = Date.now();
-      let missed = 0;
-      for (const slot of scheduledSlots) {
-        const slotIso = `${slot.date}T${slot.time}:00`;
-        const slotTs = new Date(slotIso).getTime();
-        if (slotTs >= nowTs) continue; // future — don't count as missed
-        const exactLog = logs.find((l) =>
-          l.medicationId === medicationId &&
-          l.scheduledFor.startsWith(slot.date) &&
-          (l.scheduledFor.includes(`T${slot.time}`) ||
-            Math.abs(new Date(l.scheduledFor).getTime() - slotTs) < 30 * 60 * 1000),
-        );
-        if (!exactLog) missed++;
       }
 
       const denom = taken + missed + skipped;

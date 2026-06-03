@@ -18,7 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, KeyboardAwareScrollView, ScreenContainer } from '../components';
+import { FadeInView, KeyboardAwareScrollView, ScreenContainer, AppleHealthFootnote } from '../components';
 import { FoodSearchModal } from '../components/FoodSearchModal';
 import { ReorderableSections, ReorderableItem } from '../components/ReorderableSections';
 import { WeekCalendar, WeekDay, startOfWeek, addDays } from '../components/WeekCalendar';
@@ -527,26 +527,36 @@ export function MacroTrackerScreen({ navigation, route }: any) {
                     );
                   })()}
 
-                  <View style={styles.donutLegend}>
-                    <View style={styles.donutLegendRow}>
-                      <View style={[styles.donutLegendDot, { backgroundColor: colors.macroProtein }]} />
-                      <Text style={[styles.donutLegendText, { color: colors.textSecondary }]}>
-                        Protein · {Math.round(totals.protein)}g · {totals.calories > 0 ? Math.round((totals.protein * 4 / (totals.protein * 4 + totals.carbs * 4 + totals.fat * 9)) * 100) : 0}%
-                      </Text>
-                    </View>
-                    <View style={styles.donutLegendRow}>
-                      <View style={[styles.donutLegendDot, { backgroundColor: colors.macroCarbs }]} />
-                      <Text style={[styles.donutLegendText, { color: colors.textSecondary }]}>
-                        Carbs · {Math.round(totals.carbs)}g · {totals.calories > 0 ? Math.round((totals.carbs * 4 / (totals.protein * 4 + totals.carbs * 4 + totals.fat * 9)) * 100) : 0}%
-                      </Text>
-                    </View>
-                    <View style={styles.donutLegendRow}>
-                      <View style={[styles.donutLegendDot, { backgroundColor: colors.macroFat }]} />
-                      <Text style={[styles.donutLegendText, { color: colors.textSecondary }]}>
-                        Fat · {Math.round(totals.fat)}g · {totals.calories > 0 ? Math.round((totals.fat * 9 / (totals.protein * 4 + totals.carbs * 4 + totals.fat * 9)) * 100) : 0}%
-                      </Text>
-                    </View>
-                  </View>
+                  {(() => {
+                    // Guard against a calories-only entry (macros all 0): the
+                    // macro-energy sum would be 0 and the percentages NaN.
+                    const macroSum = totals.protein * 4 + totals.carbs * 4 + totals.fat * 9;
+                    const proteinLegendPct = macroSum > 0 ? Math.round((totals.protein * 4 / macroSum) * 100) : 0;
+                    const carbsLegendPct = macroSum > 0 ? Math.round((totals.carbs * 4 / macroSum) * 100) : 0;
+                    const fatLegendPct = macroSum > 0 ? Math.round((totals.fat * 9 / macroSum) * 100) : 0;
+                    return (
+                      <View style={styles.donutLegend}>
+                        <View style={styles.donutLegendRow}>
+                          <View style={[styles.donutLegendDot, { backgroundColor: colors.macroProtein }]} />
+                          <Text style={[styles.donutLegendText, { color: colors.textSecondary }]}>
+                            Protein · {Math.round(totals.protein)}g · {proteinLegendPct}%
+                          </Text>
+                        </View>
+                        <View style={styles.donutLegendRow}>
+                          <View style={[styles.donutLegendDot, { backgroundColor: colors.macroCarbs }]} />
+                          <Text style={[styles.donutLegendText, { color: colors.textSecondary }]}>
+                            Carbs · {Math.round(totals.carbs)}g · {carbsLegendPct}%
+                          </Text>
+                        </View>
+                        <View style={styles.donutLegendRow}>
+                          <View style={[styles.donutLegendDot, { backgroundColor: colors.macroFat }]} />
+                          <Text style={[styles.donutLegendText, { color: colors.textSecondary }]}>
+                            Fat · {Math.round(totals.fat)}g · {fatLegendPct}%
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })()}
                 </View>
               </View>
             </FadeInView>
@@ -795,6 +805,8 @@ export function MacroTrackerScreen({ navigation, route }: any) {
               );
             })() : null}
           </FadeInView>
+
+          <AppleHealthFootnote />
       </KeyboardAwareScrollView>
       </ScreenContainer>
 
@@ -886,12 +898,13 @@ export function MacroTrackerScreen({ navigation, route }: any) {
           if (!user) return;
           addMacroEntry({
             memberId: user.id,
-            date: today,
+            date: selectedDate,
             name: food.brand ? `${food.brand} · ${food.name}` : food.name,
             calories: scaledMacros.calories,
             protein: scaledMacros.protein,
             carbs: scaledMacros.carbs,
             fat: scaledMacros.fat,
+            mealType,
           });
           rememberFood(user.id, food);
         }}

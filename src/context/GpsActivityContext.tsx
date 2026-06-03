@@ -103,6 +103,9 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     if (durationTimerRef.current) { clearInterval(durationTimerRef.current); durationTimerRef.current = null; }
   }, []);
 
+  // Tear down any active watch/timers if the provider unmounts while tracking.
+  useEffect(() => () => { cleanupTimers(); }, []);
+
   const startTracking = useCallback(async (type: GpsActivityType, memberId: string): Promise<boolean> => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return false;
@@ -184,6 +187,24 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
           setLiveSpeed(point.speed || 0);
           updateStats();
         }, 3000);
+      } else {
+        // Native watch failed to start — do NOT proceed as if tracking began.
+        // Without a watch the session would tick but record 0 GPS points and be
+        // silently lost on stop. Clean up and return false so the caller can
+        // surface an error (ActivityTrackerScreen.handleStart alerts on false).
+        cleanupTimers();
+        metaRef.current = null;
+        routeRef.current = [];
+        setIsTracking(false);
+        setIsPaused(false);
+        isPausedRef.current = false;
+        setCurrentPosition(null);
+        setLiveDistance(0);
+        setLiveDuration(0);
+        setLivePace(0);
+        setLiveElevGain(0);
+        setLiveSpeed(0);
+        return false;
       }
     }
 
@@ -206,9 +227,18 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     const meta = metaRef.current;
     metaRef.current = null;
 
+    // Always reset live UI state so a short/zero-point route doesn't leave a
+    // stale position marker, polyline, or stats behind.
+    setCurrentPosition(null);
+    setLiveDistance(0);
+    setLiveDuration(0);
+    setLivePace(0);
+    setLiveElevGain(0);
+    setLiveSpeed(0);
+
     if (route.length < 2) return null;
 
-    const durationSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
+    const durationSeconds = Math.max(0, Math.floor((Date.now() - startTimeRef.current - pausedTimeRef.current) / 1000));
     const distanceMeters = totalDistance(route);
     const elevationGainMeters = totalElevationGain(route);
     const avgPace = paceSecsPerKm(distanceMeters, durationSeconds);
@@ -234,12 +264,6 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     };
 
     setActivities((prev) => [activity, ...prev].slice(0, 100));
-    setCurrentPosition(null);
-    setLiveDistance(0);
-    setLiveDuration(0);
-    setLivePace(0);
-    setLiveElevGain(0);
-    setLiveSpeed(0);
 
     return activity;
   }, [cleanupTimers]);

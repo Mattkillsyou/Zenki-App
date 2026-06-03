@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { safeParseJSON } from '../utils/safeStorage';
+import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 import { todayDateString as todayISO } from '../utils/dates';
 import { WorkoutLog, PersonalRecord } from '../types/workout';
 import { EXERCISES_BY_KEY } from '../data/exercises';
@@ -77,11 +77,11 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id]);
 
   useEffect(() => {
-    if (loaded) AsyncStorage.setItem(LOGS_KEY, JSON.stringify(logs));
+    if (loaded) safeStorageSet(LOGS_KEY, logs, '[Workout logs]');
   }, [logs, loaded]);
 
   useEffect(() => {
-    if (loaded) AsyncStorage.setItem(PRS_KEY, JSON.stringify(prs));
+    if (loaded) safeStorageSet(PRS_KEY, prs, '[Workout PRs]');
   }, [prs, loaded]);
 
   // ── Logs ────────────────────────────────────────────

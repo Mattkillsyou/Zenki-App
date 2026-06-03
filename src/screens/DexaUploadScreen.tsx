@@ -25,7 +25,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, KeyboardAwareScrollView } from '../components';
+import { FadeInView, KeyboardAwareScrollView, AppleHealthFootnote } from '../components';
 import { extractDexa, DexaExtraction } from '../services/aiVision';
 import { getCurrentIdToken } from '../services/firebaseAuth';
 import { AI_IMAGE_MAX_DIMENSION } from '../config/api';
@@ -210,7 +210,7 @@ export function DexaUploadScreen({ navigation }: any) {
     addDexaScan({
       memberId: user.id,
       source: 'ai',
-      scanDate: e.scanDate ?? todayISO(),
+      scanDate: e.scanDate?.trim() || todayISO(),
       totalBodyFatPct: e.totalBodyFatPct,
       fatMassKg: e.fatMassKg,
       leanMassKg: e.leanMassKg,
@@ -355,6 +355,8 @@ export function DexaUploadScreen({ navigation }: any) {
               </SoundPressable>
             </FadeInView>
           )}
+
+          <AppleHealthFootnote />
       </KeyboardAwareScrollView>
 
       <HealthDataConsentModal

@@ -34,11 +34,18 @@ export type SenpaiSpeakResponse =
   | { ok: true; data: SenpaiSpeakResult }
   | { ok: false; error: SenpaiSpeakError };
 
+// Hard cap on a single TTS round-trip. Without this, a stalled (half-open)
+// response leaves the caller's ttsPlaying=true and the hold-to-talk mic
+// stuck until the OS socket timeout (~1-2 min). Mirrors sendSenpaiChat.
+const REQUEST_TIMEOUT_MS = 35_000;
+
 export async function fetchSenpaiAudio(
   text: string,
   voiceId?: string,
   idToken?: string,
 ): Promise<SenpaiSpeakResponse> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
@@ -47,6 +54,7 @@ export async function fetchSenpaiAudio(
       method: 'POST',
       headers,
       body: JSON.stringify({ text, voiceId }),
+      signal: controller.signal,
     });
 
     if (res.status === 401 || res.status === 403) {
@@ -76,9 +84,16 @@ export async function fetchSenpaiAudio(
     }
     return { ok: true, data: json };
   } catch (e: any) {
+    // AbortError from our timeout. Without this branch, a hung fetch would
+    // leave the caller's ttsPlaying=true and block the next hold-to-talk gesture.
+    if (e?.name === 'AbortError') {
+      return { ok: false, error: { code: 'no_network', message: 'TTS timed out.' } };
+    }
     if (e?.message?.includes('Network') || e?.message?.includes('fetch')) {
       return { ok: false, error: { code: 'no_network', message: 'No internet connection.' } };
     }
     return { ok: false, error: { code: 'parse_error', message: e?.message ?? 'Unknown error' } };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }

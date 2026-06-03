@@ -391,7 +391,14 @@ function Sparkle({ config }: { config: any }) {
   const rotation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Self-rescheduling loop: bail after unmount via `cancelled` and track the
+    // rescheduling timer so cleanup clears it. Otherwise the loop keeps firing
+    // .start() forever on a detached component (Sparkle unmounts routinely when
+    // sparkleActive/enabled flip off).
+    let cancelled = false;
+    let rescheduleTimer: ReturnType<typeof setTimeout> | undefined;
     const animate = () => {
+      if (cancelled) return;
       scale.setValue(0);
       opacity.setValue(0);
       rotation.setValue(0);
@@ -406,11 +413,16 @@ function Sparkle({ config }: { config: any }) {
         ]),
         Animated.timing(rotation, { toValue: 1, duration: config.speed, useNativeDriver: true }),
       ]).start(() => {
-        setTimeout(animate, 500 + Math.random() * 1500);
+        if (cancelled) return;
+        rescheduleTimer = setTimeout(animate, 500 + Math.random() * 1500);
       });
     };
     const t = setTimeout(animate, config.delay);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+      if (rescheduleTimer) clearTimeout(rescheduleTimer);
+    };
   }, []);
 
   const spin = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });

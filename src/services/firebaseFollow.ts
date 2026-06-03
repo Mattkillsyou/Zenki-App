@@ -17,9 +17,14 @@ export interface UserProfile {
 
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   if (!FIREBASE_CONFIGURED || !db) return null;
-  const snap = await getDoc(doc(db, 'users', userId));
-  if (!snap.exists()) return null;
-  return { uid: snap.id, ...snap.data() } as UserProfile;
+  try {
+    const snap = await getDoc(doc(db, 'users', userId));
+    if (!snap.exists()) return null;
+    return { uid: snap.id, ...snap.data() } as UserProfile;
+  } catch (err) {
+    console.warn('[getUserProfile] failed:', err);
+    return null;
+  }
 }
 
 export async function updateProfile(updates: Partial<Pick<UserProfile, 'displayName' | 'bio' | 'isPrivate' | 'avatar'>>) {
@@ -155,28 +160,44 @@ export async function isFollowing(targetId: string): Promise<boolean> {
   if (!db) return false;
   const uid = getCurrentUid();
   if (!uid) return false;
-  const snap = await getDoc(doc(db, 'following', uid, 'follows', targetId));
-  return snap.exists();
+  try {
+    const snap = await getDoc(doc(db, 'following', uid, 'follows', targetId));
+    return snap.exists();
+  } catch (err) {
+    console.warn('[isFollowing] failed:', err);
+    return false;
+  }
 }
 
 export async function getFollowerCount(userId: string): Promise<number> {
   if (!db) return 0;
   // Prefer the denormalized field (maintained server-side by the followerCounters
   // CF). Fall back to an aggregate count (never read the whole subcollection).
-  const userSnap = await getDoc(doc(db, 'users', userId));
-  const denorm = userSnap.exists() ? userSnap.data().followerCount : undefined;
-  if (typeof denorm === 'number' && Number.isFinite(denorm)) return denorm;
-  const agg = await getCountFromServer(collection(db, 'followers', userId, 'followers'));
-  return agg.data().count;
+  // Wrapped so a failed read returns 0 instead of rejecting the caller's load.
+  try {
+    const userSnap = await getDoc(doc(db, 'users', userId));
+    const denorm = userSnap.exists() ? userSnap.data().followerCount : undefined;
+    if (typeof denorm === 'number' && Number.isFinite(denorm)) return denorm;
+    const agg = await getCountFromServer(collection(db, 'followers', userId, 'followers'));
+    return agg.data().count;
+  } catch (err) {
+    console.warn('[getFollowerCount] failed:', err);
+    return 0;
+  }
 }
 
 export async function getFollowingCount(userId: string): Promise<number> {
   if (!db) return 0;
-  const userSnap = await getDoc(doc(db, 'users', userId));
-  const denorm = userSnap.exists() ? userSnap.data().followingCount : undefined;
-  if (typeof denorm === 'number' && Number.isFinite(denorm)) return denorm;
-  const agg = await getCountFromServer(collection(db, 'following', userId, 'follows'));
-  return agg.data().count;
+  try {
+    const userSnap = await getDoc(doc(db, 'users', userId));
+    const denorm = userSnap.exists() ? userSnap.data().followingCount : undefined;
+    if (typeof denorm === 'number' && Number.isFinite(denorm)) return denorm;
+    const agg = await getCountFromServer(collection(db, 'following', userId, 'follows'));
+    return agg.data().count;
+  } catch (err) {
+    console.warn('[getFollowingCount] failed:', err);
+    return 0;
+  }
 }
 
 export async function getAllUsers(): Promise<UserProfile[]> {
