@@ -32,21 +32,33 @@ export const notifyOnReport = onDocumentCreated('reports/{reportId}', async (eve
       return;
     }
 
-    // Look up each admin's push token (pushTokens/{uid}).
+    // Look up each admin's push token (pushTokens/{uid}). Keep the uid aligned
+    // with its token so Expo tickets (returned in request order) can be mapped
+    // back to the owning uid for stale-token cleanup below.
     const tokenSnaps = await Promise.all(
       adminUids.map((uid) => db.doc(`pushTokens/${uid}`).get()),
     );
-    const tokens = tokenSnaps
-      .map((s) => (s.exists ? (s.data()?.token as string | undefined) : undefined))
-      .filter((t): t is string => typeof t === 'string' && t.startsWith('ExponentPushToken'));
+    const recipients = adminUids
+      .map((uid, i) => {
+        const snap = tokenSnaps[i];
+        const token = snap.exists ? (snap.data()?.token as string | undefined) : undefined;
+        return { uid, token };
+      })
+      .filter(
+        (r): r is { uid: string; token: string } =>
+          typeof r.token === 'string' && r.token.startsWith('ExponentPushToken'),
+      );
 
-    if (tokens.length === 0) {
+    if (recipients.length === 0) {
       logger.info('notifyOnReport: no admin push tokens registered — skipping');
       return;
     }
 
-    const messages = tokens.map((to) => ({
-      to,
+    // Parallel array of uids in the SAME order as `messages` — used to zip
+    // against the Expo ticket array in the response.
+    const recipientUids = recipients.map((r) => r.uid);
+    const messages = recipients.map((r) => ({
+      to: r.token,
       sound: 'default',
       title: 'New content report',
       body: `A ${report.targetType ?? 'item'} was reported (${report.reason ?? 'reason unknown'}). Review within 24h.`,
@@ -61,6 +73,35 @@ export const notifyOnReport = onDocumentCreated('reports/{reportId}', async (eve
     });
     if (!resp.ok) {
       logger.warn('notifyOnReport: Expo push returned', resp.status, await resp.text().catch(() => ''));
+    } else {
+      // Expo returns HTTP 200 even when individual tickets carry per-token
+      // errors (e.g. DeviceNotRegistered). Inspect the ticket array and prune
+      // dead tokens; best-effort — never throw, never block the trigger.
+      try {
+        const body = (await resp.json().catch(() => null)) as
+          | { data?: Array<{ status?: string; message?: string; details?: { error?: string } }> }
+          | null;
+        const tickets = body?.data;
+        if (Array.isArray(tickets)) {
+          for (let i = 0; i < tickets.length; i++) {
+            const ticket = tickets[i];
+            if (ticket?.status === 'error') {
+              const uid = recipientUids[i];
+              logger.warn('notifyOnReport: Expo ticket error', {
+                uid,
+                message: ticket.message,
+                error: ticket.details?.error,
+              });
+              // Stale token — remove it so this dead recipient stops being targeted.
+              if (ticket.details?.error === 'DeviceNotRegistered' && uid) {
+                await db.doc(`pushTokens/${uid}`).delete().catch(() => {});
+              }
+            }
+          }
+        }
+      } catch (ticketErr) {
+        logger.warn('notifyOnReport: ticket inspection failed (non-fatal)', ticketErr);
+      }
     }
   } catch (e) {
     logger.error('notifyOnReport failed', e);
