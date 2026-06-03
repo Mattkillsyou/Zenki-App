@@ -26,6 +26,10 @@ gate**. So this fix and the deploy are a package.
    expected doc shape in `functions/src/validateInviteCode.ts`.
 3. Smoke test: enter a seeded code on a release build → passes; enter garbage →
    "valid invite code" error; confirm `'dragon'` is rejected.
+4. **Apple review:** the invite gate is **pre-auth**, so the reviewer currently
+   clears it with `'dragon'` — which dies in prod after this change. Seed a code
+   the reviewer can use and record it in `APP_REVIEWER.md`, or the reviewer is
+   locked out before they ever reach the demo login.
 
 ---
 
