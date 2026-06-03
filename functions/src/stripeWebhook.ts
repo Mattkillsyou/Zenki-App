@@ -49,22 +49,39 @@ export const stripeWebhook = onRequest(
       if (event.type === 'payment_intent.succeeded' || event.type === 'payment_intent.payment_failed') {
         const pi = event.data.object;
         const md = pi.metadata || {};
-        await admin.firestore().doc(`payments/${pi.id}`).set(
-          {
-            paymentIntentId: pi.id,
-            status: event.type === 'payment_intent.succeeded' ? 'succeeded' : 'failed',
-            amountCents: pi.amount,
-            currency: pi.currency,
-            firebaseUid: md.uid ?? null,
-            kind: md.kind ?? 'order',
-            items: md.items ?? null,
-            drinks: md.drinks ?? null,
-            stripeCreated: pi.created,
-            recordedAt: new Date().toISOString(),
-            source: 'stripe-webhook',
-          },
-          { merge: true },
-        );
+        const incomingStatus = event.type === 'payment_intent.succeeded' ? 'succeeded' : 'failed';
+        const ref = admin.firestore().doc(`payments/${pi.id}`);
+        // Reconcile in a transaction so out-of-order / retried deliveries can't
+        // corrupt the record: never downgrade a recorded 'succeeded' to 'failed'
+        // (Stripe doesn't guarantee event order and retries deliveries, so a late
+        // payment_failed for an intent that ultimately succeeded must not clobber
+        // it), and ignore an event older than the one already applied.
+        await admin.firestore().runTransaction(async (tx) => {
+          const snap = await tx.get(ref);
+          const existing = snap.exists ? snap.data() : null;
+          if (existing) {
+            if (existing.status === 'succeeded' && incomingStatus === 'failed') return;
+            if (typeof existing.eventCreated === 'number' && event.created < existing.eventCreated) return;
+          }
+          tx.set(
+            ref,
+            {
+              paymentIntentId: pi.id,
+              status: incomingStatus,
+              amountCents: pi.amount,
+              currency: pi.currency,
+              firebaseUid: md.uid ?? null,
+              kind: md.kind ?? 'order',
+              items: md.items ?? null,
+              drinks: md.drinks ?? null,
+              stripeCreated: pi.created,
+              eventCreated: event.created,
+              recordedAt: new Date().toISOString(),
+              source: 'stripe-webhook',
+            },
+            { merge: true },
+          );
+        });
         logger.info('[stripeWebhook] recorded', { id: pi.id, type: event.type, amount: pi.amount });
       }
       // Ack all other event types so Stripe doesn't retry.
