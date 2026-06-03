@@ -43,7 +43,7 @@ const POINTS_PER_DOLLAR = 10;
 
 export function StoreScreen({ navigation }: any) {
   const { colors } = useTheme();
-  const { state: gamState, redeemPoints, recordGearPurchase } = useGamification();
+  const { state: gamState, redeemPoints, awardPoints, recordGearPurchase } = useGamification();
   const { products: PRODUCTS } = useProducts();
   const { play } = useSound();
   useScreenSoundTheme('store');
@@ -351,12 +351,38 @@ export function StoreScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[styles.checkoutButton, { backgroundColor: colors.red }]}
                 onPress={async () => {
-                  const pointsDiscount = usePoints ? Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal) : 0;
+                  const requestedPointsDiscount = usePoints ? Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal) : 0;
                   const promoDiscount = appliedPromo ? cartTotal * (appliedPromo.discountPercent / 100) : 0;
+                  const requestedPointsUsed = usePoints && requestedPointsDiscount > 0
+                    ? Math.floor(requestedPointsDiscount * POINTS_PER_DOLLAR)
+                    : 0;
+
+                  // Deduct points BEFORE charging anything: redeemPoints() returns
+                  // false (and changes nothing) if the live balance can't cover it
+                  // — e.g. the balance dropped between render and tap. Honoring an
+                  // unbacked points discount would charge the wrong total and record
+                  // a discount the user never actually paid (audit F31). If it fails,
+                  // fall back to a no-points order at the correct total.
+                  let pointsUsed = 0;
+                  let pointsDiscount = 0;
+                  if (requestedPointsUsed > 0) {
+                    if (redeemPoints(requestedPointsUsed)) {
+                      pointsUsed = requestedPointsUsed;
+                      pointsDiscount = requestedPointsDiscount;
+                    } else {
+                      Alert.alert(
+                        'Points unavailable',
+                        "Your Dojo Points balance changed, so we couldn't apply them. We'll charge the full amount instead.",
+                      );
+                    }
+                  }
                   // Charge the SAME total shown to the user. (The old handler
                   // ignored the promo discount in finalTotal — fixed here.)
                   const finalTotal = Math.max(0, cartTotal - pointsDiscount - promoDiscount);
-                  const pointsUsed = usePoints && pointsDiscount > 0 ? Math.floor(pointsDiscount * POINTS_PER_DOLLAR) : 0;
+
+                  // Refund the just-deducted points if we bail before the order is
+                  // recorded, so points and the order record never diverge.
+                  const refundPointsOnAbort = () => { if (pointsUsed > 0) awardPoints(pointsUsed, 'Refund: checkout aborted'); };
 
                   // If there's a balance due and Apple Pay is available (Stripe
                   // configured + device supports it), charge it in-app; else fall
@@ -375,8 +401,9 @@ export function StoreScreen({ navigation }: any) {
                       })),
                     });
                     if (!pay.ok) {
+                      refundPointsOnAbort(); // charge failed/canceled — give points back
                       if (!pay.canceled) Alert.alert('Payment failed', pay.error ?? 'Please try again.');
-                      return; // keep the cart; charge nothing; deduct nothing
+                      return; // keep the cart; charge nothing
                     }
                     paymentMethod = 'apple_pay';
                     paymentIntentId = pay.paymentIntentId;
@@ -406,16 +433,20 @@ export function StoreScreen({ navigation }: any) {
                     createdAt: new Date().toISOString(),
                   };
 
-                  // 1) Record locally FIRST — only charge points if it stuck,
-                  //    so points and the order record never diverge.
+                  // 1) Record locally. Points were already deducted up-front (and
+                  //    verified against the live balance); if recording fails we
+                  //    refund them so points and the order record never diverge.
+                  //    NOTE: a successful Apple Pay charge can't be refunded here —
+                  //    that gap is covered by the server-side reconciliation flagged
+                  //    for the Stripe webhook (F19).
                   try {
                     await appendLocalOrder(order);
                   } catch {
+                    refundPointsOnAbort();
                     Alert.alert('Checkout failed', "We couldn't record your order. Please try again.");
                     return;
                   }
-                  // 2) Safe to deduct points + count the purchase now.
-                  if (pointsUsed > 0) redeemPoints(pointsUsed);
+                  // 2) Count the purchase toward gear achievements.
                   for (let i = 0; i < cartCount; i++) recordGearPurchase();
                   // 3) Best-effort cloud sync so the dojo/admin sees the order;
                   //    the local record stands regardless of network/Firebase.

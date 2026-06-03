@@ -8,6 +8,7 @@
 import { STRIPE_CONFIGURED } from '../config/env';
 import { AI_FUNCTION_BASE_URL } from '../config/api';
 import { getCurrentIdToken } from './firebaseAuth';
+import { saveDrinkChargeOrder } from './orderSync';
 
 export interface ApplePayResult {
   ok: boolean;
@@ -44,6 +45,11 @@ export async function payWithApplePay(params: {
   items?: Array<{ name: string; unitPrice: number; quantity: number }>;
   /** Drink-tab breakdown — the server fully re-validates the amount from this. */
   drinks?: Array<{ type: string; count: number }>;
+  /** Buyer identity. For kind:'drinks' this is used to persist a durable
+   *  receipt (local + Firestore) on success, since the drink tab is otherwise
+   *  device-local only and discarded the paymentIntentId (audit F19/F20). */
+  memberId?: string;
+  memberName?: string;
 }): Promise<ApplePayResult> {
   if (!STRIPE_CONFIGURED) return { ok: false, error: 'Payments are not configured yet.' };
   const amountCents = Math.round(params.amountCents);
@@ -104,6 +110,27 @@ export async function payWithApplePay(params: {
       const canceled = error.code === 'Canceled' || /cancel/i.test(error.message ?? '');
       return { ok: false, canceled, error: canceled ? undefined : (error.message ?? 'Payment failed.') };
     }
+
+    // Charge succeeded. For a drink-tab charge, persist a durable receipt now
+    // (the drink tab is otherwise device-local AsyncStorage and the screen
+    // discards paymentIntentId). The store path persists its own richer order
+    // record at the call site, so it doesn't go through here.
+    if (params.kind === 'drinks' && params.drinks && params.drinks.length > 0) {
+      try {
+        await saveDrinkChargeOrder({
+          memberId: params.memberId,
+          memberName: params.memberName,
+          drinks: params.drinks,
+          amountUsd: amountCents / 100,
+          paymentIntentId,
+        });
+      } catch (persistErr) {
+        // The money WAS taken — don't fail the result, but make the missing
+        // receipt loud so it can be reconciled (charge is real, record isn't).
+        console.warn('[Payments] drink charge succeeded but receipt persist failed:', persistErr);
+      }
+    }
+
     return { ok: true, paymentIntentId };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? 'Payment failed.' };
