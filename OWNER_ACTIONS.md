@@ -7,19 +7,24 @@ only the project owner can perform. Do these **before** shipping the build.
 
 ---
 
-## 1. Invite gate — `validateInviteCode` is now the real gate ⚠️ HARD LAUNCH BLOCKER
+## 1. Invite gate — TEMPORARILY OPEN (bypassed) ⚠️ re-secure before public launch
 
 **Code change:** `SignInScreen.tsx` no longer accepts the hardcoded `'dragon'`
 fallback in production. It calls the `validateInviteCode` Cloud Function and
 **fails closed** — if the function errors or 404s, the user is told "couldn't
 verify your invite code." The `'dragon'` shortcut now only works in `__DEV__`.
 
-**Why this matters:** per project memory, `validateInviteCode` is **not yet
-deployed in prod (returns 404)** and `'dragon'` was the de-facto gate. With this
-change, a 404 → fail-closed → **every new install is locked out of the invite
-gate**. So this fix and the deploy are a package.
+**CURRENT STATE (owner request): the gate is BYPASSED.** `INVITE_GATE_ENABLED = false`
+in `SignInScreen.tsx` → everyone reaches sign-in with no invite code (no `'dragon'`,
+no CF needed). This unblocks the Apple reviewer and any new install right now; the
+gate UI + `validateInviteCode` wiring stay intact and simply unreached.
 
-**Required before shipping:**
+Note the fail-closed behavior above only bites when the gate is ON. Because
+`validateInviteCode` is **not yet deployed in prod (404)**, turning the gate back
+on without deploying it first would lock out every new install — so re-enable and
+deploy together.
+
+**To re-secure the gate (once it's safe), flip `INVITE_GATE_ENABLED = true` and:**
 1. `firebase deploy --only functions:validateInviteCode`
 2. Seed real invite codes in the `inviteCodes` Firestore collection (there is no
    admin UI for this — add docs by hand in the console). Confirm the function's

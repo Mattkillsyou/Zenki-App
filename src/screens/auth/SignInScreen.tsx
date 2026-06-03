@@ -31,6 +31,11 @@ WebBrowser.maybeCompleteAuthSession();
 
 const INVITE_CODE = 'dragon';
 const INVITE_VERIFIED_KEY = '@zenki_invite_verified';
+// TEMPORARY (owner request): invite gate disabled until validateInviteCode is
+// deployed + the inviteCodes collection is seeded. While false, everyone reaches
+// the sign-in screen with no code — the gate UI + verification logic below stay
+// intact and simply unreached. Flip back to true to re-enable. See OWNER_ACTIONS.md.
+const INVITE_GATE_ENABLED = false;
 const LAST_USERNAME_KEY = '@zenki_last_username';
 
 export function SignInScreen({ navigation }: any) {
@@ -47,6 +52,8 @@ export function SignInScreen({ navigation }: any) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    // Gate disabled → never show the invite screen; go straight to sign-in.
+    if (!INVITE_GATE_ENABLED) { setCheckingInvite(false); return; }
     AsyncStorage.getItem(INVITE_VERIFIED_KEY).then((val) => {
       if (val !== 'true') setShowInviteGate(true);
       setCheckingInvite(false);
