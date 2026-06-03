@@ -450,6 +450,14 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Stripe payment records — written ONLY by the stripeWebhook Cloud Function
+    // (Admin SDK, bypasses rules) as the server-authoritative record that a
+    // charge succeeded. Admins read for reconciliation; clients never touch it.
+    match /payments/{paymentIntentId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // Default deny — anything not listed above is locked.
     match /{document=**} {
       allow read, write: if false;
