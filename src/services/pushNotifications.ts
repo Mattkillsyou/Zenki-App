@@ -1,9 +1,10 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import { EXPO_PUSH_API_URL } from '../config/api';
+import { getCurrentUid } from './firebaseAuth';
 
 // Configure how notifications are displayed when app is foregrounded
 Notifications.setNotificationHandler({
@@ -64,17 +65,24 @@ export async function registerForPushNotifications(): Promise<string | null> {
 }
 
 /**
- * Save a push token to a member's Firestore document. The /members doc id
- * IS the local member id (see memberSync.upsertMemberInFirestore), so a
- * direct doc lookup is correct — the previous `where('id', '==', memberId)`
- * query needed Firestore's automatic single-field index AND silently
- * returned empty when the field wasn't set on a doc.
+ * Save a push token to the dedicated `pushTokens/{uid}` collection (keyed by
+ * Firebase Auth uid). Relocated OFF the /members doc: /members used to be
+ * world-readable to any signed-in user, so storing the Expo push token there
+ * let anyone scrape every member's token and push to them via the public Expo
+ * API. pushTokens is owner-write / owner-or-admin-read. The `memberId` arg is
+ * kept for reference (stored as a field) but no longer used as the key.
  */
 export async function savePushTokenToFirestore(memberId: string, token: string): Promise<boolean> {
   if (!FIREBASE_CONFIGURED || !db) return false;
+  const uid = getCurrentUid();
+  if (!uid) return false;
 
   try {
-    await updateDoc(doc(db, 'members', memberId), { pushToken: token });
+    await setDoc(
+      doc(db, 'pushTokens', uid),
+      { uid, token, memberId, platform: Platform.OS, updatedAt: new Date().toISOString() },
+      { merge: true },
+    );
     return true;
   } catch (err) {
     console.warn('[Push] Save token failed:', err);
@@ -83,18 +91,19 @@ export async function savePushTokenToFirestore(memberId: string, token: string):
 }
 
 /**
- * Fetch all push tokens from Firestore (admin-only).
+ * Fetch all push tokens from Firestore (admin-only — the rule restricts a
+ * full pushTokens list to admins).
  */
 export async function fetchAllPushTokens(): Promise<string[]> {
   if (!FIREBASE_CONFIGURED || !db) return [];
 
   try {
-    const snapshot = await getDocs(collection(db, 'members'));
+    const snapshot = await getDocs(collection(db, 'pushTokens'));
     const tokens: string[] = [];
     snapshot.docs.forEach((d) => {
       const data = d.data();
-      if (data.pushToken && typeof data.pushToken === 'string') {
-        tokens.push(data.pushToken);
+      if (data.token && typeof data.token === 'string') {
+        tokens.push(data.token);
       }
     });
     return tokens;

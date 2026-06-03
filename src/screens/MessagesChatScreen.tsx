@@ -105,7 +105,8 @@ export function MessagesChatScreen({ navigation, route }: any) {
     setDraft('');
     try {
       await sendMessage(conversationId, text);
-    } catch {
+    } catch (err: any) {
+      // Restore the draft so it isn't lost on a transient failure.
       setDraft(text);
     } finally {
       setSending(false);

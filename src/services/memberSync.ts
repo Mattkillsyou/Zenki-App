@@ -76,9 +76,13 @@ export async function upsertMemberInFirestore(member: Member): Promise<boolean> 
   }
   const ref = doc(db, 'members', member.id);
   try {
+    // Never persist the push token onto /members — it lives in pushTokens/{uid}
+    // now (the /members doc must not carry credentials/PII beyond what its
+    // locked-down read rule intends). A cached local member may still hold one.
+    const { pushToken, ...safeMember } = member as Member & { pushToken?: string };
     await setDoc(
       ref,
-      { ...member, updatedAt: new Date().toISOString() },
+      { ...safeMember, updatedAt: new Date().toISOString() },
       { merge: true },
     );
   } catch (err) {
@@ -287,9 +291,10 @@ export async function backfillMembersToFirestore(members: Member[]): Promise<Bac
       const batch = writeBatch(db);
       const stamp = new Date().toISOString();
       for (const m of slice) {
+        const { pushToken, ...safeM } = m as Member & { pushToken?: string };
         batch.set(
           doc(db, 'members', m.id),
-          { ...m, updatedAt: stamp },
+          { ...safeM, updatedAt: stamp },
           { merge: true },
         );
       }
@@ -301,9 +306,10 @@ export async function backfillMembersToFirestore(members: Member[]): Promise<Bac
       // a single permission-denied doesn't abort the rest.
       for (const m of slice) {
         try {
+          const { pushToken, ...safeM } = m as Member & { pushToken?: string };
           await setDoc(
             doc(db, 'members', m.id),
-            { ...m, updatedAt: new Date().toISOString() },
+            { ...safeM, updatedAt: new Date().toISOString() },
             { merge: true },
           );
           ok++;

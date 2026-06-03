@@ -28,6 +28,33 @@ export { deleteAccount } from './deleteAccount';
 // Re-export the admin moderation endpoint.
 export { adminActionReport } from './adminActionReport';
 
+// Cascade post deletion (post doc + likes/comments subcollections + Storage
+// media). Authored-by or admin. Fixes the orphaned-subcollection leak.
+export { deletePostCascade } from './deletePostCascade';
+
+// Admin "ban / eject user" — disables the Firebase Auth account (Apple 1.2).
+export { banUser } from './banUser';
+
+// Firestore trigger: push admins on every new report (≤24h review SLA backstop).
+export { notifyOnReport } from './notifyOnReport';
+
+// Firestore triggers: maintain denormalized follower/following counts on /users
+// from the follower-edge source of truth (abuse-proof; client can't write them).
+export { onFollowerEdgeCreated, onFollowerEdgeDeleted } from './followerCounters';
+
+// One-shot admin migration — stamp authorIsPrivate on pre-existing posts so the
+// feed's where('authorIsPrivate','==',false) doesn't drop legacy posts. Run once.
+export { backfillPostPrivacy } from './backfillPostPrivacy';
+
+// One-shot admin migration — seed users.followerCount/followingCount from the
+// real subcollection counts so the increment triggers start from a correct base
+// (increment on an absent field would otherwise initialize it to ±1). Run once.
+export { backfillFollowCounts } from './backfillFollowCounts';
+
+// Admin moderation — redact an offender's messages in a reported conversation
+// (DM "Remove & Block"). Client can't redact other users' messages.
+export { redactDmMessages } from './redactDmMessages';
+
 // Re-export the Zenki-branded password-reset email endpoint (Resend).
 export { sendPasswordReset } from './sendPasswordReset';
 

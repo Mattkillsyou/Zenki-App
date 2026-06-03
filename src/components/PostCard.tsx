@@ -30,7 +30,7 @@ export function PostCard({ post, onLike, onUserPress, onCommentPress }: PostCard
   const { colors } = useTheme();
   const { reduceMotion } = useMotion();
   const { user } = useAuth();
-  const { blockUser } = useBlocks();
+  const { blockUser, muteUser } = useBlocks();
   const heartAnim = useRef(new Animated.Value(1)).current;
   const dblTapRef = useRef<number>(0);
   const [reportOpen, setReportOpen] = useState(false);
@@ -38,16 +38,19 @@ export function PostCard({ post, onLike, onUserPress, onCommentPress }: PostCard
   const isOwn = user?.id === post.userId;
 
   const openMenu = () => {
-    // Skip menu on own posts for now (no edit/delete wired at card level yet)
+    // Skip menu on own posts for now (no edit/delete wired at card level yet).
+    // This also keeps Mute/Block off your own posts.
     if (isOwn) return;
 
-    const options = ['Report post', 'Block user', 'Cancel'];
+    const muteLabel = `Mute @${post.displayName}`;
+    const options = ['Report post', muteLabel, 'Block user', 'Cancel'];
     const cancelIndex = options.length - 1;
-    const destructiveIndex = 1;
+    const destructiveIndex = 2;
 
     const handleIndex = (idx?: number) => {
       if (idx === 0) setReportOpen(true);
-      else if (idx === 1) confirmBlock();
+      else if (idx === 1) confirmMute();
+      else if (idx === 2) confirmBlock();
     };
 
     if (Platform.OS === 'ios') {
@@ -63,10 +66,30 @@ export function PostCard({ post, onLike, onUserPress, onCommentPress }: PostCard
       // Android / Web fallback — use Alert as an action sheet
       Alert.alert(post.displayName, undefined, [
         { text: 'Report post', onPress: () => handleIndex(0) },
-        { text: 'Block user', style: 'destructive', onPress: () => handleIndex(1) },
+        { text: muteLabel, onPress: () => handleIndex(1) },
+        { text: 'Block user', style: 'destructive', onPress: () => handleIndex(2) },
         { text: 'Cancel', style: 'cancel' },
       ]);
     }
+  };
+
+  const confirmMute = () => {
+    // Mute is a soft-hide: the user is never notified and can still interact;
+    // you just stop seeing their posts. Lighter-weight than block, so no
+    // destructive confirm — just do it and acknowledge.
+    Alert.alert(
+      `Mute ${post.displayName}?`,
+      `You'll stop seeing their posts in your feed. They won't be notified. You can unmute later in Settings → Blocked Users.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Mute',
+          onPress: async () => {
+            await muteUser(post.userId);
+          },
+        },
+      ],
+    );
   };
 
   const confirmBlock = () => {

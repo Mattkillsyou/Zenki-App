@@ -8,9 +8,19 @@ rules_version = '2';
 // ─────────────────────────────────────────────────────────────
 service firebase.storage {
   match /b/{bucket}/o {
-    // Per-user private folder — only the owner reads/writes.
+    // Per-user private folder — only the owner reads/writes. Avatars, health
+    // documents, and anything else that must stay private live here.
     match /users/{uid}/{allPaths=**} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Post media — community feed photos/videos. Readable by any signed-in
+    // member (the feed shows other users' media); only the owner uploads to
+    // their own prefix. Kept OUT of /users/{uid}/ (which is owner-only-read) so
+    // feed media is readable by rule, not merely via a fragile download token.
+    match /postMedia/{uid}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
     }
 
     // Public assets (branded media, class posters) — signed-in read only.

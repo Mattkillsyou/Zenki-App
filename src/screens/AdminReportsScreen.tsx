@@ -6,13 +6,15 @@
  * is the read/action side.
  *
  * Shows all reports with status === 'open', newest first.
- * Each row has two actions:
- *   - Dismiss
- *   - Remove & Block (deletes the content, auto-blocks the reporter from
- *     the offender)
+ * Each row has: Dismiss, Remove & Block, and Ban user.
  *
- * Both paths call the `adminActionReport` Cloud Function so the destructive
- * operation runs with the Admin SDK (bypassing client rules).
+ * Actions run through the CLIENT `adminActionReport` (firebaseModeration), which
+ * does the report status update + reporter-block directly under admin Firestore
+ * rules, and delegates destructive cross-user work to Cloud Functions:
+ *   - post target    → deletePostCascade (post + likes/comments + media)
+ *   - comment target → deleted at posts/{parentId}/comments/{id} (admin rule)
+ *   - message target → redactDmMessages (offender's messages in the thread)
+ * "Ban user" ejects the offender entirely via the banUser function.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -33,6 +35,7 @@ import { FadeInView, ScreenContainer } from '../components';
 import {
   listOpenReports,
   adminActionReport,
+  banUserViaFunction,
   Report,
   REPORT_REASON_LABELS,
 } from '../services/firebaseModeration';
@@ -142,6 +145,33 @@ export function AdminReportsScreen({ navigation }: any) {
               // (e.g. post already gone, or rule denied). Surface the detail.
               Alert.alert('Action complete with warning', res.error);
             }
+          },
+        },
+      ],
+    );
+  };
+
+  // Eject the offending user from the whole community (Apple 1.2: developers
+  // must be able to remove abusive users, not just block them for one reporter).
+  // Disables their Firebase Auth account via the banUser Cloud Function.
+  const handleBanUser = (r: Report) => {
+    Alert.alert(
+      'Ban this user?',
+      `This disables ${r.targetUserId}'s account across the entire app — they can no longer sign in or post. Use for repeat or severe offenders. This is separate from removing the reported content.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Ban user',
+          style: 'destructive',
+          onPress: async () => {
+            setActingOn(r.id);
+            const res = await banUserViaFunction(r.targetUserId);
+            setActingOn(null);
+            if (!res.ok) {
+              Alert.alert('Could not ban user', res.error ?? 'Please try again.');
+              return;
+            }
+            Alert.alert('User banned', 'Their account has been disabled. Resolve the report with Dismiss or Remove & Block.');
           },
         },
       ],
@@ -264,6 +294,15 @@ export function AdminReportsScreen({ navigation }: any) {
                       )}
                     </SoundPressable>
                   </View>
+
+                  <SoundPressable
+                    disabled={actingOn === r.id}
+                    onPress={() => handleBanUser(r)}
+                    style={[styles.banBtn, { borderColor: colors.red }, actingOn === r.id && { opacity: 0.6 }]}
+                  >
+                    <Ionicons name="ban-outline" size={15} color={colors.red} />
+                    <Text style={[styles.banText, { color: colors.red }]}>Ban user — eject from community</Text>
+                  </SoundPressable>
                 </View>
               </FadeInView>
             ))
@@ -389,4 +428,15 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
   },
   actionText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.2 },
+  banBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    marginTop: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+  banText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.2 },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   ScrollView,
   Image} from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,39 +28,86 @@ interface StoryItem {
 export function CommunityScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { filterBlocked, blockedIds } = useBlocks();
+  const { filterHidden, blockedIds, mutedIds } = useBlocks();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  // The pagination cursor (last post's createdAt) and an in-flight guard live
+  // in refs so the FlatList onEndReached handler always sees the latest values
+  // without re-creating the callback (and re-binding the list) on every change.
+  const cursorRef = useRef<string | null>(null);
+  const loadingRef = useRef(false);
+  // Mirror of `posts` for synchronous reads (dedupe across load-more iterations
+  // and the like-toggle guard) without depending on a stale render closure.
+  const postsRef = useRef<Post[]>([]);
+  useEffect(() => { postsRef.current = posts; }, [posts]);
 
+  // Load the FIRST page (mount + pull-to-refresh). Resets the cursor.
   const loadFeed = useCallback(async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     try {
-      const feed = await getFeed();
-      setPosts(feed);
+      const { posts: page, cursor, hasMore: more } = await getFeed();
+      postsRef.current = page;
+      setPosts(page);
+      cursorRef.current = cursor;
+      setHasMore(more);
     } catch (error) {
       console.log('[Community] Feed error:', error);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  // Re-filter whenever the blocked list changes so unblocks show instantly.
-  const visiblePosts = filterBlocked(posts, 'userId');
-  // (blockedIds referenced so the hook re-runs derived render on block changes)
-  void blockedIds;
+  // Load the NEXT page (infinite scroll). Keeps paging until it adds at least one
+  // VISIBLE (non-hidden, non-duplicate) post or runs out — otherwise a page that
+  // is entirely blocked/muted/duplicated wouldn't grow the rendered list, so
+  // onEndReached would never fire again and pagination would dead-end.
+  const loadMore = useCallback(async () => {
+    if (loadingRef.current || !hasMore || !cursorRef.current) return;
+    loadingRef.current = true;
+    setLoadingMore(true);
+    try {
+      let guard = 0;
+      while (cursorRef.current && guard < 6) {
+        guard++;
+        const { posts: page, cursor, hasMore: more } = await getFeed({ cursor: cursorRef.current });
+        cursorRef.current = cursor;
+        const seen = new Set(postsRef.current.map((p) => p.id));
+        const fresh = page.filter((p) => !seen.has(p.id));
+        const next = [...postsRef.current, ...fresh];
+        postsRef.current = next;
+        setPosts(next);
+        setHasMore(more);
+        const addedVisible = fresh.filter((p) => !blockedIds.has(p.userId) && !mutedIds.has(p.userId)).length;
+        if (addedVisible > 0 || !more) break;
+      }
+    } catch (error) {
+      console.log('[Community] Load-more error:', error);
+    } finally {
+      loadingRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [hasMore, blockedIds, mutedIds]);
 
+  // Re-filter whenever the blocked/muted lists change so unblocks/unmutes show
+  // instantly. filterHidden hides BOTH blocked and muted authors.
+  const visiblePosts = filterHidden(posts, 'userId');
+  // (referenced so the derived render re-runs on block/mute changes)
+  void blockedIds;
+  void mutedIds;
+
+  // Load on mount only. We intentionally do NOT refetch the whole feed on every
+  // tab focus — that double-loaded the feed (mount + focus) and re-paid ~100
+  // reads on every revisit (P0-8). Newly created posts surface on next manual
+  // pull-to-refresh.
   useEffect(() => {
     loadFeed();
   }, [loadFeed]);
-
-  // Reload the feed every time the screen regains focus. Without this, posts
-  // created in CreatePostScreen don't appear when the user navigates back.
-  useFocusEffect(
-    useCallback(() => {
-      loadFeed();
-    }, [loadFeed]),
-  );
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -69,9 +115,14 @@ export function CommunityScreen({ navigation }: any) {
   };
 
   const handleLike = async (postId: string, liked: boolean) => {
+    // Guard: if the post is already in the desired liked state (e.g. a double-tap
+    // fired two like(true)s), do nothing — the like txn is idempotent server-side,
+    // so a second optimistic +1 would drift the count. Clamp ≥ 0 too.
+    const current = postsRef.current.find((p) => p.id === postId);
+    if (!current || current.liked === liked) return;
     setPosts((prev) =>
       prev.map((p) =>
-        p.id === postId ? { ...p, liked, likes: p.likes + (liked ? 1 : -1) } : p,
+        p.id === postId ? { ...p, liked, likes: Math.max(0, p.likes + (liked ? 1 : -1)) } : p,
       ),
     );
     try {
@@ -81,7 +132,7 @@ export function CommunityScreen({ navigation }: any) {
       // Revert on failure
       setPosts((prev) =>
         prev.map((p) =>
-          p.id === postId ? { ...p, liked: !liked, likes: p.likes + (liked ? -1 : 1) } : p,
+          p.id === postId ? { ...p, liked: !liked, likes: Math.max(0, p.likes + (liked ? -1 : 1)) } : p,
         ),
       );
     }
@@ -184,8 +235,17 @@ export function CommunityScreen({ navigation }: any) {
           )}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={renderHeader}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.footerLoader}>
+                <ActivityIndicator size="small" color={colors.gold} />
+              </View>
+            ) : null
+          }
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 120, width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' }}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.gold} />
           }
@@ -279,6 +339,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  footerLoader: {
+    paddingVertical: 24,
+    alignItems: 'center',
   },
   emptyContainer: {
     flex: 1,

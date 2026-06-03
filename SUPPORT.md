@@ -51,10 +51,15 @@ Settings → **Danger Zone** → **Delete Account**. Confirms once, then permane
 This cannot be undone.
 
 ### I see something inappropriate on the feed
-Tap the **•••** menu in the top-right of the post, choose **Report post**, and pick a reason. Our team reviews reports and takes action. You can also **Block user** from the same menu to immediately hide all their content from your feed and messages.
+Tap the **•••** menu on the post (or on a **comment**, or in a conversation, or on a user's profile), choose **Report**, and pick a reason. **We review every report and remove violating content and offending accounts within 24 hours.** From the same menu you can also:
+- **Block user** — immediately hides all their content from your feed, comments, and messages, and stops them contacting you.
+- **Mute user** — quietly hides their posts/comments from your feed without blocking or notifying them.
 
 ### Someone is messaging me I don't want to hear from
-Open the conversation, tap **•••** in the header → **Block user**. They'll vanish from your feed and messages. Alternatively, from their profile tap **•••** → **Block user**. To undo: Settings → Privacy & Safety → Blocked Users → **Unblock**.
+Open the conversation, tap **•••** in the header → **Block user**. They'll vanish from your feed and messages. Alternatively, from their profile tap **•••** → **Block user**. To undo: Settings → Privacy & Safety → **Blocked & Muted** → **Unblock** / **Unmute**.
+
+### Community Guidelines (zero tolerance)
+Zenki is an adults-only, members-only club and has **zero tolerance for objectionable content and abusive behavior** — including harassment, hate speech, threats, sexual or violent content, and impersonation. Members can report anything they see, and **reports are reviewed and actioned (content removed, repeat/severe offenders banned) within 24 hours.** Posting prohibited content or abusing other members results in content removal and may permanently disable your account. You accept these guidelines when you create an account.
 
 ### I uploaded a bloodwork or DEXA scan — who sees it?
 Only you. Admins cannot view your health uploads without explicit consent. Images are processed by Anthropic Claude AI to extract biomarker values; the image itself is not retained by Anthropic.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,23 +7,39 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  ActionSheetIOS,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SoundPressable } from '../components/SoundPressable';
 import { KeyboardView } from '../components';
+import { ReportModal } from '../components/ReportModal';
 import { useTheme } from '../context/ThemeContext';
+import { useBlocks } from '../context/BlocksContext';
 import { spacing, typography, MAX_CONTENT_WIDTH } from '../theme';
 import { Comment, addComment, listComments } from '../services/firebasePosts';
+import { getCurrentUid } from '../services/firebaseAuth';
 
 export function CommentsScreen({ navigation, route }: any) {
   const { colors } = useTheme();
+  const { blockUser, muteUser, filterHidden, blockedIds, mutedIds } = useBlocks();
   const postId: string = route?.params?.postId;
+  const myUid = getCurrentUid();
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [reportTarget, setReportTarget] = useState<Comment | null>(null);
+
+  // Hide comments from blocked + muted authors (P0-12). Re-runs when the
+  // blocked/muted sets change (e.g. the user blocks someone from the menu
+  // below) so their comments disappear without a reload.
+  const visibleComments = useMemo(
+    () => filterHidden(comments, 'userId'),
+    [comments, filterHidden, blockedIds, mutedIds],
+  );
 
   const reload = useCallback(async () => {
     if (!postId) return;
@@ -67,24 +83,82 @@ export function CommentsScreen({ navigation, route }: any) {
     }
   };
 
-  const renderItem = ({ item }: { item: Comment }) => (
-    <View style={styles.row}>
-      <View style={[styles.avatar, { backgroundColor: colors.surfaceSecondary }]}>
-        <Text style={[styles.avatarText, { color: colors.textPrimary }]}>
-          {item.displayName.charAt(0).toUpperCase()}
-        </Text>
+  const confirmBlock = (comment: Comment) => {
+    Alert.alert(
+      `Block ${comment.displayName}?`,
+      `You won't see their posts, comments, or messages anymore. You can unblock them later in Settings → Blocked Users.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: () => { blockUser(comment.userId).catch(() => {}); },
+        },
+      ],
+    );
+  };
+
+  const openCommentMenu = (comment: Comment) => {
+    // No report/block/mute on your own comment.
+    if (comment.userId === myUid) return;
+
+    const options = ['Report comment', 'Mute user', 'Block user', 'Cancel'];
+    const cancelIndex = options.length - 1;
+    const destructiveIndex = 2;
+
+    const handleIndex = (idx?: number) => {
+      if (idx === 0) setReportTarget(comment);
+      else if (idx === 1) muteUser(comment.userId).catch(() => {});
+      else if (idx === 2) confirmBlock(comment);
+    };
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options, cancelButtonIndex: cancelIndex, destructiveButtonIndex: destructiveIndex, title: comment.displayName },
+        handleIndex,
+      );
+    } else {
+      // Android / Web fallback — Alert as an action sheet
+      Alert.alert(comment.displayName, undefined, [
+        { text: 'Report comment', onPress: () => handleIndex(0) },
+        { text: 'Mute user', onPress: () => handleIndex(1) },
+        { text: 'Block user', style: 'destructive', onPress: () => handleIndex(2) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  };
+
+  const renderItem = ({ item }: { item: Comment }) => {
+    const isOwn = item.userId === myUid;
+    return (
+      <View style={styles.row}>
+        <View style={[styles.avatar, { backgroundColor: colors.surfaceSecondary }]}>
+          <Text style={[styles.avatarText, { color: colors.textPrimary }]}>
+            {item.displayName.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+        <View style={styles.body}>
+          <Text style={[styles.line, { color: colors.textPrimary }]}>
+            <Text style={{ fontWeight: '700' }}>{item.displayName}</Text>
+            <Text>  {item.text}</Text>
+          </Text>
+          <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+            {formatTimestamp(item.createdAt)}
+          </Text>
+        </View>
+        {!isOwn && (
+          <SoundPressable
+            onPress={() => openCommentMenu(item)}
+            onLongPress={() => openCommentMenu(item)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel={`Comment options from ${item.displayName}`}
+          >
+            <Ionicons name="ellipsis-horizontal" size={18} color={colors.textSecondary} />
+          </SoundPressable>
+        )}
       </View>
-      <View style={styles.body}>
-        <Text style={[styles.line, { color: colors.textPrimary }]}>
-          <Text style={{ fontWeight: '700' }}>{item.displayName}</Text>
-          <Text>  {item.text}</Text>
-        </Text>
-        <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-          {formatTimestamp(item.createdAt)}
-        </Text>
-      </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -101,7 +175,7 @@ export function CommentsScreen({ navigation, route }: any) {
           <View style={styles.center}>
             <ActivityIndicator color={colors.gold} />
           </View>
-        ) : comments.length === 0 ? (
+        ) : visibleComments.length === 0 ? (
           <View style={styles.center}>
             <Ionicons name="chatbubble-outline" size={48} color={colors.textSecondary} />
             <Text style={[styles.empty, { color: colors.textSecondary }]}>
@@ -110,7 +184,7 @@ export function CommentsScreen({ navigation, route }: any) {
           </View>
         ) : (
           <FlatList
-            data={comments}
+            data={visibleComments}
             keyExtractor={(c) => c.id}
             renderItem={renderItem}
             contentContainerStyle={styles.list}
@@ -146,6 +220,16 @@ export function CommentsScreen({ navigation, route }: any) {
             </Text>
           </SoundPressable>
         </View>
+
+        <ReportModal
+          visible={reportTarget !== null}
+          onClose={() => setReportTarget(null)}
+          targetType="comment"
+          targetId={reportTarget?.id ?? ''}
+          targetUserId={reportTarget?.userId ?? ''}
+          parentId={postId}
+          targetPreview={reportTarget?.text}
+        />
       </KeyboardView>
     </SafeAreaView>
   );

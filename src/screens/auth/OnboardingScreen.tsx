@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TextInput, ScrollView,
-  Image, Animated, Dimensions, Platform, ActivityIndicator, Alert} from 'react-native';
+  Image, Animated, Dimensions, Platform, ActivityIndicator, Alert, Linking} from 'react-native';
 import { KeyboardView } from '../../components';
 import { SoundPressable } from '../../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +20,10 @@ import { suggestNickname } from '../../utils/nickname';
 import { BeltDisplay } from '../../components/BeltDisplay';
 import { renderWaiverText, WAIVER_VERSION, WaiverSignature } from '../../data/waiver';
 import { pushWaiverToSheets, pushWaiverToFirestore } from '../../services/waiverSync';
+import { db } from '../../config/firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import { getCurrentUid } from '../../services/firebaseAuth';
+import { PRIVACY_URL } from '../../config/api';
 import {
   calculateBMR, calculateTDEE, calculateMacros,
   lbsToKg, kgToLbs, feetInchesToCm,
@@ -28,6 +32,11 @@ import {
 import type { WeightGoal } from '../../types/activity';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Version of the Community Guidelines / acceptable-use EULA the user accepts at
+// signup (Apple 1.2 zero-tolerance UGC policy). Bump when the policy changes so
+// you can require re-acceptance.
+const COMMUNITY_GUIDELINES_VERSION = '2026-06-01';
 // Onboarding flow:
 //   0 account · 1 name · 2 phone · 3 sex
 //   4 photo · 5 fun-fact · 6 socials · 7 belt · 8 waiver · 9 welcome
@@ -151,6 +160,9 @@ export function OnboardingScreen({ navigation, route }: any) {
   const oauthMode = !!route?.params?.oauth;
   const [step, setStep] = useState(oauthMode ? 1 : 0);
   const [showPassword, setShowPassword] = useState(false);
+  // Apple 1.2: the user must accept a zero-tolerance objectionable-content /
+  // abusive-behavior policy before they can create an account and post UGC.
+  const [acceptedGuidelines, setAcceptedGuidelines] = useState(false);
   // Permission prompts moved to PermissionsOnboardingScreen post-account
   // creation; this wizard no longer asks for them inline.
   const [data, setData] = useState<OnboardingData>({
@@ -294,6 +306,24 @@ export function OnboardingScreen({ navigation, route }: any) {
         err?.message ?? 'Could not create your account. Try again.',
       );
       return;
+    }
+
+    // Record acceptance of the Community Guidelines / objectionable-content
+    // policy on the user's profile (Apple 1.2 — durable proof of EULA accept).
+    try {
+      const uid = getCurrentUid();
+      if (uid && db) {
+        await setDoc(
+          doc(db, 'users', uid),
+          {
+            acceptedTermsAt: new Date().toISOString(),
+            acceptedTermsVersion: COMMUNITY_GUIDELINES_VERSION,
+          },
+          { merge: true },
+        );
+      }
+    } catch (e) {
+      console.warn('[Onboarding] terms acceptance write failed:', e);
     }
 
     // Record the signed waiver (fire-and-forget)
@@ -830,6 +860,30 @@ export function OnboardingScreen({ navigation, route }: any) {
               Email me a copy of this waiver
             </Text>
           </SoundPressable>
+
+          {/* Apple 1.2 — required acceptance of the zero-tolerance UGC policy. */}
+          <SoundPressable
+            style={styles.emailCopyRow}
+            onPress={() => setAcceptedGuidelines(!acceptedGuidelines)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={acceptedGuidelines ? 'checkbox' : 'square-outline'}
+              size={22}
+              color={acceptedGuidelines ? colors.gold : colors.textMuted}
+            />
+            <Text style={[styles.emailCopyLabel, { color: colors.textSecondary }]}>
+              I agree to the{' '}
+              <Text
+                style={{ color: colors.gold, fontWeight: '700' }}
+                onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}
+              >
+                Community Guidelines
+              </Text>
+              {' '}— Zenki has zero tolerance for objectionable content or abusive
+              behavior, and accounts that violate it are removed.
+            </Text>
+          </SoundPressable>
         </View>
       );
       // Step 9: Welcome
@@ -863,7 +917,9 @@ export function OnboardingScreen({ navigation, route }: any) {
     if (step === 8) {
       const expected = `${data.firstName} ${data.lastName}`.trim().toLowerCase();
       const signed = data.signedName.trim().toLowerCase();
-      return signed.length > 0 && (signed === expected || signed.includes(data.firstName.trim().toLowerCase()));
+      const nameOk = signed.length > 0 && (signed === expected || signed.includes(data.firstName.trim().toLowerCase()));
+      // Must also accept the Community Guidelines (Apple 1.2).
+      return nameOk && acceptedGuidelines;
     }
     return true;
   };
