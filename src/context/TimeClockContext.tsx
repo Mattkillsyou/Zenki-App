@@ -15,8 +15,21 @@ import {
 } from '../utils/timeclock';
 import { getHolidayInfo } from '../data/holidays';
 import { pushTimeEntry } from '../services/googleSheets';
+import { useAuth } from './AuthContext';
 
-const STORAGE_KEY = '@zenki_timeclock_state';
+// Legacy single-key store (pre-F03). Kept only so an existing employee's hours
+// on this device migrate into their per-uid store on first load instead of
+// vanishing. New writes go to the per-uid key below.
+const LEGACY_STORAGE_KEY = '@zenki_timeclock_state';
+/** Per-Firebase-uid persistence so two employees on one device never merge
+ *  hours. Signed-out / no-uid falls back to the legacy key (single-user). */
+const storageKeyForUid = (uid: string | null | undefined): string =>
+  uid ? `@zenki_timeclock_state_${uid}` : LEGACY_STORAGE_KEY;
+
+/** Last-resort hourly rate when neither the provider prop nor the member record
+ *  carries one. NOT a per-employee value — pay math just needs a number rather
+ *  than fabricating $0; the real rate should come from the member's hourlyRate. */
+const DOJO_DEFAULT_HOURLY_RATE = 20;
 
 interface TimeClockContextValue {
   state: TimeClockState;
@@ -52,21 +65,43 @@ const TimeClockContext = createContext<TimeClockContextValue>({
 
 export function TimeClockProvider({
   children,
-  hourlyRate = 20,
-  employeeName = 'Apple',
+  hourlyRate,
+  employeeName,
 }: {
   children: React.ReactNode;
+  /** Per-employee rate, passed from App (the signed-in member's hourlyRate).
+   *  When omitted, falls back to the member record then the dojo default. */
   hourlyRate?: number;
+  /** Display name written onto each timesheet row. When omitted, derived from
+   *  the signed-in member; never a hardcoded placeholder. */
   employeeName?: string;
 }) {
+  const { user } = useAuth();
+  const uid = user?.firebaseUid ?? null;
+
+  // Resolve the real employee identity. Props (passed by App from the signed-in
+  // member) win; otherwise derive from the member record. No 'Apple'/$20
+  // placeholder so payroll rows and the in-app pay total reflect the actual
+  // employee (F03).
+  const effectiveEmployeeName =
+    (employeeName && employeeName.trim()) ||
+    `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim();
+  const effectiveHourlyRate =
+    hourlyRate ?? user?.hourlyRate ?? DOJO_DEFAULT_HOURLY_RATE;
+
   const [state, setState] = useState<TimeClockState>(defaultState);
   const [loaded, setLoaded] = useState(false);
   const [elapsedMinutes, setElapsedMinutes] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Load from AsyncStorage
+  // Load from AsyncStorage, scoped to the current uid so employees on a shared
+  // device don't merge hours. Reloads when the signed-in uid changes.
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
+    let cancelled = false;
+    const storageKey = storageKeyForUid(uid);
+
+    const hydrate = (raw: string | null) => {
+      if (cancelled) return;
       const saved = safeParseJSON<TimeClockState | null>(raw, null, (v) =>
         typeof v === 'object' && v !== null && 'currentPeriod' in (v as object),
       );
@@ -86,17 +121,42 @@ export function TimeClockProvider({
         } else {
           setState(saved);
         }
+      } else {
+        // No state for this uid yet — start clean (don't leak another
+        // employee's in-memory state across a uid switch).
+        setState(defaultState);
       }
       setLoaded(true);
-    });
-  }, []);
+    };
 
-  // Persist on state change
+    setLoaded(false);
+    AsyncStorage.getItem(storageKey).then((raw) => {
+      // One-time migration: a signed-in employee with no per-uid store yet
+      // adopts the legacy single-key data (this device's prior hours) instead
+      // of losing it. Only when there's a uid and no per-uid record. The legacy
+      // key is then cleared so a *second* employee on the same device can't
+      // inherit the first employee's hours (the merge bug F03 calls out) — the
+      // per-uid key written by the persist effect becomes the source of truth.
+      if (raw == null && uid) {
+        AsyncStorage.getItem(LEGACY_STORAGE_KEY).then((legacyRaw) => {
+          if (cancelled) return;
+          hydrate(legacyRaw);
+          if (legacyRaw != null) AsyncStorage.removeItem(LEGACY_STORAGE_KEY);
+        });
+      } else {
+        hydrate(raw);
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, [uid]);
+
+  // Persist on state change, to the uid-scoped key.
   useEffect(() => {
     if (loaded) {
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      AsyncStorage.setItem(storageKeyForUid(uid), JSON.stringify(state));
     }
-  }, [state, loaded]);
+  }, [state, loaded, uid]);
 
   // Live timer while clocked in
   useEffect(() => {
@@ -163,7 +223,7 @@ export function TimeClockProvider({
         : [...prev.currentPeriod.entries, completed];
 
       // Fire and forget Sheets sync
-      pushTimeEntry(completed, employeeName, hourlyRate, prev.currentPeriod.startDate, prev.currentPeriod.endDate).then((ok) => {
+      pushTimeEntry(completed, effectiveEmployeeName, effectiveHourlyRate, prev.currentPeriod.startDate, prev.currentPeriod.endDate).then((ok) => {
         if (ok) {
           setState((s) => ({
             ...s,
@@ -183,7 +243,7 @@ export function TimeClockProvider({
         currentPeriod: { ...prev.currentPeriod, entries },
       };
     });
-  }, [employeeName, hourlyRate]);
+  }, [effectiveEmployeeName, effectiveHourlyRate]);
 
   const markLunchTaken = useCallback(() => {
     setState((prev) => {
@@ -219,7 +279,7 @@ export function TimeClockProvider({
     });
   }, []);
 
-  const periodSummary = getPeriodTotals(state.currentPeriod, hourlyRate);
+  const periodSummary = getPeriodTotals(state.currentPeriod, effectiveHourlyRate);
 
   return (
     <TimeClockContext.Provider

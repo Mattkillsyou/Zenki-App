@@ -202,10 +202,17 @@ export function AdminBroadcastScreen({ navigation }: any) {
             </View>
           </FadeInView>
 
-          {/* History */}
+          {/* History — local device log only. This is NOT a shared cross-admin
+              audit: each send is saved to this device's AsyncStorage and never
+              to Firestore, so another admin (or a reinstall) won't see it. The
+              copy below is deliberately honest about that to avoid implying a
+              dojo-wide record. */}
           <FadeInView delay={60} slideUp={10}>
             <View style={styles.section}>
-              <Text style={[styles.sectionLabel, { color: colors.gold }]}>RECENT BROADCASTS</Text>
+              <Text style={[styles.sectionLabel, { color: colors.gold }]}>SENT FROM THIS DEVICE</Text>
+              <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>
+                Local history only — other admins and reinstalls won't see these.
+              </Text>
               {history.length === 0 ? (
                 <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <Ionicons name="notifications-outline" size={32} color={colors.textMuted} />
@@ -247,6 +254,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 34, fontWeight: '800', letterSpacing: -0.3 },
   section: { paddingHorizontal: spacing.lg, marginTop: spacing.md },
   sectionLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: spacing.md },
+  sectionCaption: { fontSize: 11, fontWeight: '500', marginTop: -spacing.sm, marginBottom: spacing.md, lineHeight: 15 },
   card: {
     padding: spacing.md + 4,
     borderRadius: borderRadius.lg,

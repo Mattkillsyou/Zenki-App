@@ -1,6 +1,7 @@
 import { TimeEntry } from '../types/timeclock';
 import { formatTime, calculatePayBreakdown } from '../utils/timeclock';
 import { SHEETS_PROXY_URL } from '../config/api';
+import { SHEETS_PROXY_TOKEN } from '../config/env';
 
 // ─────────────────────────────────────────────────
 // Google Sheets Sync Service
@@ -23,6 +24,10 @@ export async function pushTimeEntry(
     : null;
 
   const payload = {
+    // Shared secret so the Apps Script can reject anonymous POSTs into payroll
+    // (F43). Blank until EXPO_PUBLIC_SHEETS_PROXY_TOKEN is provisioned via EAS;
+    // the script should fail closed on a missing/mismatched token.
+    token: SHEETS_PROXY_TOKEN,
     employeeName,
     date: entry.date,
     clockIn: entry.clockIn ? formatTime(entry.clockIn) : '',
