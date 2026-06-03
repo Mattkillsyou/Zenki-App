@@ -119,6 +119,10 @@ export function DrinkTrackerProvider({ children }: { children: React.ReactNode }
 
   // ── Commit pending → unpaid charges ──
   const commitPending = useCallback((memberName: string = 'Member') => {
+    // Capture the committed entries outside the updater so the network sync
+    // fires exactly once per commit. The updater itself must stay pure —
+    // React may invoke it more than once for a single logical update.
+    let committed: DrinkEntry[] = [];
     setState((prev) => {
       const now = new Date();
       const date = now.toISOString().split('T')[0];
@@ -136,12 +140,13 @@ export function DrinkTrackerProvider({ children }: { children: React.ReactNode }
             paid: false,
           };
           newEntries.push(entry);
-          // Sync each charge to Sheets as unpaid
-          pushDrinkEntry(entry, memberName);
         }
       });
+      committed = newEntries;
       return { entries: [...prev.entries, ...newEntries], pending: [] };
     });
+    // Sync each charge to Sheets as unpaid — after setState, exactly once.
+    committed.forEach((entry) => pushDrinkEntry(entry, memberName));
   }, []);
 
   // ── Charge management ──
