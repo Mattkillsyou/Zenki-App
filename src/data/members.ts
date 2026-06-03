@@ -65,8 +65,8 @@ export const MEMBERS: Member[] = [
     stripes: 3,
     memberSince: '1997-01-01',
     isAdmin: true,
-    totalSessions: 5000,
-    weekStreak: 52,
+    totalSessions: 0,
+    weekStreak: 0,
   },
   {
     id: '2',
@@ -78,8 +78,8 @@ export const MEMBERS: Member[] = [
     stripes: 3,
     memberSince: '2024-01-15',
     isAdmin: true,
-    totalSessions: 156,
-    weekStreak: 12,
+    totalSessions: 0,
+    weekStreak: 0,
   },
   {
     id: '4',

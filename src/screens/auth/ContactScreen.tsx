@@ -106,12 +106,12 @@ export function ContactScreen({ navigation }: any) {
             <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
               <SoundPressable
                 style={styles.infoRow}
-                onPress={() => Linking.openURL('tel:3235551997')}
+                onPress={() => Linking.openURL('tel:3239538131')}
               >
                 <Ionicons name="call-outline" size={20} color={colors.gold} />
                 <View style={styles.infoText}>
                   <Text style={[styles.infoLabel, { color: colors.textMuted }]}>PHONE</Text>
-                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>(323) 555-1997</Text>
+                  <Text style={[styles.infoValue, { color: colors.textPrimary }]}>(323) 953-8131</Text>
                 </View>
               </SoundPressable>
               <View style={[styles.infoDivider, { backgroundColor: colors.divider }]} />
