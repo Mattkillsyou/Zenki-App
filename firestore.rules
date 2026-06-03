@@ -385,14 +385,13 @@ service cloud.firestore {
     // `auth.currentUser.uid`) because the app's `memberId` is an internal
     // id ('1','2',…), not the Firebase Auth uid.
     match /appointments/{apptId} {
-      // Kept readable by any signed-in member. Owner-scoping the read
-      // (firebaseUid == auth.uid) was attempted but REVERTED: `firebaseUid` is
-      // the LAST writer's uid (an admin overwrites it when confirming), so
-      // scoping by it hides a member's own confirmed sessions and breaks the
-      // booking screens. A real fix needs a stable `ownerUid` field written once
-      // at creation. The client filters `myAppointments` to the signed-in member;
-      // the residual direct-query exposure is tracked as APP_AUDIT F25.
-      allow read: if isSignedIn();
+      // Read scoped to owner + admins (F25). `firebaseUid` is now the booking
+      // member's uid — PRESERVED through admin edits (appointmentSync) and
+      // backfilled for legacy docs (backfillAppointmentOwners) — so this no
+      // longer hides a member's own sessions. Clients scope the listener to
+      // match (admins stream all; members stream where firebaseUid==uid).
+      allow read: if isAdmin()
+                  || (isSignedIn() && resource.data.firebaseUid == request.auth.uid);
       allow create: if isAdmin()
                     || (isSignedIn()
                         && request.resource.data.firebaseUid == request.auth.uid);

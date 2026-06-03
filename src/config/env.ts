@@ -29,9 +29,12 @@ export const GOOGLE_SHEETS_SCRIPT_URL: string =
 export const SHEETS_PROXY_TOKEN: string =
   extra.SHEETS_PROXY_TOKEN || process.env.EXPO_PUBLIC_SHEETS_PROXY_TOKEN || '';
 
-/** USDA FoodData Central API key */
+/** USDA FoodData Central API key. Falls back to USDA's public `DEMO_KEY` (low
+ *  rate limits) so food search works out of the box; set EXPO_PUBLIC_USDA_API_KEY
+ *  via EAS for production limits. foodSearch degrades to Open Food Facts if the
+ *  key is rate-limited/rejected. */
 export const USDA_API_KEY: string =
-  extra.USDA_API_KEY || process.env.EXPO_PUBLIC_USDA_API_KEY || '';
+  extra.USDA_API_KEY || process.env.EXPO_PUBLIC_USDA_API_KEY || 'DEMO_KEY';
 
 /** Stripe publishable key (client-side). Set in app.json `extra` or as the
  *  EAS/EXPO_PUBLIC env var. Empty until configured — see APPLE_PAY_SETUP.md. */

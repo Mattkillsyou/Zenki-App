@@ -9,6 +9,7 @@ import {
 } from '../services/appointmentSync';
 import { syncOrAlert } from '../utils/syncOrAlert';
 import { useAuth } from './AuthContext';
+import { getCurrentUid } from '../services/firebaseAuth';
 
 const STORAGE_KEY = '@zenki_appointments';
 
@@ -26,6 +27,10 @@ export interface Appointment {
   status: AppointmentStatus;
   createdAt: string;
   notificationId?: string; // ID of scheduled local notification
+  /** Auth uid of the booking member — stamped at creation and PRESERVED through
+   *  admin edits (so the rule can scope reads to the owner). Not the admin who
+   *  last wrote. Backfilled for legacy docs via backfillAppointmentOwners. */
+  firebaseUid?: string;
 }
 
 interface AppointmentContextValue {
@@ -117,12 +122,14 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
 
   // Live Firestore subscription — source of truth across devices.
   useEffect(() => {
-    const unsub = subscribeToAppointments((items) => {
+    // Scope the listener: members stream only their own appointments (rule
+    // denies others), admins stream all. Re-subscribes on auth change.
+    const unsub = subscribeToAppointments(getCurrentUid(), !!user?.isAdmin, (items) => {
       setAppointments(items);
       safeStorageSet(STORAGE_KEY, items, '[Appointments]');
     });
     return () => { unsub(); };
-  }, []);
+  }, [user?.id, user?.isAdmin]);
 
   useEffect(() => {
     if (loaded) safeStorageSet(STORAGE_KEY, appointments, '[Appointments]');

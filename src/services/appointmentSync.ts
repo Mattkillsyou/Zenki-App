@@ -3,6 +3,8 @@ import {
   doc,
   deleteDoc,
   onSnapshot,
+  query,
+  where,
   Unsubscribe,
 } from 'firebase/firestore';
 import { auth, db, FIREBASE_CONFIGURED } from '../config/firebase';
@@ -15,7 +17,11 @@ export async function upsertAppointmentInFirestore(appt: Appointment): Promise<b
   // The app's `memberId` is an internal id ('1','2',…) — not the auth uid —
   // so rules check `firebaseUid` instead. Admin writes always pass via
   // `isAdmin()` regardless of this field.
-  const firebaseUid = auth?.currentUser?.uid;
+  // PRESERVE the booking member's uid through admin edits — fall back to the
+  // current writer only when creating a brand-new appointment. Without this, an
+  // admin confirming a booking overwrote firebaseUid with the admin's uid, which
+  // then hid the appointment from the member once reads are owner-scoped.
+  const firebaseUid = appt.firebaseUid ?? auth?.currentUser?.uid;
   const payload = firebaseUid ? { ...rest, firebaseUid } : rest;
   return serverConfirmedSetDoc(
     'appointments',
@@ -36,11 +42,23 @@ export async function deleteAppointmentFromFirestore(id: string): Promise<boolea
   }
 }
 
-export function subscribeToAppointments(cb: (appts: Appointment[]) => void): Unsubscribe {
+export function subscribeToAppointments(
+  uid: string | null,
+  isAdmin: boolean,
+  cb: (appts: Appointment[]) => void,
+): Unsubscribe {
   if (!FIREBASE_CONFIGURED || !db) return noopUnsubscribe;
+  if (!uid) return noopUnsubscribe;
   try {
+    // Admins stream the whole collection (rule allows via isAdmin()); a regular
+    // member streams only their own (rule: firebaseUid == auth.uid). Scoping the
+    // query is REQUIRED — a full-collection listener that includes denied docs
+    // fails the entire query with permission-denied, so a member would see none.
+    const q = isAdmin
+      ? collection(db, 'appointments')
+      : query(collection(db, 'appointments'), where('firebaseUid', '==', uid));
     return onSnapshot(
-      collection(db, 'appointments'),
+      q,
       (snap) => {
         const items: Appointment[] = snap.docs.map(
           (d) => ({ id: d.id, ...(d.data() as Omit<Appointment, 'id'>) }),

@@ -51,6 +51,11 @@ export { backfillPostPrivacy } from './backfillPostPrivacy';
 // (increment on an absent field would otherwise initialize it to ±1). Run once.
 export { backfillFollowCounts } from './backfillFollowCounts';
 
+// One-shot admin migration — re-stamp each appointment's firebaseUid to the
+// booking member's uid so the owner-scoped read rule doesn't hide legacy
+// bookings (F25). Run once after deploying the tightened rule.
+export { backfillAppointmentOwners } from './backfillAppointmentOwners';
+
 // Admin moderation — redact an offender's messages in a reported conversation
 // (DM "Remove & Block"). Client can't redact other users' messages.
 export { redactDmMessages } from './redactDmMessages';
