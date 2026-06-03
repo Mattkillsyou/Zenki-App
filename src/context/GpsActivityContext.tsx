@@ -78,6 +78,11 @@ interface GpsActivityContextValue {
   liveElevGain: number;
   liveSpeed: number;
   currentPosition: GpsPoint | null;
+  /** The full live route so far. The screen draws its polyline from this rather
+   *  than accumulating currentPosition deltas — in background mode each 2s drain
+   *  advances currentPosition by many fixes at once, so a delta-append polyline
+   *  would skip every interior point. */
+  liveRoute: GpsPoint[];
   startTracking: (type: GpsActivityType, memberId: string) => Promise<boolean>;
   stopTracking: (weightKg?: number) => GpsActivity | null;
   pauseTracking: () => void;
@@ -99,6 +104,7 @@ const GpsActivityContext = createContext<GpsActivityContextValue>({
   liveElevGain: 0,
   liveSpeed: 0,
   currentPosition: null,
+  liveRoute: [],
   startTracking: async () => false,
   stopTracking: () => null,
   pauseTracking: () => {},
@@ -132,6 +138,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
   const [liveElevGain, setLiveElevGain] = useState(0);
   const [liveSpeed, setLiveSpeed] = useState(0);
   const [currentPosition, setCurrentPosition] = useState<GpsPoint | null>(null);
+  const [liveRoute, setLiveRoute] = useState<GpsPoint[]>([]);
 
   const routeRef = useRef<GpsPoint[]>([]);
   const metaRef = useRef<{ id: string; memberId: string; type: GpsActivityType; startedAt: string } | null>(null);
@@ -200,6 +207,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
   const drainBgBuffer = useCallback(() => {
     if (isPausedRef.current || bgPointBuffer.length === 0) return;
     routeRef.current = [...bgPointBuffer];
+    setLiveRoute(routeRef.current);
     const last = routeRef.current[routeRef.current.length - 1];
     if (last) {
       setCurrentPosition(last);
@@ -257,6 +265,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     setLivePace(0);
     setLiveElevGain(0);
     setLiveSpeed(0);
+    setLiveRoute([]);
 
     const updateStats = () => {
       const dist = totalDistance(routeRef.current);
@@ -265,6 +274,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
       // Subtract paused time so live pace matches the resume path + saved value.
       const elapsed = (Date.now() - startTimeRef.current - pausedTimeRef.current) / 1000;
       setLivePace(paceSecsPerKm(dist, elapsed));
+      setLiveRoute([...routeRef.current]);
     };
 
     // Get user's ACTUAL current position first (for centering + sim start)
@@ -295,7 +305,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
       setBackgroundTracking(true);
       drainTimerRef.current = setInterval(drainBgBuffer, 2000);
       durationTimerRef.current = setInterval(() => {
-        setLiveDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+        setLiveDuration(Math.max(0, Math.floor((Date.now() - startTimeRef.current - pausedTimeRef.current - (isPausedRef.current ? Date.now() - pauseStartRef.current : 0)) / 1000)));
       }, 1000);
       return true;
     }
@@ -354,13 +364,16 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
         setLivePace(0);
         setLiveElevGain(0);
         setLiveSpeed(0);
+        setLiveRoute([]);
         return false;
       }
     }
 
-    // Duration timer — always runs separately
+    // Duration timer — always runs separately. Subtract paused time (and the
+    // in-progress pause delta) so the headline timer freezes during a pause and
+    // matches both live pace and the saved durationSeconds.
     durationTimerRef.current = setInterval(() => {
-      setLiveDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+      setLiveDuration(Math.max(0, Math.floor((Date.now() - startTimeRef.current - pausedTimeRef.current - (isPausedRef.current ? Date.now() - pauseStartRef.current : 0)) / 1000)));
     }, 1000);
 
     return true;
@@ -368,6 +381,16 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
 
   const stopTracking = useCallback((weightKg: number = 80): GpsActivity | null => {
     if (!metaRef.current) return null;
+
+    // If stopped WHILE paused, fold the in-progress pause into pausedTimeRef so
+    // the saved durationSeconds (and the pace/calories derived from it) exclude
+    // it — matching the frozen live timer. Without this, ending mid-pause counts
+    // the paused stretch as active time.
+    if (isPausedRef.current) {
+      pausedTimeRef.current += Date.now() - pauseStartRef.current;
+      isPausedRef.current = false;
+      setIsPaused(false);
+    }
 
     // Background mode: the buffer holds the authoritative route (incl. points
     // the last drain may have missed). Fold it in, then stop OS updates.
@@ -390,6 +413,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     // Always reset live UI state so a short/zero-point route doesn't leave a
     // stale position marker, polyline, or stats behind.
     setCurrentPosition(null);
+    setLiveRoute([]);
     setLiveDistance(0);
     setLiveDuration(0);
     setLivePace(0);
@@ -477,6 +501,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
       setLiveElevGain(totalElevationGain(routeRef.current));
       const activeTime = (Date.now() - startTimeRef.current - pausedTimeRef.current) / 1000;
       setLivePace(paceSecsPerKm(dist, activeTime));
+      setLiveRoute([...routeRef.current]);
     };
 
     try {
@@ -539,7 +564,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
       value={{
         isTracking, backgroundTracking, isPaused, currentActivityType,
         liveDistance, liveDuration, livePace, liveElevGain, liveSpeed,
-        currentPosition, startTracking, stopTracking,
+        currentPosition, liveRoute, startTracking, stopTracking,
         pauseTracking, resumeTracking, removeActivity,
         activities, memberActivities, totalStats,
       }}

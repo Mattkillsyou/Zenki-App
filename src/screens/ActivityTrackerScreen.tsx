@@ -60,9 +60,10 @@ function CleanActivityTrackerScreen({ navigation }: any) {
   const { user } = useAuth();
   const { colors } = useTheme();
   const {
-    isTracking, backgroundTracking, currentActivityType,
+    isTracking, backgroundTracking, isPaused, currentActivityType,
     liveDistance, liveDuration, livePace, liveElevGain, liveSpeed,
-    currentPosition, startTracking, stopTracking, memberActivities,
+    currentPosition, liveRoute, startTracking, stopTracking,
+    pauseTracking, resumeTracking, memberActivities,
   } = useGpsActivity();
   const { latestWeight } = useNutrition();
   const { recordSession } = useGamification();
@@ -90,12 +91,12 @@ function CleanActivityTrackerScreen({ navigation }: any) {
     return () => { cancelled = true; };
   }, []);
 
-  // Accumulate route while tracking
+  // Drive the live polyline from the context's authoritative route (not from
+  // currentPosition deltas) — in background mode each drain advances the route
+  // by many fixes at once, so a delta-append polyline would skip interior points.
   useEffect(() => {
-    if (currentPosition) {
-      setRouteCoords((prev) => [...prev, { lat: currentPosition.latitude, lng: currentPosition.longitude }]);
-    }
-  }, [currentPosition]);
+    setRouteCoords(liveRoute.map((p) => ({ lat: p.latitude, lng: p.longitude })));
+  }, [liveRoute]);
 
   const handleStart = async () => {
     if (!user) return;
@@ -222,7 +223,10 @@ function CleanActivityTrackerScreen({ navigation }: any) {
               livePace={livePace}
               liveElevGain={liveElevGain}
               liveSpeed={liveSpeed}
+              isPaused={isPaused}
               onStart={handleStart}
+              onPause={pauseTracking}
+              onResume={resumeTracking}
               onStop={handleStop}
             />
           )}
@@ -254,12 +258,13 @@ function CleanActivityTrackerScreen({ navigation }: any) {
 // ═════════════════════════════════════════════════════
 
 function TrackPanel({
-  isTracking, backgroundTracking, currentActivityType, selectedType, setSelectedType,
+  isTracking, backgroundTracking, isPaused, currentActivityType, selectedType, setSelectedType,
   liveDistance, liveDuration, livePace, liveElevGain, liveSpeed,
-  onStart, onStop,
+  onStart, onPause, onResume, onStop,
 }: {
   isTracking: boolean;
   backgroundTracking: boolean;
+  isPaused: boolean;
   currentActivityType: GpsActivityType;
   selectedType: GpsActivityType;
   setSelectedType: (t: GpsActivityType) => void;
@@ -269,6 +274,8 @@ function TrackPanel({
   liveElevGain: number;
   liveSpeed: number;
   onStart: () => void;
+  onPause: () => void;
+  onResume: () => void;
   onStop: () => void;
 }) {
   const { colors } = useTheme();
@@ -295,6 +302,16 @@ function TrackPanel({
           <StatCell label="Speed" value={`${(liveSpeed * 2.237).toFixed(1)} mph`} />
           <StatCell label="Elev" value={`${Math.round(liveElevGain * 3.281)} ft`} />
         </View>
+
+        <Pressable
+          style={[styles.primaryBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, marginBottom: 10 }]}
+          onPress={isPaused ? onResume : onPause}
+        >
+          <Ionicons name={isPaused ? 'play' : 'pause'} size={18} color={colors.textPrimary} />
+          <Text style={[styles.primaryBtnText, { color: colors.textPrimary }]}>
+            {isPaused ? 'Resume' : 'Pause'}
+          </Text>
+        </Pressable>
 
         <Pressable
           style={[styles.primaryBtn, { backgroundColor: colors.error }]}
