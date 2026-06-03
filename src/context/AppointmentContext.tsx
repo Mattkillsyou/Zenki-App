@@ -8,6 +8,7 @@ import {
   deleteAppointmentFromFirestore,
 } from '../services/appointmentSync';
 import { syncOrAlert } from '../utils/syncOrAlert';
+import { useAuth } from './AuthContext';
 
 const STORAGE_KEY = '@zenki_appointments';
 
@@ -99,6 +100,7 @@ async function cancelNotification(id?: string) {
 
 export function AppointmentProvider({ children }: { children: React.ReactNode }) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const { user } = useAuth();
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -204,14 +206,17 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
   const value = useMemo(
     () => ({
       appointments,
-      myAppointments: appointments,
+      // Actually the signed-in member's own appointments (was the full
+      // collection — a misnomer that invited a future consumer to render every
+      // member's bookings). Admin views use `appointments`/`pendingForAdmin`.
+      myAppointments: appointments.filter((a) => a.memberId === user?.id),
       pendingForAdmin,
       requestAppointment,
       confirmAppointment,
       cancelAppointment,
       completeAppointment,
     }),
-    [appointments, pendingForAdmin, requestAppointment, confirmAppointment, cancelAppointment, completeAppointment],
+    [appointments, user?.id, pendingForAdmin, requestAppointment, confirmAppointment, cancelAppointment, completeAppointment],
   );
 
   return (
