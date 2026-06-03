@@ -154,17 +154,24 @@ export const adminActionReport = onRequest(
       logger.warn('Removal of target content failed — continuing with block', e);
     }
 
-    // 2. Block the target user from the reporter
-    try {
-      await db
-        .doc(`blocks/${report.reporterId}/blocked/${report.targetUserId}`)
-        .set({
-          blockedAt: new Date().toISOString(),
-          reason: `auto_block_from_report_${reportId}`,
-        });
-      affected.blockAdded = true;
-    } catch (e) {
-      logger.warn('Auto-block failed', e);
+    // 2. Block the target user from the reporter.
+    // Guard against an empty targetUserId — clients store it as `?? ''`, and an
+    // empty path segment makes db.doc() throw INVALID_ARGUMENT, which the
+    // try/catch would silently swallow (the auto-block would never happen).
+    if (typeof report.targetUserId === 'string' && report.targetUserId !== '') {
+      try {
+        await db
+          .doc(`blocks/${report.reporterId}/blocked/${report.targetUserId}`)
+          .set({
+            blockedAt: new Date().toISOString(),
+            reason: `auto_block_from_report_${reportId}`,
+          });
+        affected.blockAdded = true;
+      } catch (e) {
+        logger.warn('Auto-block failed', e);
+      }
+    } else {
+      affected.blockSkipped = true;
     }
 
     // 3. Mark report actioned

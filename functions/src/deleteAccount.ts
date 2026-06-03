@@ -146,16 +146,28 @@ export const deleteAccount = onRequest(
 
       // 4. Follow requests — to this user (their queue) and authored by them.
       deleted.followRequestsIncoming = await deleteDocDeep(db.collection('followRequests').doc(uid));
+      // Outgoing: this user's pending requests live at
+      // followRequests/{target}/requests/{uid}. PAGE the 'requests'
+      // collection-group (bounded memory) and delete only ours, instead of
+      // buffering every user's requests in memory at once — the unbounded
+      // .get() would inflate memory/timeout as the user base grows, and account
+      // deletion must reliably succeed (Apple 5.1.1(v)).
       let outgoingRequests = 0;
-      const sentReqs = await db.collectionGroup('requests').get().catch(() => null);
-      if (sentReqs) {
-        const mine = sentReqs.docs.filter((d) => d.id === uid && d.ref.path.startsWith('followRequests/'));
-        for (let i = 0; i < mine.length; i += BATCH_SIZE) {
+      let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+      while (true) {
+        let q = db.collectionGroup('requests').orderBy('__name__').limit(BATCH_SIZE);
+        if (cursor) q = q.startAfter(cursor);
+        const snap = await q.get().catch(() => null);
+        if (!snap || snap.empty) break;
+        const mine = snap.docs.filter((d) => d.id === uid && d.ref.path.startsWith('followRequests/'));
+        if (mine.length) {
           const batch = db.batch();
-          mine.slice(i, i + BATCH_SIZE).forEach((d) => batch.delete(d.ref));
+          mine.forEach((d) => batch.delete(d.ref));
           await batch.commit();
-          outgoingRequests += Math.min(BATCH_SIZE, mine.length - i);
+          outgoingRequests += mine.length;
         }
+        if (snap.size < BATCH_SIZE) break;
+        cursor = snap.docs[snap.docs.length - 1];
       }
       deleted.followRequestsOutgoing = outgoingRequests;
 

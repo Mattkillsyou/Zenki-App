@@ -746,6 +746,7 @@ export const senpaiChat = onRequest(
     cors: true,
     timeoutSeconds: 30,
     memory: '256MiB',
+    invoker: 'public',
   },
   async (req, res) => {
     if (req.method === 'OPTIONS') {
