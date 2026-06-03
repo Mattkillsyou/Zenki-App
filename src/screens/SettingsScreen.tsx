@@ -28,7 +28,7 @@ import { useSenpaiChat } from '../hooks/useSenpaiChat';
 import { senpaiJingle } from '../sounds/synth';
 import Constants from 'expo-constants';
 import { typography, spacing } from '../theme';
-import { AI_FUNCTION_BASE_URL } from '../config/api';
+import { AI_FUNCTION_BASE_URL, PRIVACY_URL } from '../config/api';
 import { FIREBASE_CONFIGURED, auth as firebaseAuth } from '../config/firebase';
 import { resetCoachmarks } from '../components/CoachmarkTutorial';
 import {
@@ -942,13 +942,10 @@ export function SettingsScreen({ navigation }: any) {
         {renderSectionHeader('ABOUT')}
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
           {renderNavRow('information-circle-outline', 'About Zenki Dojo', () =>
-            Linking.openURL('https://www.zenkidojo.com')
-          )}
-          {renderNavRow('document-text-outline', 'Terms of Service', () =>
-            Linking.openURL('https://www.zenkidojo.com/terms')
+            Linking.openURL('https://zenki-dojo.web.app')
           )}
           {renderNavRow('shield-outline', 'Privacy Policy', () =>
-            Linking.openURL('https://www.zenkidojo.com/privacy')
+            Linking.openURL(PRIVACY_URL)
           )}
         </View>
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, marginTop: spacing.sm, borderRadius: 20, padding: 0 }]}>
