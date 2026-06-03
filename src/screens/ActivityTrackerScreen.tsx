@@ -60,7 +60,7 @@ function CleanActivityTrackerScreen({ navigation }: any) {
   const { user } = useAuth();
   const { colors } = useTheme();
   const {
-    isTracking, currentActivityType,
+    isTracking, backgroundTracking, currentActivityType,
     liveDistance, liveDuration, livePace, liveElevGain, liveSpeed,
     currentPosition, startTracking, stopTracking, memberActivities,
   } = useGpsActivity();
@@ -213,6 +213,7 @@ function CleanActivityTrackerScreen({ navigation }: any) {
           {activeTab === 'track' && (
             <TrackPanel
               isTracking={isTracking}
+              backgroundTracking={backgroundTracking}
               currentActivityType={currentActivityType}
               selectedType={selectedType}
               setSelectedType={setSelectedType}
@@ -253,11 +254,12 @@ function CleanActivityTrackerScreen({ navigation }: any) {
 // ═════════════════════════════════════════════════════
 
 function TrackPanel({
-  isTracking, currentActivityType, selectedType, setSelectedType,
+  isTracking, backgroundTracking, currentActivityType, selectedType, setSelectedType,
   liveDistance, liveDuration, livePace, liveElevGain, liveSpeed,
   onStart, onStop,
 }: {
   isTracking: boolean;
+  backgroundTracking: boolean;
   currentActivityType: GpsActivityType;
   selectedType: GpsActivityType;
   setSelectedType: (t: GpsActivityType) => void;
@@ -302,7 +304,7 @@ function TrackPanel({
           <Text style={styles.primaryBtnText}>End Activity</Text>
         </Pressable>
 
-        <ForegroundOnlyNotice />
+        <TrackingNotice isTracking={isTracking} backgroundTracking={backgroundTracking} />
       </View>
     );
   }
@@ -349,30 +351,56 @@ function TrackPanel({
         </Text>
       </Pressable>
 
-      <ForegroundOnlyNotice />
+      <TrackingNotice isTracking={isTracking} backgroundTracking={backgroundTracking} />
     </View>
   );
 }
 
 // ═════════════════════════════════════════════════════
-// Honest foreground-only tracking notice
+// Tracking notice — adapts to actual capability
 //
-// GPS recording uses a When-In-Use foreground location watch, which iOS/Android
-// suspend when the app is backgrounded or the screen locks. We do NOT do
-// background location tracking, so we tell the user plainly to keep the app
-// open rather than implying the route keeps recording in their pocket.
-// FLAG: true background tracking needs the `location` background mode +
-// requestBackgroundPermissionsAsync + a TaskManager task (see APP_AUDIT F17).
+// When the user granted Always/background location, recording continues with
+// the screen locked (backgroundTracking=true) and we say so. When they only
+// granted When-In-Use, the context falls back to a foreground watch and we tell
+// them plainly to keep the screen open — no false "records in your pocket"
+// claim. (APP_AUDIT F17 — background tracking now wired in GpsActivityContext.)
 // ═════════════════════════════════════════════════════
 
-function ForegroundOnlyNotice() {
+function TrackingNotice({ isTracking, backgroundTracking }: { isTracking: boolean; backgroundTracking: boolean }) {
   const { colors } = useTheme();
+
+  // Before a session starts we don't yet know what the user will grant — set the
+  // expectation that allowing "Always" keeps recording with the screen locked.
+  if (!isTracking) {
+    return (
+      <View style={styles.noticeRow}>
+        <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+        <Text style={[styles.noticeText, { color: colors.textMuted }]}>
+          Allow “Always” location access when prompted and your route keeps
+          recording even when the screen is locked.
+        </Text>
+      </View>
+    );
+  }
+
+  if (backgroundTracking) {
+    return (
+      <View style={styles.noticeRow}>
+        <Ionicons name="checkmark-circle-outline" size={14} color={colors.success} />
+        <Text style={[styles.noticeText, { color: colors.textMuted }]}>
+          Recording in the background — you can lock your phone or switch apps and
+          your route keeps tracking.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.noticeRow}>
       <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
       <Text style={[styles.noticeText, { color: colors.textMuted }]}>
-        Keep this screen open while tracking — recording pauses if the app is
-        backgrounded or the phone locks.
+        Keep this screen open while tracking — background location is off, so
+        recording pauses if the app is backgrounded or the phone locks.
       </Text>
     </View>
   );

@@ -16,7 +16,11 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Zenki Dojo uses your location to automatically log dojo visits and, when you start a GPS-tracked workout, to record your route, distance, and pace."
+          "locationWhenInUsePermission": "Zenki Dojo uses your location to automatically log dojo visits and, when you start a GPS-tracked workout, to record your route, distance, and pace.",
+          "locationAlwaysAndWhenInUsePermission": "Zenki Dojo keeps recording your route, distance, and pace while a GPS workout is running, even when the app is in the background or your screen is locked.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       [
@@ -91,6 +95,7 @@
       },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Zenki Dojo uses your location to automatically log dojo visits and, when you start a GPS-tracked workout, to record your route, distance, and pace.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Zenki Dojo keeps recording your route, distance, and pace while a GPS workout is running, even when the app is in the background or your screen is locked.",
         "NSCameraUsageDescription": "Zenki Dojo uses your camera to scan food barcodes for macro logging, take progress and food photos, and set your profile picture. Photos stay on your device unless you post them.",
         "NSMicrophoneUsageDescription": "Zenki Dojo records audio along with video posts so the audio matches the moment you captured. Also used to capture your voice when you talk to Senpai in the chat — audio is transcribed on-device and not stored or uploaded.",
         "NSSpeechRecognitionUsageDescription": "Zenki Dojo transcribes your voice on-device when you talk to Senpai in the chat. The audio never leaves your phone.",
@@ -103,7 +108,8 @@
         "NSHealthUpdateUsageDescription": "Zenki Dojo writes your logged workouts, weight, nutrition, and heart-rate sessions to Apple Health so all your training data stays in one place.",
         "NSMotionUsageDescription": "Zenki Dojo uses motion sensors to count steps and estimate active minutes during workouts.",
         "UIBackgroundModes": [
-          "fetch"
+          "fetch",
+          "location"
         ]
       },
       "entitlements": {
@@ -157,6 +163,9 @@
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.CAMERA",
         "android.permission.READ_CALENDAR",
         "android.permission.WRITE_CALENDAR",

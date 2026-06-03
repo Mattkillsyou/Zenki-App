@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { Platform } from 'react-native';
+import { Platform, AppState } from 'react-native';
 import { useSyncedState } from '../hooks/useSyncedState';
 import * as Location from 'expo-location';
+import * as TaskManager from 'expo-task-manager';
 import {
   GpsActivity,
   GpsPoint,
@@ -22,8 +23,53 @@ import {
 
 const STORAGE_KEY = '@zenki_gps_activities';
 
+// ─────────────────────────────────────────────
+// Background location task (APP_AUDIT F17 — true background tracking)
+//
+// On iOS the `location` background mode keeps the JS runtime alive, so this
+// module-level buffer survives screen-lock / app-switch and the foreground
+// provider drains it for live UI + reads it as the authoritative route on stop.
+// Process-eviction recovery (app killed by the OS mid-run) is intentionally out
+// of scope. Registered at module scope so it exists before the provider mounts.
+// ─────────────────────────────────────────────
+const BG_LOCATION_TASK = 'zenki-bg-location';
+
+let bgPointBuffer: GpsPoint[] = [];
+
+// Set by the provider while a session is paused. The background task is module
+// scope and can't read component refs, so we gate appends through this flag —
+// mirrors the foreground watch's `if (isPausedRef.current) return;` guard so a
+// pause freezes the route in BOTH modes (in-flight fixes after the async
+// stopLocationUpdatesAsync are dropped instead of inflating distance/pace).
+let bgPaused = false;
+
+try {
+  TaskManager.defineTask(BG_LOCATION_TASK, async ({ data, error }: any) => {
+    if (error) return;
+    if (bgPaused) return;
+    const locs: Location.LocationObject[] | undefined = data?.locations;
+    if (!locs?.length) return;
+    for (const loc of locs) {
+      bgPointBuffer.push({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        altitude: loc.coords.altitude,
+        speed: loc.coords.speed,
+        timestamp: loc.timestamp,
+      });
+    }
+  });
+} catch {
+  // expo-task-manager unavailable (web / unsupported) — background tracking
+  // simply won't engage and the foreground watch remains the fallback.
+}
+
 interface GpsActivityContextValue {
   isTracking: boolean;
+  /** True once OS-level background location updates are actually running for
+   *  the current session (Always permission granted). When false while
+   *  tracking, we fell back to a foreground-only watch. */
+  backgroundTracking: boolean;
   isPaused: boolean;
   currentActivityType: GpsActivityType;
   liveDistance: number;
@@ -44,6 +90,7 @@ interface GpsActivityContextValue {
 
 const GpsActivityContext = createContext<GpsActivityContextValue>({
   isTracking: false,
+  backgroundTracking: false,
   isPaused: false,
   currentActivityType: 'run',
   liveDistance: 0,
@@ -76,6 +123,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     validate: Array.isArray,
   });
   const [isTracking, setIsTracking] = useState(false);
+  const [backgroundTracking, setBackgroundTracking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentActivityType, setCurrentActivityType] = useState<GpsActivityType>('run');
   const [liveDistance, setLiveDistance] = useState(0);
@@ -91,6 +139,8 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
   const watchRef = useRef<Location.LocationSubscription | null>(null);
   const simTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const drainTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const bgModeRef = useRef(false);        // true while OS background updates run
   const pausedTimeRef = useRef(0);        // accumulated paused time in ms
   const pauseStartRef = useRef(0);        // when current pause started
   const isPausedRef = useRef(false);
@@ -101,25 +151,99 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     watchRef.current = null;
     if (simTimerRef.current) { clearInterval(simTimerRef.current); simTimerRef.current = null; }
     if (durationTimerRef.current) { clearInterval(durationTimerRef.current); durationTimerRef.current = null; }
+    if (drainTimerRef.current) { clearInterval(drainTimerRef.current); drainTimerRef.current = null; }
+  }, []);
+
+  // Start OS-level background location updates. Returns true only if the user
+  // grants Always/background permission and the updates start — otherwise the
+  // caller falls back to a foreground-only watch. No-ops on web.
+  const startBgUpdates = useCallback(async (promptIfNeeded = true): Promise<boolean> => {
+    if (Platform.OS === 'web') return false;
+    try {
+      // On resume we already hold the grant from start — only PROMPT on the
+      // initial start, so a pause→resume can't eject the user to Settings
+      // (Android 11+) or re-prompt. If the grant was revoked mid-run, the check
+      // returns non-granted and the caller degrades to a foreground watch.
+      const { status } = promptIfNeeded
+        ? await Location.requestBackgroundPermissionsAsync()
+        : await Location.getBackgroundPermissionsAsync();
+      if (status !== 'granted') return false;
+      const already = await Location.hasStartedLocationUpdatesAsync(BG_LOCATION_TASK).catch(() => false);
+      if (already) { await Location.stopLocationUpdatesAsync(BG_LOCATION_TASK).catch(() => {}); }
+      await Location.startLocationUpdatesAsync(BG_LOCATION_TASK, {
+        accuracy: Location.Accuracy.BestForNavigation,
+        distanceInterval: 5,
+        timeInterval: 3000,
+        pausesUpdatesAutomatically: false,
+        activityType: Location.ActivityType.Fitness,
+        showsBackgroundLocationIndicator: true,
+        foregroundService: {
+          notificationTitle: 'Zenki Dojo — workout in progress',
+          notificationBody: 'Recording your route, distance, and pace.',
+          notificationColor: '#D4A017',
+        },
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // Stop OS-level background updates (fire-and-forget; safe if not running).
+  const stopBgUpdates = useCallback(() => {
+    try { Location.stopLocationUpdatesAsync(BG_LOCATION_TASK).catch(() => {}); } catch { /* not started */ }
+  }, []);
+
+  // Drain the background buffer into routeRef + live UI. The buffer is the full
+  // background-recorded route (seeded with the initial point), so we rebuild
+  // routeRef from it idempotently — no double-counting across drains.
+  const drainBgBuffer = useCallback(() => {
+    if (isPausedRef.current || bgPointBuffer.length === 0) return;
+    routeRef.current = [...bgPointBuffer];
+    const last = routeRef.current[routeRef.current.length - 1];
+    if (last) {
+      setCurrentPosition(last);
+      setLiveSpeed(Math.max(0, last.speed || 0));
+    }
+    const dist = totalDistance(routeRef.current);
+    setLiveDistance(dist);
+    setLiveElevGain(totalElevationGain(routeRef.current));
+    const activeTime = (Date.now() - startTimeRef.current - pausedTimeRef.current) / 1000;
+    setLivePace(paceSecsPerKm(dist, activeTime));
   }, []);
 
   // Tear down any active watch/timers if the provider unmounts while tracking.
-  useEffect(() => () => { cleanupTimers(); }, []);
+  useEffect(() => () => { cleanupTimers(); stopBgUpdates(); }, []);
+
+  // Catch the live UI up the moment the app returns to foreground (the drain
+  // interval is suspended while backgrounded; the bg task keeps buffering).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active' && bgModeRef.current && metaRef.current && !isPausedRef.current) {
+        drainBgBuffer();
+      }
+    });
+    return () => sub.remove();
+  }, [drainBgBuffer]);
 
   const startTracking = useCallback(async (type: GpsActivityType, memberId: string): Promise<boolean> => {
-    // FLAG (APP_AUDIT F17): foreground-only tracking. We request only
-    // When-In-Use permission and record via a foreground watchPositionAsync;
-    // iOS/Android suspend this when the app is backgrounded or the screen
-    // locks, so the route stops accumulating until the app is reopened.
-    // ActivityTrackerScreen surfaces an honest "keep the screen open" notice.
-    // True background tracking requires Location.startLocationUpdatesAsync with
-    // a TaskManager task, requestBackgroundPermissionsAsync, and the `location`
-    // background mode + NSLocationAlwaysAndWhenInUse string in app.json — a
-    // capability/infra change deferred here, not silently claimed.
+    // Tracking strategy (APP_AUDIT F17 — resolved):
+    //  1. Require When-In-Use permission (the baseline).
+    //  2. Try to upgrade to OS-level BACKGROUND updates (startBgUpdates): if the
+    //     user grants Always, a TaskManager task records the route while the app
+    //     is backgrounded / the screen is locked (iOS `location` background mode
+    //     + Android foreground service, both configured in app.json).
+    //  3. If background permission is denied, fall back to a foreground-only
+    //     watchPositionAsync — the UI then shows an honest "keep this screen
+    //     open" notice (backgroundTracking=false).
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return false;
 
     routeRef.current = [];
+    bgPointBuffer = [];
+    bgPaused = false;
+    bgModeRef.current = false;
+    setBackgroundTracking(false);
     metaRef.current = { id: randomId(), memberId, type, startedAt: new Date().toISOString() };
     startTimeRef.current = Date.now();
     setCurrentActivityType(type);
@@ -138,7 +262,8 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
       const dist = totalDistance(routeRef.current);
       setLiveDistance(dist);
       setLiveElevGain(totalElevationGain(routeRef.current));
-      const elapsed = (Date.now() - startTimeRef.current) / 1000;
+      // Subtract paused time so live pace matches the resume path + saved value.
+      const elapsed = (Date.now() - startTimeRef.current - pausedTimeRef.current) / 1000;
       setLivePace(paceSecsPerKm(dist, elapsed));
     };
 
@@ -159,7 +284,23 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
       setCurrentPosition(initialPoint);
     } catch { /* fallback to defaults */ }
 
-    // GPS watch
+    // ── Try TRUE BACKGROUND tracking first ──────────────────────────────
+    // Seed the buffer with the initial point so the derived route includes it,
+    // then start OS background updates. On success we drive live UI from a drain
+    // interval and return — no foreground watch (startLocationUpdatesAsync
+    // delivers in foreground too, so a second watch would double-record).
+    bgPointBuffer = [...routeRef.current];
+    if (await startBgUpdates()) {
+      bgModeRef.current = true;
+      setBackgroundTracking(true);
+      drainTimerRef.current = setInterval(drainBgBuffer, 2000);
+      durationTimerRef.current = setInterval(() => {
+        setLiveDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+      }, 1000);
+      return true;
+    }
+
+    // GPS watch (foreground-only fallback)
     try {
       watchRef.current = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 5, timeInterval: 3000 },
@@ -223,10 +364,20 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     }, 1000);
 
     return true;
-  }, []);
+  }, [startBgUpdates, drainBgBuffer]);
 
   const stopTracking = useCallback((weightKg: number = 80): GpsActivity | null => {
     if (!metaRef.current) return null;
+
+    // Background mode: the buffer holds the authoritative route (incl. points
+    // the last drain may have missed). Fold it in, then stop OS updates.
+    if (bgModeRef.current) {
+      routeRef.current = [...bgPointBuffer];
+      stopBgUpdates();
+    }
+    bgModeRef.current = false;
+    setBackgroundTracking(false);
+    bgPointBuffer = [];
 
     // Stop everything first
     cleanupTimers();
@@ -275,7 +426,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     setActivities((prev) => [activity, ...prev].slice(0, 100));
 
     return activity;
-  }, [cleanupTimers]);
+  }, [cleanupTimers, stopBgUpdates]);
 
   const pauseTracking = useCallback(() => {
     if (!isTracking || isPausedRef.current) return;
@@ -283,12 +434,17 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     setIsPaused(true);
     pauseStartRef.current = Date.now();
 
-    // Stop GPS watch / simulation during pause
-    watchRef.current?.remove();
-    watchRef.current = null;
-    if (simTimerRef.current) { clearInterval(simTimerRef.current); simTimerRef.current = null; }
-    // Keep duration timer running — it shows elapsed time
-  }, [isTracking]);
+    // Stop GPS recording during pause
+    if (bgModeRef.current) {
+      bgPaused = true;       // freeze the buffer; drops any in-flight OS fixes
+      stopBgUpdates();
+    } else {
+      watchRef.current?.remove();
+      watchRef.current = null;
+      if (simTimerRef.current) { clearInterval(simTimerRef.current); simTimerRef.current = null; }
+    }
+    // Keep duration + drain timers running — they show elapsed time
+  }, [isTracking, stopBgUpdates]);
 
   const resumeTracking = useCallback(async () => {
     if (!isTracking || !isPausedRef.current) return;
@@ -296,6 +452,22 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     pausedTimeRef.current += Date.now() - pauseStartRef.current;
     isPausedRef.current = false;
     setIsPaused(false);
+
+    // Background mode: unfreeze the buffer and restart OS updates (no re-prompt).
+    // If the Always grant was revoked mid-run, startBgUpdates(false) returns
+    // false — degrade to a foreground watch so recording continues and the UI
+    // notice stops claiming background recording (instead of silently dying).
+    if (bgModeRef.current) {
+      bgPaused = false;
+      if (await startBgUpdates(false)) {
+        return; // drain interval already running handles live UI
+      }
+      routeRef.current = [...bgPointBuffer];   // fold the bg route captured so far
+      bgModeRef.current = false;
+      setBackgroundTracking(false);
+      if (drainTimerRef.current) { clearInterval(drainTimerRef.current); drainTimerRef.current = null; }
+      // fall through to the foreground watch restart below
+    }
 
     // Restart GPS watch / simulation
     const lastPoint = routeRef.current[routeRef.current.length - 1];
@@ -346,7 +518,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
         }, 3000);
       }
     }
-  }, [isTracking]);
+  }, [isTracking, startBgUpdates]);
 
   const removeActivity = useCallback((id: string) => {
     setActivities((prev) => prev.filter((a) => a.id !== id));
@@ -365,7 +537,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
   return (
     <GpsActivityContext.Provider
       value={{
-        isTracking, isPaused, currentActivityType,
+        isTracking, backgroundTracking, isPaused, currentActivityType,
         liveDistance, liveDuration, livePace, liveElevGain, liveSpeed,
         currentPosition, startTracking, stopTracking,
         pauseTracking, resumeTracking, removeActivity,
