@@ -72,6 +72,11 @@ export { sendPasswordReset } from './sendPasswordReset';
 // the invite gate runs pre-auth; validates against the inviteCodes collection.
 export { validateInviteCode } from './validateInviteCode';
 
+// Public pre-auth contact/membership-inquiry endpoint — lets a non-member's
+// "Contact Us" form reach the dojo (writes supportMessages via Admin SDK with
+// per-IP rate limiting, since that collection is auth-gated for direct writes).
+export { submitContactInquiry } from './submitContactInquiry';
+
 // Stripe PaymentIntent creation for in-app Apple Pay / card checkout
 // (clothing store + drink tab). Bearer-token auth + per-UID rate limiting.
 export { createPaymentIntent } from './createPaymentIntent';

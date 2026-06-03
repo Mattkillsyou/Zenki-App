@@ -108,7 +108,6 @@
         "NSHealthUpdateUsageDescription": "Zenki Dojo writes your logged workouts, weight, nutrition, and heart-rate sessions to Apple Health so all your training data stays in one place.",
         "NSMotionUsageDescription": "Zenki Dojo uses motion sensors to count steps and estimate active minutes during workouts.",
         "UIBackgroundModes": [
-          "fetch",
           "location"
         ]
       },

@@ -50,6 +50,7 @@ export const sendPasswordReset = onRequest(
     secrets: [RESEND_API_KEY],
     cors: true,
     region: 'us-central1',
+    invoker: 'public',
   },
   async (req, res) => {
     if (req.method !== 'POST') {

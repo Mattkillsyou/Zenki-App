@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Effective date:** 2026-04-19
-**Last updated:** 2026-04-19
+**Last updated:** 2026-06-03
 
 Zenki Dojo ("the app," "we," "us") is operated by **Matt Brown** on behalf of Zenki Dojo training facility. This policy explains what data we collect, why, and how we protect it.
 
@@ -58,7 +58,7 @@ You accept these terms when you create an account; continued use constitutes ong
 ### What we do NOT collect
 - Advertising identifier (IDFA)
 - Contacts, calendar, or other device data beyond what you explicitly attach
-- Precise location in the background (foreground-only, and only while GPS workouts are running or you arrive at the dojo for check-in)
+- Your location outside of an active GPS workout or dojo check-in — we never track location continuously or when the app is closed
 - Crash or performance analytics
 - Third-party behavioral tracking of any kind
 
@@ -75,7 +75,7 @@ Every piece of data above is collected **for App Functionality** only, using App
 | Provide health + fitness features | Training, health, nutrition data |
 | Community and messaging features | Posts, DMs, follows |
 | Dojo operations | Attendance, waivers, support messages |
-| Auto-check-in and GPS routes | Precise location (foreground, only while active) |
+| Auto-check-in and GPS routes | Precise location (including in the background while a GPS workout is actively running) |
 | AI macro estimation and scan parsing | Photos/PDFs you explicitly upload (see Section 4) |
 | Improve the app | Anonymous error logs via Firebase *(no user identifiers)* |
 
@@ -172,7 +172,7 @@ If the app is used by a member under 18, a parent or guardian should review this
 - All data in transit uses HTTPS/TLS.
 - Firestore rules enforce that you can only read/write your own data.
 - Storage rules enforce that uploaded files are only accessible by you.
-- We do not store credit-card, banking, or payment data inside the app — no in-app payments are processed as of v1.0.
+- In-app purchases (clothing store + drink tab) are processed by Stripe via Apple Pay. Stripe handles all card and banking data — the app never sees or stores raw card numbers, only the payment confirmation ID and your order record.
 
 No system is 100% secure. If you suspect a breach or vulnerability, email `mattbrowntheemail@gmail.com`.
 

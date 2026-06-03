@@ -191,10 +191,12 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
     };
     const impact = impactMap[mood] ?? null;
     const entry: MemoryEntry = { mood, dialogue, timestamp: Date.now() };
+    // Keep the updater pure (React may run it more than once): compute the next
+    // memory log here, then persist once OUTSIDE setState below.
+    let cappedLog: MemoryEntry[] = [];
     setState((s) => {
       const nextLog = [...s.memoryLog, entry];
-      const cappedLog = nextLog.length > MEMORY_CAP ? nextLog.slice(nextLog.length - MEMORY_CAP) : nextLog;
-      safeStorageSet(MEMORY_KEY, cappedLog, '[Senpai]');
+      cappedLog = nextLog.length > MEMORY_CAP ? nextLog.slice(nextLog.length - MEMORY_CAP) : nextLog;
       return {
         ...s,
         mascotMood: mood,
@@ -205,6 +207,7 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
         activeImpact: impact,
       };
     });
+    safeStorageSet(MEMORY_KEY, cappedLog, '[Senpai]');
     timerRef.current = setTimeout(() => {
       setState((s) => ({ ...s, mascotMood: 'idle', lastReaction: null, sparkleActive: false }));
     }, durationMs);

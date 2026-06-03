@@ -28,7 +28,7 @@ const DRINK_PRICES: Record<string, number> = {
 const MAX_CHARGE_CENTS = 1_000_00; // $1,000 hard ceiling (abuse/typo guard)
 
 export const createPaymentIntent = onRequest(
-  { secrets: [STRIPE_SECRET_KEY], cors: true, region: 'us-central1' },
+  { secrets: [STRIPE_SECRET_KEY], cors: true, region: 'us-central1', invoker: 'public' },
   async (req, res) => {
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'method-not-allowed' });

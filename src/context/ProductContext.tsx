@@ -116,9 +116,12 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
     return () => unsub();
   }, [cloudSyncEnabled]);
 
-  // ── Local save whenever customProducts changes (and we're not mid-cloud-sync)
+  // ── Local save whenever customProducts changes. Always mirror to AsyncStorage
+  // once loaded (even with cloud sync on) so an optimistic catch-fallback edit
+  // after a failed cloud write survives the next launch. The snapshot handler
+  // writing the same value is harmless idempotent thrash.
   useEffect(() => {
-    if (loaded && !cloudSyncEnabled) {
+    if (loaded) {
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(customProducts));
     }
   }, [customProducts, loaded, cloudSyncEnabled]);

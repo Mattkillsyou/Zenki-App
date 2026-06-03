@@ -137,7 +137,7 @@
   <main>
     <h1>Privacy Policy</h1>
 <p><strong>Effective date:</strong> 2026-04-19
-<strong>Last updated:</strong> 2026-04-19</p>
+<strong>Last updated:</strong> 2026-06-03</p>
 <p>Zenki Dojo ("the app," "we," "us") is operated by <strong>Matt Brown</strong> on behalf of Zenki Dojo training facility. This policy explains what data we collect, why, and how we protect it.</p>
 <p>If you have questions, email us at <strong>mattbrowntheemail@gmail.com</strong>.</p>
 <hr />
@@ -185,7 +185,7 @@
 <ul>
 <li>Advertising identifier (IDFA)</li>
 <li>Contacts, calendar, or other device data beyond what you explicitly attach</li>
-<li>Precise location in the background (foreground-only, and only while GPS workouts are running or you arrive at the dojo for check-in)</li>
+<li>Your location outside of an active GPS workout or dojo check-in — we never track location continuously or when the app is closed</li>
 <li>Crash or performance analytics</li>
 <li>Third-party behavioral tracking of any kind</li>
 </ul>
@@ -222,7 +222,7 @@
 </tr>
 <tr>
 <td>Auto-check-in and GPS routes</td>
-<td>Precise location (foreground, only while active)</td>
+<td>Precise location (including in the background while a GPS workout is actively running)</td>
 </tr>
 <tr>
 <td>AI macro estimation and scan parsing</td>
@@ -297,7 +297,7 @@
 <li>All data in transit uses HTTPS/TLS.</li>
 <li>Firestore rules enforce that you can only read/write your own data.</li>
 <li>Storage rules enforce that uploaded files are only accessible by you.</li>
-<li>We do not store credit-card, banking, or payment data inside the app — no in-app payments are processed as of v1.0.</li>
+<li>In-app purchases (clothing store + drink tab) are processed by Stripe via Apple Pay. Stripe handles all card and banking data — the app never sees or stores raw card numbers, only the payment confirmation ID and your order record.</li>
 </ul>
 <p>No system is 100% secure. If you suspect a breach or vulnerability, email <code>mattbrowntheemail@gmail.com</code>.</p>
 <hr />
