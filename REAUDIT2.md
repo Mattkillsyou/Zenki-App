@@ -48,14 +48,20 @@ finding**, then an adversarial review of the fixes (no regressions found).
 - A `safeStorageSet` ran inside a `setState` updater (the one instance the earlier
   fix missed) → moved out (`SenpaiContext`).
 
-## Residual / owner notes
-- **unreadFor badge:** a participant can still nudge the *other* party's unread
-  count in their shared 2-person conversation (no leak/escalation). Constraining
-  arbitrary map *values* in rules is impractical; move unread bookkeeping to a
-  Cloud Function if it ever matters. Low severity, left as-is.
-- **Pre-auth "prospect" contact form:** can't write the auth-gated
-  `supportMessages` collection, so it queues and only sends once the device signs
-  in. For guaranteed delivery from non-members, route it through a public Cloud
-  Function (like `sendPasswordReset`) or email.
+## Residuals — now RESOLVED
+- ✅ **unreadFor badge:** the conversation update rule now blocks a participant
+  from *lowering* the other party's unread count (the harmful "hide messages"
+  half). A writer may reset their own count and only raise the other's (send) —
+  verified to pass all legit DM writes. Inflating the other's count was the
+  harmless half and isn't worth a Cloud-Function rework.
+- ✅ **Pre-auth "prospect" contact form:** added a public `submitContactInquiry`
+  Cloud Function (Admin SDK + per-IP rate limit) so a non-member's "Contact Us"
+  form reaches the dojo's support inbox directly, instead of queuing until the
+  device signs in. ContactScreen now POSTs to it.
+
+## Owner notes
+- **Deploy:** `firebase deploy --only hosting,firestore:rules,functions`
+  (the new `submitContactInquiry` function + the updated rules must deploy).
+  EAS rebuild for the `app.json` background-mode change.
 - **Deploy:** `firebase deploy --only hosting,firestore:rules,functions`; EAS
   rebuild for the `app.json` background-mode change.

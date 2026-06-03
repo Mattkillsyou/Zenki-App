@@ -14,7 +14,7 @@ import * as admin from 'firebase-admin';
 type Endpoint =
   | 'recognizeFood' | 'extractDexa' | 'parseBloodwork'
   | 'senpaiChat' | 'senpaiSpeak' | 'createPaymentIntent'
-  | 'sendPasswordReset' | 'validateInviteCode';
+  | 'sendPasswordReset' | 'validateInviteCode' | 'submitContactInquiry';
 
 const LIMITS: Record<Endpoint, number> = {
   recognizeFood: 30,  // up to 30 food photos/day
@@ -25,6 +25,7 @@ const LIMITS: Record<Endpoint, number> = {
   createPaymentIntent: 30, // up to 30 checkout/payment attempts per day (abuse guard)
   sendPasswordReset: 8,    // per EMAIL/day — anti email-bomb (silently dropped over cap)
   validateInviteCode: 40,  // per IP/day — invite-code brute-force deterrent
+  submitContactInquiry: 5, // per IP/day — pre-auth contact form anti-spam
 };
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;

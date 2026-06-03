@@ -12,7 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { typography, spacing, borderRadius } from '../../theme';
 import { Button, KeyboardAwareScrollView, ScreenContainer } from '../../components';
-import { submitSupportMessage } from '../../services/supportMessages';
 
 export function ContactScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -24,34 +23,28 @@ export function ContactScreen({ navigation }: any) {
   const [sent, setSent] = useState(false);
 
   const handleSubmit = async () => {
-    if (!name || !email) {
-      Alert.alert('Error', 'Please enter your name and email');
+    if (!name || !email || !message) {
+      Alert.alert('Error', 'Please enter your name, email, and a message');
       return;
     }
     setLoading(true);
     try {
-      // Persist the inquiry to the same backend the in-app support form uses
-      // (Firestore `supportMessages`, with a local-queue fallback when offline)
-      // instead of the old setTimeout that silently discarded the message and
-      // then claimed it was sent. Contact details that don't map to support
-      // fields (phone) are folded into the message body so nothing is lost.
-      const detailLines = [
-        message.trim(),
-        '',
-        `— from the Contact Us form —`,
-        `Name: ${name.trim()}`,
-        `Email: ${email.trim()}`,
-        phone.trim() ? `Phone: ${phone.trim()}` : null,
-      ].filter((l) => l !== null);
-
-      await submitSupportMessage({
-        memberId: 'prospect',
-        memberName: name.trim(),
-        memberEmail: email.trim(),
-        category: 'general',
-        subject: `Membership inquiry from ${name.trim()}`,
-        message: detailLines.join('\n'),
+      // This screen is PRE-AUTH (prospects), so it can't write the auth-gated
+      // supportMessages collection directly. Route it through the public
+      // submitContactInquiry Cloud Function (Admin SDK + per-IP rate limiting),
+      // which delivers it to the dojo's support inbox.
+      const { AI_FUNCTION_BASE_URL } = await import('../../config/api');
+      const res = await fetch(`${AI_FUNCTION_BASE_URL}/submitContactInquiry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          message: message.trim(),
+        }),
       });
+      if (!res.ok) throw new Error('We couldn’t send your message right now. Please try again shortly.');
       setSent(true);
     } catch (e: any) {
       Alert.alert('Could not send', e?.message || 'Please try again shortly.');
