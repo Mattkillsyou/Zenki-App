@@ -15,6 +15,20 @@ import { USDA_API_KEY } from '../config/env';
 
 const TIMEOUT_MS = 5000;
 
+// One-time dev/QA flag so a missing or rejected USDA key is detectable instead
+// of silently swallowed. When this fires, USDA results never appear and search
+// degrades to Open Food Facts only.
+let _usdaKeyWarned = false;
+function warnUsdaKeyOnce(reason: string) {
+  if (_usdaKeyWarned) return;
+  _usdaKeyWarned = true;
+  console.warn(
+    `[foodSearch] USDA FoodData Central unavailable (${reason}). ` +
+      'Set EXPO_PUBLIC_USDA_API_KEY (or extra.USDA_API_KEY) to enable USDA ' +
+      'results; falling back to Open Food Facts only.',
+  );
+}
+
 // ─────────────────────────────────────────────
 // Public entrypoint
 // ─────────────────────────────────────────────
@@ -61,9 +75,23 @@ export async function lookupBarcode(barcode: string): Promise<FoodSearchResult |
 // ─────────────────────────────────────────────
 
 async function searchUSDA(query: string, limit: number): Promise<FoodSearchResult[]> {
+  // No key configured → skip the guaranteed-403 round trip entirely and degrade
+  // to Open Food Facts. We do NOT ship a key here (see APP_AUDIT F14 + contract:
+  // EXPO_PUBLIC_USDA_API_KEY must be provisioned; don't invent one).
+  if (!USDA_API_KEY) {
+    warnUsdaKeyOnce('no API key configured');
+    return [];
+  }
   const url = `${USDA_BASE_URL}/foods/search?api_key=${USDA_API_KEY}&query=${encodeURIComponent(query)}&pageSize=${limit}&dataType=Foundation,SR%20Legacy,Branded`;
   const res = await fetchWithTimeout(url);
-  if (!res.ok) return [];
+  if (!res.ok) {
+    // 401/403 means the configured key is missing/invalid — surface it so it's
+    // caught in QA rather than silently returning nothing forever.
+    if (res.status === 401 || res.status === 403) {
+      warnUsdaKeyOnce(`HTTP ${res.status} — key rejected`);
+    }
+    return [];
+  }
   const json = await res.json();
   const foods: any[] = Array.isArray(json.foods) ? json.foods : [];
   return foods.map(usdaFoodToResult).filter(Boolean) as FoodSearchResult[];

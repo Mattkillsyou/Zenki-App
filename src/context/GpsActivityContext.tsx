@@ -107,6 +107,15 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
   useEffect(() => () => { cleanupTimers(); }, []);
 
   const startTracking = useCallback(async (type: GpsActivityType, memberId: string): Promise<boolean> => {
+    // FLAG (APP_AUDIT F17): foreground-only tracking. We request only
+    // When-In-Use permission and record via a foreground watchPositionAsync;
+    // iOS/Android suspend this when the app is backgrounded or the screen
+    // locks, so the route stops accumulating until the app is reopened.
+    // ActivityTrackerScreen surfaces an honest "keep the screen open" notice.
+    // True background tracking requires Location.startLocationUpdatesAsync with
+    // a TaskManager task, requestBackgroundPermissionsAsync, and the `location`
+    // background mode + NSLocationAlwaysAndWhenInUse string in app.json — a
+    // capability/infra change deferred here, not silently claimed.
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return false;
 
