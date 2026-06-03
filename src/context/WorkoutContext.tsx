@@ -11,7 +11,10 @@ import { useAuth } from './AuthContext';
 const LOGS_KEY = '@zenki_workout_logs';
 const PRS_KEY = '@zenki_personal_records';
 
-const POINTS_PER_WORKOUT = 25;
+// Diamonds for a logged workout come SOLELY from recordSession() (a logged
+// workout == a training session); logWorkout no longer grants a second flat
+// award on top, which previously double-counted. recordSession is also gated to
+// once per day so re-logging ("Add Another") can't farm the session reward.
 const POINTS_PER_PR = 50;
 
 interface WorkoutContextValue {
@@ -55,7 +58,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [logs, setLogs] = useState<WorkoutLog[]>([]);
   const [prs, setPRs] = useState<PersonalRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const { awardPoints, recordSession } = useGamification();
+  const { awardPoints, deductPoints, recordSession } = useGamification();
   const { user } = useAuth();
 
   // Re-read on user change so sign-in / reviewer-seed writes are picked up.
@@ -109,12 +112,16 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         id: genId('log'),
         createdAt: new Date().toISOString(),
       };
+      // Grant the session reward (Diamonds + XP + streak) at most once per
+      // member per day: the FIRST log of the day counts as the session; extra
+      // "Add Another" logs still save but don't re-award. recordSession is the
+      // sole grantor (no separate flat awardPoints — that was double-counting).
+      const alreadyLoggedToday = hasMemberLoggedToday(log.memberId);
       setLogs((prev) => [full, ...prev]);
-      awardPoints(POINTS_PER_WORKOUT, 'workout_logged');
-      recordSession();
+      if (!alreadyLoggedToday) recordSession();
       return full;
     },
-    [awardPoints, recordSession],
+    [hasMemberLoggedToday, recordSession],
   );
 
   const removeLog = useCallback((id: string) => {
@@ -170,8 +177,14 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   );
 
   const removePR = useCallback((id: string) => {
-    setPRs((prev) => prev.filter((p) => p.id !== id));
-  }, []);
+    setPRs((prev) => {
+      // Only refund (and only once) if the PR actually existed — guards against
+      // a double-delete clawing back points twice. addPR always grants exactly
+      // POINTS_PER_PR, so the refund is symmetric and the add+delete loop nets 0.
+      if (prev.some((p) => p.id === id)) deductPoints(POINTS_PER_PR, 'pr_removed');
+      return prev.filter((p) => p.id !== id);
+    });
+  }, [deductPoints]);
 
   return (
     <WorkoutContext.Provider

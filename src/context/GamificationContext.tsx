@@ -55,6 +55,9 @@ interface GamificationContextValue {
   awardStripe: () => void;
   redeemPoints: (amount: number, reason?: string) => boolean;
   awardPoints: (amount: number, reason?: string) => void;
+  // Reverse a prior award (e.g. deleting a PR that granted points). Clamps both
+  // the spendable balance and the lifetime tally at 0 so it can't go negative.
+  deductPoints: (amount: number, reason?: string) => void;
   awardFlames: (amount: number, reason?: string) => void;
   redeemFlames: (amount: number, reason?: string) => boolean;
   recordHRSession: () => void;
@@ -100,6 +103,7 @@ const defaultState: GamificationState = {
   memberSinceDate: '',
   sessionsThisWeek: 0,
   sessionsThisMonth: 0,
+  lastSessionMonth: '',
   hrSessionsCount: 0,
   mealsLoggedCount: 0,
   weightLoggedCount: 0,
@@ -128,6 +132,7 @@ const GamificationContext = createContext<GamificationContextValue>({
   awardStripe: () => {},
   redeemPoints: () => false,
   awardPoints: () => {},
+  deductPoints: () => {},
   awardFlames: () => {},
   redeemFlames: () => false,
   recordHRSession: () => {},
@@ -263,11 +268,19 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
     // Weekly streak — independent of daily streak. A week counts once the member
     // trains any day in it; consecutive calendar weeks extend the streak.
+    // Rolling into a new week also zeroes sessionsThisWeek so the week_warrior
+    // achievement ("5+ sessions in a week") measures THIS week, not lifetime.
     if (prev.lastActiveWeek !== thisWeek) {
       const prevWeek = prev.lastActiveWeek ? previousWeekISO(thisWeek) : '';
       const newWeekStreak = prev.lastActiveWeek === prevWeek ? prev.weekStreak + 1 : 1;
       const longestWeekStreak = Math.max(prev.longestWeekStreak, newWeekStreak);
-      next = { ...next, weekStreak: newWeekStreak, longestWeekStreak, lastActiveWeek: thisWeek };
+      next = {
+        ...next,
+        weekStreak: newWeekStreak,
+        longestWeekStreak,
+        lastActiveWeek: thisWeek,
+        sessionsThisWeek: 0,
+      };
     }
 
     return next;
@@ -362,13 +375,21 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     setState((prev) => {
       const now = new Date();
       const hour = now.getHours();
+      const thisMonth = todayISO().slice(0, 7); // 'YYYY-MM'
       let updated: GamificationState = { ...prev, totalSessions: prev.totalSessions + 1 };
       updated = ensureMemberSince(updated);
+      // updateStreak zeroes sessionsThisWeek when the ISO week rolls over.
       updated = updateStreak(updated);
 
       if (hour < 7)  updated.earlyBirdCount  = (updated.earlyBirdCount  || 0) + 1;
       if (hour >= 20) updated.nightOwlCount  = (updated.nightOwlCount   || 0) + 1;
       if (isWeekend(now)) updated.weekendSessionsCount = (updated.weekendSessionsCount || 0) + 1;
+      // Reset the monthly counter when the calendar month rolls over so
+      // month_warrior ("20+ sessions in a month") measures THIS month, not lifetime.
+      if (updated.lastSessionMonth !== thisMonth) {
+        updated.sessionsThisMonth = 0;
+        updated.lastSessionMonth = thisMonth;
+      }
       updated.sessionsThisWeek  = (updated.sessionsThisWeek  || 0) + 1;
       updated.sessionsThisMonth = (updated.sessionsThisMonth || 0) + 1;
 
@@ -486,6 +507,14 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     }));
   }, []);
 
+  const deductPoints = useCallback((amount: number) => {
+    setState((prev) => ({
+      ...prev,
+      dojoPoints: Math.max(0, (prev.dojoPoints || 0) - amount),
+      pointsLifetime: Math.max(0, (prev.pointsLifetime || 0) - amount),
+    }));
+  }, []);
+
   const awardFlames = useCallback((amount: number) => {
     setState((prev) => ({
       ...prev,
@@ -565,6 +594,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         awardStripe,
         redeemPoints,
         awardPoints,
+        deductPoints,
         awardFlames,
         redeemFlames,
         recordHRSession,

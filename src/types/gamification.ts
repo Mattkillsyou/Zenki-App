@@ -86,6 +86,11 @@ export interface GamificationState {
   memberSinceDate: string;  // ISO
   sessionsThisWeek: number;
   sessionsThisMonth: number;
+  // Period markers so sessionsThisWeek/Month are real rolling windows, not a
+  // lifetime running total. weekStreak's lastActiveWeek doubles as the weekly
+  // marker; lastSessionMonth tracks the month (YYYY-MM) the monthly counter
+  // belongs to, so it zeroes on month rollover instead of accumulating forever.
+  lastSessionMonth: string;     // 'YYYY-MM' the sessionsThisMonth counter is for
   achievements: Achievement[];
   pendingCelebration: Celebration | null;
 }
