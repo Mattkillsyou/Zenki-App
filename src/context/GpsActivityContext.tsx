@@ -462,10 +462,12 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     if (bgModeRef.current) {
       bgPaused = true;       // freeze the buffer; drops any in-flight OS fixes
       stopBgUpdates();
+      setLiveSpeed(0);       // zero the gauge while paused (matches frozen timer/pace)
     } else {
       watchRef.current?.remove();
       watchRef.current = null;
       if (simTimerRef.current) { clearInterval(simTimerRef.current); simTimerRef.current = null; }
+      setLiveSpeed(0);       // zero the gauge while paused (matches frozen timer/pace)
     }
     // Keep duration + drain timers running — they show elapsed time
   }, [isTracking, stopBgUpdates]);
