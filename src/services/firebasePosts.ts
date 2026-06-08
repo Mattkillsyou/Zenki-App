@@ -1,7 +1,7 @@
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import {
   collection, addDoc, doc, getDoc, getDocFromServer, getDocs,
-  query, where, orderBy, limit, startAfter, runTransaction,
+  query, where, orderBy, limit, startAfter, runTransaction, documentId,
 } from 'firebase/firestore';
 import type { QueryDocumentSnapshot } from 'firebase/firestore';
 import { getCurrentUid } from './firebaseAuth';
@@ -100,8 +100,8 @@ export async function createTextPost(caption: string): Promise<Post | null> {
 
 export interface FeedPage {
   posts: Post[];
-  /** `createdAt` (ISO) of the last returned post, or null. Pass back as
-   *  `opts.cursor` to fetch the next page via startAfter. */
+  /** Opaque pagination token ("<createdAt>|<docId>") for the last returned post,
+   *  or null. Pass back as `opts.cursor` to fetch the next page. */
   cursor: string | null;
   /** True when this page came back full (returned count === pageSize), i.e.
    *  there may be more to load. */
@@ -132,6 +132,20 @@ function coerceCreatedAt(v: any): string | null {
 /** Coerce a `displayName` to a non-empty string, defaulting to 'Member'. */
 function coerceDisplayName(v: any): string {
   return typeof v === 'string' && v.trim() ? v : 'Member';
+}
+
+// The feed paginates by (createdAt DESC, __name__ DESC). The cursor is an opaque
+// "<createdAtISO>|<docId>" token. Without the docId tiebreaker, a value-only
+// startAfter(createdAt) EXCLUDES every doc sharing that exact createdAt
+// millisecond — so a tie group straddling a page boundary is silently skipped.
+// ISO timestamps never contain '|', so it's a safe separator.
+function encodeCursor(p: Post): string { return `${p.createdAt}|${p.id}`; }
+function decodeCursor(c: string | null | undefined): { createdAt: string; id: string } | null {
+  if (!c) return null;
+  const i = c.indexOf('|');
+  // Tolerate a legacy value-only cursor (no separator) by pairing it with the
+  // lowest possible id so the page boundary is still well-defined.
+  return i < 0 ? { createdAt: c, id: '' } : { createdAt: c.slice(0, i), id: c.slice(i + 1) };
 }
 
 export async function getFeed(
@@ -199,7 +213,7 @@ export async function getFeed(
 
   const makePage = (posts: Post[]): FeedPage => ({
     posts,
-    cursor: posts.length > 0 ? posts[posts.length - 1].createdAt : null,
+    cursor: posts.length > 0 ? encodeCursor(posts[posts.length - 1]) : null,
     // hasMore is keyed off the raw page fill (returned count === pageSize),
     // not the post-filter count, so a page that's entirely malformed/private
     // still advances rather than dead-ending pagination.
@@ -214,10 +228,12 @@ export async function getFeed(
   // required so the feed list-query is satisfied by the rule's public branch
   // (SOCIAL_CONTRACT §10).
   if (followedIds.length === 0) {
+    const cur = decodeCursor(cursor);
     const constraints = [
       where('authorIsPrivate', '==', false),
       orderBy('createdAt', 'desc'),
-      ...(cursor ? [startAfter(cursor)] : []),
+      orderBy(documentId(), 'desc'),
+      ...(cur ? [startAfter(cur.createdAt, cur.id)] : []),
       limit(pageSize),
     ];
     const snap = await getDocs(query(collection(db, 'posts'), ...constraints));
@@ -232,18 +248,22 @@ export async function getFeed(
     batches.push(followedIds.slice(i, i + 30));
   }
 
-  // Run batch queries in parallel. Each batch is a separate page-sized
-  // window starting after the cursor; the union is then sorted desc and the
-  // top `pageSize` taken, which is the correct next global page because
-  // startAfter guarantees no batch returns anything newer-or-equal to the
-  // cursor. The public-author filter keeps every branch on the rule's public
-  // path (SOCIAL_CONTRACT §10).
+  // Run batch queries in parallel. Each batch is a separate page-sized window
+  // starting after the EXACT (createdAt, docId) cursor; the union is then sorted
+  // by the same total order and the top `pageSize` taken — the correct next
+  // global page, because startAfter on the composite cursor guarantees no batch
+  // returns anything newer-or-equal to the cursor (and never skips a createdAt
+  // tie). Items past `pageSize` in this page's union are OLDER than the new
+  // cursor, so the next page re-fetches them — nothing is lost. The public-author
+  // filter keeps every branch on the rule's public path (SOCIAL_CONTRACT §10).
+  const cur = decodeCursor(cursor);
   const batchSnaps = await Promise.all(batches.map((batch) => {
     const constraints = [
       where('userId', 'in', batch),
       where('authorIsPrivate', '==', false),
       orderBy('createdAt', 'desc'),
-      ...(cursor ? [startAfter(cursor)] : []),
+      orderBy(documentId(), 'desc'),
+      ...(cur ? [startAfter(cur.createdAt, cur.id)] : []),
       limit(pageSize),
     ];
     return getDocs(query(collection(firestore, 'posts'), ...constraints));
@@ -257,7 +277,10 @@ export async function getFeed(
     .flatMap((snap) => snap.docs)
     .map((d) => ({ d, createdAt: coerceCreatedAt((d.data() as any).createdAt) }))
     .filter((x): x is { d: QueryDocumentSnapshot; createdAt: string } => x.createdAt !== null)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .sort((a, b) => {
+      const c = b.createdAt.localeCompare(a.createdAt);
+      return c !== 0 ? c : b.d.id.localeCompare(a.d.id); // tiebreak by docId DESC — matches the query order
+    })
     .slice(0, pageSize)
     .map((x) => x.d);
 
