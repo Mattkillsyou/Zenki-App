@@ -108,6 +108,32 @@ export interface FeedPage {
   hasMore: boolean;
 }
 
+/**
+ * Coerce a Firestore `createdAt` value to an ISO string. Posts are written with
+ * `new Date().toISOString()`, but a legacy/seed doc could carry a Firestore
+ * Timestamp (or epoch-millis number). Returns null ONLY when the value is truly
+ * unusable — callers drop those (and log) rather than silently vanish them.
+ */
+function coerceCreatedAt(v: any): string | null {
+  if (typeof v === 'string') return v;
+  // Firestore Timestamp (client SDK) — has toDate()/seconds.
+  if (v && typeof v.toDate === 'function') {
+    try { return v.toDate().toISOString(); } catch { /* fall through */ }
+  }
+  if (v && typeof v.seconds === 'number') {
+    try { return new Date(v.seconds * 1000).toISOString(); } catch { /* fall through */ }
+  }
+  if (typeof v === 'number' && isFinite(v)) {
+    try { return new Date(v).toISOString(); } catch { /* fall through */ }
+  }
+  return null;
+}
+
+/** Coerce a `displayName` to a non-empty string, defaulting to 'Member'. */
+function coerceDisplayName(v: any): string {
+  return typeof v === 'string' && v.trim() ? v : 'Member';
+}
+
 export async function getFeed(
   opts?: { cursor?: string | null; pageSize?: number },
 ): Promise<FeedPage> {
@@ -143,18 +169,32 @@ export async function getFeed(
   };
 
   // Resolve `liked` for an already-filtered, already-paged set of docs in
-  // parallel (never N sequential gets) and drop malformed docs so a single
-  // bad doc can't crash FlatList.
+  // parallel (never N sequential gets). We COERCE legacy shapes (Timestamp/
+  // number createdAt, missing displayName) into the canonical string form
+  // instead of silently dropping them, so pre-`authorIsPrivate`/seed posts
+  // still render. A doc is dropped ONLY when `createdAt` is genuinely
+  // uncoercible (can't be sorted/paginated) — and that drop is logged so a
+  // vanishing post is observable instead of a mystery.
   const hydrate = async (
     docs: QueryDocumentSnapshot[],
   ): Promise<Post[]> => {
-    const posts = await Promise.all(docs.map(async (d) => {
+    const hydrated = await Promise.all(docs.map(async (d) => {
       const liked = await safeIsLiked(d.id);
-      return { id: d.id, ...d.data(), liked } as Post;
+      const data = d.data() as any;
+      const createdAt = coerceCreatedAt(data.createdAt);
+      if (createdAt === null) {
+        console.warn(`[getFeed] dropping post ${d.id}: uncoercible createdAt`, data?.createdAt);
+        return null;
+      }
+      return {
+        ...data,
+        id: d.id,
+        createdAt,
+        displayName: coerceDisplayName(data.displayName),
+        liked,
+      } as Post;
     }));
-    return posts.filter(
-      (p) => typeof p.createdAt === 'string' && typeof p.displayName === 'string',
-    );
+    return hydrated.filter((p): p is Post => p !== null);
   };
 
   const makePage = (posts: Post[]): FeedPage => ({
@@ -210,12 +250,16 @@ export async function getFeed(
   }));
 
   // Merge, sort desc, take the page window BEFORE hydrating like-state so we
-  // only resolve `liked` for the posts we actually return.
+  // only resolve `liked` for the posts we actually return. Sort on the COERCED
+  // ISO timestamp so a legacy Timestamp-typed createdAt is included here (hydrate
+  // coerces again — the two stay consistent) rather than silently excluded.
   const merged = batchSnaps
     .flatMap((snap) => snap.docs)
-    .filter((d) => typeof (d.data() as any).createdAt === 'string')
-    .sort((a, b) => (b.data() as any).createdAt.localeCompare((a.data() as any).createdAt))
-    .slice(0, pageSize);
+    .map((d) => ({ d, createdAt: coerceCreatedAt((d.data() as any).createdAt) }))
+    .filter((x): x is { d: QueryDocumentSnapshot; createdAt: string } => x.createdAt !== null)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, pageSize)
+    .map((x) => x.d);
 
   const posts = await hydrate(merged);
   return { ...makePage(posts), hasMore: merged.length === pageSize };
