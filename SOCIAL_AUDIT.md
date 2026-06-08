@@ -263,9 +263,17 @@ Legacy posts created before the denormalized `authorIsPrivate` flag existed lack
 | F1 | major | **Block-evasion via DM** — a blocked user could still `create` messages to the blocker (rule checked only conversation membership); the client gate hides only the *blocker's* composer. | `firestore.rules` messages `create` | Added additive `blockedBetween()` guard — deny the send if either party blocked the other. Loosens nothing. |
 | F2 | minor | Blocked users still appeared in member **search / New Message**. | `UserSearchScreen.tsx` | Filter results through `blockedIds`. |
 
-## Findings DEFERRED (documented, not fixed here — with rationale)
+## Findings D1–D6 — NOW FIXED in this PR
 
-These are **pre-existing** (not the empty-feed bug, not regressions from this branch). Each carries real but bounded impact and a fix riskier/larger than belongs in the same PR that stabilizes the feed:
+> Initially deferred as pre-existing/risky; the owner asked to **fix all**, so all six were implemented and adversarially re-reviewed (a fresh-context pass found zero issues). Each fix:
+> - **D1 (feed tie-break):** `(createdAt, documentId()) DESC` order + opaque `"createdAt|id"` cursor in `getFeed` — tie-groups no longer skipped. Existing composite indexes serve it (Firestore's implicit trailing `__name__` adopts the last field's DESC direction), so **no index change**.
+> - **D2 (>30-follow batch):** the exact composite cursor makes the batched merge correct — un-returned union items re-fetch on the next page; `hasMore` is sound. No dead-end/dupe.
+> - **D3 (server-side block):** new `blockMirror` CF maintains `/blockedBy/{blocked}/by/{blocker}` (+ one-shot `backfillBlockedBy`); rules add `/blockedBy` (owner-read, CF-write-only) + an **asymmetric DM read gate** (the blocked party can't read the thread; the blocker keeps access); `BlocksContext` loads "who blocked me" and hides them bidirectionally in feed/search/inbox. Posts/users LIST reads are intentionally **not** rule-gated by block (that would re-break the feed) → client-side hiding.
+> - **D4 (unreadFor):** the conversations rule now caps the other party's unread to ≤ old+1 per write (already couldn't be lowered).
+> - **D5 (adminActionReport):** the `message` branch redacts the offender's messages in the conversation (matches `redactDmMessages`), dropping the `parentId` dependency.
+> - **D6 (ban purge):** `banUser` cascade-deletes the offender's posts + comments after the auth-disable (best-effort, non-fatal).
+
+Original deferral rationale (kept for the record):
 
 | # | Severity | Finding | File | Why deferred |
 |---|---|---|---|---|
