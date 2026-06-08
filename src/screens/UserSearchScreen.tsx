@@ -11,12 +11,14 @@ import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useBlocks } from '../context/BlocksContext';
 import { spacing, MAX_CONTENT_WIDTH } from '../theme';
 import { getAllMembers, MemberProfile } from '../services/firebaseUsers';
 import { getOrCreateConversation } from '../services/firebaseMessages';
 
 export function UserSearchScreen({ navigation, route }: any) {
   const { colors } = useTheme();
+  const { blockedIds } = useBlocks();
   const action: 'view' | 'message' = route?.params?.action || 'view';
   const [members, setMembers] = useState<MemberProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,9 +34,12 @@ export function UserSearchScreen({ navigation, route }: any) {
 
   const filtered = useMemo(() => {
     const q = queryText.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter((m) => m.displayName.toLowerCase().includes(q));
-  }, [members, queryText]);
+    // Hide users the viewer has blocked from search + new-message results, so a
+    // blocked person isn't discoverable or messageable (Apple 1.2 "won't see them").
+    const visible = members.filter((m) => !blockedIds.has(m.id));
+    if (!q) return visible;
+    return visible.filter((m) => m.displayName.toLowerCase().includes(q));
+  }, [members, queryText, blockedIds]);
 
   const handlePress = async (member: MemberProfile) => {
     if (action === 'message') {

@@ -241,3 +241,41 @@ global non-realtime feed (A1) · no `commentCount` surfaced + stale docstring (A
 ---
 
 *End of Phase A. Phase B build plan follows in the session message; it is also mirrored below once approved into `SOCIAL_CONTRACT.md`.*
+
+---
+
+# Addendum — `fix/social-tab` audit (2026-06-05)
+
+> **Trigger:** the Dojo Feed rendered empty. **Method:** 2 parallel read-only audit agents (data-integrity/functionality, security/privacy) + direct re-verification of every fixed finding. Scoped to social. Branch `fix/social-tab` off `main` (`eacc992`).
+
+## Root cause of the empty feed (FIXED)
+
+Legacy posts created before the denormalized `authorIsPrivate` flag existed lack the field, and the feed query `where('authorIsPrivate','==',false)` (`firebasePosts.ts` fallback + following paths) does **not** match field-less docs → they are silently excluded. Compounded by `CommunityScreen` swallowing any thrown query error into the same "Be the first to share" empty state. Fixes on this branch:
+- `functions/src/backfillPostPrivacy.ts` — extended to stamp `authorIsPrivate` **and** normalize legacy non-string `createdAt`/`displayName` in one idempotent pass (run once after deploy).
+- `firebasePosts.ts` `hydrate` — now **coerces** legacy `Timestamp`/number `createdAt` → ISO and missing `displayName` → 'Member' instead of silently dropping; logs a warning only when a doc is genuinely uncoercible.
+- `CommunityScreen.tsx` — distinct **error state with Retry** so a query failure (e.g. an un-deployed composite index → FAILED_PRECONDITION) surfaces instead of reading as "no posts".
+- Indexes already present in `firestore.indexes.json`; **owner must deploy** `firestore:indexes` + run the backfill (the field/index changes don't take effect until then).
+
+## Other findings FIXED on this branch
+
+| # | Severity | Finding | File | Fix |
+|---|---|---|---|---|
+| F1 | major | **Block-evasion via DM** — a blocked user could still `create` messages to the blocker (rule checked only conversation membership); the client gate hides only the *blocker's* composer. | `firestore.rules` messages `create` | Added additive `blockedBetween()` guard — deny the send if either party blocked the other. Loosens nothing. |
+| F2 | minor | Blocked users still appeared in member **search / New Message**. | `UserSearchScreen.tsx` | Filter results through `blockedIds`. |
+
+## Findings DEFERRED (documented, not fixed here — with rationale)
+
+These are **pre-existing** (not the empty-feed bug, not regressions from this branch). Each carries real but bounded impact and a fix riskier/larger than belongs in the same PR that stabilizes the feed:
+
+| # | Severity | Finding | File | Why deferred |
+|---|---|---|---|---|
+| D1 | major | **Feed pagination drops `createdAt`-tie posts** — `startAfter(<isoString>)` is value-based over a non-unique sort key, so a tie group straddling a page boundary is skipped. | `firebasePosts.ts` getFeed | Correct fix needs a `(createdAt, __name__)` composite cursor + index; **the emulator does not enforce composite indexes, so this can't be safely validated here** — risks a prod FAILED_PRECONDITION. Needs a focused PR + prod index deploy. |
+| D2 | major | **>30-follow feed batches dead-end / dupe** — per-batch `limit` + a single shared cursor makes the merge math lose followed-author posts and mis-report `hasMore`. Only triggers when a user follows >30 accounts. | `firebasePosts.ts` getFeed following path | Proper fix is a k-way merge with per-batch cursors (or fan-out) — a pagination rewrite. Rare in a small club; defer to avoid destabilizing the just-fixed feed. `loadMore` already dedupes visible dupes. |
+| D3 | major | **Block not enforced server-side for reads** — a blocked user can still read the blocker's public posts/profile and existing DM history directly. | `firestore.rules` | Bidirectional read-enforcement needs a CF-maintained `/blockedBy/{uid}` mirror + rule changes across posts/users — security-sensitive, larger than this PR. F1 closes the worst sub-vector (new DMs). |
+| D4 | minor | `unreadFor` value-shape unconstrained → inbox-preview/badge spoofing between two existing participants. | `firestore.rules` conv update | Nuisance, not a leak. |
+| D5 | minor | Exported CF `adminActionReport` message branch expects `parentId`=conversationId, but message reports file `targetId`=conversationId (no parentId). **Latent/dead** — the live admin path uses the client `adminActionReport` (correct). | `functions/src/adminActionReport.ts` | No live impact; flag before anyone repoints the admin UI at the CF. |
+| D6 | minor | `banUser` disables Auth but doesn't purge the banned user's existing posts/comments; `users/{uid}.banned` is never read by clients. | `functions/src/banUser.ts` | Ban locks sign-in; content removal is a separate admin action today. Completeness gap, not a hole. |
+
+## Verified SAFE (do not re-chase)
+
+Post create (server-confirmed write), like/unlike (atomic, idempotent, ±1 rule-gated, clamped ≥0), comment create, follow/unfollow/accept (both mirror edges in one batch), block/mute/report (durable, owner-scoped), send-DM (atomic batch), `deletePostCascade` (post + likes + comments + media, no orphans), `redactDmMessages` (right thread), follower/following counts (server-maintained by `followerCounters`, client never writes them — forge-proof), reports (admin-read-only, identity not leaked to target), private-account post protection (rules-enforced via `isApprovedFollowerOf` + `isPublicAccount` self-follow gate), all 4 moderation CFs (admin-gated, fail closed), EULA/Community-Guidelines acceptance (enforced + durably recorded in `OnboardingScreen.tsx`). Composite indexes for feed/profile/inbox/reports all present in `firestore.indexes.json`.

@@ -41,6 +41,16 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(uid)).data.get('isPrivate', false) != true;
     }
 
+    // True if EITHER user has blocked the other. Used to stop a blocked user from
+    // delivering NEW direct messages (block-evasion / harassment) at the rules
+    // layer — the client only hides the BLOCKER's own composer, which does nothing
+    // to stop the blocked party's app from sending. Purely additive: it only ever
+    // DENIES a send, never widens any read/write.
+    function blockedBetween(a, b) {
+      return exists(/databases/$(database)/documents/blocks/$(a)/blocked/$(b))
+          || exists(/databases/$(database)/documents/blocks/$(b)/blocked/$(a));
+    }
+
     // A non-admin member write must not grant itself privileged fields. Admins
     // provision employees/admins through the isAdmin() branch instead.
     // CREATE guard: a self-created member doc must not grant itself privileged
@@ -225,7 +235,16 @@ service cloud.firestore {
         allow create: if isSignedIn()
                       && request.auth.uid in
                          get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants
-                      && request.resource.data.senderId == request.auth.uid;
+                      && request.resource.data.senderId == request.auth.uid
+                      // Block-evasion guard: deny the send if either participant has
+                      // blocked the other. Without this, a blocked user's client still
+                      // shows a working composer and the write succeeds (the client gate
+                      // only hides the BLOCKER's composer). See SOCIAL_AUDIT.md.
+                      && !blockedBetween(
+                           request.auth.uid,
+                           otherParty(
+                             get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants,
+                             request.auth.uid));
         // No client update/delete — redaction is admin-only via the Admin SDK.
       }
     }
