@@ -101,7 +101,7 @@ export function HealthKitProvider({ children }: { children: React.ReactNode }) {
   // Existing app data
   const { myWeights, myMacros } = useNutrition();
   const { myLogs: myWorkoutLogs } = useWorkouts();
-  const { sessions: hrSessions, currentBpm } = useHeartRate();
+  const { sessions: hrSessions, currentBpm, isRecording } = useHeartRate();
 
   // In-memory cache of synced ids (mirrors AsyncStorage). Mutated on push.
   const syncedRef = useRef<SyncedSet>({});
@@ -334,17 +334,22 @@ export function HealthKitProvider({ children }: { children: React.ReactNode }) {
     return () => sub.remove();
   }, [authorized, enabled, refreshFromHK]);
 
-  // Live HR push — every fresh BPM during recording goes into HK in near-real-time.
-  // Throttle to 1 push every 5s to avoid spamming.
+  // Live HR push — when connected but NOT recording a session, push fresh BPM to
+  // HealthKit as ambient samples (throttled 1/5s, like a watch).
+  // During a recording we SKIP this: stopSession backfills the full downsampled HR
+  // trace via pushPendingWorkouts (see :213), so live-pushing too would write the
+  // same workout's heart rate to Health twice — with different timestamps, so Health
+  // can't dedupe them, leaving overlapping HR samples for the workout window.
   const lastLivePushRef = useRef(0);
   useEffect(() => {
     if (!authorized || !enabled) return;
+    if (isRecording) return; // the per-session backfill owns recorded HR — don't double-write
     if (!currentBpm || currentBpm <= 0) return;
     const now = Date.now();
     if (now - lastLivePushRef.current < 5000) return;
     lastLivePushRef.current = now;
     pushHeartRate(currentBpm).catch(() => {});
-  }, [authorized, enabled, currentBpm]);
+  }, [authorized, enabled, currentBpm, isRecording]);
 
   const value = useMemo<HealthKitContextValue>(() => ({
     available,
