@@ -41,6 +41,24 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(uid)).data.get('isPrivate', false) != true;
     }
 
+    // True if EITHER user has blocked the other. Used to stop a blocked user from
+    // delivering NEW direct messages (block-evasion / harassment) at the rules
+    // layer — the client only hides the BLOCKER's own composer, which does nothing
+    // to stop the blocked party's app from sending. Purely additive: it only ever
+    // DENIES a send, never widens any read/write.
+    function blockedBetween(a, b) {
+      return exists(/databases/$(database)/documents/blocks/$(a)/blocked/$(b))
+          || exists(/databases/$(database)/documents/blocks/$(b)/blocked/$(a));
+    }
+
+    // The other participant of a conversation (by id), resolved from the stored
+    // participants array. Used by the DM block-on-read gate. The get() is cached
+    // with the membership get() on the same path within one rule evaluation.
+    function otherInConversation(convId, me) {
+      return otherParty(
+        get(/databases/$(database)/documents/conversations/$(convId)).data.participants, me);
+    }
+
     // A non-admin member write must not grant itself privileged fields. Admins
     // provision employees/admins through the isAdmin() branch instead.
     // CREATE guard: a self-created member doc must not grant itself privileged
@@ -215,17 +233,36 @@ service cloud.firestore {
                       || !(otherParty(resource.data.participants, request.auth.uid) in resource.data.unreadFor)
                       || (otherParty(resource.data.participants, request.auth.uid) in request.resource.data.unreadFor
                           && request.resource.data.unreadFor[otherParty(resource.data.participants, request.auth.uid)]
-                             >= resource.data.unreadFor[otherParty(resource.data.participants, request.auth.uid)])
+                             >= resource.data.unreadFor[otherParty(resource.data.participants, request.auth.uid)]
+                          // Also CAP inflation: a single write may raise the other party's
+                          // unread by at most 1 (the legit send increments by exactly 1), so
+                          // a participant can't spike the other's badge to an arbitrary number.
+                          && request.resource.data.unreadFor[otherParty(resource.data.participants, request.auth.uid)]
+                             <= resource.data.unreadFor[otherParty(resource.data.participants, request.auth.uid)] + 1)
                     );
 
       match /messages/{messageId} {
         allow read: if isSignedIn()
                     && request.auth.uid in
-                       get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+                       get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants
+                    // D3: the BLOCKED party can't read the thread when the OTHER
+                    // participant has blocked them. Asymmetric — the blocker keeps
+                    // read access so their own inbox/thread isn't broken; new DMs are
+                    // already denied by the create rule's blockedBetween guard.
+                    && !exists(/databases/$(database)/documents/blocks/$(otherInConversation(conversationId, request.auth.uid))/blocked/$(request.auth.uid));
         allow create: if isSignedIn()
                       && request.auth.uid in
                          get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants
-                      && request.resource.data.senderId == request.auth.uid;
+                      && request.resource.data.senderId == request.auth.uid
+                      // Block-evasion guard: deny the send if either participant has
+                      // blocked the other. Without this, a blocked user's client still
+                      // shows a working composer and the write succeeds (the client gate
+                      // only hides the BLOCKER's composer). See SOCIAL_AUDIT.md.
+                      && !blockedBetween(
+                           request.auth.uid,
+                           otherParty(
+                             get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants,
+                             request.auth.uid));
         // No client update/delete — redaction is admin-only via the Admin SDK.
       }
     }
@@ -372,6 +409,16 @@ service cloud.firestore {
     match /blocks/{uid}/blocked/{blockedUid} {
       allow read: if isOwner(uid) || isAdmin();
       allow write: if isOwner(uid) || isAdmin();
+    }
+
+    // Mirror of the /blocks graph, maintained by the blockMirror Cloud Function
+    // (Admin SDK). /blockedBy/{uid}/by/{blockerUid} lets a user discover who has
+    // blocked THEM, so the client can hide the blocker bidirectionally (feed /
+    // search / profile / inbox). Owner-read only; never client-written (so a user
+    // can't forge "X blocked me").
+    match /blockedBy/{uid}/by/{blockerUid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
     }
 
     // Reports — users can file a report (write-only from client).

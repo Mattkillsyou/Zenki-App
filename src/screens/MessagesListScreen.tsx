@@ -17,11 +17,13 @@ import { Conversation, subscribeToInbox } from '../services/firebaseMessages';
 export function MessagesListScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { isBlocked } = useBlocks();
+  const { isBlocked, blockedByIds } = useBlocks();
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
-  // Hide threads with blocked users
-  const visibleConvs = convs.filter((c) => !c.otherUserId || !isBlocked(c.otherUserId));
+  // Hide threads with users blocked in EITHER direction (I blocked them, or they
+  // blocked me) so block is bidirectional in the inbox too.
+  const visibleConvs = convs.filter((c) =>
+    !c.otherUserId || (!isBlocked(c.otherUserId) && !blockedByIds.has(c.otherUserId)));
 
   useEffect(() => {
     // Conversations arrive already enriched with otherUserName/otherUserAvatar

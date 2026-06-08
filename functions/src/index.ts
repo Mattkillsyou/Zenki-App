@@ -42,6 +42,11 @@ export { notifyOnReport } from './notifyOnReport';
 // from the follower-edge source of truth (abuse-proof; client can't write them).
 export { onFollowerEdgeCreated, onFollowerEdgeDeleted } from './followerCounters';
 
+// Firestore triggers + one-shot backfill: maintain a /blockedBy mirror of the
+// /blocks graph so a blocked user can be hidden bidirectionally (they stop seeing
+// the blocker too). Mirror is Admin-SDK-written only — clients can't forge it.
+export { onBlockCreated, onBlockDeleted, backfillBlockedBy } from './blockMirror';
+
 // One-shot admin migration — stamp authorIsPrivate on pre-existing posts so the
 // feed's where('authorIsPrivate','==',false) doesn't drop legacy posts. Run once.
 export { backfillPostPrivacy } from './backfillPostPrivacy';

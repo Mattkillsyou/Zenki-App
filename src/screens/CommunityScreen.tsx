@@ -28,12 +28,17 @@ interface StoryItem {
 export function CommunityScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { filterHidden, blockedIds, mutedIds } = useBlocks();
+  const { filterHidden, blockedIds, mutedIds, blockedByIds } = useBlocks();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  // True when the FIRST-page load threw (e.g. a missing composite index →
+  // FAILED_PRECONDITION, or a permission-denied). We surface this as a distinct
+  // "couldn't load" state with a Retry instead of letting it fall through to the
+  // "Be the first to share" empty state — an error must never read as "no posts".
+  const [error, setError] = useState(false);
   // The pagination cursor (last post's createdAt) and an in-flight guard live
   // in refs so the FlatList onEndReached handler always sees the latest values
   // without re-creating the callback (and re-binding the list) on every change.
@@ -54,8 +59,12 @@ export function CommunityScreen({ navigation }: any) {
       setPosts(page);
       cursorRef.current = cursor;
       setHasMore(more);
-    } catch (error) {
-      console.log('[Community] Feed error:', error);
+      setError(false);
+    } catch (err) {
+      console.log('[Community] Feed error:', err);
+      // Only flip into the error state when there's nothing already on screen;
+      // a failed pull-to-refresh over an existing feed shouldn't blow it away.
+      if (postsRef.current.length === 0) setError(true);
     } finally {
       loadingRef.current = false;
       setLoading(false);
@@ -83,7 +92,8 @@ export function CommunityScreen({ navigation }: any) {
         postsRef.current = next;
         setPosts(next);
         setHasMore(more);
-        const addedVisible = fresh.filter((p) => !blockedIds.has(p.userId) && !mutedIds.has(p.userId)).length;
+        const addedVisible = fresh.filter((p) =>
+          !blockedIds.has(p.userId) && !mutedIds.has(p.userId) && !blockedByIds.has(p.userId)).length;
         if (addedVisible > 0 || !more) break;
       }
     } catch (error) {
@@ -92,7 +102,7 @@ export function CommunityScreen({ navigation }: any) {
       loadingRef.current = false;
       setLoadingMore(false);
     }
-  }, [hasMore, blockedIds, mutedIds]);
+  }, [hasMore, blockedIds, mutedIds, blockedByIds]);
 
   // Re-filter whenever the blocked/muted lists change so unblocks/unmutes show
   // instantly. filterHidden hides BOTH blocked and muted authors.
@@ -111,6 +121,12 @@ export function CommunityScreen({ navigation }: any) {
 
   const handleRefresh = () => {
     setRefreshing(true);
+    loadFeed();
+  };
+
+  const handleRetry = () => {
+    setError(false);
+    setLoading(true);
     loadFeed();
   };
 
@@ -208,6 +224,27 @@ export function CommunityScreen({ navigation }: any) {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.gold} />
         </View>
+      ) : error && visiblePosts.length === 0 ? (
+        <ScrollView
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.gold} />}
+          contentContainerStyle={{ flex: 1 }}
+        >
+          <View style={styles.emptyContainer}>
+            <Ionicons name="cloud-offline-outline" size={56} color={colors.textMuted} />
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Couldn't load the feed</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
+              Something went wrong reaching the Dojo. Check your connection and try again.
+            </Text>
+            <SoundPressable
+              style={[styles.retryButton, { backgroundColor: colors.gold }]}
+              onPress={handleRetry}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading the feed"
+            >
+              <Text style={styles.retryLabel}>Retry</Text>
+            </SoundPressable>
+          </View>
+        </ScrollView>
       ) : visiblePosts.length === 0 ? (
         <ScrollView
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.gold} />}
@@ -362,6 +399,19 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryLabel: {
+    color: '#000',
+    fontSize: 15,
+    fontWeight: '800',
   },
   fab: {
     position: 'absolute',

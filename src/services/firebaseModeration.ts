@@ -117,6 +117,24 @@ export async function getBlockedUserIds(): Promise<Set<string>> {
   }
 }
 
+/** Fetch the set of UIDs who have blocked the current user, from the /blockedBy
+ *  mirror maintained server-side by the blockMirror Cloud Function. Lets the
+ *  client hide the blocker bidirectionally (feed/search/profile/inbox). Returns
+ *  an empty set if the mirror isn't populated yet (pre-backfill) or the read
+ *  fails — block then degrades to one-directional, never errors the UI. */
+export async function getUsersWhoBlockedMe(): Promise<Set<string>> {
+  if (!FIREBASE_CONFIGURED || !db) return new Set();
+  const uid = getCurrentUid();
+  if (!uid) return new Set();
+  try {
+    const snap = await getDocs(collection(db, 'blockedBy', uid, 'by'));
+    return new Set(snap.docs.map((d) => d.id));
+  } catch (e) {
+    console.warn('[Moderation] getUsersWhoBlockedMe failed:', e);
+    return new Set();
+  }
+}
+
 /** Whether the current user has blocked {uid}. */
 export async function isUserBlocked(blockedUid: string): Promise<boolean> {
   if (!FIREBASE_CONFIGURED || !db) return false;
