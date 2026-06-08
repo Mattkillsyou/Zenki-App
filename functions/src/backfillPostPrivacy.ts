@@ -7,11 +7,15 @@
  * (created before the flag existed) would silently disappear from the feed.
  *
  * This stamps `authorIsPrivate` on every post that lacks it, derived from the
- * author's current `users/{uid}.isPrivate` (cached per author). Idempotent —
- * posts that already have the field are skipped, so it's safe to re-run.
+ * author's current `users/{uid}.isPrivate` (cached per author). In the same pass
+ * it also repairs two other shapes that would make a legacy/seed post vanish
+ * client-side: a non-string `createdAt` (normalized to an ISO string, preserving
+ * the original instant when it's a Timestamp) and a missing/empty `displayName`
+ * (defaulted to 'Member'). Idempotent — a post that already has all three healthy
+ * is skipped, so it's safe to re-run.
  *
  * Auth: Bearer ID token, admin only.
- * Returns { ok, scanned, updated }.
+ * Returns { ok, scanned, updated } (updated = posts that needed any repair).
  */
 
 import { onRequest } from 'firebase-functions/v2/https';
@@ -72,10 +76,38 @@ export const backfillPostPrivacy = onRequest(
         for (const d of snap.docs) {
           scanned++;
           const data = d.data();
-          if (typeof data.authorIsPrivate === 'boolean') continue; // already set
-          const userId = data.userId as string | undefined;
-          const priv = userId ? await isAuthorPrivate(userId) : false;
-          batch.update(d.ref, { authorIsPrivate: priv });
+          const update: Record<string, unknown> = {};
+
+          // 1) authorIsPrivate — the feed query `where('authorIsPrivate','==',false)`
+          //    does NOT match docs lacking the field, so stamp it (from the author's
+          //    current profile) on every post that doesn't already have a boolean.
+          if (typeof data.authorIsPrivate !== 'boolean') {
+            const userId = data.userId as string | undefined;
+            update.authorIsPrivate = userId ? await isAuthorPrivate(userId) : false;
+          }
+
+          // 2) createdAt — the feed orders by `createdAt` and the client requires a
+          //    string ISO (mixed string/Timestamp types also corrupt ordering +
+          //    startAfter pagination). Normalize any non-string value, PRESERVING the
+          //    original instant when it's a Timestamp; fall back to the doc's server
+          //    create time, then now.
+          if (typeof data.createdAt !== 'string') {
+            const c: any = data.createdAt;
+            let iso: string;
+            if (c && typeof c.toDate === 'function') iso = c.toDate().toISOString();
+            else if (c && typeof c.seconds === 'number') iso = new Date(c.seconds * 1000).toISOString();
+            else if (d.createTime && typeof d.createTime.toDate === 'function') iso = d.createTime.toDate().toISOString();
+            else iso = new Date().toISOString();
+            update.createdAt = iso;
+          }
+
+          // 3) displayName — must be a non-empty string or the post is dropped client-side.
+          if (typeof data.displayName !== 'string' || !data.displayName.trim()) {
+            update.displayName = 'Member';
+          }
+
+          if (Object.keys(update).length === 0) continue; // already healthy — skip (idempotent)
+          batch.update(d.ref, update);
           batchCount++;
           updated++;
         }
