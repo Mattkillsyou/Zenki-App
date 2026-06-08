@@ -18,7 +18,7 @@ import { getOrCreateConversation } from '../services/firebaseMessages';
 
 export function UserSearchScreen({ navigation, route }: any) {
   const { colors } = useTheme();
-  const { blockedIds } = useBlocks();
+  const { filterBlocked } = useBlocks();
   const action: 'view' | 'message' = route?.params?.action || 'view';
   const [members, setMembers] = useState<MemberProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,12 +34,13 @@ export function UserSearchScreen({ navigation, route }: any) {
 
   const filtered = useMemo(() => {
     const q = queryText.trim().toLowerCase();
-    // Hide users the viewer has blocked from search + new-message results, so a
-    // blocked person isn't discoverable or messageable (Apple 1.2 "won't see them").
-    const visible = members.filter((m) => !blockedIds.has(m.id));
+    // Hide blocked users (both directions — I blocked them OR they blocked me) from
+    // search + new-message results, so a blocked person isn't discoverable or
+    // messageable (Apple 1.2 "won't see them").
+    const visible = filterBlocked(members, 'id');
     if (!q) return visible;
     return visible.filter((m) => m.displayName.toLowerCase().includes(q));
-  }, [members, queryText, blockedIds]);
+  }, [members, queryText, filterBlocked]);
 
   const handlePress = async (member: MemberProfile) => {
     if (action === 'message') {

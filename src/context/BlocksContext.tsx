@@ -6,12 +6,16 @@ import {
   muteUser as muteUserRemote,
   unmuteUser as unmuteUserRemote,
   getMutedUserIds,
+  getUsersWhoBlockedMe,
 } from '../services/firebaseModeration';
 import { useAuth } from './AuthContext';
 
 interface BlocksContextValue {
   /** Set of user IDs the current user has blocked. */
   blockedIds: Set<string>;
+  /** Set of user IDs who have blocked the current user (server /blockedBy mirror).
+   *  Hidden bidirectionally so a blocked user also stops seeing the blocker. */
+  blockedByIds: Set<string>;
   /** Set of user IDs the current user has muted (soft-hide, no block). */
   mutedIds: Set<string>;
   /** True if the given uid is blocked by the current user. */
@@ -37,6 +41,7 @@ interface BlocksContextValue {
 
 const BlocksContext = createContext<BlocksContextValue>({
   blockedIds: new Set(),
+  blockedByIds: new Set(),
   mutedIds: new Set(),
   isBlocked: () => false,
   isMuted: () => false,
@@ -52,17 +57,22 @@ const BlocksContext = createContext<BlocksContextValue>({
 export function BlocksProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set());
+  const [blockedByIds, setBlockedByIds] = useState<Set<string>>(new Set());
   const [mutedIds, setMutedIds] = useState<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
     if (!user?.id) {
       setBlockedIds(new Set());
       setMutedIds(new Set());
+      setBlockedByIds(new Set());
       return;
     }
-    const [blocked, muted] = await Promise.all([getBlockedUserIds(), getMutedUserIds()]);
+    const [blocked, muted, blockedBy] = await Promise.all([
+      getBlockedUserIds(), getMutedUserIds(), getUsersWhoBlockedMe(),
+    ]);
     setBlockedIds(blocked);
     setMutedIds(muted);
+    setBlockedByIds(blockedBy);
   }, [user?.id]);
 
   useEffect(() => {
@@ -104,22 +114,27 @@ export function BlocksProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Both blocked (I blocked them) and blockedBy (they blocked me) are hidden, so
+  // blocking is bidirectional — a blocked user also stops seeing the blocker.
   const filterBlocked = useCallback(<T,>(items: T[], userIdField: keyof T): T[] => {
-    if (blockedIds.size === 0) return items;
-    return items.filter((item) => !blockedIds.has(item[userIdField] as unknown as string));
-  }, [blockedIds]);
-
-  const filterHidden = useCallback(<T,>(items: T[], userIdField: keyof T): T[] => {
-    if (blockedIds.size === 0 && mutedIds.size === 0) return items;
+    if (blockedIds.size === 0 && blockedByIds.size === 0) return items;
     return items.filter((item) => {
       const id = item[userIdField] as unknown as string;
-      return !blockedIds.has(id) && !mutedIds.has(id);
+      return !blockedIds.has(id) && !blockedByIds.has(id);
     });
-  }, [blockedIds, mutedIds]);
+  }, [blockedIds, blockedByIds]);
+
+  const filterHidden = useCallback(<T,>(items: T[], userIdField: keyof T): T[] => {
+    if (blockedIds.size === 0 && mutedIds.size === 0 && blockedByIds.size === 0) return items;
+    return items.filter((item) => {
+      const id = item[userIdField] as unknown as string;
+      return !blockedIds.has(id) && !mutedIds.has(id) && !blockedByIds.has(id);
+    });
+  }, [blockedIds, mutedIds, blockedByIds]);
 
   return (
     <BlocksContext.Provider value={{
-      blockedIds, mutedIds, isBlocked, isMuted,
+      blockedIds, blockedByIds, mutedIds, isBlocked, isMuted,
       blockUser, unblockUser, muteUser, unmuteUser,
       filterBlocked, filterHidden, refresh,
     }}>

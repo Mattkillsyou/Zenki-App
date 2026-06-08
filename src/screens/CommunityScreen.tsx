@@ -28,7 +28,7 @@ interface StoryItem {
 export function CommunityScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { filterHidden, blockedIds, mutedIds } = useBlocks();
+  const { filterHidden, blockedIds, mutedIds, blockedByIds } = useBlocks();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -92,7 +92,8 @@ export function CommunityScreen({ navigation }: any) {
         postsRef.current = next;
         setPosts(next);
         setHasMore(more);
-        const addedVisible = fresh.filter((p) => !blockedIds.has(p.userId) && !mutedIds.has(p.userId)).length;
+        const addedVisible = fresh.filter((p) =>
+          !blockedIds.has(p.userId) && !mutedIds.has(p.userId) && !blockedByIds.has(p.userId)).length;
         if (addedVisible > 0 || !more) break;
       }
     } catch (error) {
@@ -101,7 +102,7 @@ export function CommunityScreen({ navigation }: any) {
       loadingRef.current = false;
       setLoadingMore(false);
     }
-  }, [hasMore, blockedIds, mutedIds]);
+  }, [hasMore, blockedIds, mutedIds, blockedByIds]);
 
   // Re-filter whenever the blocked/muted lists change so unblocks/unmutes show
   // instantly. filterHidden hides BOTH blocked and muted authors.
