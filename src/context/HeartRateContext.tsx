@@ -62,6 +62,25 @@ function downsample(samples: HRSample[], maxCount: number): HRSample[] {
   return result;
 }
 
+/** Order the picker list for the now-UNFILTERED scan so the user's strap floats
+ *  to the top of a noisy nearby-device list: likely HR straps (advertising 0x180D)
+ *  first, then named devices above "Unknown device" placeholders, then strongest
+ *  signal first (unknown RSSI last). Pure; Array.sort is stable so equal ranks
+ *  keep insertion order. */
+function sortDiscovered(list: BLEDeviceInfo[]): BLEDeviceInfo[] {
+  return [...list].sort((a, b) => {
+    if (!!a.advertisesHrService !== !!b.advertisesHrService) {
+      return a.advertisesHrService ? -1 : 1;
+    }
+    if (!!a.named !== !!b.named) {
+      return a.named ? -1 : 1; // real names above "Unknown device" placeholders
+    }
+    const ar = a.rssi == null ? -Infinity : a.rssi;
+    const br = b.rssi == null ? -Infinity : b.rssi;
+    return br - ar; // stronger (less negative) RSSI first
+  });
+}
+
 interface HeartRateContextValue {
   // ───────── EXISTING — unchanged signatures/behavior ─────────
   bleStatus: BLEStatus;
@@ -96,6 +115,9 @@ interface HeartRateContextValue {
   batteryLevel: number | null;               // 0–100 from Battery Service 0x180F / 0x2A19, when exposed
   signalRssi: number | null;                 // live RSSI (dBm) of the connected device
   lastConnectedAt: number | null;            // Date.now() of the active/most-recent connection
+
+  // ───────── NEW: connected-but-no-HR guidance ─────────
+  noHrDeviceName: string | null;             // name of the last device that connected but exposed no 0x180D/0x2A37 (drives WHOOP "Broadcast Heart Rate" tip); paired with bleReason 'noHrService'
 }
 
 const HeartRateContext = createContext<HeartRateContextValue>({
@@ -124,6 +146,7 @@ const HeartRateContext = createContext<HeartRateContextValue>({
   batteryLevel: null,
   signalRssi: null,
   lastConnectedAt: null,
+  noHrDeviceName: null,
 });
 
 function randomId(): string {
@@ -147,6 +170,10 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
   const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
   const [signalRssi, setSignalRssi] = useState<number | null>(null);
   const [lastConnectedAt, setLastConnectedAt] = useState<number | null>(null);
+  // Name of the last device that connected but exposed no HR service (e.g. a
+  // WHOOP with Broadcast Heart Rate off). Drives the picker's guidance card;
+  // set in finalizeConnection's no-HR branch, cleared on scan/success/disconnect.
+  const [noHrDeviceName, setNoHrDeviceName] = useState<string | null>(null);
 
   // Ref mirror of isRecording — safe to read inside BLE callbacks (no stale closure)
   const isRecordingRef = useRef(false);
@@ -167,6 +194,10 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
   const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Accumulator for the active scan: id → BLEDeviceInfo (deduped, freshest RSSI)
   const scanFoundRef = useRef<Map<string, BLEDeviceInfo>>(new Map());
+  // Timestamp (ms) of the last discoveredDevices flush. With allowDuplicates:true
+  // the scan callback fires many times/sec across all nearby peripherals; this
+  // throttles UI updates so high-frequency advertisements don't thrash render.
+  const lastScanFlushRef = useRef(0);
   // Guards the single post-drop reconnect so a flapping link can't loop forever
   const dropReconnectingRef = useRef(false);
   // In-flight connect guard. True from the moment a connect attempt starts
@@ -381,6 +412,38 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
 
+    // Determine HR capability AFTER connecting (root-cause fix): a device is only
+    // a usable monitor if it exposes the HR service 0x180D *and* the HR measurement
+    // characteristic 0x2A37. Check now — before adopting it as the active device —
+    // so a WHOOP with Broadcast Heart Rate OFF (or any non-HR peripheral the user
+    // tapped) can't sit silently on "Connected — … · — bpm" forever.
+    let hasHr = false;
+    try {
+      const chars = await device.characteristicsForService(HR_SERVICE);
+      hasHr = Array.isArray(chars)
+        && chars.some((c: any) => typeof c?.uuid === 'string' && c.uuid.toLowerCase() === HR_CHAR.toLowerCase());
+    } catch {
+      hasHr = false; // service absent / discovery race → treat as no HR
+    }
+    if (!hasHr) {
+      // Connected at the GATT level, but NOT broadcasting standard heart rate.
+      // Be honest: drop this link (don't hold a useless connection that also blocks
+      // WHOOP's single consumer slot), surface guidance, do NOT persist as a saved
+      // device, and never show a fake/0 "connected". The previous device (if any)
+      // was already torn down at the connect-path entry, so just cancel THIS one.
+      const nm = device.name || device.localName || 'This device';
+      try { device.cancelConnection(); } catch { /* ignore */ }
+      setConnectedDeviceName(null);
+      setCurrentBpm(0);
+      setBatteryLevel(null);
+      setSignalRssi(null);
+      setNoHrDeviceName(nm);
+      setBleStatus('disconnected');
+      setBleReason('noHrService');
+      return false;
+    }
+    setNoHrDeviceName(null); // HR-capable → clear any prior no-HR guidance
+
     // Fresh connection — cancel + drop any previous one's link/listeners/poll
     // first (true), so switching straps via the picker doesn't leak the old
     // device's connection. No-ops safely when there's no previous device.
@@ -518,7 +581,9 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
 
     // Reset accumulator + UI list.
     scanFoundRef.current = new Map();
+    lastScanFlushRef.current = 0; // first discovered device flushes immediately
     setDiscoveredDevices([]);
+    setNoHrDeviceName(null); // clear any stale "connected but no HR" guidance
     setBleStatus('scanning');
     setBleReason('none');
 
@@ -526,12 +591,22 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     scanTimeoutRef.current = setTimeout(() => {
       try { manager.stopDeviceScan(); } catch { /* ignore */ }
       scanTimeoutRef.current = null;
+      // Final flush so the last (sub-throttle) burst of results is shown.
+      setDiscoveredDevices(sortDiscovered(Array.from(scanFoundRef.current.values())));
       // Only revert status if we're still scanning (not mid-connect).
       setBleStatus((prev) => (prev === 'scanning' ? 'disconnected' : prev));
       if (scanFoundRef.current.size === 0) setBleReason('noDeviceFound');
     }, SCAN_TIMEOUT_MS);
 
-    manager.startDeviceScan([HR_SERVICE], null, (error: any, device: any) => {
+    // UNFILTERED scan (root-cause fix): a service-UUID filter ([HR_SERVICE]) only
+    // matches devices that advertise 0x180D in the *advertising packet*. A WHOOP —
+    // and many straps that expose HR only in the scan response or GATT table —
+    // never fire the callback under a filter, so they never appear. Scan with no
+    // filter and decide HR capability AFTER connecting (see finalizeConnection).
+    // allowDuplicates:true so a device that's nameless / RSSI-less in its first
+    // advertisement gets its real name + live signal filled in from later packets
+    // (the dedupe/merge below relies on this); UI flushes are throttled to ~3/sec.
+    manager.startDeviceScan(null, { allowDuplicates: true }, (error: any, device: any) => {
       if (error) {
         if (scanTimeoutRef.current) { clearTimeout(scanTimeoutRef.current); scanTimeoutRef.current = null; }
         try { manager.stopDeviceScan(); } catch { /* ignore */ }
@@ -540,14 +615,38 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       if (!device) return;
-      // Dedupe by id, keep the freshest RSSI; never auto-connect.
+      const advertised = device.name || device.localName || null;
+      const advertisesHrService = Array.isArray(device.serviceUUIDs)
+        && device.serviceUUIDs.some((u: any) => typeof u === 'string' && u.toLowerCase() === HR_SERVICE.toLowerCase());
+      // Show every CONNECTABLE peripheral — drop ONLY beacons that explicitly
+      // report they can't be connected. A WHOOP in Broadcast Heart Rate mode
+      // advertises NEITHER 0x180D NOR (reliably) a name, so hiding unnamed devices
+      // risked hiding the user's own strap entirely. Unnamed-but-connectable rows
+      // render as "Unknown device (…)" and sort to the bottom (sortDiscovered),
+      // and an accidental tap on a non-HR device is handled honestly post-connect.
+      if (!advertised && !advertisesHrService && device.isConnectable === false) return;
+      // Dedupe by id; merge so a later packet that drops the name/UUIDs can't blank
+      // a good earlier one. Never auto-connect — the user picks from the list.
+      const prev = scanFoundRef.current.get(device.id);
+      const named = !!advertised || prev?.named || false;
       const info: BLEDeviceInfo = {
         id: device.id,
-        name: device.name || device.localName || 'HR Monitor',
-        rssi: typeof device.rssi === 'number' ? device.rssi : null,
+        // Distinguishable placeholder (last 4 of id) so two unnamed devices don't collide.
+        name: advertised || prev?.name || `Unknown device (${String(device.id).slice(-4)})`,
+        rssi: typeof device.rssi === 'number' ? device.rssi : (prev?.rssi ?? null),
+        advertisesHrService: advertisesHrService || prev?.advertisesHrService || false,
+        named,
       };
       scanFoundRef.current.set(device.id, info);
-      setDiscoveredDevices(Array.from(scanFoundRef.current.values()));
+      // Throttle UI flushes (~3/sec): allowDuplicates:true means this callback can
+      // fire dozens of times/sec across all nearby peripherals. The accumulator Map
+      // always has the freshest data; the timeout handler does a final flush so the
+      // last sub-throttle burst still renders.
+      const now = Date.now();
+      if (now - lastScanFlushRef.current >= 350) {
+        lastScanFlushRef.current = now;
+        setDiscoveredDevices(sortDiscovered(Array.from(scanFoundRef.current.values())));
+      }
     });
   }, [ensureManager]);
 
@@ -565,6 +664,7 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     connectingRef.current = true;
     setBleStatus('connecting');
     setBleReason('none');
+    setNoHrDeviceName(null); // picking a (new) device clears any prior no-HR guidance
     // Tear down ANY existing connection BEFORE attempting the new one, so a
     // failed strap-switch can't leave the old device silently streaming BPM
     // (and recording ghost samples into an active session). Safe no-op when
@@ -636,99 +736,33 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
   }, [ensureManager, cancelPendingDropReconnect, finalizeConnection, clearConnectionState]);
   useEffect(() => { reconnectSavedRef.current = reconnectSaved; }, [reconnectSaved]);
 
-  // ── BLE scan + connect (COMPAT — WorkoutSessionScreen depends on this).
-  // Reconnect-first: try the saved device silently, else first-match scan and
-  // route the found device through the shared finalizeConnection tail.
+  // ── BLE scan + connect (COMPAT — kept for BLE_CONTRACT.md back-compat).
+  // Reconnect-first: silently reconnect a known saved strap (legitimate — not a
+  // "first match"). Otherwise populate the picker via the UNFILTERED scan and let
+  // the user choose. We NO LONGER auto-grab the first match: under an unfiltered
+  // scan that would connect to a random nearby peripheral (AirPods, a TV…), and
+  // picking the right strap is the whole point. Callers that want a connection
+  // route the user to the picker (BluetoothDevicesScreen → connectToDevice).
   const scanAndConnect = useCallback(async (): Promise<boolean> => {
     if (Platform.OS === 'web') {
       setBleStatus('unavailable');
       setBleReason('unsupported');
       return false;
     }
-    // In-flight guard: at most one connect attempt ever runs at a time. If an
-    // auto-reconnect (AppState-foreground / onStateChange:PoweredOn / post-drop
-    // backoff) is already connecting, a scanAndConnect tap must no-op rather than
-    // race — otherwise reconnectSaved below bails on its own connectingRef guard,
-    // this misreads that as 'reconnect failed', and we'd start a concurrent scan
-    // ('scanning' over the in-flight 'connecting'). Bail BEFORE any state change /
-    // cancelPendingDropReconnect so we don't disturb the in-flight attempt.
-    // Note: don't set connectingRef here — reconnectSaved bails if it's already
-    // true, so let each phase manage its own guard.
+    // In-flight guard: at most one connect attempt ever runs at a time. Bail
+    // BEFORE any state change so an in-flight auto-reconnect isn't disturbed.
     if (connectingRef.current) return false;
-    // A new connect supersedes any pending post-drop reconnect — cancel its
-    // timer (Race #1) before starting, so it can't tear down the new link ~2s in.
+    // A new connect supersedes any pending post-drop reconnect — cancel its timer.
     cancelPendingDropReconnect();
-    // Try the saved monitor first.
+    // Try the saved monitor first (silent, no dialog, no picker needed).
     if (savedDeviceRef.current) {
       const ok = await reconnectSaved();
       if (ok) return true;
     }
-    const manager = ensureManager();
-    if (!manager) return false;
-
-    setBleStatus('scanning');
-    setBleReason('none');
-
-    return new Promise<boolean>((resolve) => {
-      let settled = false;
-      const finish = (result: boolean) => {
-        if (settled) return;
-        settled = true;
-        resolve(result);
-      };
-
-      const timeout = setTimeout(() => {
-        try { manager.stopDeviceScan(); } catch { /* ignore */ }
-        setBleStatus((prev) => (prev === 'scanning' ? 'disconnected' : prev));
-        setBleReason((prev) => (prev === 'none' ? 'noDeviceFound' : prev));
-        finish(false);
-      }, SCAN_TIMEOUT_MS);
-      scanTimeoutRef.current = timeout;
-
-      manager.startDeviceScan([HR_SERVICE], null, async (error: any, device: any) => {
-        if (error) {
-          clearTimeout(timeout);
-          scanTimeoutRef.current = null;
-          setBleStatus('disconnected');
-          setBleReason('failed');
-          finish(false);
-          return;
-        }
-        if (device) {
-          // Re-entrancy guard (Race #2): two device-found events in one scan
-          // batch must not both run connect()+finalizeConnection. Bail if this
-          // attempt is already settled or another connect is in flight.
-          if (settled || connectingRef.current) return;
-          connectingRef.current = true;
-          // First match wins.
-          try { manager.stopDeviceScan(); } catch { /* ignore */ }
-          clearTimeout(timeout);
-          scanTimeoutRef.current = null;
-          cancelPendingDropReconnect();
-          setBleStatus('connecting');
-          // Tear down ANY existing connection BEFORE the new attempt, so a
-          // failed switch can't leave a previous device streaming. Safe no-op
-          // when there's no previous device.
-          clearConnectionState(true);
-          try {
-            const connected = await device.connect();
-            const ok = await finalizeConnection(connected);
-            finish(ok);
-          } catch {
-            // Only flip to failed if THIS attempt is still the active one — a
-            // settled sibling may have already succeeded; don't clobber it.
-            if (!settled) {
-              setBleStatus('disconnected');
-              setBleReason('failed');
-              finish(false);
-            }
-          } finally {
-            connectingRef.current = false;
-          }
-        }
-      });
-    });
-  }, [ensureManager, reconnectSaved, cancelPendingDropReconnect, finalizeConnection, clearConnectionState]);
+    // No saved device (or reconnect failed): populate the picker; the user picks.
+    await startScan();
+    return false;
+  }, [cancelPendingDropReconnect, reconnectSaved, startScan]);
 
   // ── User-initiated disconnect (keeps the saved device — just drops the link).
   const disconnect = useCallback(() => {
@@ -962,6 +996,7 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
         batteryLevel,
         signalRssi,
         lastConnectedAt,
+        noHrDeviceName,
       }}
     >
       {children}

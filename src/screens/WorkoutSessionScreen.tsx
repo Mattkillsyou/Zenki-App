@@ -38,7 +38,6 @@ export function WorkoutSessionScreen({ navigation }: any) {
   const {
     bleStatus,
     connectedDeviceName,
-    scanAndConnect,
     disconnect,
     currentBpm,
     isRecording,
@@ -128,10 +127,10 @@ export function WorkoutSessionScreen({ navigation }: any) {
     if (bleStatus !== 'connected') {
       Alert.alert(
         'Connect a heart-rate monitor',
-        "No monitor is connected, so this session can't record heart rate, calories, or strain. Pair a Bluetooth monitor to track your workout.",
+        "No monitor is connected, so this session can't record heart rate, calories, or strain. Open the device list to scan for and connect a Bluetooth monitor.",
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Scan for monitor', onPress: () => { scanAndConnect().catch(() => {}); } },
+          { text: 'Open device list', onPress: () => navigation.navigate('BluetoothDevices') },
         ],
       );
       return;
@@ -175,11 +174,13 @@ export function WorkoutSessionScreen({ navigation }: any) {
     );
   };
 
-  const handleBLEToggle = async () => {
+  const handleBLEToggle = () => {
     if (bleStatus === 'connected') {
       disconnect();
-    } else if (bleStatus === 'disconnected') {
-      await scanAndConnect();
+    } else {
+      // Not connected → open the device picker (scan + pick). scanAndConnect no
+      // longer first-match auto-connects, so selection happens in the picker.
+      navigation.navigate('BluetoothDevices');
     }
   };
 

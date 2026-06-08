@@ -103,6 +103,7 @@ export function SettingsScreen({ navigation }: any) {
     if (bleReason === 'unauthorized') return 'Permission needed';
     if (bleReason === 'unsupported' || bleStatus === 'unavailable') return 'Not available on this device';
     if (bleReason === 'noDeviceFound') return 'No monitor found';
+    if (bleReason === 'noHrService') return 'No heart-rate signal';
     if (bleReason === 'dropped') return 'Monitor disconnected';
     return 'Not connected';
   })();
