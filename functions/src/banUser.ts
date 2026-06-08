@@ -6,13 +6,15 @@
  * moderation flow only blocked an offender FOR THE ONE REPORTER, so they could
  * keep posting to everyone else. This disables their Firebase Auth account
  * (they can no longer sign in or refresh a token — the real enforcement) and
- * flags users/{uid}.banned for display/audit.
+ * flags users/{uid}.banned for display/audit. It also PURGES the offender's
+ * public content (their posts + comments) so banning actually removes the
+ * objectionable UGC, not just freezes the account (Apple 1.2 "remove … content").
  *
  * Auth: Bearer Firebase ID token; caller must be an admin (custom claim or
  * /admins/{uid} doc).
  *
  * Body: { targetUid: string, reason?: string }
- * Returns: { ok: true, targetUid, disabled: true }
+ * Returns: { ok: true, targetUid, disabled: true, purged: { posts, comments } }
  */
 
 import { onRequest } from 'firebase-functions/v2/https';
@@ -38,7 +40,9 @@ async function verifyAdmin(req: any): Promise<string | { error: string; status: 
 }
 
 export const banUser = onRequest(
-  { cors: true, memory: '256MiB', timeoutSeconds: 30, invoker: 'public' },
+  // Higher timeout than a plain disable — the content purge below can touch many
+  // posts/comments for a prolific offender.
+  { cors: true, memory: '256MiB', timeoutSeconds: 120, invoker: 'public' },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).send('Method not allowed'); return; }
 
@@ -70,7 +74,38 @@ export const banUser = onRequest(
         { merge: true },
       ).catch((e) => logger.warn('banUser: users flag write failed (non-fatal)', e));
 
-      res.json({ ok: true, targetUid, disabled: true });
+      // Purge the offender's public UGC (Apple 1.2 "remove offending content"):
+      // their posts (+ likes/comments subcollections via recursiveDelete) and any
+      // comments they left on OTHER users' posts. Best-effort and AFTER the
+      // auth-disable — a purge hiccup must never fail the ban (the disable above is
+      // the real enforcement). Single-field collection-group indexes are
+      // auto-maintained, so the comments query needs no explicit index.
+      const purged: { posts: number; comments: number } = { posts: 0, comments: 0 };
+      try {
+        const myPosts = await admin.firestore()
+          .collection('posts').where('userId', '==', targetUid).get();
+        for (const p of myPosts.docs) {
+          await admin.firestore().recursiveDelete(p.ref);
+          purged.posts++;
+        }
+      } catch (e) {
+        logger.warn('banUser: post purge failed (non-fatal)', e);
+      }
+      try {
+        const myComments = await admin.firestore()
+          .collectionGroup('comments').where('userId', '==', targetUid).get();
+        const BATCH = 400;
+        for (let i = 0; i < myComments.docs.length; i += BATCH) {
+          const batch = admin.firestore().batch();
+          myComments.docs.slice(i, i + BATCH).forEach((c) => batch.delete(c.ref));
+          await batch.commit();
+        }
+        purged.comments = myComments.docs.length;
+      } catch (e) {
+        logger.warn('banUser: comment purge failed (non-fatal)', e);
+      }
+
+      res.json({ ok: true, targetUid, disabled: true, purged });
     } catch (e: any) {
       logger.error('banUser failed for targetUid=' + targetUid, e);
       res.status(500).json({ ok: false, error: e?.message ?? 'Unknown error' });

@@ -39,7 +39,8 @@ interface Report {
   targetUserId: string;
   reason: string;
   context?: string;
-  /** For 'comment': the parent postId. For 'message': the conversationId. */
+  /** For 'comment': the parent postId. (Message reports carry the conversationId
+   *  in `targetId`, not here.) */
   parentId?: string;
   status: 'open' | 'dismissed' | 'actioned';
 }
@@ -137,15 +138,29 @@ export const adminActionReport = onRequest(
           affected.commentDeleted = true;
         }
       } else if (report.targetType === 'message') {
-        // Messages live under conversations/{conversationId}/messages/{msgId}.
-        // The report's parentId carries the conversationId.
-        if (report.parentId) {
-          const msgRef = db.doc(`conversations/${report.parentId}/messages/${report.targetId}`);
-          const msgSnap = await msgRef.get();
-          if (msgSnap.exists) {
-            await msgRef.update({ text: '', redacted: true, redactedReason: 'moderator_action' });
-            affected.messageRedacted = true;
+        // Message reports are thread-level: targetId = conversationId and
+        // targetUserId = the offending sender (matching the client report writer
+        // and the redactDmMessages CF). Redact EVERY message that sender posted in
+        // the conversation — not a single messageId via parentId — so this branch
+        // and the live redactDmMessages path behave identically. (Paged at 400 to
+        // respect the 500-op write-batch limit.)
+        const convId = report.targetId;
+        const offender = report.targetUserId;
+        if (convId && typeof offender === 'string' && offender) {
+          const msgs = await db
+            .collection('conversations').doc(convId)
+            .collection('messages').where('senderId', '==', offender).get();
+          let redacted = 0;
+          const BATCH = 400;
+          for (let i = 0; i < msgs.docs.length; i += BATCH) {
+            const batch = db.batch();
+            msgs.docs.slice(i, i + BATCH).forEach((m) =>
+              batch.update(m.ref, { text: '', redacted: true, redactedReason: 'moderator_action' }),
+            );
+            await batch.commit();
+            redacted += Math.min(BATCH, msgs.docs.length - i);
           }
+          affected.messagesRedacted = redacted > 0;
         }
       }
       // 'user' targets — no content to delete; block + mark actioned (use the
