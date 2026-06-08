@@ -242,6 +242,12 @@ export const deleteAccount = onRequest(
       // deletion — a GDPR gap. Query by firebaseUid.
       deleted.attendance = await deleteByQuery(db.collection('attendance').where('firebaseUid', '==', uid));
       deleted.waivers = await deleteByQuery(db.collection('waivers').where('firebaseUid', '==', uid));
+      // appointments + taskCompletions are likewise firebaseUid-stamped personal
+      // records (booking history; per-member shift-completion log) — same GDPR
+      // sweep, else a deleted user's identifiable history survives and keeps
+      // streaming to admins (firestore.rules /appointments, /taskCompletions).
+      deleted.appointments = await deleteByQuery(db.collection('appointments').where('firebaseUid', '==', uid));
+      deleted.taskCompletions = await deleteByQuery(db.collection('taskCompletions').where('firebaseUid', '==', uid));
       deleted.supportMessages = await deleteByQuery(db.collection('supportMessages').where('senderId', '==', uid));
       // DEXA scans + bloodwork are local-only (AsyncStorage via NutritionContext), never server-persisted — nothing to delete here.
       deleted.aiRateLimits = await deleteDocDeep(db.collection('aiRateLimits').doc(uid));

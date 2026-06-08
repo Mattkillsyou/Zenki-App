@@ -111,7 +111,8 @@ service cloud.firestore {
                       && (
                         resource.data.firebaseUid == request.auth.uid
                         || (!('firebaseUid' in resource.data)
-                            && resource.data.email == request.auth.token.email)
+                            && resource.data.email == request.auth.token.email
+                            && request.auth.token.email_verified == true)
                       ));
       allow create: if isAdmin()
                     || (isSignedIn()
@@ -135,7 +136,8 @@ service cloud.firestore {
                         && (
                           resource.data.firebaseUid == request.auth.uid
                           || (!('firebaseUid' in resource.data)
-                              && resource.data.email == request.auth.token.email)
+                              && resource.data.email == request.auth.token.email
+                              && request.auth.token.email_verified == true)
                         ));
       allow delete: if isAdmin();
     }
