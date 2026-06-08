@@ -69,14 +69,20 @@ export type BLEReason =
   | 'unauthorized'   // BLE permission denied  → "Allow Bluetooth in Settings"
   | 'unsupported'    // no BLE (web/simulator) → "Bluetooth isn't available on this device"
   | 'noDeviceFound'  // scan timed out empty   → "No monitor found. Bring the strap closer / wet the contacts"
+  | 'noHrService'    // connected at GATT but no 0x180D/0x2A37 → "Connected, but not broadcasting heart rate"
   | 'dropped'        // unexpected disconnect  → "Monitor disconnected"
   | 'failed';        // connect attempt failed → "Couldn't connect. Try again."
 
-/** A nearby HR monitor seen during a scan. */
+/** A nearby BLE peripheral seen during a scan. The scan is now UNFILTERED (so a
+ *  WHOOP / any strap that hides 0x180D from its advertising packet still shows
+ *  up), so a device is not necessarily an HR monitor — `advertisesHrService`
+ *  flags the ones that look like straps. */
 export interface BLEDeviceInfo {
   id: string;
-  name: string;        // device.name || device.localName || 'HR Monitor'
+  name: string;        // advertised name/localName, else "Unknown device (xxxx)"
   rssi: number | null; // dBm; null if unknown
+  advertisesHrService?: boolean; // advertises 0x180D in the scan packet → likely a strap
+  named?: boolean;     // had a real advertised name (vs. an "Unknown device" placeholder) → sorts above placeholders
 }
 
 /** The last-used monitor, persisted across launches. */

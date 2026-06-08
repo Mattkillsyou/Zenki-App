@@ -62,6 +62,7 @@ export function BluetoothDevicesScreen({ navigation }: any) {
     reconnectSaved,
     forgetDevice,
     disconnect,
+    noHrDeviceName,
   } = useHeartRate();
 
   // Stop any in-flight scan when leaving the screen — don't keep the radio
@@ -87,9 +88,15 @@ export function BluetoothDevicesScreen({ navigation }: any) {
     if (bleReason === 'unauthorized') return 'Permission needed';
     if (bleReason === 'unsupported' || bleStatus === 'unavailable') return 'Not available on this device';
     if (bleReason === 'noDeviceFound') return 'No monitor found';
+    if (bleReason === 'noHrService') return 'No heart-rate signal';
     if (bleReason === 'dropped') return 'Monitor disconnected';
     return 'Not connected';
   })();
+
+  // A WHOOP nearby (named like one) → proactively surface broadcast-mode guidance,
+  // even before the user taps it, since WHOOP is the common "looks paired but no HR" case.
+  const whoopSeen = discoveredDevices.some((d) => /whoop/i.test(d.name));
+  const showWhoopTip = bleReason === 'noHrService' || whoopSeen;
 
   // ── Signal-bars renderer ──
   const SignalBars = ({ rssi }: { rssi: number | null }) => {
@@ -218,6 +225,35 @@ export function BluetoothDevicesScreen({ navigation }: any) {
           )}
         </View>
 
+        {/* ── WHOOP / "connected but no heart rate" guidance ── */}
+        {showWhoopTip && (
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.gold }]}>
+            <View style={styles.tipHeaderRow}>
+              <Ionicons name="information-circle" size={18} color={colors.gold} />
+              <Text style={[styles.tipTitle, { color: colors.textPrimary }]}>
+                {bleReason === 'noHrService'
+                  ? `${noHrDeviceName ?? 'That device'} isn't broadcasting heart rate`
+                  : 'Using a WHOOP?'}
+              </Text>
+            </View>
+            <Text style={[styles.tipBody, { color: colors.textSecondary }]}>
+              WHOOP only shares heart rate with other apps when Broadcast Heart Rate is on:
+            </Text>
+            <Text style={[styles.tipStep, { color: colors.textSecondary }]}>
+              1.  In the WHOOP app, turn on Broadcast Heart Rate.
+            </Text>
+            <Text style={[styles.tipStep, { color: colors.textSecondary }]}>
+              2.  Make sure WHOOP isn't connected to its own app or paired in iOS Settings — it stops advertising then.
+            </Text>
+            <Text style={[styles.tipStep, { color: colors.textSecondary }]}>
+              3.  Keep your phone close, then scan again.
+            </Text>
+            <Text style={[styles.tipFootnote, { color: colors.textMuted }]}>
+              Other straps (Polar H10/OH1, Garmin HRM, Wahoo TICKR, CooSpo) broadcast standard heart rate by default — just power them on and scan.
+            </Text>
+          </View>
+        )}
+
         {/* ── 2. Saved device (offline) — one-tap reconnect ── */}
         {savedDevice && !isConnected && (
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -296,7 +332,7 @@ export function BluetoothDevicesScreen({ navigation }: any) {
         {/* ── 3. Scan + discovered devices ── */}
         {bleReason !== 'unsupported' && bleStatus !== 'unavailable' && (
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.sectionLabel, { color: colors.gold }]}>NEARBY MONITORS</Text>
+            <Text style={[styles.sectionLabel, { color: colors.gold }]}>NEARBY DEVICES</Text>
 
             <SoundPressable
               style={[styles.scanBtn, { backgroundColor: colors.backgroundElevated, borderColor: colors.border }]}
@@ -325,10 +361,19 @@ export function BluetoothDevicesScreen({ navigation }: any) {
                     onPress={() => connectToDevice(device.id)}
                     disabled={isConnecting}
                   >
-                    <Ionicons name="heart-outline" size={18} color={colors.textSecondary} />
+                    <Ionicons
+                      name={device.advertisesHrService ? 'heart' : 'bluetooth-outline'}
+                      size={18}
+                      color={device.advertisesHrService ? colors.gold : colors.textMuted}
+                    />
                     <Text style={[styles.deviceRowName, { color: colors.textPrimary }]} numberOfLines={1}>
                       {device.name}
                     </Text>
+                    {device.advertisesHrService && (
+                      <View style={[styles.hrTag, { backgroundColor: colors.goldMuted }]}>
+                        <Text style={[styles.hrTagText, { color: colors.gold }]}>HR</Text>
+                      </View>
+                    )}
                     <SignalBars rssi={device.rssi} />
                     <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: 8 }} />
                   </SoundPressable>
@@ -336,9 +381,15 @@ export function BluetoothDevicesScreen({ navigation }: any) {
               </View>
             )}
 
+            {discoveredDevices.length > 0 && (
+              <Text style={[styles.helperText, { color: colors.textMuted }]}>
+                Heart-rate monitors are marked HR. Tap your strap to connect.
+              </Text>
+            )}
+
             {!isScanning && discoveredDevices.length === 0 && bleReason !== 'noDeviceFound' && (
               <Text style={[styles.helperText, { color: colors.textMuted }]}>
-                Tap scan to discover heart-rate monitors nearby.
+                Tap scan to discover nearby Bluetooth devices. Heart-rate monitors are marked HR.
               </Text>
             )}
           </View>
@@ -366,6 +417,18 @@ export function BluetoothDevicesScreen({ navigation }: any) {
                 <Text style={[styles.actionText, { color: colors.error }]}>Forget device</Text>
               </SoundPressable>
             )}
+          </View>
+        )}
+
+        {/* ── How connecting works (Core Bluetooth ≠ iOS Settings pairing) ── */}
+        {bleReason !== 'unsupported' && bleStatus !== 'unavailable' && (
+          <View style={[styles.infoCard, { backgroundColor: colors.backgroundElevated, borderColor: colors.border }]}>
+            <Ionicons name="bluetooth" size={16} color={colors.textMuted} style={{ marginTop: 1 }} />
+            <Text style={[styles.infoText, { color: colors.textMuted }]}>
+              Zenki connects to monitors directly over Bluetooth — you don't pair them in iOS Settings.
+              A strap that's paired or connected in iOS Settings (or its own app) can stop advertising;
+              forget it there so Zenki can find it.
+            </Text>
           </View>
         )}
 
@@ -553,4 +616,29 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 17, fontWeight: '700', marginTop: spacing.xs },
   emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 18, paddingHorizontal: spacing.sm },
+
+  // HR tag on discovered rows
+  hrTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  hrTagText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+
+  // WHOOP / no-HR guidance card
+  tipHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.sm },
+  tipTitle: { fontSize: 15, fontWeight: '800', flex: 1 },
+  tipBody: { fontSize: 13, lineHeight: 19, marginBottom: spacing.xs },
+  tipStep: { fontSize: 13, lineHeight: 19, marginBottom: 2 },
+  tipFootnote: { fontSize: 12, lineHeight: 17, marginTop: spacing.sm },
+
+  // "How connecting works" info card
+  infoCard: {
+    flexDirection: 'row',
+    gap: 10,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    padding: spacing.md,
+  },
+  infoText: { flex: 1, fontSize: 12, lineHeight: 17 },
 });
