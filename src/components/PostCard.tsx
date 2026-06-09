@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useMotion } from '../context/MotionContext';
 import { useBlocks } from '../context/BlocksContext';
-import { useAuth } from '../context/AuthContext';
+import { getCurrentUid } from '../services/firebaseAuth';
 import { Post } from '../services/firebasePosts';
 import { ReportModal } from './ReportModal';
 
@@ -29,13 +29,12 @@ interface PostCardProps {
 export function PostCard({ post, onLike, onUserPress, onCommentPress }: PostCardProps) {
   const { colors } = useTheme();
   const { reduceMotion } = useMotion();
-  const { user } = useAuth();
   const { blockUser, muteUser } = useBlocks();
   const heartAnim = useRef(new Animated.Value(1)).current;
   const dblTapRef = useRef<number>(0);
   const [reportOpen, setReportOpen] = useState(false);
 
-  const isOwn = user?.id === post.userId;
+  const isOwn = getCurrentUid() === post.userId;
 
   const openMenu = () => {
     // Skip menu on own posts for now (no edit/delete wired at card level yet).

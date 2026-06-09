@@ -18,6 +18,7 @@ import { spacing, MAX_CONTENT_WIDTH } from '../theme';
 import { PostCard } from '../components/PostCard';
 import { AnimatedLogo } from '../components/AnimatedLogo';
 import { Post, getFeed, likePost, unlikePost } from '../services/firebasePosts';
+import { getCurrentUid } from '../services/firebaseAuth';
 
 interface StoryItem {
   userId: string;
@@ -216,6 +217,23 @@ export function CommunityScreen({ navigation }: any) {
             onPress={() => navigation.navigate('UserSearch')}
           >
             <Ionicons name="search-outline" size={24} color={colors.textPrimary} />
+          </SoundPressable>
+          <SoundPressable
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={() => navigation.navigate('MessagesList')}
+            accessibilityLabel="Direct messages"
+          >
+            <Ionicons name="paper-plane-outline" size={23} color={colors.textPrimary} />
+          </SoundPressable>
+          <SoundPressable
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={() => {
+              const uid = getCurrentUid();
+              if (uid) navigation.navigate('UserProfile', { userId: uid });
+            }}
+            accessibilityLabel="My profile"
+          >
+            <Ionicons name="person-circle-outline" size={25} color={colors.textPrimary} />
           </SoundPressable>
         </View>
       </View>

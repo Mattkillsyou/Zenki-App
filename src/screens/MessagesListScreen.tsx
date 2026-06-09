@@ -9,14 +9,13 @@ import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { useAuth } from '../context/AuthContext';
+import { getCurrentUid } from '../services/firebaseAuth';
 import { useBlocks } from '../context/BlocksContext';
 import { spacing, MAX_CONTENT_WIDTH } from '../theme';
 import { Conversation, subscribeToInbox } from '../services/firebaseMessages';
 
 export function MessagesListScreen({ navigation }: any) {
   const { colors } = useTheme();
-  const { user } = useAuth();
   const { isBlocked, blockedByIds } = useBlocks();
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,8 +35,9 @@ export function MessagesListScreen({ navigation }: any) {
   }, []);
 
   const renderItem = ({ item }: { item: Conversation }) => {
-    const unread = user?.id ? item.unreadFor?.[user.id] || 0 : 0;
-    const previewPrefix = item.lastSenderId === user?.id ? 'You: ' : '';
+    const uid = getCurrentUid();
+    const unread = uid ? item.unreadFor?.[uid] || 0 : 0;
+    const previewPrefix = item.lastSenderId === uid ? 'You: ' : '';
     const initials = (item.otherUserName || 'M').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
     const time = item.lastMessageAt ? formatTimeAgo(item.lastMessageAt) : '';
     return (

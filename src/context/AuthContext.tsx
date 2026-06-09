@@ -10,7 +10,6 @@ import {
   firebaseSignInWithPassword,
   firebaseSignOut,
   emailForMember,
-  subscribeToAuthState,
 } from '../services/firebaseAuth';
 import { FIREBASE_CONFIGURED, auth } from '../config/firebase';
 import { seedReviewerDataIfNeeded } from '../utils/seedReviewerData';
@@ -97,33 +96,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  // Reconcile the local (AsyncStorage) session with the LIVE Firebase Auth
-  // session. `user` is restored from AsyncStorage independently of Firebase, so a
-  // persisted local identity can outlive an expired / not-restored Firebase
-  // session — a "zombie" where the UI looks signed-in but auth.currentUser is null,
-  // so getCurrentUid() returns null, every Firestore write (posts, likes, follows)
-  // throws not-signed-in, and the feed short-circuits to empty. That was the root
-  // cause of "can't post + options missing". onAuthStateChanged is the source of
-  // truth: once Firebase resolves its initial (persisted) state, if there is NO
-  // live session but a local id is stored, the session is dead — clear local state
-  // so the app routes to sign-in for a REAL session. (No silent re-auth: seed
-  // passwords are stripped in production, so re-login is the only prod-safe path.)
-  useEffect(() => {
-    if (!FIREBASE_CONFIGURED) return; // dev/offline uses a local-only session — nothing to reconcile
-    const unsub = subscribeToAuthState((uid) => {
-      if (uid) return; // live session present — healthy
-      AsyncStorage.getItem(STORAGE_KEY)
-        .then((id) => {
-          if (id) {
-            console.warn('[AuthContext] no live Firebase session for a persisted user — clearing zombie session so the app re-authenticates');
-            setUser(null);
-          }
-        })
-        .catch(() => {});
-    });
-    return unsub;
   }, []);
 
   // Live Firestore subscription on the signed-in user's member doc. Picks

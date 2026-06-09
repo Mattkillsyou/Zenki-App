@@ -100,7 +100,7 @@ export function CreatePostScreen({ navigation }: any) {
       if (code === 'permission-denied' || /permission/i.test(code)) {
         return {
           title: "Couldn't post",
-          body: "You don't have permission to post yet — ask the dojo admin to verify your account.",
+          body: "Couldn't reach the server to save your post. Check your connection and try again in a moment.",
         };
       }
       return { title: 'Error', body: 'Failed to post. Please try again.' };
