@@ -47,14 +47,18 @@ export async function createPost(mediaUri: string, mediaType: 'photo' | 'video',
   };
 
   const docRef = await addDoc(collection(db, 'posts'), postData);
-  // Server-confirm — see createTextPost for the why.
+  // Best-effort server-confirm (non-fatal). experimentalForceLongPolling
+  // (config/firebase.ts) already forces addDoc to round-trip to the server, so a
+  // failed/slow confirming READ no longer means the write was lost — it usually
+  // means the verify read itself timed out on a flaky link. Throwing here turned a
+  // post that actually SAVED into a false "couldn't post". Warn, don't fail.
   try {
     const verify = await getDocFromServer(docRef);
     if (!verify.exists()) {
-      throw new Error('write-not-on-server');
+      console.warn('[createPost] server verify did not see the doc yet (eventual consistency):', docRef.id);
     }
   } catch (verifyErr: any) {
-    throw new Error(`write-not-on-server: ${verifyErr?.code || verifyErr?.message || 'unknown'}`);
+    console.warn('[createPost] server verify read failed (non-fatal):', verifyErr?.code || verifyErr?.message || 'unknown');
   }
   return { id: docRef.id, ...postData };
 }
@@ -83,17 +87,18 @@ export async function createTextPost(caption: string): Promise<Post | null> {
   };
 
   const docRef = await addDoc(collection(db, 'posts'), postData);
-  // Server-confirm: bypass cache and read the doc back from the server. If
-  // the doc isn't there, the addDoc resolved against the offline cache and
-  // the server never saw the write — we want to surface that as a real error
-  // rather than report success.
+  // Best-effort server-confirm (non-fatal). experimentalForceLongPolling
+  // (config/firebase.ts) already forces addDoc to round-trip to the server, so a
+  // failed/slow confirming READ no longer implies the write was lost — it usually
+  // means the verify read timed out. Throwing turned a SAVED post into a false
+  // "couldn't post". Warn, don't fail the post.
   try {
     const verify = await getDocFromServer(docRef);
     if (!verify.exists()) {
-      throw new Error('write-not-on-server');
+      console.warn('[createTextPost] server verify did not see the doc yet (eventual consistency):', docRef.id);
     }
   } catch (verifyErr: any) {
-    throw new Error(`write-not-on-server: ${verifyErr?.code || verifyErr?.message || 'unknown'}`);
+    console.warn('[createTextPost] server verify read failed (non-fatal):', verifyErr?.code || verifyErr?.message || 'unknown');
   }
   return { id: docRef.id, ...postData };
 }

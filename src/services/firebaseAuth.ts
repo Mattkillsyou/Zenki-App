@@ -9,6 +9,7 @@ import {
   sendPasswordResetEmail,
   getIdToken,
   getAuth,
+  onAuthStateChanged,
 } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -254,6 +255,24 @@ export async function adminCreateMemberAccount(
 
 export function getCurrentUid(): string | null {
   return auth?.currentUser?.uid || null;
+}
+
+/**
+ * Subscribe to LIVE Firebase Auth session changes. The callback receives the
+ * live uid, or null when there is no live session. Returns an unsubscribe fn.
+ *
+ * Source of truth for session liveness: the app's local (AsyncStorage) identity
+ * is restored independently and can outlive the Firebase session, so AuthContext
+ * uses this to detect + clear a "zombie" session (local user, no live Firebase
+ * session) that would otherwise null getCurrentUid() and break every authenticated
+ * write (posting, likes, follows) while emptying the feed.
+ */
+export function subscribeToAuthState(cb: (uid: string | null) => void): () => void {
+  if (!auth) {
+    cb(null);
+    return () => {};
+  }
+  return onAuthStateChanged(auth, (u) => cb(u?.uid ?? null));
 }
 
 /**
