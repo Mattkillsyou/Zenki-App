@@ -106,13 +106,20 @@ service cloud.firestore {
       // leak). Admins read everything; a member reads only their OWN doc
       // (matched by firebaseUid, or a not-yet-claimed doc with their email).
       // Cross-user public display fields are served from /users instead.
+      //
+      // The email-fallback branch deliberately does NOT require
+      // email_verified: the app never calls sendEmailVerification, so every
+      // password account is permanently unverified. Requiring it would lock
+      // seed/reviewer members (whose docs have no firebaseUid stamp yet) out
+      // of their OWN doc → broke profile-photo upload + self-claim. The email
+      // match already scopes the fallback to the rightful owner. Do NOT re-add
+      // email_verified here unless the app actually sends verification emails.
       allow read: if isAdmin()
                   || (isSignedIn()
                       && (
                         resource.data.firebaseUid == request.auth.uid
                         || (!('firebaseUid' in resource.data)
-                            && resource.data.email == request.auth.token.email
-                            && request.auth.token.email_verified == true)
+                            && resource.data.email == request.auth.token.email)
                       ));
       allow create: if isAdmin()
                     || (isSignedIn()
@@ -122,8 +129,9 @@ service cloud.firestore {
       //   (a) NORMAL — existing doc already stamped with this user's
       //       firebaseUid, and the new doc preserves that stamp.
       //   (b) FIRST-TIME CLAIM — existing doc has no firebaseUid yet AND
-      //       its email matches the auth user's verified email; the new
-      //       doc must stamp the user's firebaseUid. Without this path
+      //       its email matches the auth user's email (not verification-gated;
+      //       see read-branch note above); the new doc must stamp the user's
+      //       firebaseUid. Without this path
       //       any /members doc that landed without a firebaseUid (admin
       //       backfilled seed members, or an earlier signup that wrote
       //       /members but not the stamp) is permanently un-updatable
@@ -136,8 +144,7 @@ service cloud.firestore {
                         && (
                           resource.data.firebaseUid == request.auth.uid
                           || (!('firebaseUid' in resource.data)
-                              && resource.data.email == request.auth.token.email
-                              && request.auth.token.email_verified == true)
+                              && resource.data.email == request.auth.token.email)
                         ));
       allow delete: if isAdmin();
     }
