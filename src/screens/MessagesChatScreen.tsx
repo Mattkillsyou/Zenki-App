@@ -12,7 +12,7 @@ import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { useAuth } from '../context/AuthContext';
+import { getCurrentUid } from '../services/firebaseAuth';
 import { useBlocks } from '../context/BlocksContext';
 import { spacing, MAX_CONTENT_WIDTH } from '../theme';
 import {
@@ -26,7 +26,6 @@ import { ReportModal } from '../components/ReportModal';
 
 export function MessagesChatScreen({ navigation, route }: any) {
   const { colors } = useTheme();
-  const { user } = useAuth();
   const { isBlocked, blockUser, unblockUser } = useBlocks();
   const initial = route.params || {};
   const [conversationId, setConversationId] = useState<string | null>(initial.conversationId || null);
@@ -114,7 +113,7 @@ export function MessagesChatScreen({ navigation, route }: any) {
   };
 
   const renderItem = ({ item }: { item: Message }) => {
-    const isMe = item.senderId === user?.id;
+    const isMe = item.senderId === getCurrentUid();
     return (
       <View style={[styles.bubbleRow, { justifyContent: isMe ? 'flex-end' : 'flex-start' }]}>
         <View

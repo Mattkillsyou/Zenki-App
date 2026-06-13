@@ -1,6 +1,6 @@
 import { storage, FIREBASE_CONFIGURED } from '../config/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { getCurrentUid } from './firebaseAuth';
+import { getCurrentUid, getCurrentIdToken } from './firebaseAuth';
 
 /**
  * RN's `fetch(uri).blob()` is unreliable for video-sized payloads — the
@@ -68,6 +68,17 @@ export async function uploadMedia(uri: string, type: 'photo' | 'video'): Promise
     throw new Error('uploadMedia: empty-blob');
   }
 
-  await uploadBytes(storageRef, blob, { contentType: contentTypeFor(ext) });
+  try {
+    await uploadBytes(storageRef, blob, { contentType: contentTypeFor(ext) });
+  } catch (e: any) {
+    // Same token-attach race as posts: a fresh post-sign-in session can hit
+    // storage/unauthorized before the ID token attaches. Re-prime + retry once.
+    if (e?.code === 'storage/unauthorized') {
+      await getCurrentIdToken(true).catch(() => null);
+      await uploadBytes(storageRef, blob, { contentType: contentTypeFor(ext) });
+    } else {
+      throw e;
+    }
+  }
   return getDownloadURL(storageRef);
 }
