@@ -85,6 +85,7 @@ export function CreatePostScreen({ navigation }: any) {
   const handlePost = async () => {
     const friendlyError = (err: any): { title: string; body: string } => {
       const code = err?.code || err?.message || '';
+      console.warn('[CreatePost] post failed:', err?.code || err?.message || 'unknown');
       if (code === 'not-signed-in') {
         return {
           title: "Couldn't post",
@@ -97,7 +98,7 @@ export function CreatePostScreen({ navigation }: any) {
           body: 'The community feed is not configured for this build.',
         };
       }
-      if (code === 'permission-denied' || /permission/i.test(code)) {
+      if (code === 'permission-denied' || code === 'storage/unauthorized' || /permission/i.test(code)) {
         return {
           title: "Couldn't post",
           body: "Couldn't reach the server to save your post. Check your connection and try again in a moment.",

@@ -4,7 +4,7 @@ import {
   query, where, orderBy, limit, startAfter, runTransaction, documentId,
 } from 'firebase/firestore';
 import type { QueryDocumentSnapshot } from 'firebase/firestore';
-import { getCurrentUid } from './firebaseAuth';
+import { getCurrentUid, getCurrentIdToken } from './firebaseAuth';
 import { uploadMedia } from './firebaseStorage';
 import { deletePostCascadeViaFunction } from './firebaseModeration';
 
@@ -46,7 +46,17 @@ export async function createPost(mediaUri: string, mediaType: 'photo' | 'video',
     createdAt: new Date().toISOString(),
   };
 
-  const docRef = await addDoc(collection(db, 'posts'), postData);
+  // A token-attach race right after sign-in can make the first addDoc throw
+  // permission-denied (the fresh ID token hasn't attached to the Firestore
+  // channel yet). Re-prime the token and retry once before failing; the happy
+  // path is untouched and a genuine rule rejection still throws.
+  const docRef = await addDoc(collection(db!, 'posts'), postData).catch(async (e: any) => {
+    if (e?.code === 'permission-denied' || /permission-denied/i.test(String(e?.message || ''))) {
+      await getCurrentIdToken(true).catch(() => null);
+      return addDoc(collection(db!, 'posts'), postData);
+    }
+    throw e;
+  });
   // Best-effort server-confirm (non-fatal). experimentalForceLongPolling
   // (config/firebase.ts) already forces addDoc to round-trip to the server, so a
   // failed/slow confirming READ no longer means the write was lost — it usually
@@ -86,7 +96,17 @@ export async function createTextPost(caption: string): Promise<Post | null> {
     createdAt: new Date().toISOString(),
   };
 
-  const docRef = await addDoc(collection(db, 'posts'), postData);
+  // A token-attach race right after sign-in can make the first addDoc throw
+  // permission-denied (the fresh ID token hasn't attached to the Firestore
+  // channel yet). Re-prime the token and retry once before failing; the happy
+  // path is untouched and a genuine rule rejection still throws.
+  const docRef = await addDoc(collection(db!, 'posts'), postData).catch(async (e: any) => {
+    if (e?.code === 'permission-denied' || /permission-denied/i.test(String(e?.message || ''))) {
+      await getCurrentIdToken(true).catch(() => null);
+      return addDoc(collection(db!, 'posts'), postData);
+    }
+    throw e;
+  });
   // Best-effort server-confirm (non-fatal). experimentalForceLongPolling
   // (config/firebase.ts) already forces addDoc to round-trip to the server, so a
   // failed/slow confirming READ no longer implies the write was lost — it usually
