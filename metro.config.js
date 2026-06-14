@@ -1,16 +1,11 @@
-// Metro config — extends defaults to bundle .apng (animated PNG) assets
-// alongside .png. We use APNG for the senpai mascot animations because
-// expo-image's iOS animated-WebP decoder produced black-box / pixelated
-// rendering on Apple-silicon simulators, and naming animated files .png
-// causes Xcode's bundle-time pngcrush pass to strip the APNG chunks
-// (acTL / fcTL / fdAT). Keeping the .apng extension bypasses pngcrush so
-// the animation survives the build.
+// Metro config — Expo defaults.
+//
+// The senpai mascot uses ONE static PNG per mood (see src/components/SenpaiMascot.tsx)
+// plus a JS-side bounce for liveness. Animated formats were deliberately dropped:
+// expo-image's iOS animated-WebP decoder produced black-box / pixelated rendering on
+// Apple-silicon simulators, and animated-PNG (.apng) chunks (acTL/fcTL/fdAT) get
+// stripped by Xcode's bundle-time pngcrush pass. Static PNG-per-mood avoids both, so
+// no custom assetExts are needed here.
 const { getDefaultConfig } = require('expo/metro-config');
 
-const config = getDefaultConfig(__dirname);
-
-if (!config.resolver.assetExts.includes('apng')) {
-  config.resolver.assetExts.push('apng');
-}
-
-module.exports = config;
+module.exports = getDefaultConfig(__dirname);

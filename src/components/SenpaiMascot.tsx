@@ -15,6 +15,8 @@ import { useTheme } from '../context/ThemeContext';
 import { useSenpaiChat } from '../hooks/useSenpaiChat';
 import { stopSenpaiAudio } from '../services/senpaiAudio';
 import { SenpaiChatModal } from './SenpaiChatModal';
+import { SenpaiVoiceModal } from './SenpaiVoiceModal';
+import { ANIM_ASSETS } from './senpaiMoodAssets';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const POS_KEY = '@zenki_senpai_pos';
@@ -31,34 +33,26 @@ const clampPos = (x: number, y: number) => ({
 });
 
 /* ─── Animation asset map ────────────────────────────────────────────────── */
-
-// STATIC PNG strategy. Both animated WebP and animated PNG via expo-image
-// produced the same broken render on Apple-silicon iOS 26 simulators
-// (black-box bounding rectangle + heavy nearest-neighbor pixelation as if
-// decoded at thumbnail resolution and upscaled). Rather than keep chasing
-// the decoder bug, we ship a single first-frame PNG per mood and animate
-// liveness via the JS-side `bounce` Animated.Value below — same
-// expressiveness in practice, none of the native-decoder fragility, and
-// senpai assets shrink from ~58 MB → ~2 MB.
-const ANIM_ASSETS: Record<string, any> = {
-  idle: require('../assets/senpai/senpai_idle.png'),
-  cheering: require('../assets/senpai/senpai_cheering.png'),
-  impressed: require('../assets/senpai/senpai_impressed.png'),
-  encouraging: require('../assets/senpai/senpai_encouraging.png'),
-  celebrating: require('../assets/senpai/senpai_celebrating.png'),
-  sleeping: require('../assets/senpai/senpai_sleep.png'),
-  disappointed: require('../assets/senpai/senpai_cry.png'),
-  // Extra animations available (asset still bundled, just not wired):
-  // think: require('../assets/senpai/senpai_think.png'),
-  // wave: require('../assets/senpai/senpai_wave.png'),
-};
+// ANIM_ASSETS (mood→PNG) lives in ./senpaiMoodAssets so SenpaiVoiceModal can
+// share it without a circular import. Static PNG-per-mood + a JS bounce.
 
 /**
- * Senpai Mode mascot — animated chibi character using Ziggle WebP animations.
- * Floats on screen, reacts to user actions, shows speech bubbles.
- * Draggable, with idle/sleep timers.
+ * Senpai Mode mascot — a static chibi PNG per mood + a JS bounce for liveness.
+ * Floats on screen, reacts to user actions, shows speech bubbles. Draggable,
+ * with idle/sleep timers.
+ *
+ * Thin gate: the heavy impl (STT event subscriptions, image-cache effect,
+ * position reads, animation loops) must not mount when Senpai is off, since
+ * this component is always rendered in App.tsx. An early-return *inside* the
+ * impl still ran every hook; gating the mount here avoids all of it.
  */
 export function SenpaiMascot() {
+  const { state } = useSenpai();
+  if (!state.enabled) return null;
+  return <SenpaiMascotImpl />;
+}
+
+function SenpaiMascotImpl() {
   const { state, triggerReaction } = useSenpai();
   const { colors } = useTheme();
   const [hidden, setHidden] = useState(false);
@@ -66,6 +60,8 @@ export function SenpaiMascot() {
   // Full-screen chat modal (item 5) — the keyboard/voice surface, opened from
   // the "💬 chat" pill. The inline bubble stays the quick voice surface.
   const [chatOpen, setChatOpen] = useState(false);
+  // Dedicated hands-free voice surface, opened from the "🎙️ voice" pill.
+  const [voiceOpen, setVoiceOpen] = useState(false);
 
   // Inline walkie-talkie chat state. TAP senpai once to start listening,
   // tap again to stop — a friendlier replacement for the old press-and-hold
@@ -362,21 +358,10 @@ export function SenpaiMascot() {
   const trailBufRef = useRef<{ x: number; y: number; t: number }[]>([]);
   const lastSnapRef = useRef(0);
 
-  // One-time cache invalidation: senpai_*.webp asset content has changed
-  // (frame 1 alpha + dispose=background on every frame). expo-image keys
-  // its disk cache by asset URI, so file content changes don't bust it on
-  // their own. Bump VERSION any time the senpai assets change.
-  useEffect(() => {
-    const KEY = '@senpai_asset_cache_v';
-    const VERSION = '7';
-    AsyncStorage.getItem(KEY).then((v) => {
-      if (v !== VERSION) {
-        Image.clearMemoryCache();
-        Image.clearDiskCache();
-        AsyncStorage.setItem(KEY, VERSION);
-      }
-    });
-  }, []);
+  // (Removed the @senpai_asset_cache_v effect: the mascot moods are bundled
+  // `require()`d PNGs, so Image.clearDiskCache/clearMemoryCache — which only
+  // affect URI-sourced expo-image entries — was a no-op. Bundled asset bytes
+  // are already busted by each new app binary.)
 
   useEffect(() => {
     AsyncStorage.getItem(POS_KEY).then((raw) => {
@@ -486,7 +471,9 @@ export function SenpaiMascot() {
       idleTimerRef.current = setTimeout(() => {
         triggerReaction('idle', randomDialogue('idle'), 5000);
         sleepTimerRef.current = setTimeout(() => {
-          triggerReaction('sleeping', 'zzz...', 99999);
+          // Infinity = terminal reaction (no auto-clear) — she stays asleep
+          // until the next interaction wakes her.
+          triggerReaction('sleeping', 'zzz...', Infinity);
         }, 60000);
       }, 45000);
     }
@@ -684,7 +671,7 @@ export function SenpaiMascot() {
     return () => loop.stop();
   }, [listening, glowAnim]);
 
-  if (!state.enabled || hidden) return null;
+  if (hidden) return null;
 
   const mood = state.mascotMood;
   const opacity = mood === 'sleeping' ? 0.85 : 1;
@@ -757,9 +744,20 @@ export function SenpaiMascot() {
               : `something broke: ${chatError.message} 💕`
             : null;
           // bubbleOverride is the highest priority (above liveTranscript
-          // even) so a tap-hint or mid-loading nudge ALWAYS displays —
-          // otherwise a stale lastAssistantMsg.content would win and the
-          // user's tap would seem to do nothing.
+          // even) so a tap-hint or mid-loading nudge ALWAYS displays.
+          //
+          // Priority below it (the #1 fix): an ACTIVE reaction
+          // (reactionExpiry in the future) outranks the last chat reply.
+          // Otherwise `lastAssistantMsg.content` — which never expires and is
+          // persisted — permanently shadowed the whole reaction engine in the
+          // bubble (workout/PR/level-up/idle/sleep would change the image but
+          // not the text). Chat replies ALSO set state.lastReaction (via
+          // triggerReaction in useSenpaiChat), so this branch shows her reply
+          // for its lifetime too. The stale reply then lingers only while a
+          // voice convo is open (so the user can re-read it); once she's not
+          // listening and the reaction expires, the bubble clears instead of
+          // freezing on an old line.
+          const reactionActive = !!state.lastReaction && state.reactionExpiry > Date.now();
           const bubbleText = bubbleOverride
             ? bubbleOverride
             : liveTranscript
@@ -768,7 +766,9 @@ export function SenpaiMascot() {
             ? '...'
             : errText
             ? errText
-            : lastAssistantMsg?.content
+            : reactionActive
+            ? state.lastReaction
+            : listening && lastAssistantMsg?.content
             ? lastAssistantMsg.content
             : listening
             ? 'speak to me senpai 💕'
@@ -1006,10 +1006,14 @@ export function SenpaiMascot() {
             the mic — didDragRef swallows the press that trails a drag. */}
         <Pressable
           onPress={handleTap}
+          onLongPress={() => setShowClose((v) => !v)}
+          delayLongPress={500}
           accessibilityRole="button"
           accessibilityLabel={listening ? 'Stop talking to Senpai' : 'Talk to Senpai'}
           accessibilityHint={
-            listening ? 'Turns the microphone off' : 'Opens the microphone and starts listening'
+            listening
+              ? 'Turns the microphone off. Long-press to show a dismiss button.'
+              : 'Opens the microphone and starts listening. Long-press to show a dismiss button.'
           }
           hitSlop={8}
         >
@@ -1050,9 +1054,32 @@ export function SenpaiMascot() {
           </Pressable>
           <Pressable
             onPress={() => {
+              // Hand off from inline voice to the dedicated voice surface: stop
+              // the mascot's inline mic first so the modal's STT isn't fighting it.
+              if (listening) deactivateListening();
+              setChatOpen(false);
+              setVoiceOpen(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Open hands-free voice chat with Senpai"
+            hitSlop={6}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              borderRadius: 11,
+              backgroundColor: 'rgba(0,0,0,0.55)',
+            }}
+          >
+            <Text style={{ fontSize: 10, color: '#fff', fontWeight: '800', letterSpacing: 0.2 }}>🎙️ voice</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
               // Hand off from inline voice to the full chat: stop the mascot's
               // mic first so the modal's STT isn't fighting it.
               if (listening) deactivateListening();
+              setVoiceOpen(false);
               setChatOpen(true);
             }}
             accessibilityRole="button"
@@ -1102,6 +1129,11 @@ export function SenpaiMascot() {
           mascot's inline walkie-talkie. The shared SenpaiChatProvider keeps it
           on the same conversation as the bubble. */}
       {chatOpen && <SenpaiChatModal visible={chatOpen} onClose={() => setChatOpen(false)} />}
+
+      {/* Dedicated hands-free voice surface. Mounted only while open so its STT
+          subscription doesn't double-fire alongside the mascot's inline mic;
+          shares the same SenpaiChatProvider conversation. */}
+      {voiceOpen && <SenpaiVoiceModal visible={voiceOpen} onClose={() => setVoiceOpen(false)} />}
     </>
   );
 }

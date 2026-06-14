@@ -479,7 +479,7 @@ export function SettingsScreen({ navigation }: any) {
         {/* Senpai Mode toggle — sits right under the theme picker because
             enabling it locks the theme + spawns the floating chibi (the
             most "I want this on" decision in the app). The expanded
-            senpai controls (volume, sparkles, outfit, memory) still live
+            senpai controls (volume, sparkles, memory) still live
             in the SECRET LAB section further down. */}
         <View
           style={[

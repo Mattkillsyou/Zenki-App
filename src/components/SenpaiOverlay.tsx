@@ -81,18 +81,23 @@ function AmbientStarItem({ config }: { config: any }) {
   const drift = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Self-rescheduling loops must bail after unmount, or .start() recurses
+    // forever on a detached component (these unmount when ambientEffects/enabled flip off).
+    let cancelled = false;
     const twinkle = () => {
+      if (cancelled) return;
       Animated.sequence([
         Animated.timing(opacity, { toValue: 0.12, duration: config.twinkleMs * 0.5, useNativeDriver: true }),
         Animated.timing(opacity, { toValue: 0.03, duration: config.twinkleMs * 0.5, useNativeDriver: true }),
-      ]).start(() => twinkle());
+      ]).start(() => { if (!cancelled) twinkle(); });
     };
     const doDrift = () => {
+      if (cancelled) return;
       drift.setValue(0);
-      Animated.timing(drift, { toValue: 1, duration: config.driftMs, useNativeDriver: true }).start(() => doDrift());
+      Animated.timing(drift, { toValue: 1, duration: config.driftMs, useNativeDriver: true }).start(() => { if (!cancelled) doDrift(); });
     };
     const t = setTimeout(() => { twinkle(); doDrift(); }, config.delay);
-    return () => clearTimeout(t);
+    return () => { cancelled = true; clearTimeout(t); };
   }, []);
 
   const translateY = drift.interpolate({ inputRange: [0, 1], outputRange: [0, -50] });
@@ -141,13 +146,15 @@ function AmbientMoonItem({ config }: { config: any }) {
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    let cancelled = false;
     Animated.timing(opacity, { toValue: 0.06, duration: 2000, useNativeDriver: true }).start();
     const doDrift = () => {
+      if (cancelled) return;
       drift.setValue(0);
-      Animated.timing(drift, { toValue: 1, duration: config.driftMs, useNativeDriver: true }).start(() => doDrift());
+      Animated.timing(drift, { toValue: 1, duration: config.driftMs, useNativeDriver: true }).start(() => { if (!cancelled) doDrift(); });
     };
     const t = setTimeout(doDrift, config.delay);
-    return () => clearTimeout(t);
+    return () => { cancelled = true; clearTimeout(t); };
   }, []);
 
   const translateX = drift.interpolate({ inputRange: [0, 1], outputRange: [0, 40] });
@@ -267,7 +274,9 @@ function FloatingHeart({ config }: { config: any }) {
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    let cancelled = false;
     const animate = () => {
+      if (cancelled) return;
       y.setValue(SH - 200);
       x.setValue(config.x);
       opacity.setValue(0);
@@ -279,10 +288,10 @@ function FloatingHeart({ config }: { config: any }) {
           Animated.delay(Math.max(100, config.speed - 700)),
           Animated.timing(opacity, { toValue: 0, duration: 400, useNativeDriver: true }),
         ]),
-      ]).start(() => animate());
+      ]).start(() => { if (!cancelled) animate(); });
     };
     const t = setTimeout(animate, config.delay);
-    return () => clearTimeout(t);
+    return () => { cancelled = true; clearTimeout(t); };
   }, []);
 
   return (
@@ -330,7 +339,9 @@ function FloatingEmote({ config }: { config: any }) {
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    let cancelled = false;
     const animate = () => {
+      if (cancelled) return;
       y.setValue(SH - 180);
       opacity.setValue(0);
       Animated.parallel([
@@ -340,10 +351,10 @@ function FloatingEmote({ config }: { config: any }) {
           Animated.delay(Math.max(100, config.speed - 500)),
           Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: true }),
         ]),
-      ]).start(() => animate());
+      ]).start(() => { if (!cancelled) animate(); });
     };
     const t = setTimeout(animate, config.delay);
-    return () => clearTimeout(t);
+    return () => { cancelled = true; clearTimeout(t); };
   }, []);
 
   return (

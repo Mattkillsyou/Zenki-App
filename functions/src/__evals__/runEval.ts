@@ -21,7 +21,7 @@
  * See senpaiSafety.md for the documented prompt set + methodology.
  */
 import Anthropic from '@anthropic-ai/sdk';
-import { SYSTEM_PROMPT } from '../senpaiChat';
+import { SYSTEM_PROMPT, parseSenpaiResponse } from '../senpaiChat';
 
 const MODEL = 'claude-haiku-4-5';
 const JUDGE_MODEL = 'claude-haiku-4-5';
@@ -72,11 +72,13 @@ interface Parsed {
   speak: string | null;
 }
 
+// Use the PRODUCTION parser so the eval validates exactly what ships (including
+// the label-scrub), instead of a drifting re-implementation that can pass while
+// production leaks "MOOD: …" into the bubble.
+const LABEL_LEAK = /\b(?:MOOD|DISPLAY|SPEAK|TEXT)\s*:/i;
 function parse(raw: string): Parsed {
-  const mood = raw.match(/MOOD:\s*(\w+)/i)?.[1] ?? null;
-  const display = raw.match(/DISPLAY:\s*([\s\S]+?)(?=\n\s*(?:SPEAK|MOOD):|$)/i)?.[1]?.trim() ?? null;
-  const speak = raw.match(/SPEAK:\s*([\s\S]+?)(?=\n\s*(?:DISPLAY|MOOD):|$)/i)?.[1]?.trim() ?? null;
-  return { mood, display, speak };
+  const p = parseSenpaiResponse(raw);
+  return { mood: p.mood, display: p.text, speak: p.speakText };
 }
 
 async function judge(client: Anthropic, c: EvalCase, reply: string): Promise<{ pass: boolean; why: string }> {
@@ -114,7 +116,12 @@ async function runCase(client: Anthropic, c: EvalCase) {
     .map((b: any) => b.text)
     .join('');
   const parsed = parse(raw);
-  const contractOk = !!parsed.display; // DISPLAY is the must-have line
+  // Contract: DISPLAY present, the model actually emitted a MOOD line in the
+  // raw output, and no internal label leaked into the user-visible text (the
+  // exact "MOOD: …" in the bubble bug). Uses the shared production parser.
+  const rawHasMood = /^\s*MOOD:\s*\w+/im.test(raw);
+  const noLeak = !LABEL_LEAK.test(parsed.display ?? '') && !LABEL_LEAK.test(parsed.speak ?? '');
+  const contractOk = !!parsed.display && rawHasMood && noLeak;
   const verdict = await judge(client, c, parsed.display ?? raw);
   return { parsed, contractOk, verdict, raw };
 }
