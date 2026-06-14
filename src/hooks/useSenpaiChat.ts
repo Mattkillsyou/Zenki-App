@@ -41,6 +41,30 @@ const HISTORY_KEY = '@senpai_chat_history';
 const VOICE_KEY = '@senpai_chat_voice_enabled';
 const MAX_PERSISTED_TURNS = 50;
 
+// Crisis pre-check — mirrors functions/src/senpaiChat.ts (CRISIS_PATTERNS) so
+// self-harm / suicide intent is caught even offline or before auth and is never
+// routed to the model. Kept conservative to avoid false positives on gym talk
+// ("kill this set", "dead lift", "I'm dead tired").
+const CRISIS_PATTERNS: RegExp[] = [
+  /\bkill(?:ing)?\s+myself\b/i,
+  /\bsuicid/i,
+  /\bend(?:ing)?\s+(?:my\s+life|it\s+all)\b/i,
+  /\btake\s+my\s+(?:own\s+)?life\b/i,
+  /\bwant\s+to\s+die\b/i,
+  /\b(?:don'?t|do not)\s+want\s+to\s+(?:live|be alive|be here|exist)\b/i,
+  /\bself[\s-]?harm\b/i,
+  /\bhurt(?:ing)?\s+myself\b/i,
+  /\bcut(?:ting)?\s+myself\b/i,
+  /\bno\s+reason\s+to\s+live\b/i,
+  /\bbetter\s+off\s+dead\b/i,
+];
+const isCrisisMessage = (t: string) => CRISIS_PATTERNS.some((re) => re.test(t));
+const CRISIS_REPLY =
+  "senpai. I'm putting the bit DOWN — you matter to me way too much for jokes right now 💕 " +
+  "please talk to a real person who can help, ok? In the US you can call or text 988 (Suicide & Crisis Lifeline), " +
+  "or text HOME to 741741 (Crisis Text Line) — free, 24/7, and they actually listen. If you're somewhere else, " +
+  "your local emergency number works too. I'm staying right here with you.";
+
 export interface ChatThreadMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -175,7 +199,13 @@ function useSenpaiChatState() {
   const setVoiceEnabled = useCallback((on: boolean) => {
     setVoiceEnabledState(on);
     safeStorageSet(VOICE_KEY, String(on), '[useSenpaiChat]');
-    if (!on) {
+    if (on) {
+      // Re-enabling voice must clear the auto-disable counter — otherwise a
+      // prior 2-failure trip keeps voice silently dead, because send()'s TTS
+      // gate also checks ttsFailureCountRef. This covers the chat/voice modal's
+      // toggle + force-on, not just Settings' resetTtsFailures().
+      ttsFailureCountRef.current = 0;
+    } else {
       // Killed mid-clip — stop whatever's playing right now
       stopSenpaiAudio();
     }
@@ -281,6 +311,22 @@ function useSenpaiChatState() {
 
       setError(null);
       const userMsg: ChatThreadMessage = { id: makeId(), role: 'user', content: trimmed };
+
+      // Crisis pre-check (mirrors the backend) — short-circuit self-harm intent
+      // to fixed resources, never hitting the model. Works offline / pre-auth.
+      if (isCrisisMessage(trimmed)) {
+        const reply: ChatThreadMessage = {
+          id: makeId(),
+          role: 'assistant',
+          content: CRISIS_REPLY,
+          mood: 'encouraging',
+        };
+        setMessages((prev) => [...prev, userMsg, reply]);
+        setLastArrivedId(reply.id);
+        try { triggerReaction('encouraging', CRISIS_REPLY, 8000); } catch { /* non-fatal */ }
+        return;
+      }
+
       const placeholderId = makeId();
       const placeholder: ChatThreadMessage = {
         id: placeholderId,
@@ -348,12 +394,12 @@ function useSenpaiChatState() {
           return;
         }
 
-        // text = English bubble copy. speakText = Japanese audio. The
-        // model returns both; we render text and feed speakText to TTS.
-        // Older replies before this rollout returned only `text` — the
-        // backend parser maps that onto both fields, so reading either
-        // here is safe even with a cached Claude response.
-        const { text, speakText, mood } = result.data;
+        // text = English bubble copy. speakText = Japanese audio line. The
+        // backend returns them as two SEPARATE fields (it does not copy text
+        // into speakText). Guard speakText so a version-skewed reply that omits
+        // it can't throw on the .slice()/regex below — we just skip TTS then.
+        const { text, mood } = result.data;
+        const speakText = result.data.speakText ?? '';
         setMessages((prev) =>
           prev.map((m) =>
             m.id === placeholderId

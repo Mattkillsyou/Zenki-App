@@ -333,7 +333,10 @@ export function HomeScreen({ navigation }: any) {
     if (!senpaiShouldReact()) return;
     const hour = new Date().getHours();
     const key = hour < 12 ? 'morning' : hour >= 18 ? 'evening' : 'appOpen';
-    const t = setTimeout(() => senpaiReact('encouraging', randomDialogue(key), 4000), 1500);
+    // 'cheering' — the morning/evening/appOpen greetings are high-energy
+    // ("SENPAI! You're here!"), so the mood should match the copy, not the
+    // calmer 'encouraging' pose.
+    const t = setTimeout(() => senpaiReact('cheering', randomDialogue(key), 4000), 1500);
     return () => clearTimeout(t);
   }, [senpaiState.enabled]);
   const { announcements } = useAnnouncements();

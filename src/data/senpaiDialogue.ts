@@ -149,5 +149,6 @@ export const SENPAI_DIALOGUE = {
 
 export function randomDialogue(key: keyof typeof SENPAI_DIALOGUE): string {
   const options = SENPAI_DIALOGUE[key];
+  if (!options || options.length === 0) return '';
   return options[Math.floor(Math.random() * options.length)];
 }

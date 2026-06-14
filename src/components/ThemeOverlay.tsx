@@ -466,22 +466,28 @@ function MoonSparkleItem({ item }: { item: any }) {
   const twinkle = useRef(new Animated.Value(0.15)).current;
 
   useEffect(() => {
+    // Mirror the guarded Flicker/SheikahRune pattern: a `cancelled` flag bails
+    // the self-rescheduling recursion after unmount. MoonSparkle items unmount
+    // whenever the Senpai theme's overlay flips off (14 of them, every toggle).
+    let cancelled = false;
     const drift = () => {
+      if (cancelled) return;
       translateY.setValue(item.startY);
       Animated.timing(translateY, {
         toValue: -40,
         duration: item.speed,
         useNativeDriver: true,
-      }).start(() => drift());
+      }).start(() => { if (!cancelled) drift(); });
     };
     const shimmer = () => {
+      if (cancelled) return;
       Animated.sequence([
         Animated.timing(twinkle, { toValue: 0.85, duration: item.twinkleMs * 0.5, useNativeDriver: true }),
         Animated.timing(twinkle, { toValue: 0.15, duration: item.twinkleMs * 0.5, useNativeDriver: true }),
-      ]).start(() => shimmer());
+      ]).start(() => { if (!cancelled) shimmer(); });
     };
     const t = setTimeout(() => { drift(); shimmer(); }, item.delay);
-    return () => clearTimeout(t);
+    return () => { cancelled = true; clearTimeout(t); };
   }, []);
 
   return (

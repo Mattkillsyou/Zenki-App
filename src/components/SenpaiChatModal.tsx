@@ -371,13 +371,14 @@ export function SenpaiChatModal({ visible, onClose }: Props) {
           {/* Thread */}
           {messages.length === 0 ? (
             <View style={styles.emptyWrap}>
-              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>...hi.</Text>
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>HI HI HI!! 💕</Text>
               <Text style={[styles.emptyBody, { color: colors.textMuted }]}>
+                {'you came back to MY app, senpai. '}
                 {inputMode === 'voice'
                   ? recording
-                    ? "I'm listening."
-                    : "Tap and talk. I'll respond."
-                  : "Type below. I'll respond."}
+                    ? "I'm listening — talk to me 💕"
+                    : "tap and talk, I'll answer out loud 💕"
+                  : "type below, I'll answer 💕"}
               </Text>
             </View>
           ) : (
