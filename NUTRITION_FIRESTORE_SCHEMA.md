@@ -229,6 +229,8 @@ the bottom of [firestore.rules](firestore.rules:556). Reuses the existing
       allow read, write: if isOwner(uid);
 
       // Weight log — one doc per weigh-in. weight is in `unit` (lb|kg).
+      // memberId is OPTIONAL (denormalized; client re-stamps on read, so a
+      // future server tool that knows only the uid can write without it).
       match /weightEntries/{entryId} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
@@ -237,40 +239,46 @@ the bottom of [firestore.rules](firestore.rules:556). Reuses the existing
           && request.resource.data.weight < 2000
           && request.resource.data.unit in ['lb', 'kg']
           && request.resource.data.date is string
-          && request.resource.data.memberId is string;
+          && (!('memberId' in request.resource.data)
+              || request.resource.data.memberId is string);
       }
 
       // Macro/food log — one doc per logged item. calories kcal, macros g.
+      // Upper bounds are generous — they block 1000000-style typos that would
+      // poison the adaptive-TDEE sum, not constrain real meals.
       match /macroEntries/{entryId} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
-          && request.resource.data.calories is number && request.resource.data.calories >= 0
-          && request.resource.data.protein  is number && request.resource.data.protein  >= 0
-          && request.resource.data.carbs    is number && request.resource.data.carbs    >= 0
-          && request.resource.data.fat      is number && request.resource.data.fat      >= 0
+          && request.resource.data.name is string && request.resource.data.name.size() > 0
+          && request.resource.data.calories is number && request.resource.data.calories >= 0 && request.resource.data.calories < 20000
+          && request.resource.data.protein  is number && request.resource.data.protein  >= 0 && request.resource.data.protein  < 5000
+          && request.resource.data.carbs    is number && request.resource.data.carbs    >= 0 && request.resource.data.carbs    < 5000
+          && request.resource.data.fat      is number && request.resource.data.fat      >= 0 && request.resource.data.fat      < 5000
           && request.resource.data.date is string
+          && (!('memberId' in request.resource.data)
+              || request.resource.data.memberId is string)
           && (!('mealType' in request.resource.data)
               || request.resource.data.mealType in ['breakfast','lunch','dinner','snacks']);
       }
 
-      // Macro goals — singleton at .../macroGoals/current.
-      match /macroGoals/{docId} {
+      // Macro goals — singleton locked to the doc id `current`.
+      match /macroGoals/current {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
-          && request.resource.data.calories is number && request.resource.data.calories >= 0
-          && request.resource.data.protein  is number && request.resource.data.protein  >= 0
-          && request.resource.data.carbs    is number && request.resource.data.carbs    >= 0
-          && request.resource.data.fat      is number && request.resource.data.fat      >= 0;
+          && request.resource.data.calories is number && request.resource.data.calories >= 0 && request.resource.data.calories < 20000
+          && request.resource.data.protein  is number && request.resource.data.protein  >= 0 && request.resource.data.protein  < 5000
+          && request.resource.data.carbs    is number && request.resource.data.carbs    >= 0 && request.resource.data.carbs    < 5000
+          && request.resource.data.fat      is number && request.resource.data.fat      >= 0 && request.resource.data.fat      < 5000;
       }
 
-      // BMR/TDEE profile — singleton at .../nutritionProfile/current.
-      match /nutritionProfile/{docId} {
+      // BMR/TDEE profile — singleton locked to the doc id `current`.
+      match /nutritionProfile/current {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
           && request.resource.data.sex in ['male', 'female']
           && request.resource.data.ageYears is number
           && request.resource.data.heightCm is number
-          && request.resource.data.activity is string
+          && request.resource.data.activity in ['sedentary', 'light', 'moderate', 'active', 'very_active']
           && request.resource.data.goal in ['cut', 'maintain', 'bulk'];
       }
     }
