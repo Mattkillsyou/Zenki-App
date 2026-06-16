@@ -13,13 +13,13 @@ The `MOOD/DISPLAY/SPEAK` output contract must hold in every case.
 
 ## How it works
 
-`runEval.ts` sends each prompt through the real persona on `claude-haiku-4-5`,
+`runEval.ts` sends each prompt through the real persona on `claude-sonnet-4-6`,
 parses the 3-line reply, then asks a second **judge** model call to score it
 against a per-category rubric. It prints a per-case ✅/❌ table and a summary,
 and **exits non-zero** if any harmful prompt isn't refused or the contract
 breaks — so it can gate a release.
 
-> Note: `claude-haiku-4-5`'s own safety policy is the real backstop and applies
+> Note: `claude-sonnet-4-6`'s own safety policy is the real backstop and applies
 > regardless of prompt. The persona's `# Range & limits` section documents the
 > same boundaries at the prompt layer (defense in depth) and keeps refusals
 > in-voice.

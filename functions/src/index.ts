@@ -86,7 +86,7 @@ export { submitContactInquiry } from './submitContactInquiry';
 // (clothing store + drink tab). Bearer-token auth + per-UID rate limiting.
 export { createPaymentIntent } from './createPaymentIntent';
 
-// Senpai AI chat endpoint — Daria-meets-DDLC chibi mascot powered by Haiku 4.5.
+// Senpai AI chat endpoint — Daria-meets-DDLC chibi mascot powered by Sonnet 4.6.
 // See SENPAI_AI_CHAT_PROMPT.md for design + persona reference.
 export { senpaiChat } from './senpaiChat';
 
