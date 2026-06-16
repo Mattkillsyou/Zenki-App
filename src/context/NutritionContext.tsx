@@ -23,6 +23,18 @@ import { DexaScan } from '../types/dexa';
 import { BloodworkReport } from '../types/bloodwork';
 import { useAuth } from './AuthContext';
 import { useGamification } from './GamificationContext';
+import { getCurrentUid } from '../services/firebaseAuth';
+import {
+  subscribeNutrition,
+  migrateNutritionToFirestore,
+  writeNutritionMeta,
+  upsertWeightEntry,
+  deleteWeightEntry,
+  upsertMacroEntry,
+  deleteMacroEntry,
+  setMacroGoals,
+  setNutritionProfile,
+} from '../services/nutritionSync';
 
 const WEIGHT_KEY = '@zenki_weight_entries';
 const MACRO_KEY = '@zenki_macro_entries';
@@ -31,6 +43,8 @@ const PROFILE_KEY = '@zenki_nutrition_profiles';
 const RECENT_FOODS_KEY = '@zenki_recent_foods';
 const DEXA_KEY = '@zenki_dexa_scans';
 const BLOODWORK_KEY = '@zenki_bloodwork_reports';
+// Per-uid run-once guard for the AsyncStorage → Firestore nutrition migration.
+const MIGRATED_KEY_PREFIX = '@zenki_nutrition_migrated_v1:';
 
 const RECENT_FOODS_LIMIT = 20;
 
@@ -143,6 +157,25 @@ function genId(prefix: string): string {
   return generateId(prefix);
 }
 
+/**
+ * Merge a Firestore time-series delta into the current in-memory array BY ID.
+ * Upserts replace/add by id (re-stamped with the current memberId); removedIds
+ * are dropped; everything else (other members' rows, and the current user's
+ * local-only rows not present in this delta) is preserved untouched. Never
+ * wholesale-replaces, so an empty/offline snapshot can't wipe local data.
+ */
+function mergeById<T extends { id: string; memberId: string }>(
+  prev: T[],
+  upserts: T[],
+  removedIds: string[],
+  memberId: string,
+): T[] {
+  const removed = new Set(removedIds);
+  const upsertIds = new Set(upserts.map((u) => u.id));
+  const kept = prev.filter((x) => !removed.has(x.id) && !upsertIds.has(x.id));
+  return [...kept, ...upserts.map((u) => ({ ...u, memberId }))];
+}
+
 export function NutritionProvider({ children }: { children: React.ReactNode }) {
   const [weights, setWeights] = useState<WeightEntry[]>([]);
   const [macros, setMacros] = useState<MacroEntry[]>([]);
@@ -201,6 +234,103 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { if (loaded) safeStorageSet(DEXA_KEY, dexaScans, '[Nutrition dexa]'); }, [dexaScans, loaded]);
   useEffect(() => { if (loaded) safeStorageSet(BLOODWORK_KEY, bloodwork, '[Nutrition bloodwork]'); }, [bloodwork, loaded]);
 
+  // ── Firestore sync (weight / macros / goals / profile) ──
+  // When the signed-in user has a Firebase uid, Firestore at
+  // /nutrition/{uid}/… becomes the source of truth for THAT user's
+  // weight/macro/goals/profile data: a write from either the app OR a
+  // server-side Senpai tool (Admin SDK) shows up here via the snapshot.
+  //
+  // The AsyncStorage path above is left fully intact as the offline cache,
+  // the instant-on data on cold start, AND the source for the one-time
+  // migration. We only ever REPLACE the current user's slice of in-memory
+  // state from a snapshot (re-stamping memberId) — other members' cached
+  // rows are never touched, and the legacy keys are read, never destroyed.
+  //
+  // Seed/reviewer accounts with no Firebase uid (getCurrentUid() === null)
+  // stay on the AsyncStorage-only path and never reach this effect.
+  // DEXA / bloodwork / recent-foods deliberately remain local-only.
+  // See NUTRITION_FIRESTORE_SCHEMA.md.
+  useEffect(() => {
+    const memberId = user?.id;
+    const uid = getCurrentUid();
+    if (!uid || !memberId) return;
+
+    let cancelled = false;
+    let unsub: () => void = () => {};
+
+    (async () => {
+      // One-time migration: lift this user's existing AsyncStorage rows into
+      // Firestore BEFORE subscribing, so the first snapshot already includes
+      // them (no transient "empty" flash). Idempotent (writes by existing id,
+      // merge:true) and guarded per-uid.
+      try {
+        const flagKey = `${MIGRATED_KEY_PREFIX}${uid}`;
+        const already = await AsyncStorage.getItem(flagKey);
+        if (!already) {
+          const [wRaw, mRaw, gRaw, pRaw] = await Promise.all([
+            AsyncStorage.getItem(WEIGHT_KEY),
+            AsyncStorage.getItem(MACRO_KEY),
+            AsyncStorage.getItem(GOALS_KEY),
+            AsyncStorage.getItem(PROFILE_KEY),
+          ]);
+          const isObject = (v: unknown) => typeof v === 'object' && v !== null && !Array.isArray(v);
+          const legacyWeights = safeParseJSON<WeightEntry[]>(wRaw, [], Array.isArray).filter((w) => w.memberId === memberId);
+          const legacyMacros = safeParseJSON<MacroEntry[]>(mRaw, [], Array.isArray).filter((m) => m.memberId === memberId);
+          const legacyGoals = safeParseJSON<Record<string, MacroGoals>>(gRaw, {}, isObject)[memberId] ?? null;
+          const legacyProfile = safeParseJSON<Record<string, NutritionProfile>>(pRaw, {}, isObject)[memberId] ?? null;
+
+          const hasData = legacyWeights.length > 0 || legacyMacros.length > 0 || !!legacyGoals || !!legacyProfile;
+          const ok = hasData
+            ? await migrateNutritionToFirestore(uid, {
+                weights: legacyWeights,
+                macros: legacyMacros,
+                goals: legacyGoals,
+                profile: legacyProfile,
+              })
+            : true;
+          if (ok) {
+            await writeNutritionMeta(uid, { memberId, migratedAt: new Date().toISOString() });
+            await AsyncStorage.setItem(flagKey, '1');
+          }
+        }
+      } catch {
+        // non-fatal — the subscription still works; migration retries next launch
+      }
+
+      if (cancelled) return;
+
+      unsub = subscribeNutrition(uid, (delta) => {
+        // Merge incrementally BY ID and re-stamp memberId, so the existing
+        // memberId-keyed selectors keep working even for server-written docs
+        // that never carried a memberId. Merging (not replacing) means an
+        // empty/offline snapshot can't wipe locally-loaded rows.
+        if (delta.weights) {
+          const { upserts, removedIds } = delta.weights;
+          setWeights((prev) => mergeById(prev, upserts, removedIds, memberId));
+        }
+        if (delta.macros) {
+          const { upserts, removedIds } = delta.macros;
+          setMacros((prev) => mergeById(prev, upserts, removedIds, memberId));
+        }
+        // Singletons upsert-only — never clear local on an absent/offline doc.
+        if (delta.goals) {
+          const g = delta.goals;
+          setGoalsByMember((prev) => ({ ...prev, [memberId]: { ...g, memberId } }));
+        }
+        if (delta.profile) {
+          const p = delta.profile;
+          setProfilesByMember((prev) => ({ ...prev, [memberId]: { ...p, memberId } }));
+        }
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   // ── Weight ──
   const myWeights = useCallback(
     (memberId: string) =>
@@ -226,11 +356,15 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
     };
     setWeights((prev) => [...prev, full]);
     recordWeightLogged();
+    const uid = getCurrentUid();
+    if (uid) upsertWeightEntry(uid, full);
     return full;
   }, [recordWeightLogged]);
 
   const removeWeight = useCallback((id: string) => {
     setWeights((prev) => prev.filter((w) => w.id !== id));
+    const uid = getCurrentUid();
+    if (uid) deleteWeightEntry(uid, id);
   }, []);
 
   // ── Macros ──
@@ -275,11 +409,15 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
     };
     setMacros((prev) => [...prev, full]);
     recordMealLogged();
+    const uid = getCurrentUid();
+    if (uid) upsertMacroEntry(uid, full);
     return full;
   }, [recordMealLogged]);
 
   const removeMacroEntry = useCallback((id: string) => {
     setMacros((prev) => prev.filter((m) => m.id !== id));
+    const uid = getCurrentUid();
+    if (uid) deleteMacroEntry(uid, id);
   }, []);
 
   const macrosForDateByMeal = useCallback(
@@ -336,22 +474,26 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
 
   const updateGoals = useCallback(
     (memberId: string, partial: Partial<Omit<MacroGoals, 'memberId' | 'updatedAt'>>) => {
+      // Compute the merged goals INSIDE the updater so we read the latest state
+      // (not a stale closure) — two rapid updateGoals calls must compound, not
+      // clobber. Capture the result to mirror the same value up to Firestore.
+      let updated: MacroGoals | null = null;
       setGoalsByMember((prev) => {
         const existing = prev[memberId] ?? {
           memberId,
           ...DEFAULT_MACRO_GOALS,
           updatedAt: new Date().toISOString(),
         };
-        return {
-          ...prev,
-          [memberId]: {
-            ...existing,
-            ...partial,
-            memberId,
-            updatedAt: new Date().toISOString(),
-          },
+        updated = {
+          ...existing,
+          ...partial,
+          memberId,
+          updatedAt: new Date().toISOString(),
         };
+        return { ...prev, [memberId]: updated };
       });
+      const uid = getCurrentUid();
+      if (uid && updated) setMacroGoals(uid, updated);
     },
     [],
   );
@@ -375,16 +517,17 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   const saveProfile = useCallback(
     (profile: Omit<NutritionProfile, 'updatedAt' | 'completedAt'>, weightKg: number) => {
       const now = new Date().toISOString();
+      // Compute fullProfile INSIDE the updater so completedAt reads the latest
+      // stored value (not a stale closure); capture it to mirror to Firestore.
+      let fullProfile: NutritionProfile | null = null;
       setProfilesByMember((prev) => {
         const existing = prev[profile.memberId];
-        return {
-          ...prev,
-          [profile.memberId]: {
-            ...profile,
-            completedAt: existing?.completedAt ?? now,
-            updatedAt: now,
-          },
+        fullProfile = {
+          ...profile,
+          completedAt: existing?.completedAt ?? now,
+          updatedAt: now,
         };
+        return { ...prev, [profile.memberId]: fullProfile };
       });
 
       // Compute and store derived macro goals
@@ -402,17 +545,21 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
         adjustmentOverride: profile.calorieAdjustment,
       });
 
-      setGoalsByMember((prev) => ({
-        ...prev,
-        [profile.memberId]: {
-          memberId: profile.memberId,
-          calories: macros.calories,
-          protein: macros.protein,
-          carbs: macros.carbs,
-          fat: macros.fat,
-          updatedAt: now,
-        },
-      }));
+      const fullGoals: MacroGoals = {
+        memberId: profile.memberId,
+        calories: macros.calories,
+        protein: macros.protein,
+        carbs: macros.carbs,
+        fat: macros.fat,
+        updatedAt: now,
+      };
+      setGoalsByMember((prev) => ({ ...prev, [profile.memberId]: fullGoals }));
+
+      const uid = getCurrentUid();
+      if (uid) {
+        if (fullProfile) setNutritionProfile(uid, fullProfile);
+        setMacroGoals(uid, fullGoals);
+      }
     },
     [],
   );
@@ -495,19 +642,16 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       // Only commit an update if we actually adapted (delta != 0 or we produced a high-confidence "no change")
       if (update.confidence !== 'none') {
         const now = new Date().toISOString();
-        setProfilesByMember((prev) => {
-          const existing = prev[memberId];
-          if (!existing) return prev;
-          return {
-            ...prev,
-            [memberId]: {
-              ...existing,
-              adaptedTdee: update.newTdee,
-              lastAdaptedAt: now,
-              updatedAt: now,
-            },
-          };
-        });
+        const uid = getCurrentUid();
+
+        const updatedProfile: NutritionProfile = {
+          ...profile,
+          adaptedTdee: update.newTdee,
+          lastAdaptedAt: now,
+          updatedAt: now,
+        };
+        setProfilesByMember((prev) => (prev[memberId] ? { ...prev, [memberId]: updatedProfile } : prev));
+        if (uid) setNutritionProfile(uid, updatedProfile);
 
         // Also recompute macro goals against the new TDEE
         const latest = weights
@@ -521,17 +665,16 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
             weightKg,
             adjustmentOverride: profile.calorieAdjustment,
           });
-          setGoalsByMember((prev) => ({
-            ...prev,
-            [memberId]: {
-              memberId,
-              calories: macros.calories,
-              protein: macros.protein,
-              carbs: macros.carbs,
-              fat: macros.fat,
-              updatedAt: now,
-            },
-          }));
+          const updatedGoals: MacroGoals = {
+            memberId,
+            calories: macros.calories,
+            protein: macros.protein,
+            carbs: macros.carbs,
+            fat: macros.fat,
+            updatedAt: now,
+          };
+          setGoalsByMember((prev) => ({ ...prev, [memberId]: updatedGoals }));
+          if (uid) setMacroGoals(uid, updatedGoals);
         }
       }
 

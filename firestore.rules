@@ -552,6 +552,81 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // Nutrition — weight log, macro/food log, macro goals, BMR/TDEE
+    // profile. ALL keyed by Firebase Auth uid in the PATH (NOT the
+    // app's internal memberId), so the owner IS the path segment and
+    // the rule is a plain isOwner() check — no per-doc firebaseUid
+    // stamping or field-equality dance (unlike attendance/appointments,
+    // which are flat collections). The server (Admin SDK, senpaiChat
+    // tools) BYPASSES these rules and writes the same /nutrition/{uid}/…
+    // paths using the uid from the verified ID token, so client and
+    // server share one source of truth. See NUTRITION_FIRESTORE_SCHEMA.md.
+    //
+    // Health data is private: owner-only READ and WRITE. No cross-user
+    // read — not even admins (medical-adjacent PII; moderation never
+    // needs it). `memberId` inside the docs is denormalized only: the
+    // client re-stamps it on read, so it is OPTIONAL here (a future
+    // server tool knows only the uid) and is intentionally NOT the
+    // security boundary.
+    // ─────────────────────────────────────────────────────────────
+    match /nutrition/{uid} {
+      allow read, write: if isOwner(uid);
+
+      // Weight log — one doc per weigh-in. weight is in `unit` (lb|kg).
+      match /weightEntries/{entryId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.weight is number
+          && request.resource.data.weight > 0
+          && request.resource.data.weight < 2000
+          && request.resource.data.unit in ['lb', 'kg']
+          && request.resource.data.date is string
+          && (!('memberId' in request.resource.data)
+              || request.resource.data.memberId is string);
+      }
+
+      // Macro/food log — one doc per logged item. calories kcal, macros g.
+      // Upper bounds are deliberately generous (block 1000000-style typos that
+      // would poison the adaptive TDEE sum, not constrain real meals). memberId
+      // is optional (denormalized; client re-stamps on read).
+      match /macroEntries/{entryId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.name is string && request.resource.data.name.size() > 0
+          && request.resource.data.calories is number && request.resource.data.calories >= 0 && request.resource.data.calories < 20000
+          && request.resource.data.protein  is number && request.resource.data.protein  >= 0 && request.resource.data.protein  < 5000
+          && request.resource.data.carbs    is number && request.resource.data.carbs    >= 0 && request.resource.data.carbs    < 5000
+          && request.resource.data.fat      is number && request.resource.data.fat      >= 0 && request.resource.data.fat      < 5000
+          && request.resource.data.date is string
+          && (!('memberId' in request.resource.data)
+              || request.resource.data.memberId is string)
+          && (!('mealType' in request.resource.data)
+              || request.resource.data.mealType in ['breakfast', 'lunch', 'dinner', 'snacks']);
+      }
+
+      // Macro goals — singleton locked to the doc id `current`.
+      match /macroGoals/current {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.calories is number && request.resource.data.calories >= 0 && request.resource.data.calories < 20000
+          && request.resource.data.protein  is number && request.resource.data.protein  >= 0 && request.resource.data.protein  < 5000
+          && request.resource.data.carbs    is number && request.resource.data.carbs    >= 0 && request.resource.data.carbs    < 5000
+          && request.resource.data.fat      is number && request.resource.data.fat      >= 0 && request.resource.data.fat      < 5000;
+      }
+
+      // BMR/TDEE profile — singleton locked to the doc id `current`.
+      match /nutritionProfile/current {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.sex in ['male', 'female']
+          && request.resource.data.ageYears is number
+          && request.resource.data.heightCm is number
+          && request.resource.data.activity in ['sedentary', 'light', 'moderate', 'active', 'very_active']
+          && request.resource.data.goal in ['cut', 'maintain', 'bulk'];
+      }
+    }
+
     // Default deny — anything not listed above is locked.
     match /{document=**} {
       allow read, write: if false;
