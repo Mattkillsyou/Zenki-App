@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Dimensions} from 'react-native';
+  View, Text, StyleSheet, ScrollView, useWindowDimensions} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,15 +12,16 @@ import {
   TrainingAccentToken,
 } from '../content/trainingModules';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const COLS = SCREEN_WIDTH >= 600 ? 3 : 2;
-
 /**
  * Training — a library of how-to guides, one per module. Reachable from
  * Settings → Learn → Training Guides.
  */
 export function TrainingHomeScreen({ navigation }: any) {
   const { colors } = useTheme();
+  // Reactive grid: adapts to iPad width, rotation, and Split View resizing
+  // (was a static Dimensions.get() at module load — App Review Guideline 4).
+  const { width } = useWindowDimensions();
+  const COLS = width >= 600 ? 3 : 2;
 
   const resolveAccent = (token: TrainingAccentToken): string => {
     const map: Record<TrainingAccentToken, string> = {

@@ -27,7 +27,6 @@ import { useAuth } from '../context/AuthContext';
 import { Order } from '../types/orders';
 import { appendLocalOrder, saveOrderToFirestore } from '../services/orderSync';
 import { isApplePayAvailable, payWithApplePay } from '../services/payments';
-import { STRIPE_CONFIGURED } from '../config/env';
 import { generateId } from '../utils/generateId';
 
 const WISHLIST_KEY = '@zenki_wishlist';
@@ -63,6 +62,17 @@ export function StoreScreen({ navigation }: any) {
   // Promo code
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountPercent: number; label: string } | null>(null);
+
+  // Whether Apple Pay can actually present on THIS device (Stripe configured +
+  // device supports Platform Pay). Drives the checkout button label so it never
+  // promises "Apple Pay" when no sheet would appear — that mismatch is the
+  // App Review 2.1(a) "no further action after Apple Pay tapped" rejection.
+  const [applePayReady, setApplePayReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    isApplePayAvailable().then((ok) => { if (!cancelled) setApplePayReady(ok); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Persist wishlist (cart now persists via CartContext).
   useEffect(() => {
@@ -473,7 +483,7 @@ export function StoreScreen({ navigation }: any) {
                     const promoDiscount = appliedPromo ? cartTotal * (appliedPromo.discountPercent / 100) : 0;
                     const finalTotal = Math.max(0, cartTotal - pointsDiscount - promoDiscount);
                     if (finalTotal === 0) return 'CONFIRM · FREE WITH POINTS';
-                    return STRIPE_CONFIGURED
+                    return applePayReady
                       ? `PAY $${finalTotal.toFixed(2)} WITH APPLE PAY`
                       : `RESERVE · PAY $${finalTotal.toFixed(2)} AT DOJO`;
                   })()}
