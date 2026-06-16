@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, Alert, Animated, PanResponder, Dimensions, Pressable} from 'react-native';
+  View, Text, StyleSheet, Alert, Animated, PanResponder, Dimensions, Pressable, TextInput,
+  Keyboard, Platform,
+} from 'react-native';
 import { SoundPressable } from './SoundPressable';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,11 +13,8 @@ import {
 } from 'expo-speech-recognition';
 import { useSenpai } from '../context/SenpaiContext';
 import { randomDialogue } from '../data/senpaiDialogue';
-import { useTheme } from '../context/ThemeContext';
 import { useSenpaiChat } from '../hooks/useSenpaiChat';
 import { stopSenpaiAudio } from '../services/senpaiAudio';
-import { SenpaiChatModal } from './SenpaiChatModal';
-import { SenpaiVoiceModal } from './SenpaiVoiceModal';
 import { ANIM_ASSETS } from './senpaiMoodAssets';
 
 const { width: SW, height: SH } = Dimensions.get('window');
@@ -31,6 +30,35 @@ const clampPos = (x: number, y: number) => ({
   x: Math.max(VISIBLE_MARGIN + 16 - SW, Math.min(MASCOT_SIZE - VISIBLE_MARGIN + 16, x)),
   y: Math.max(VISIBLE_MARGIN + 110 - SH, Math.min(MASCOT_SIZE - VISIBLE_MARGIN + 110, y)),
 });
+
+// In-place chat surface. She is draggable and snaps to the nearest of the 4
+// screen corners; the chat "dock" (reply bubble + Type/Talk switch + text box)
+// opens INWARD from whichever corner she's in, so it never runs off-screen.
+const MODE_KEY = '@zenki_senpai_mode';
+// One-time AI safety disclaimer gate (carried over from the deleted full-screen chat).
+const DISCLAIMER_KEY = '@senpai_chat_disclaimer_v1';
+const DOCK_W = 264;
+type CornerKey = 'br' | 'bl' | 'tr' | 'tl';
+// basePos values that seat her flush in each corner. Derived from the
+// default bottom:110/right:16 anchor + the MASCOT_SIZE box (16px side margins,
+// ~60px top inset clear of the status bar).
+const SNAP_LEFT_X = 32 + MASCOT_SIZE - SW; // basePos.x → left edge ≈ 16
+const SNAP_TOP_Y = 170 + MASCOT_SIZE - SH; // basePos.y → top edge ≈ 60
+const CORNER_TARGETS: Record<CornerKey, { x: number; y: number }> = {
+  br: { x: 0, y: 0 },
+  bl: { x: SNAP_LEFT_X, y: 0 },
+  tr: { x: 0, y: SNAP_TOP_Y },
+  tl: { x: SNAP_LEFT_X, y: SNAP_TOP_Y },
+};
+const nearestCorner = (pos: { x: number; y: number }): CornerKey => {
+  // Reconstruct her on-screen center from the basePos offset, then pick the
+  // nearest corner by which half of the screen the center falls in.
+  const centerX = SW - (16 - pos.x) - MASCOT_SIZE / 2;
+  const centerY = SH - (110 - pos.y) - MASCOT_SIZE / 2;
+  const v = centerY < SH / 2 ? 't' : 'b';
+  const h = centerX < SW / 2 ? 'l' : 'r';
+  return (v + h) as CornerKey;
+};
 
 /* ─── Animation asset map ────────────────────────────────────────────────── */
 // ANIM_ASSETS (mood→PNG) lives in ./senpaiMoodAssets so SenpaiVoiceModal can
@@ -54,14 +82,23 @@ export function SenpaiMascot() {
 
 function SenpaiMascotImpl() {
   const { state, triggerReaction } = useSenpai();
-  const { colors } = useTheme();
   const [hidden, setHidden] = useState(false);
   const [showClose, setShowClose] = useState(false);
-  // Full-screen chat modal (item 5) — the keyboard/voice surface, opened from
-  // the "💬 chat" pill. The inline bubble stays the quick voice surface.
-  const [chatOpen, setChatOpen] = useState(false);
-  // Dedicated hands-free voice surface, opened from the "🎙️ voice" pill.
-  const [voiceOpen, setVoiceOpen] = useState(false);
+  // In-place chat surface: 'type' = inline text box you type into; 'talk' =
+  // walkie-talkie voice (tap the chibi / the mic to talk). One switch flips
+  // between them — there is NO separate full-screen page anymore.
+  const [mode, setModeState] = useState<'type' | 'talk'>('type');
+  const [draft, setDraft] = useState('');
+  const inputRef = useRef<TextInput>(null);
+  // Which screen corner she's snapped to — drives which side the chat dock
+  // opens from so it always expands inward (never off-screen).
+  const [corner, setCorner] = useState<CornerKey>('br');
+  // One-time AI disclaimer gate (null = still loading; false = must accept
+  // before chatting; true = accepted). Replaces the deleted modal's gate.
+  const [disclaimerOK, setDisclaimerOK] = useState<boolean | null>(null);
+  // Keyboard height while the text box is focused — used to lift the dock so
+  // the input isn't hidden behind the keyboard at a bottom corner.
+  const [kbHeight, setKbHeight] = useState(0);
 
   // Inline walkie-talkie chat state. TAP senpai once to start listening,
   // tap again to stop — a friendlier replacement for the old press-and-hold
@@ -368,8 +405,35 @@ function SenpaiMascotImpl() {
       const parsed = safeParseJSON<{ x: number; y: number } | null>(raw, null, (v) =>
         typeof v === 'object' && v !== null && typeof (v as { x?: unknown }).x === 'number' && typeof (v as { y?: unknown }).y === 'number',
       );
-      if (parsed) setBasePos(clampPos(parsed.x, parsed.y));
+      if (parsed) {
+        // Persisted spots predate corner-snapping — snap the stored position
+        // to its nearest corner so she always reads as corner-docked.
+        const key = nearestCorner(clampPos(parsed.x, parsed.y));
+        setBasePos(CORNER_TARGETS[key]);
+        setCorner(key);
+      }
     });
+  }, []);
+
+  // Restore the last-used chat mode (type vs talk).
+  useEffect(() => {
+    AsyncStorage.getItem(MODE_KEY).then((m) => {
+      if (m === 'type' || m === 'talk') setModeState(m);
+    });
+  }, []);
+
+  // Restore the one-time AI disclaimer acceptance.
+  useEffect(() => {
+    AsyncStorage.getItem(DISCLAIMER_KEY).then((v) => setDisclaimerOK(v === 'accepted'));
+  }, []);
+
+  // Track the keyboard so the dock can lift clear of it while typing.
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvt, (e) => setKbHeight(e.endCoordinates?.height ?? 0));
+    const hideSub = Keyboard.addListener(hideEvt, () => setKbHeight(0));
+    return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
   const panResponder = useRef(
@@ -409,7 +473,10 @@ function SenpaiMascotImpl() {
         // A drag has started — mark it so the trailing onPress (if any) is
         // swallowed by handleTap instead of toggling the mic.
         didDragRef.current = true;
-        pan.setOffset({ x: (pan.x as any)._value, y: (pan.y as any)._value });
+        // Halt any in-flight corner-snap spring and capture her TRUE current
+        // position. A native-driven value's JS-side _value is stale mid-spring;
+        // stopAnimation's callback delivers the real value per axis.
+        pan.stopAnimation((v) => pan.setOffset(v));
         pan.setValue({ x: 0, y: 0 });
         // Reset trail to mascot origin and show dots
         trailPositions.forEach((p) => p.setValue({ x: 0, y: 0 }));
@@ -439,13 +506,28 @@ function SenpaiMascotImpl() {
         pan.flattenOffset();
         const dx = (pan.x as any)._value;
         const dy = (pan.y as any)._value;
-        // pan.x/y after flattenOffset is just THIS drag's gesture delta
-        // (offset was reset to 0 on grant). Accumulate onto current basePos
-        // and clamp so a fast/long fling can't put her past the screen edge.
-        const next = clampPos(basePosRef.current.x + dx, basePosRef.current.y + dy);
-        setBasePos(next);
-        pan.setValue({ x: 0, y: 0 });
-        AsyncStorage.setItem(POS_KEY, JSON.stringify(next));
+        // Where she was dropped (clamped on-screen), then snap to the nearest
+        // of the 4 corners. The transform springs from the drop delta to the
+        // corner; on settle we commit basePos (layout) and zero the pan so the
+        // rendered spot is unchanged. Native driver to stay in sync with the
+        // native bounce loop on the same transform.
+        const dropped = clampPos(basePosRef.current.x + dx, basePosRef.current.y + dy);
+        const key = nearestCorner(dropped);
+        const target = CORNER_TARGETS[key];
+        Animated.spring(pan, {
+          toValue: { x: target.x - basePosRef.current.x, y: target.y - basePosRef.current.y },
+          useNativeDriver: true,
+          friction: 7,
+          tension: 80,
+        }).start(({ finished }) => {
+          // If a new drag interrupted the snap, this fires with finished=false
+          // — bail so we don't clobber the in-progress gesture.
+          if (!finished) return;
+          setBasePos(target);
+          pan.setValue({ x: 0, y: 0 });
+        });
+        setCorner(key);
+        AsyncStorage.setItem(POS_KEY, JSON.stringify(target));
         // Clear the drag flag on the next tick — long enough for any
         // press-release that trails this drag to fire (and be swallowed by
         // handleTap) first, so the *next* genuine tap still toggles the mic.
@@ -534,11 +616,59 @@ function SenpaiMascotImpl() {
   // never opens or closes the mic. Reset shortly after the drag ends.
   const didDragRef = useRef(false);
 
+  // setMode — flip the in-place surface between the text box and voice.
+  // Entering 'type' closes the mic (if open) and focuses the box; entering
+  // 'talk' drops keyboard focus. Persisted so it sticks across launches.
+  const setMode = (m: 'type' | 'talk') => {
+    setModeState(m);
+    AsyncStorage.setItem(MODE_KEY, m);
+    if (m === 'type') {
+      if (listeningRef.current) deactivateListening();
+      setTimeout(() => inputRef.current?.focus(), 120);
+    } else {
+      inputRef.current?.blur();
+    }
+  };
+
+  // submitType — send the typed message; her reply lands in the bubble.
+  const submitType = () => {
+    const t = draft.trim();
+    if (!t || chatLoading || disclaimerOK !== true) return;
+    clearChatError();
+    setDraft('');
+    sendChat(t);
+  };
+
+  // Accept the one-time AI disclaimer, unlocking chat.
+  const acceptDisclaimer = () => {
+    setDisclaimerOK(true);
+    AsyncStorage.setItem(DISCLAIMER_KEY, 'accepted');
+    if (mode === 'type') setTimeout(() => inputRef.current?.focus(), 120);
+  };
+
+  // Clear the conversation — the only user-facing reset, mirroring the old
+  // full-screen chat's trash button (history persists across launches).
+  const confirmClear = () => {
+    Alert.alert('Clear chat?', "this wipes the conversation — senpai won't remember 💕", [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Clear', style: 'destructive', onPress: () => { clearChatError(); clearChat(); } },
+    ]);
+  };
+
   const handleTap = () => {
     // A reposition drag ends with a press-release that also fires onPress —
     // swallow that one so dragging the chibi never toggles the mic.
     if (didDragRef.current) {
       didDragRef.current = false;
+      return;
+    }
+    // Until the one-time AI disclaimer is accepted, the chibi does nothing
+    // (the disclaimer occupies the dock panel).
+    if (disclaimerOK !== true) return;
+    // In type mode the chibi isn't a mic — tapping her just pops the keyboard
+    // on the inline text box.
+    if (mode === 'type') {
+      inputRef.current?.focus();
       return;
     }
     // Listening → tap turns the mic OFF. Allowed even while a reply is in
@@ -677,6 +807,56 @@ function SenpaiMascotImpl() {
   const opacity = mood === 'sleeping' ? 0.85 : 1;
   const animSource = ANIM_ASSETS[mood] ?? ANIM_ASSETS.idle;
 
+  // Which corner she's docked to → which side the chat dock opens from.
+  const isTop = corner[0] === 't';
+  const isLeft = corner[1] === 'l';
+  // Lift the dock clear of the keyboard when typing at a BOTTOM corner (top
+  // corners open downward and are already clear). Lift = how far the keyboard
+  // top rises above the dock's bottom edge, plus a small margin.
+  const dockBottomFromScreen = (110 - basePos.y) + MASCOT_SIZE + 6;
+  const dockLift =
+    mode === 'type' && !isTop && kbHeight > 0
+      ? Math.max(0, kbHeight - dockBottomFromScreen + 12)
+      : 0;
+
+  // Bubble text priority: tap/loading override → live transcript → loading
+  // dots → typed error → her last reply → listening greeting → auto reaction.
+  const bubbleText = (() => {
+    const errText = chatError
+      ? chatError.code === 'no_auth'
+        ? 'sign in expired senpai — open the app fresh 💕'
+        : chatError.code === 'no_network'
+        ? chatError.message + ' 💕'
+        : chatError.code === 'rate_limit'
+        ? chatError.message + ' 💕'
+        : chatError.code === 'server_error'
+        ? `server hiccup (${chatError.message}) — try again 💕`
+        : chatError.code === 'parse_error'
+        ? `bad reply (${chatError.message}) — try again 💕`
+        : `something broke: ${chatError.message} 💕`
+      : null;
+    // An ACTIVE reaction (reactionExpiry in the future) outranks the last chat
+    // reply — otherwise lastAssistantMsg (never-expiring, persisted) permanently
+    // shadows the reaction engine in the bubble (the audit's Root-Cause-A freeze).
+    // lastAssistantMsg only wins while she's actively listening.
+    const reactionActive = !!state.lastReaction && state.reactionExpiry > Date.now();
+    return bubbleOverride
+      ? bubbleOverride
+      : liveTranscript
+      ? liveTranscript
+      : chatLoading
+      ? '...'
+      : errText
+      ? errText
+      : reactionActive
+      ? state.lastReaction
+      : listening && lastAssistantMsg?.content
+      ? lastAssistantMsg.content
+      : listening
+      ? 'speak to me senpai 💕'
+      : state.lastReaction;
+  })();
+
   return (
     <>
       <Animated.View
@@ -693,8 +873,14 @@ function SenpaiMascotImpl() {
             opacity,
           },
         ]}
-        {...panResponder.panHandlers}
       >
+        {/* Draggable cluster — the PanResponder lives on THIS wrapper, which
+            holds ONLY the chibi + her effects. The chat dock (a sibling below)
+            is therefore never in this responder's negotiation, so its TextInput
+            and buttons can't be hijacked into a reposition drag (a draggy tap
+            on a child reports child-relative locationX/Y, which previously
+            fell inside the mascot bounds check). mascotHit is the hit box. */}
+        <View style={styles.mascotHit} {...panResponder.panHandlers}>
         {/* Drag trail dots (pink → blue → purple) */}
         {[
           { idx: 0, color: '#FF2E51' },
@@ -721,60 +907,7 @@ function SenpaiMascotImpl() {
           />
         ))}
 
-        {/* Speech bubble — chat surface + legacy reaction overlay.
-            Priority: live transcript (you talking) → loading dots →
-            error → senpai's reply → listening greeting → auto reaction.
-            The reply must beat the listening greeting, otherwise once
-            the mic is open the user never sees senpai answer.
-            Error text now uses the typed error code so the user can
-            see *why* it failed (auth vs network vs rate-limit vs
-            timeout vs unknown), instead of the old generic blurb. */}
-        {(() => {
-          const errText = chatError
-            ? chatError.code === 'no_auth'
-              ? 'sign in expired senpai — open the app fresh 💕'
-              : chatError.code === 'no_network'
-              ? chatError.message + ' 💕'
-              : chatError.code === 'rate_limit'
-              ? chatError.message + ' 💕'
-              : chatError.code === 'server_error'
-              ? `server hiccup (${chatError.message}) — try again 💕`
-              : chatError.code === 'parse_error'
-              ? `bad reply (${chatError.message}) — try again 💕`
-              : `something broke: ${chatError.message} 💕`
-            : null;
-          // bubbleOverride is the highest priority (above liveTranscript
-          // even) so a tap-hint or mid-loading nudge ALWAYS displays.
-          //
-          // Priority below it (the #1 fix): an ACTIVE reaction
-          // (reactionExpiry in the future) outranks the last chat reply.
-          // Otherwise `lastAssistantMsg.content` — which never expires and is
-          // persisted — permanently shadowed the whole reaction engine in the
-          // bubble (workout/PR/level-up/idle/sleep would change the image but
-          // not the text). Chat replies ALSO set state.lastReaction (via
-          // triggerReaction in useSenpaiChat), so this branch shows her reply
-          // for its lifetime too. The stale reply then lingers only while a
-          // voice convo is open (so the user can re-read it); once she's not
-          // listening and the reaction expires, the bubble clears instead of
-          // freezing on an old line.
-          const reactionActive = !!state.lastReaction && state.reactionExpiry > Date.now();
-          const bubbleText = bubbleOverride
-            ? bubbleOverride
-            : liveTranscript
-            ? liveTranscript
-            : chatLoading
-            ? '...'
-            : errText
-            ? errText
-            : reactionActive
-            ? state.lastReaction
-            : listening && lastAssistantMsg?.content
-            ? lastAssistantMsg.content
-            : listening
-            ? 'speak to me senpai 💕'
-            : state.lastReaction;
-          return bubbleText ? <SpeechBubble text={bubbleText} colors={colors} /> : null;
-        })()}
+        {/* Reply / live-transcript bubble now renders inside the chat dock below. */}
 
         {/* Listening glow — bright pulsing pink halo while the mic is open.
             Renders only while listening; fades when she goes quiet. */}
@@ -1009,9 +1142,13 @@ function SenpaiMascotImpl() {
           onLongPress={() => setShowClose((v) => !v)}
           delayLongPress={500}
           accessibilityRole="button"
-          accessibilityLabel={listening ? 'Stop talking to Senpai' : 'Talk to Senpai'}
+          accessibilityLabel={
+            mode === 'type' ? 'Type to Senpai' : listening ? 'Stop talking to Senpai' : 'Talk to Senpai'
+          }
           accessibilityHint={
-            listening
+            mode === 'type'
+              ? 'Opens the keyboard. Long-press to show a dismiss button.'
+              : listening
               ? 'Turns the microphone off. Long-press to show a dismiss button.'
               : 'Opens the microphone and starts listening. Long-press to show a dismiss button.'
           }
@@ -1025,77 +1162,121 @@ function SenpaiMascotImpl() {
             cachePolicy="memory-disk"
           />
         </Pressable>
+        </View>
 
-        {/* Mic pill + chat pill — small, always-visible controls anchored under
-            the chibi. "🎤 tap to talk" mirrors tapping her (inline voice);
-            "💬 chat" opens the full-screen modal (keyboard/voice, item 5).
-            box-none on the wrapper so it never blocks a drag on the mascot. */}
+        {/* In-place chat dock — anchored to her current corner, expands
+            inward. Holds her reply bubble + the Type/Talk switch and (in
+            Type mode) the inline text box. Replaces the old pills AND the
+            full-screen chat page — nothing here opens a new screen.
+            box-none so empty space never blocks a drag on the mascot. */}
         <View
           pointerEvents="box-none"
-          style={{ position: 'absolute', bottom: -6, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 }}
+          style={[
+            styles.dock,
+            isTop ? { top: MASCOT_SIZE + 6 } : { bottom: MASCOT_SIZE + 6 },
+            isLeft ? { left: -10, alignItems: 'flex-start' } : { right: -10, alignItems: 'flex-end' },
+            { transform: [{ translateY: -dockLift }] },
+          ]}
         >
-          <Pressable
-            onPress={handleTap}
-            accessibilityRole="button"
-            accessibilityLabel={listening ? 'Stop talking to Senpai' : 'Talk to Senpai'}
-            hitSlop={6}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-              borderRadius: 11,
-              backgroundColor: listening ? 'rgba(220,38,38,0.92)' : 'rgba(0,0,0,0.55)',
-            }}
-          >
-            <Text style={{ fontSize: 10, color: '#fff', fontWeight: '800', letterSpacing: 0.2 }}>
-              {listening ? '● listening' : '🎤 tap to talk'}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              // Hand off from inline voice to the dedicated voice surface: stop
-              // the mascot's inline mic first so the modal's STT isn't fighting it.
-              if (listening) deactivateListening();
-              setChatOpen(false);
-              setVoiceOpen(true);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Open hands-free voice chat with Senpai"
-            hitSlop={6}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-              borderRadius: 11,
-              backgroundColor: 'rgba(0,0,0,0.55)',
-            }}
-          >
-            <Text style={{ fontSize: 10, color: '#fff', fontWeight: '800', letterSpacing: 0.2 }}>🎙️ voice</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              // Hand off from inline voice to the full chat: stop the mascot's
-              // mic first so the modal's STT isn't fighting it.
-              if (listening) deactivateListening();
-              setVoiceOpen(false);
-              setChatOpen(true);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Open Senpai chat (keyboard or voice)"
-            hitSlop={6}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-              borderRadius: 11,
-              backgroundColor: 'rgba(0,0,0,0.55)',
-            }}
-          >
-            <Text style={{ fontSize: 10, color: '#fff', fontWeight: '800', letterSpacing: 0.2 }}>💬 chat</Text>
-          </Pressable>
+          {(() => {
+            const bubbleEl = bubbleText ? <SpeechBubble key="bubble" text={bubbleText} /> : null;
+            const panelEl = (
+              <View key="panel" style={styles.dockPanel}>
+                {disclaimerOK === null ? null : !disclaimerOK ? (
+                  // One-time AI safety disclaimer — must accept before chatting.
+                  <View style={styles.disclaimerBox}>
+                    <Text style={styles.disclaimerText}>
+                      senpai's a chibi mascot powered by AI — not a doctor, therapist, or dietitian.
+                      for medical, dietary, or mental-health advice, please talk to a real professional 💕
+                    </Text>
+                    <Pressable
+                      onPress={acceptDisclaimer}
+                      hitSlop={6}
+                      accessibilityRole="button"
+                      accessibilityLabel="Acknowledge that Senpai is an AI, not a professional"
+                      style={styles.disclaimerBtn}
+                    >
+                      <Text style={styles.disclaimerBtnText}>got it 💕</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <>
+                    {/* Type ⟷ Talk switch + clear */}
+                    <View style={styles.switchRow}>
+                      <View style={styles.segWrap}>
+                        <Pressable
+                          onPress={() => setMode('type')}
+                          hitSlop={4}
+                          accessibilityRole="button"
+                          accessibilityLabel="Type to Senpai"
+                          style={[styles.segBtn, mode === 'type' && styles.segBtnActive]}
+                        >
+                          <Text style={[styles.segText, mode === 'type' && styles.segTextActive]}>⌨ Type</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => setMode('talk')}
+                          hitSlop={4}
+                          accessibilityRole="button"
+                          accessibilityLabel="Talk to Senpai"
+                          style={[styles.segBtn, mode === 'talk' && styles.segBtnActive]}
+                        >
+                          <Text style={[styles.segText, mode === 'talk' && styles.segTextActive]}>🎤 Talk</Text>
+                        </Pressable>
+                      </View>
+                      <Pressable
+                        onPress={confirmClear}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                        accessibilityLabel="Clear conversation"
+                        style={styles.clearBtn}
+                      >
+                        <Text style={styles.clearBtnText}>🗑</Text>
+                      </Pressable>
+                    </View>
+                    {mode === 'type' ? (
+                      <View style={styles.inputRow}>
+                        <TextInput
+                          ref={inputRef}
+                          value={draft}
+                          onChangeText={setDraft}
+                          onSubmitEditing={submitType}
+                          placeholder="type to senpai…"
+                          placeholderTextColor="rgba(255,255,255,0.5)"
+                          returnKeyType="send"
+                          blurOnSubmit={false}
+                          editable={!chatLoading}
+                          style={styles.input}
+                        />
+                        <Pressable
+                          onPress={submitType}
+                          disabled={chatLoading || !draft.trim()}
+                          hitSlop={6}
+                          accessibilityRole="button"
+                          accessibilityLabel="Send message"
+                          style={[styles.sendBtn, (chatLoading || !draft.trim()) && { opacity: 0.4 }]}
+                        >
+                          <Text style={styles.sendBtnText}>➤</Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Pressable
+                        onPress={handleTap}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                        accessibilityLabel={listening ? 'Stop talking to Senpai' : 'Talk to Senpai'}
+                        style={[styles.micBtn, listening && styles.micBtnActive]}
+                      >
+                        <Text style={styles.micBtnText}>
+                          {listening ? '● listening — tap to stop' : '🎤 tap to talk'}
+                        </Text>
+                      </Pressable>
+                    )}
+                  </>
+                )}
+              </View>
+            );
+            return isTop ? [bubbleEl, panelEl] : [panelEl, bubbleEl];
+          })()}
         </View>
 
         {/* Close button (on long press) */}
@@ -1123,24 +1304,13 @@ function SenpaiMascotImpl() {
           </SoundPressable>
         )}
       </Animated.View>
-
-      {/* Full-screen chat modal — keyboard/voice (item 5). Mounted only while
-          open so its STT event subscription doesn't double-fire alongside the
-          mascot's inline walkie-talkie. The shared SenpaiChatProvider keeps it
-          on the same conversation as the bubble. */}
-      {chatOpen && <SenpaiChatModal visible={chatOpen} onClose={() => setChatOpen(false)} />}
-
-      {/* Dedicated hands-free voice surface. Mounted only while open so its STT
-          subscription doesn't double-fire alongside the mascot's inline mic;
-          shares the same SenpaiChatProvider conversation. */}
-      {voiceOpen && <SenpaiVoiceModal visible={voiceOpen} onClose={() => setVoiceOpen(false)} />}
     </>
   );
 }
 
 /* ─── Speech Bubble ──────────────────────────────────────────────────────── */
 
-function SpeechBubble({ text, colors }: { text: string; colors: any }) {
+function SpeechBubble({ text }: { text: string }) {
   const scale = useRef(new Animated.Value(0)).current;
   const fade = useRef(new Animated.Value(0)).current;
 
@@ -1156,10 +1326,9 @@ function SpeechBubble({ text, colors }: { text: string; colors: any }) {
       style={[
         styles.bubble,
         {
-          // Hardcoded SOLID background instead of `colors.surface` —
-          // surface is semi-transparent in the active theme and let
-          // page content bleed through, killing readability against
-          // the chibi + the cards behind her.
+          // Hardcoded SOLID background — a translucent theme surface let
+          // page content bleed through and killed readability against the
+          // chibi + the cards behind her.
           backgroundColor: '#0F0E2C',
           borderColor: 'rgba(255,255,255,0.16)',
           opacity: fade,
@@ -1167,13 +1336,11 @@ function SpeechBubble({ text, colors }: { text: string; colors: any }) {
         },
       ]}
     >
-      {/* No numberOfLines — replies routinely run 4–6 lines and the
-          old 3-line cap was truncating them mid-sentence. Bubble grows
-          vertically as needed; width is fixed so it stays horizontal. */}
+      {/* No numberOfLines — replies routinely run 4–6 lines; the bubble
+          grows vertically as needed. */}
       <Text style={[styles.bubbleText, { color: '#FFFFFF' }]}>
         {text}
       </Text>
-      <View style={[styles.bubbleArrow, { borderTopColor: '#0F0E2C' }]} />
     </Animated.View>
   );
 }
@@ -1285,32 +1452,92 @@ const styles = StyleSheet.create({
     boxShadow: '0 0 8px rgba(255, 140, 0, 0.9)',
   },
 
-  // Speech bubble — explicit width so it actually goes wide. The
-  // chibi container is only MASCOT_SIZE (140) wide, and even though the
-  // bubble is position:absolute, RN's auto-width measurement was packing
-  // text to fit the parent column instead of expanding to maxWidth.
-  // Forcing `width: 280` reliably gives us a horizontal-favored bubble.
-  // The bubble extends from `right: -10` leftward across the screen,
-  // centering naturally over the chibi.
+  // Speech bubble — her reply / live-transcript surface. Lives INSIDE the
+  // chat dock now (no longer absolutely positioned over the mascot), so it
+  // flows above/below her depending on which corner she's docked to.
   bubble: {
-    position: 'absolute',
-    bottom: MASCOT_SIZE + 8,
-    right: -10,
-    width: 280,
+    maxWidth: DOCK_W,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 14,
     borderWidth: 1,
-    zIndex: 10,
   },
   bubbleText: { fontSize: 13, fontWeight: '700', lineHeight: 18 },
-  bubbleArrow: {
+
+  // ─── In-place chat dock + Type/Talk panel ───────────────────────────────
+  // Positioned (top/bottom/left/right + alignItems) inline per corner so it
+  // always opens inward from whichever corner she's snapped to.
+  dock: {
     position: 'absolute',
-    bottom: -6,
-    right: 20,
-    width: 0, height: 0,
-    borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 6,
-    borderLeftColor: 'transparent', borderRightColor: 'transparent',
+    width: DOCK_W,
+    zIndex: 40,
+    gap: 6,
+  },
+  dockPanel: {
+    alignSelf: 'stretch',
+    backgroundColor: 'rgba(15,14,44,0.96)',
+    borderColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 6,
+    gap: 6,
+  },
+  segWrap: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 9,
+    padding: 2,
+  },
+  segBtn: { flex: 1, paddingVertical: 5, borderRadius: 7, alignItems: 'center' },
+  segBtnActive: { backgroundColor: '#FF2E51' },
+  segText: { fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.7)', letterSpacing: 0.2 },
+  segTextActive: { color: '#FFFFFF' },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  input: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  sendBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: '#FF2E51',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sendBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
+  micBtn: {
+    alignSelf: 'stretch',
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+  },
+  micBtnActive: { backgroundColor: 'rgba(220,38,38,0.92)' },
+  micBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800', letterSpacing: 0.2 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  clearBtn: {
+    width: 30, height: 30, borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  clearBtnText: { fontSize: 13 },
+  disclaimerBox: { gap: 8 },
+  disclaimerText: { color: 'rgba(255,255,255,0.92)', fontSize: 11.5, fontWeight: '600', lineHeight: 16 },
+  disclaimerBtn: {
+    alignSelf: 'stretch', paddingVertical: 8, borderRadius: 10,
+    backgroundColor: '#FF2E51', alignItems: 'center',
+  },
+  disclaimerBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800', letterSpacing: 0.2 },
+  // Chibi-only hit box that owns the drag PanResponder (siblings: the dock).
+  mascotHit: {
+    width: MASCOT_SIZE,
+    height: MASCOT_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Close button
