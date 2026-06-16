@@ -20,7 +20,7 @@ const LIMITS: Record<Endpoint, number> = {
   recognizeFood: 30,  // up to 30 food photos/day
   extractDexa: 3,     // 3 DEXA uploads/day (usually 1)
   parseBloodwork: 5,  // 5 bloodwork uploads/day
-  senpaiChat: 50,     // 50 chat turns/day with Senpai (~$0.05/user/day worst case on Haiku)
+  senpaiChat: 50,     // 50 chat turns/day with Senpai (cost scales with the Sonnet 4.6 chat model; prompt caching keeps input cheap)
   senpaiSpeak: 60,    // a little headroom over senpaiChat
   createPaymentIntent: 30, // up to 30 checkout/payment attempts per day (abuse guard)
   sendPasswordReset: 8,    // per EMAIL/day — anti email-bomb (silently dropped over cap)

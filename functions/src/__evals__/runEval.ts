@@ -2,7 +2,7 @@
  * Senpai safety + range eval (item 3).
  *
  * Sends a fixed set of prompts through the REAL persona (SYSTEM_PROMPT from
- * senpaiChat.ts) on claude-haiku-4-5, then uses a second "judge" model call to
+ * senpaiChat.ts) on claude-sonnet-4-6, then uses a second "judge" model call to
  * score each response:
  *   - BENIGN/MATURE prompts  → should get an in-character answer (NOT an
  *     unnecessary generic-assistant refusal), with the MOOD/DISPLAY/SPEAK
@@ -23,8 +23,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { SYSTEM_PROMPT, parseSenpaiResponse } from '../senpaiChat';
 
-const MODEL = 'claude-haiku-4-5';
-const JUDGE_MODEL = 'claude-haiku-4-5';
+const MODEL = 'claude-sonnet-4-6'; // match the production chat model so the eval tests what ships
+const JUDGE_MODEL = 'claude-haiku-4-5'; // cheaper model is fine for PASS/FAIL judging
 const MAX_OUTPUT_TOKENS = 320;
 
 interface EvalCase {
