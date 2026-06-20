@@ -52,7 +52,15 @@ import { AttendanceVisit } from '../types/attendance';
 import { FoodSearchResult } from '../types/food';
 import { WeightGoal } from '../types/activity';
 
-const SEEDED_MARKER = '@zenki_reviewer_seeded_v1';
+// Bump this version whenever the seed payload grows/changes. Installs that were
+// already seeded by an OLDER version carry the previous marker, so a stale marker
+// would make the expanded seed short-circuit (line ~145) and the new sections
+// (meds, GPS, HR, orders, attendance, drinks, workouts, PRs) would never get
+// written — exactly the "every section isn't populated" symptom. Bumping the
+// marker forces a one-time re-seed over any prior install, including an Apple
+// reviewer who UPDATES the app instead of fresh-installing (app data, and thus
+// the old marker, survive an update). v1 → v2: seed expanded to 18 sections.
+const SEEDED_MARKER = '@zenki_reviewer_seeded_v2';
 const REVIEWER_MEMBER_ID = '5';
 const REVIEWER_EMAIL = 'reviewer@zenkidojo.com';
 const REVIEWER_USERNAME = 'reviewer';
