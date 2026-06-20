@@ -145,8 +145,8 @@ const DEV_SEED_PASSWORDS: Record<string, string> = {
   'matt.b': 'password',
   'mattbrowntheemail@gmail.com': 'password',
   admin: 'password',
-  reviewer: 'ZenkiTest2026!',
-  'reviewer@zenkidojo.com': 'ZenkiTest2026!',
+  reviewer: 'reviewer123',
+  'reviewer@zenkidojo.com': 'reviewer123',
 };
 
 export const CREDENTIALS: Record<string, { password: string; memberId: string }> =
