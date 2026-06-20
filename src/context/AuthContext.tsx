@@ -142,6 +142,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id]);
 
   const signIn = useCallback(async (member: Member) => {
+    // Seed the App Review demo account's sample data BEFORE setUser, so it's on
+    // disk before NutritionContext (and others) re-read on the user-id change.
+    // Previously this was fire-and-forget AFTER setUser, so the re-read raced
+    // ahead of the async seed writes and Body Lab + Home rendered EMPTY on the
+    // reviewer's first sign-in — they only populated after an app restart
+    // (App Review 2.1(a): "provide a demo account with pre-populated uploads").
+    // No-op (returns immediately) for every non-reviewer account.
+    await seedReviewerDataIfNeeded(member).catch((e) =>
+      console.warn('[AuthContext] reviewer seed failed (non-fatal)', e),
+    );
+
     setUser(member);
     await AsyncStorage.setItem(STORAGE_KEY, member.id);
 
@@ -164,12 +175,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn('[AuthContext] signIn CUSTOM_MEMBER_KEY persist failed (non-fatal)', e);
       }
     }
-
-    // Seeds sample data on first sign-in for the App Review demo account.
-    // No-op for everyone else. See utils/seedReviewerData.ts.
-    seedReviewerDataIfNeeded(member).catch((e) =>
-      console.warn('[AuthContext] reviewer seed failed (non-fatal)', e),
-    );
   }, []);
 
   const createAccount = useCallback(async (member: Member, password?: string) => {

@@ -33,6 +33,25 @@ import { BloodworkReport } from '../types/bloodwork';
 
 const SEEDED_MARKER = '@zenki_reviewer_seeded_v1';
 const REVIEWER_MEMBER_ID = '5';
+const REVIEWER_EMAIL = 'reviewer@zenkidojo.com';
+const REVIEWER_USERNAME = 'reviewer';
+
+/**
+ * Detect the App Review demo account robustly. The reviewer's Firebase account
+ * isn't reliably stamped back to Member id '5' at runtime (sign-in can resolve
+ * the member by email/uid instead), so gating ONLY on id === '5' made the seed
+ * silently skip — Body Lab + Home landed EMPTY for the reviewer (App Review
+ * 2.1(a) "provide a demo account with pre-populated uploads"). Match on email
+ * and username too. The seed writes under member.id (whatever it resolves to),
+ * which is exactly the id the screens read via user.id, so the data lines up.
+ */
+function isReviewerAccount(member: Member): boolean {
+  return (
+    member.id === REVIEWER_MEMBER_ID ||
+    (member.email ?? '').toLowerCase() === REVIEWER_EMAIL ||
+    (member.username ?? '').toLowerCase() === REVIEWER_USERNAME
+  );
+}
 
 // Storage keys — copied verbatim from each context so we don't have to
 // export them just for this one-shot seed.
@@ -67,7 +86,7 @@ function genId(prefix: string, suffix: string): string {
 }
 
 export async function seedReviewerDataIfNeeded(member: Member): Promise<void> {
-  if (member.id !== REVIEWER_MEMBER_ID) return;
+  if (!isReviewerAccount(member)) return;
 
   try {
     const marker = await AsyncStorage.getItem(SEEDED_MARKER);
