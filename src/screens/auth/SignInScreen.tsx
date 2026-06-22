@@ -504,15 +504,15 @@ export function SignInScreen({ navigation }: any) {
               <Text style={styles.socialBtnText}>Continue with Google</Text>
             </SoundPressable>
 
-            <SoundPressable
-              style={[styles.socialBtn, { backgroundColor: '#000000' }]}
-              activeOpacity={0.8}
-              onPress={handleAppleSignIn}
-              disabled={loading}
-            >
-              <Ionicons name="logo-apple" size={24} color="#FFFFFF" />
-              <Text style={[styles.socialBtnText, { color: '#FFFFFF' }]}>Continue with Apple</Text>
-            </SoundPressable>
+            {appleAvailable && (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+                cornerRadius={14}
+                style={styles.appleBtn}
+                onPress={handleAppleSignIn}
+              />
+            )}
 
             {/* Divider */}
             <View style={styles.dividerRow}>
@@ -615,6 +615,14 @@ const styles = StyleSheet.create({
     gap: 10, paddingVertical: 11, borderRadius: 14,
   },
   socialBtnText: { fontSize: 15, fontWeight: '600', color: '#333' },
+
+  // Official Sign in with Apple button (AppleAuthenticationButton). Height/radius
+  // match styles.socialBtn (Google: paddingVertical 11 → ~44pt + borderRadius 14)
+  // so the two line up. The native button renders its OWN Apple logo + "Continue
+  // with Apple" label per HIG — do not add our own icon/text. WHITE buttonStyle
+  // gives a solid fill + clear boundary on the app's forced-dark (#111113)
+  // background, fixing App Review Guideline 4 ("not clear it is a button").
+  appleBtn: { width: '100%', height: 46 },
 
   // Divider
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 0 },
