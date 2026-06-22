@@ -234,13 +234,6 @@ export function PermissionsOnboardingScreen({ navigation }: any) {
     advance(next);
   }, [busy, step, outcomes, advance, user?.id]);
 
-  const handleSkip = useCallback(() => {
-    if (busy) return;
-    const next = { ...outcomes, [step.id]: 'skipped' as Outcome };
-    setOutcomes(next);
-    advance(next);
-  }, [busy, step, outcomes, advance]);
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <FadeInView style={styles.body}>
@@ -262,7 +255,7 @@ export function PermissionsOnboardingScreen({ navigation }: any) {
 
         {/* Optional micro-copy reminder */}
         <Text style={[styles.optional, { color: colors.textMuted }]}>
-          Optional · you can change this later in Settings.
+          You can adjust any of these later in Settings.
         </Text>
       </FadeInView>
 
@@ -294,17 +287,7 @@ export function PermissionsOnboardingScreen({ navigation }: any) {
             { backgroundColor: busy ? colors.surface : colors.gold, opacity: busy ? 0.6 : 1 },
           ]}
         >
-          <Text style={styles.allowBtnText}>{busy ? 'WAITING…' : 'ALLOW'}</Text>
-        </SoundPressable>
-        <SoundPressable
-          activeOpacity={0.7}
-          onPress={handleSkip}
-          disabled={busy}
-          style={styles.skipBtn}
-        >
-          <Text style={[styles.skipBtnText, { color: colors.textMuted }]}>
-            {isLast ? 'SKIP & FINISH' : 'SKIP FOR NOW'}
-          </Text>
+          <Text style={styles.allowBtnText}>{busy ? 'WAITING…' : 'CONTINUE'}</Text>
         </SoundPressable>
       </View>
     </SafeAreaView>
@@ -384,15 +367,6 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 15,
     fontWeight: '900',
-    letterSpacing: 1.5,
-  },
-  skipBtn: {
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  skipBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
     letterSpacing: 1.5,
   },
 });
