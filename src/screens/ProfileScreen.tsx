@@ -150,6 +150,90 @@ export function ProfileScreen({ navigation }: any) {
     if (!result.canceled && result.assets[0]) await persistPhoto(result.assets[0].uri);
   };
 
+  // Guest mode (App Review 5.1.1(v)): no account → show a sign-in CTA instead of
+  // a member card with placeholder "Member / white belt" data. Appearance and
+  // Help/Settings stay reachable. (All hooks above run unconditionally.)
+  if (!user) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+        <ScreenContainer maxWidth="form">
+        <KeyboardAwareScrollView offset={64} contentContainerStyle={styles.scroll}>
+          <View style={styles.header}>
+            <View style={styles.avatarWrapper}>
+              <View style={[styles.avatarOuter, { borderColor: colors.border }]}>
+                <View style={[styles.avatar, { backgroundColor: colors.surface }]}>
+                  <Ionicons name="person-outline" size={32} color={colors.textMuted} />
+                </View>
+              </View>
+            </View>
+            <Text style={[styles.name, { color: colors.textPrimary }]}>Browsing as Guest</Text>
+            <Text style={[styles.bioText, { color: colors.textSecondary }]}>
+              Sign in or create a free account to track your training, book sessions, shop, and join the community.
+            </Text>
+            <SoundPressable
+              style={[styles.guestCtaBtn, { backgroundColor: colors.gold }]}
+              onPress={() => navigation.navigate('SignIn')}
+              accessibilityLabel="Sign in or create account"
+            >
+              <Ionicons name="log-in-outline" size={18} color="#000" />
+              <Text style={styles.guestCtaText}>Sign In / Create Account</Text>
+            </SoundPressable>
+          </View>
+
+          {/* Appearance toggle stays available to guests */}
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>APPEARANCE</Text>
+          <View style={[styles.themePillRow, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}>
+            {THEME_OPTIONS.map((opt) => {
+              const isActive = mode === opt.value;
+              return (
+                <SoundPressable
+                  key={opt.value}
+                  style={[
+                    styles.themeOption,
+                    isActive && { backgroundColor: colors.goldMuted, borderColor: colors.gold },
+                  ]}
+                  onPress={() => setMode(opt.value)}
+                >
+                  <Ionicons name={opt.icon} size={16} color={isActive ? colors.gold : colors.textMuted} />
+                  <Text style={[styles.themeOptionLabel, { color: isActive ? colors.gold : colors.textMuted }]}>
+                    {opt.label}
+                  </Text>
+                </SoundPressable>
+              );
+            })}
+          </View>
+
+          {/* Help & Settings stay reachable */}
+          <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>MENU</Text>
+          <View style={styles.menuGrid}>
+            <MenuTile
+              icon="settings-outline"
+              label="Settings"
+              sub="Appearance, about"
+              onPress={() => navigation.navigate('Settings')}
+            />
+            <MenuTile
+              icon="help-circle-outline"
+              label="Help"
+              sub="FAQ, tutorial, privacy"
+              onPress={() => navigation.navigate('Help')}
+            />
+            <MenuTile
+              icon="chatbubbles-outline"
+              label="Contact IT"
+              sub="Report a bug or idea"
+              onPress={() => navigation.navigate('ContactSupport')}
+              accent
+            />
+          </View>
+
+          <View style={{ height: 24 }} />
+        </KeyboardAwareScrollView>
+        </ScreenContainer>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScreenContainer maxWidth="form">
@@ -514,6 +598,21 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   memberType: { fontSize: 9, fontWeight: '800', letterSpacing: 1.2 },
+
+  // Guest sign-in CTA
+  guestCtaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    marginTop: 14,
+    alignSelf: 'stretch',
+    marginHorizontal: spacing.lg,
+  },
+  guestCtaText: { color: '#000', fontSize: 15, fontWeight: '800' },
 
   // Zenki Card
   zenkiCard: {

@@ -17,11 +17,14 @@ import { Button } from '../components';
 import { getProductImages } from '../data/products';
 import { useProducts } from '../context/ProductContext';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { requireAuth } from '../utils/requireAuth';
 
 export function ProductDetailScreen({ navigation, route }: any) {
   const { colors } = useTheme();
   const { products } = useProducts();
   const { addToCart } = useCart();
+  const { user } = useAuth();
   const { productId } = route.params;
   const product = products.find((p) => p.id === productId);
 
@@ -77,6 +80,8 @@ export function ProductDetailScreen({ navigation, route }: any) {
       Alert.alert('Select Size', 'Please choose a size before purchasing.');
       return;
     }
+    // Reserving/buying is an account action (5.1.1(v)); add-to-cart stays open.
+    if (!requireAuth(user, navigation, 'check out')) return;
     Alert.alert(
       'Reserve Item',
       `${product.name}${selectedSize ? ` (${selectedSize})` : ''} × ${quantity}\n` +

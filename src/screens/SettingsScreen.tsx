@@ -74,7 +74,7 @@ function confirmDestructive(
 
 export function SettingsScreen({ navigation }: any) {
   const { colors, mode, setMode } = useTheme();
-  const { user, signOut } = useAuth();
+  const { user, isGuest, signOut } = useAuth();
   const isAdmin = user?.isAdmin === true;
 
   // Apple HealthKit — controls a clearly-labeled section so users (and
@@ -955,12 +955,25 @@ export function SettingsScreen({ navigation }: any) {
           </Text>
         </View>
 
-        {/* Danger Zone */}
-        {renderSectionHeader('DANGER ZONE')}
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, marginTop: spacing.sm, borderRadius: 20, padding: 0 }]}>
-          {renderNavRow('log-out-outline', 'Sign Out', handleSignOut, true)}
-          {renderNavRow('person-remove-outline', 'Delete Account', handleDeleteAccount, true)}
-        </View>
+        {/* Account — guests have no account to sign out of or delete (5.1.1(v)),
+            so show a single Sign In / Create Account row instead of Danger Zone. */}
+        {isGuest ? (
+          <>
+            {renderSectionHeader('ACCOUNT')}
+            <View style={[styles.sectionCard, { backgroundColor: colors.surface, marginTop: spacing.sm, borderRadius: 20, padding: 0 }]}>
+              {renderNavRow('log-in-outline', 'Sign In / Create Account', () => navigation.navigate('SignIn'))}
+            </View>
+          </>
+        ) : (
+          <>
+            {/* Danger Zone */}
+            {renderSectionHeader('DANGER ZONE')}
+            <View style={[styles.sectionCard, { backgroundColor: colors.surface, marginTop: spacing.sm, borderRadius: 20, padding: 0 }]}>
+              {renderNavRow('log-out-outline', 'Sign Out', handleSignOut, true)}
+              {renderNavRow('person-remove-outline', 'Delete Account', handleDeleteAccount, true)}
+            </View>
+          </>
+        )}
 
         {/* Credit */}
         <Text style={[styles.creditText, { color: colors.textMuted }]}>

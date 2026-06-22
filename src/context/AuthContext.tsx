@@ -18,6 +18,11 @@ import { syncOrAlert } from '../utils/syncOrAlert';
 const STORAGE_KEY = '@zenki_current_user';
 const CUSTOM_MEMBER_KEY = '@zenki_custom_member';
 const LAST_USERNAME_KEY = '@zenki_last_username';
+// Guest browsing (App Review 5.1.1(v)): a guest has no account, so `user`
+// stays null. This flag — persisted so a relaunched guest stays a guest —
+// lets the navigator drop a guest into Main while every account-based action
+// is still gated by requireAuth(user, …). Never fabricate a user for guests.
+const GUEST_KEY = '@zenki_guest_mode';
 
 interface AuthContextValue {
   user: Member | null;
@@ -29,6 +34,12 @@ interface AuthContextValue {
    */
   createAccount: (member: Member, password?: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** True when browsing without an account (App Review 5.1.1(v)). */
+  isGuest: boolean;
+  /** Enter guest mode: user stays null, flag persists across relaunch. */
+  continueAsGuest: () => Promise<void>;
+  /** Leave guest mode (used on real sign-in / sign-out). */
+  exitGuest: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -37,10 +48,14 @@ const AuthContext = createContext<AuthContextValue>({
   signIn: async () => {},
   createAccount: async () => {},
   signOut: async () => {},
+  isGuest: false,
+  continueAsGuest: async () => {},
+  exitGuest: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Member | null>(null);
+  const [isGuest, setIsGuest] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -48,7 +63,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const id = await AsyncStorage.getItem(STORAGE_KEY);
-        if (!id) return;
+        if (!id) {
+          // No stored account — but a guest who chose "Browse as Guest" and
+          // relaunched should land back in Main, not the sign-in wall.
+          const guest = await AsyncStorage.getItem(GUEST_KEY);
+          if (guest === 'true' && !cancelled) setIsGuest(true);
+          return;
+        }
 
         // Resolve the base record (seed first, then custom-signup blob).
         let base: Member | null = MEMBERS.find((m) => m.id === id) ?? null;
@@ -154,7 +175,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 
     setUser(member);
+    // Signing in supersedes guest mode.
+    setIsGuest(false);
     await AsyncStorage.setItem(STORAGE_KEY, member.id);
+    await AsyncStorage.removeItem(GUEST_KEY);
 
     // Persist the full member blob for any non-seed id so the session-restore
     // path can rehydrate it. The restore logic resolves the user by
@@ -250,6 +274,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem(CUSTOM_MEMBER_KEY, JSON.stringify(memberWithUid));
     await AsyncStorage.setItem(STORAGE_KEY, memberWithUid.id);
     setUser(memberWithUid);
+    // Creating a real account supersedes guest mode.
+    setIsGuest(false);
+    await AsyncStorage.removeItem(GUEST_KEY);
 
     // Sheets sync stays fire-and-forget (best-effort).
     pushMemberToSheets(memberWithUid);
@@ -289,6 +316,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Local state first so UI updates immediately
     setUser(null);
+    // Sign-out also leaves guest mode, so state never leaks between sessions.
+    setIsGuest(false);
 
     // Clear the Firebase Auth session — critical for Apple review
     await firebaseSignOut();
@@ -296,10 +325,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Wipe local identity state
     await AsyncStorage.removeItem(STORAGE_KEY);
     await AsyncStorage.removeItem(CUSTOM_MEMBER_KEY);
+    await AsyncStorage.removeItem(GUEST_KEY);
   }, [user]);
 
+  // ── Guest browsing (App Review 5.1.1(v)) ──
+  // Enter/leave guest mode. `user` stays null in both cases — guests are
+  // intentionally account-less so every account-based action stays gated.
+  const continueAsGuest = useCallback(async () => {
+    setUser(null);
+    setIsGuest(true);
+    await AsyncStorage.setItem(GUEST_KEY, 'true');
+  }, []);
+
+  const exitGuest = useCallback(async () => {
+    setIsGuest(false);
+    await AsyncStorage.removeItem(GUEST_KEY);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, signIn, createAccount, signOut }}>
+    <AuthContext.Provider value={{ user, isLoading, signIn, createAccount, signOut, isGuest, continueAsGuest, exitGuest }}>
       {children}
     </AuthContext.Provider>
   );
