@@ -19,6 +19,7 @@ import { PostCard } from '../components/PostCard';
 import { AnimatedLogo } from '../components/AnimatedLogo';
 import { Post, getFeed, likePost, unlikePost } from '../services/firebasePosts';
 import { getCurrentUid } from '../services/firebaseAuth';
+import { requireAuth } from '../utils/requireAuth';
 
 interface StoryItem {
   userId: string;
@@ -220,7 +221,7 @@ export function CommunityScreen({ navigation }: any) {
           </SoundPressable>
           <SoundPressable
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            onPress={() => navigation.navigate('MessagesList')}
+            onPress={() => { if (!requireAuth(user, navigation, 'send messages')) return; navigation.navigate('MessagesList'); }}
             accessibilityLabel="Direct messages"
           >
             <Ionicons name="paper-plane-outline" size={23} color={colors.textPrimary} />
@@ -321,7 +322,7 @@ export function CommunityScreen({ navigation }: any) {
       {/* Floating Create Button */}
       <SoundPressable
         style={[styles.fab, { backgroundColor: colors.gold }]}
-        onPress={() => navigation.navigate('CreatePost')}
+        onPress={() => { if (!requireAuth(user, navigation, 'post')) return; navigation.navigate('CreatePost'); }}
       >
         <Ionicons name="add" size={28} color="#000" />
       </SoundPressable>

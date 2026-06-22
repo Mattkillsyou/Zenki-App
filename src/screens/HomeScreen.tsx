@@ -56,6 +56,7 @@ import { useSchedule } from '../context/ScheduleContext';
 import { useHasUnreadNotifications } from './NotificationsScreen';
 import { formatCount } from '../utils/formatCount';
 import { formatDistance, formatDurationHuman } from '../utils/gps';
+import { requireAuth } from '../utils/requireAuth';
 import { useCycleTracker } from '../context/CycleTrackerContext';
 import { useSenpai } from '../context/SenpaiContext';
 import { randomDialogue } from '../data/senpaiDialogue';
@@ -654,6 +655,18 @@ export function HomeScreen({ navigation }: any) {
   const orderStorageKey = user?.id ? `@zenki_home_order_${user.id}` : null;
   const visibilityStorageKey = user?.id ? `@zenki_home_visibility_${user.id}` : null;
 
+  // Account-based features (per-member nutrition, workouts, weight, meds, GPS,
+  // cycle, body lab) require an account (App Review 5.1.1(v)). A guest tapping
+  // these tiles is prompted to sign in instead of mounting a destination screen
+  // that dereferences user.id (crash / placeholder-owned write). Preserves the
+  // existing edit-mode no-op. Browsing-only tools (Timer, Achievements) and the
+  // tab navigations (Schedule) stay open.
+  const navAccount = (route: string, params?: any) => {
+    if (editMode) return;
+    if (!requireAuth(user, navigation, 'use this feature')) return;
+    navigation.navigate(route, params);
+  };
+
   // Animated values for edit-mode bar entrance / exit
   const editBarOpacity = useRef(new Animated.Value(0)).current;
   const editBarTranslate = useRef(new Animated.Value(-12)).current;
@@ -973,7 +986,7 @@ export function HomeScreen({ navigation }: any) {
                       <View style={{ paddingHorizontal: 24, flexDirection: 'row', gap: 10 }}>
                       <TouchableOpacity
                         activeOpacity={0.85}
-                        onPress={() => !editMode && navigation.navigate('MacroTracker', { openSearch: true })}
+                        onPress={() => navAccount('MacroTracker', { openSearch: true })}
                         style={[styles.quickFoodBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
                       >
                         <Ionicons name="search" size={22} color={colors.gold} />
@@ -981,7 +994,7 @@ export function HomeScreen({ navigation }: any) {
                       </TouchableOpacity>
                       <TouchableOpacity
                         activeOpacity={0.85}
-                        onPress={() => !editMode && navigation.navigate('BarcodeScanner')}
+                        onPress={() => navAccount('BarcodeScanner')}
                         style={[styles.quickFoodBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
                       >
                         <Ionicons name="barcode-outline" size={22} color={colors.gold} />
@@ -989,7 +1002,7 @@ export function HomeScreen({ navigation }: any) {
                       </TouchableOpacity>
                       <TouchableOpacity
                         activeOpacity={0.85}
-                        onPress={() => !editMode && navigation.navigate('PhotoFood')}
+                        onPress={() => navAccount('PhotoFood')}
                         style={[styles.quickFoodBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
                       >
                         <Ionicons name="sparkles-outline" size={22} color={colors.gold} />
@@ -1102,7 +1115,7 @@ export function HomeScreen({ navigation }: any) {
                       <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 10 }]}>Today's Macros</Text>
                       <SoundPressable
                         activeOpacity={0.85}
-                        onPress={() => !editMode && navigation.navigate('MacroTracker')}
+                        onPress={() => navAccount('MacroTracker')}
                         style={[styles.macroBarCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}
                       >
                         {([
@@ -1139,21 +1152,21 @@ export function HomeScreen({ navigation }: any) {
                     >
                       <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 10 }]}>Training</Text>
                       <View style={styles.toolsGrid}>
-                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('WorkoutSession')} style={[styles.homeTool, { backgroundColor: colors.redMuted, borderColor: colors.red }]}>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => navAccount('WorkoutSession')} style={[styles.homeTool, { backgroundColor: colors.redMuted, borderColor: colors.red }]}>
                           <Ionicons name="heart" size={20} color={colors.red} />
                           <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Start Workout</Text>
                           <Text style={[styles.homeToolSub, { color: colors.textSecondary }]}>Live HR tracking</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('Workout')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => navAccount('Workout')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                           <Ionicons name="barbell" size={20} color={colors.gold} />
                           <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Workout</Text>
                           <Text style={[styles.homeToolSub, { color: colors.textSecondary }]}>Exercise library</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('MacroTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => navAccount('MacroTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                           <Ionicons name="restaurant-outline" size={20} color={colors.gold} />
                           <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Food Log</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('WeightTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => navAccount('WeightTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                           <Ionicons name="scale-outline" size={20} color={colors.gold} />
                           <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Weight</Text>
                         </TouchableOpacity>
@@ -1161,20 +1174,20 @@ export function HomeScreen({ navigation }: any) {
                           <Ionicons name="timer-outline" size={20} color={colors.gold} />
                           <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Timers</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('BodyLab')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => navAccount('BodyLab')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                           <Ionicons name="medkit-outline" size={20} color={colors.gold} />
                           <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Body Lab</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('MedicationTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => navAccount('MedicationTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                           <Ionicons name="bandage-outline" size={20} color={colors.gold} />
                           <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Meds</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('ActivityTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        <TouchableOpacity activeOpacity={0.85} onPress={() => navAccount('ActivityTracker')} style={[styles.homeTool, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                           <Ionicons name="navigate-outline" size={20} color={colors.gold} />
                           <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>GPS</Text>
                         </TouchableOpacity>
                         {isFemale && (
-                          <TouchableOpacity activeOpacity={0.85} onPress={() => !editMode && navigation.navigate('CycleTracker')} style={[styles.homeTool, { backgroundColor: 'rgba(230, 57, 70, 0.08)', borderColor: '#E63946' + '40' }]}>
+                          <TouchableOpacity activeOpacity={0.85} onPress={() => navAccount('CycleTracker')} style={[styles.homeTool, { backgroundColor: 'rgba(230, 57, 70, 0.08)', borderColor: '#E63946' + '40' }]}>
                             <Ionicons name="heart-circle-outline" size={20} color="#E63946" />
                             <Text style={[styles.homeToolLabel, { color: colors.textPrimary }]}>Cycle</Text>
                           </TouchableOpacity>

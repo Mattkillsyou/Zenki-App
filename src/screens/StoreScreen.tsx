@@ -28,6 +28,7 @@ import { Order } from '../types/orders';
 import { appendLocalOrder, saveOrderToFirestore } from '../services/orderSync';
 import { isApplePayAvailable, payWithApplePay } from '../services/payments';
 import { generateId } from '../utils/generateId';
+import { requireAuth } from '../utils/requireAuth';
 
 const WISHLIST_KEY = '@zenki_wishlist';
 
@@ -208,7 +209,7 @@ export function StoreScreen({ navigation }: any) {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <TouchableOpacity
             style={[styles.cartButton, { backgroundColor: '#000', borderColor: colors.border }]}
-            onPress={() => navigation.navigate('OrderHistory')}
+            onPress={() => { if (!requireAuth(user, navigation, 'view your orders')) return; navigation.navigate('OrderHistory'); }}
             activeOpacity={0.75}
             accessibilityLabel="My orders"
           >
@@ -361,6 +362,9 @@ export function StoreScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[styles.checkoutButton, { backgroundColor: colors.red }]}
                 onPress={async () => {
+                  // Account-based action (5.1.1(v)): checkout writes an order
+                  // stamped with the member id, so a guest must sign in first.
+                  if (!requireAuth(user, navigation, 'check out')) return;
                   const requestedPointsDiscount = usePoints ? Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal) : 0;
                   const promoDiscount = appliedPromo ? cartTotal * (appliedPromo.discountPercent / 100) : 0;
                   const requestedPointsUsed = usePoints && requestedPointsDiscount > 0

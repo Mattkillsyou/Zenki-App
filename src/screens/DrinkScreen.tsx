@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { requireAuth } from '../utils/requireAuth';
 import { useMotion } from '../context/MotionContext';
 import { useDrinkTracker } from '../context/DrinkTrackerContext';
 import { useAuth } from '../context/AuthContext';
@@ -75,6 +77,7 @@ export function DrinkScreen() {
     getAllMonths,
   } = useDrinkTracker();
   const { user } = useAuth();
+  const navigation = useNavigation<any>();
   const [showMonthly, setShowMonthly] = useState(false);
 
   return (
@@ -160,6 +163,10 @@ export function DrinkScreen() {
                 { backgroundColor: pending.length > 0 ? colors.gold : colors.surfaceSecondary, opacity: pending.length > 0 ? 1 : 0.6 },
               ]}
               onPress={() => {
+                // Committing a tab creates a billable charge tied to a member
+                // (5.1.1(v)) — a guest must sign in first. Browsing the menu and
+                // adding drinks to the pending order stays open.
+                if (!requireAuth(user, navigation, 'start a drink tab')) return;
                 play('success');
                 const totalDrinksCommitted = pending.reduce((n, p) => n + p.count, 0);
                 commitPending();
@@ -239,6 +246,9 @@ export function DrinkScreen() {
             style={[styles.bottomPayBtn, { backgroundColor: unpaidTotal > 0 ? colors.gold : colors.surfaceSecondary }]}
             disabled={unpaidTotal === 0}
             onPress={async () => {
+              // Settling a tab is a real payment / billing write keyed to a
+              // member (5.1.1(v)); guests are prompted to sign in.
+              if (!requireAuth(user, navigation, 'settle your tab')) return;
               const memberName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Member';
               const amount = unpaidTotal; // capture before payAllUnpaid zeroes it
               // Apple Pay path (Stripe configured + device supports it): charge

@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { requireAuth } from '../utils/requireAuth';
 import { spacing } from '../theme';
 import { KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { submitSupportMessage, flushSupportQueue, SupportCategory } from '../services/supportMessages';
@@ -48,6 +49,12 @@ export function ContactSupportScreen({ navigation }: any) {
       Alert.alert('Message too short', 'Please add a bit more detail so IT can help.');
       return;
     }
+    // The in-app support channel writes a member-keyed record and the server
+    // rule requires an auth uid; for a guest the message would only queue
+    // locally and never deliver (the queue flush also needs a uid), so the
+    // "Message sent" success would be a lie. Prompt the guest to sign in
+    // (5.1.1(v)) — the pre-auth Contact form remains for prospects.
+    if (!requireAuth(user, navigation, 'contact support')) return;
 
     setSubmitting(true);
     try {

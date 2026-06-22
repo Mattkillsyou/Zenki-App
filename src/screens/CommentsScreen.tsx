@@ -20,6 +20,7 @@ import { useBlocks } from '../context/BlocksContext';
 import { spacing, typography, MAX_CONTENT_WIDTH } from '../theme';
 import { Comment, addComment, listComments } from '../services/firebasePosts';
 import { getCurrentUid } from '../services/firebaseAuth';
+import { requireAuth } from '../utils/requireAuth';
 
 export function CommentsScreen({ navigation, route }: any) {
   const { colors } = useTheme();
@@ -63,6 +64,8 @@ export function CommentsScreen({ navigation, route }: any) {
   const handleSubmit = async () => {
     const trimmed = text.trim();
     if (!trimmed || submitting) return;
+    // Reading comments is open browsing; posting one is account-based (5.1.1(v)).
+    if (!requireAuth(myUid, navigation, 'comment')) return;
     setSubmitting(true);
     try {
       const created = await addComment(postId, trimmed);

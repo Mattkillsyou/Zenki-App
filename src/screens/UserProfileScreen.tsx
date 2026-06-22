@@ -10,6 +10,7 @@ import { typography, spacing, borderRadius } from '../theme';
 import { getUserProfile, updateProfile, followUser, unfollowUser, isFollowing, getFollowerCount, getFollowingCount, listFollowRequests, hasRequestedFollow, cancelFollowRequest, UserProfile } from '../services/firebaseFollow';
 import { getUserPosts, Post } from '../services/firebasePosts';
 import { getCurrentUid } from '../services/firebaseAuth';
+import { requireAuth } from '../utils/requireAuth';
 import { ReportModal } from '../components/ReportModal';
 
 // Clamp grid width to MAX_CONTENT_WIDTH so post tiles don't blow up on
@@ -134,6 +135,9 @@ export function UserProfileScreen({ navigation, route }: any) {
     // Safety guard — matches the inline !userBlocked guard on the Message
     // button. Belt-and-suspenders on top of the disabled={userBlocked} prop.
     if (userBlocked) return;
+    // Following is account-based (5.1.1(v)); a guest is prompted to sign in
+    // instead of silently no-opping (followUser returns '' for a null uid).
+    if (!requireAuth(getCurrentUid(), navigation, 'follow members')) return;
 
     if (following) {
       await unfollowUser(userId);
@@ -291,11 +295,15 @@ export function UserProfileScreen({ navigation, route }: any) {
               </SoundPressable>
               <SoundPressable
                 style={[styles.actionButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, flex: 1, opacity: userBlocked ? 0.4 : 1 }]}
-                onPress={() => !userBlocked && navigation.navigate('MessagesChat', {
-                  otherUserId: userId,
-                  otherUserName: profile?.displayName,
-                  otherUserAvatar: profile?.avatar,
-                })}
+                onPress={() => {
+                  if (userBlocked) return;
+                  if (!requireAuth(getCurrentUid(), navigation, 'send messages')) return;
+                  navigation.navigate('MessagesChat', {
+                    otherUserId: userId,
+                    otherUserName: profile?.displayName,
+                    otherUserAvatar: profile?.avatar,
+                  });
+                }}
                 disabled={userBlocked}
               >
                 <Ionicons name="paper-plane-outline" size={16} color={colors.textPrimary} />

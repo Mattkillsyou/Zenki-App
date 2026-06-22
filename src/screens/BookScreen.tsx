@@ -16,6 +16,7 @@ import { useAppointments } from '../context/AppointmentContext';
 import { useGamification } from '../context/GamificationContext';
 import { fetchBusyIntervals, isSlotBusy, BusyInterval } from '../services/calendarAvailability';
 import { addEventToCalendar } from '../services/calendarIntegration';
+import { requireAuth } from '../utils/requireAuth';
 
 // Generate today's date for display
 const getDisplayDate = () => {
@@ -135,10 +136,7 @@ export function BookScreen({ navigation }: any) {
       return;
     }
 
-    if (!user) {
-      Alert.alert('Sign in required', 'Please sign in to request a booking.');
-      return;
-    }
+    if (!requireAuth(user, navigation, 'request a booking')) return;
 
     const instructor = INSTRUCTORS[selectedInstructor];
     const sessionType = SESSION_TYPES[selectedType];

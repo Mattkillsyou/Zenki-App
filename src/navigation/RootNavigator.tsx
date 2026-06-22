@@ -196,7 +196,7 @@ const modalTransition = {
 // NAVIGATOR
 // ─────────────────────────────────────────────────
 export function RootNavigator() {
-  const { user, isLoading } = useAuth();
+  const { user, isGuest, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -208,7 +208,7 @@ export function RootNavigator() {
 
   return (
     <Stack.Navigator
-      initialRouteName={user ? 'Main' : 'SignIn'}
+      initialRouteName={user || isGuest ? 'Main' : 'SignIn'}
       screenOptions={{
         headerShown: false,
         gestureEnabled: true,

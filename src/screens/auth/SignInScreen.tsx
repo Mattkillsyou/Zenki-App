@@ -588,6 +588,19 @@ export function SignInScreen({ navigation }: any) {
               <Text style={[styles.footerLink, { color: colors.gold }]}>Create Account</Text>
             </SoundPressable>
           </View>
+
+          {/* Browse as Guest — App Review 5.1.1(v): the Store and private-class
+              booking are browsable without an account; only checkout / booking /
+              social actions require sign-in. */}
+          <SoundPressable
+            onPress={async () => { await auth.continueAsGuest(); navigation.replace('Main'); }}
+            style={{ alignSelf: 'center', paddingVertical: 10, marginTop: 4 }}
+            accessibilityLabel="Browse as guest"
+          >
+            <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textSecondary, textDecorationLine: 'underline' }}>
+              Browse as Guest
+            </Text>
+          </SoundPressable>
         </ScreenContainer>
       </KeyboardAwareScrollView>
     </SafeAreaView>
