@@ -22,3 +22,4 @@ export { ErrorBoundary } from './ErrorBoundary';
 export { KeyboardView, KeyboardAwareScrollView } from './KeyboardView';
 export { ScreenContainer } from './ScreenContainer';
 export { AppleHealthFootnote } from './AppleHealthFootnote';
+export { MedicalCitations } from './MedicalCitations';

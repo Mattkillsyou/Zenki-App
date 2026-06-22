@@ -7,6 +7,13 @@
  * accepted ranges for adult males and females in the US.
  *
  * Not medical advice — always defer to values printed on the actual report.
+ *
+ * Provenance: the displayed reference/optimal ranges are general adult ranges
+ * consistent with public standards from MedlinePlus / NIH, the American Diabetes
+ * Association (glucose/HbA1c), the American Thyroid Association (TSH/T3/T4), and
+ * NHLBI (cholesterol). These sources are surfaced to users in the app via the
+ * <MedicalCitations topic="bloodwork" /> component on the bloodwork detail
+ * screen (Apple App Review Guideline 1.4.1 — citations must be easy to find).
  */
 
 import { BiomarkerCategory } from '../types/bloodwork';

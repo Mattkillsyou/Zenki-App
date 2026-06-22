@@ -14,7 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { todayDateString } from '../utils/dates';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, KeyboardView, ScreenContainer } from '../components';
+import { FadeInView, KeyboardView, ScreenContainer, MedicalCitations } from '../components';
 import {
   Sex,
   ActivityLevel,
@@ -412,6 +412,8 @@ export function MacroSetupScreen({ navigation }: any) {
                   <MacroPill label="Carbs" value={`${computed.macros.carbs}g`} color="#4ECDC4" colors={colors} />
                   <MacroPill label="Fat" value={`${computed.macros.fat}g`} color="#FFD166" colors={colors} />
                 </View>
+
+                <MedicalCitations topic="nutrition" />
               </StepWrap>
             )}
           </FadeInView>

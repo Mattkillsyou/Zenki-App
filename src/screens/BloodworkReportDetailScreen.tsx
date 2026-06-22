@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, ScreenContainer } from '../components';
+import { FadeInView, ScreenContainer, MedicalCitations } from '../components';
 import { AiExtractedBanner } from '../components/AiExtractedBanner';
 import { BiomarkerStatus, StoredBiomarker, BiomarkerCategory } from '../types/bloodwork';
 import { CATEGORY_ORDER, lookupBiomarkerRef } from '../data/biomarkers';
@@ -162,6 +162,8 @@ export function BloodworkReportDetailScreen({ route, navigation }: any) {
               </View>
             );
           })}
+
+          <MedicalCitations topic="bloodwork" style={styles.citations} />
         </FadeInView>
         </ScreenContainer>
       </ScrollView>
@@ -236,4 +238,6 @@ const styles = StyleSheet.create({
   bioVal: { fontSize: 14 },
   bioRef: { fontSize: 11, fontWeight: '600', marginTop: 2, letterSpacing: 0.2 },
   bioDesc: { fontSize: 11, fontWeight: '500', marginTop: 4, lineHeight: 16 },
+
+  citations: { marginHorizontal: spacing.lg, marginTop: spacing.lg },
 });

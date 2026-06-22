@@ -12,7 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, LineChart } from '../components';
+import { FadeInView, LineChart, MedicalCitations } from '../components';
 import { DexaScan } from '../types/dexa';
 
 // Clamp chart width to MAX_CONTENT_WIDTH so charts don't overflow the
@@ -153,6 +153,8 @@ export function DexaScansScreen({ navigation }: any) {
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </SoundPressable>
             ))}
+
+            <MedicalCitations topic="dexa" style={styles.citations} />
           </>
         )}
       </ScrollView>
@@ -235,4 +237,6 @@ const styles = StyleSheet.create({
   },
   scanDate: { fontSize: 15, fontWeight: '800' },
   scanSummary: { fontSize: 12, fontWeight: '600', marginTop: 2, letterSpacing: 0.2 },
+
+  citations: { marginHorizontal: spacing.lg, marginTop: spacing.xl },
 });

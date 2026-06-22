@@ -8,7 +8,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing } from '../theme';
-import { FadeInView, ScreenContainer, AppleHealthFootnote } from '../components';
+import { FadeInView, ScreenContainer, AppleHealthFootnote, MedicalCitations } from '../components';
 
 type Tab = 'dashboard' | 'dexa' | 'bloodwork' | 'info';
 
@@ -174,6 +174,9 @@ export function BodyLabScreen({ navigation }: any) {
                     : healthScore != null && healthScore >= 40 ? 'Room for improvement. Check insights below.'
                     : 'Upload scans and blood panels to improve your score.'}
                 </Text>
+                <Text style={[styles.scoreCaption, { color: colors.textMuted }]}>
+                  How this is calculated: a general wellness composite from your DEXA, bloodwork, and weight trends. Not a clinical diagnosis.
+                </Text>
               </View>
             </FadeInView>
 
@@ -263,6 +266,8 @@ export function BodyLabScreen({ navigation }: any) {
                 ))}
               </FadeInView>
             )}
+
+            <MedicalCitations topic="bodylab" />
           </>
         )}
 
@@ -405,6 +410,8 @@ export function BodyLabScreen({ navigation }: any) {
                 • Macros: Daily during active cut/bulk phases
               </Text>
             </View>
+
+            <MedicalCitations topic="bodylab" />
           </>
         )}
 
@@ -477,6 +484,7 @@ const styles = StyleSheet.create({
   scoreValue: { fontSize: 36, fontWeight: '900' },
   scoreUnit: { fontSize: 12, fontWeight: '600' },
   scoreDesc: { fontSize: 12, textAlign: 'center', lineHeight: 17 },
+  scoreCaption: { fontSize: 11, textAlign: 'center', lineHeight: 15, marginTop: 6, paddingHorizontal: 4 },
 
   dashGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   dashTile: {

@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
-import { FadeInView, ScreenContainer } from '../components';
+import { FadeInView, ScreenContainer, MedicalCitations } from '../components';
 import { AiExtractedBanner } from '../components/AiExtractedBanner';
 
 function formatDate(iso: string): string {
@@ -203,6 +203,8 @@ export function DexaScanDetailScreen({ route, navigation }: any) {
               </View>
             </>
           )}
+
+          <MedicalCitations topic="dexa" style={styles.citations} />
         </FadeInView>
         </ScreenContainer>
       </ScrollView>
@@ -303,4 +305,6 @@ const styles = StyleSheet.create({
   regionVals: { fontSize: 12, fontWeight: '600', marginTop: 2 },
 
   noteText: { fontSize: 13, fontWeight: '500', lineHeight: 19 },
+
+  citations: { marginHorizontal: spacing.lg, marginTop: spacing.lg },
 });
