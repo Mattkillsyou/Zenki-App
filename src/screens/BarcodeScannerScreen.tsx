@@ -116,7 +116,7 @@ export function BarcodeScannerScreen({ navigation }: any) {
           onPress={canAsk ? requestPermission : () => Linking.openSettings()}
           style={[styles.permBtn, { backgroundColor: colors.gold }]}
         >
-          <Text style={styles.permBtnText}>{canAsk ? 'Allow camera' : 'Open Settings'}</Text>
+          <Text style={styles.permBtnText}>{canAsk ? 'Continue' : 'Open Settings'}</Text>
         </SoundPressable>
         <SoundPressable onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }}>
           <Text style={{ color: colors.textMuted, fontSize: 14, fontWeight: '600' }}>Cancel</Text>
