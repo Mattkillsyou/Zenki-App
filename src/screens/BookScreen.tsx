@@ -17,6 +17,7 @@ import { useGamification } from '../context/GamificationContext';
 import { fetchBusyIntervals, isSlotBusy, BusyInterval } from '../services/calendarAvailability';
 import { addEventToCalendar } from '../services/calendarIntegration';
 import { requireAuth } from '../utils/requireAuth';
+import { useSchedulingConfig, priceLabelFor } from '../context/SchedulingConfigContext';
 
 // Generate today's date for display
 const getDisplayDate = () => {
@@ -32,11 +33,8 @@ const INSTRUCTORS = [
   { name: 'Rachel', specialty: 'Mobility, Pilates', avatar: 'RA' },
 ];
 
-const SESSION_TYPES = [
-  { label: '1:1 Private', duration: '60 min', price: 150, priceLabel: '$150' },
-  { label: 'Partner Session', duration: '60 min', price: 100, priceLabel: '$100/ea' },
-  { label: 'Pilates', duration: '50 min', price: 120, priceLabel: '$120' },
-];
+// Session types (and their admin-editable prices) now live in
+// SchedulingConfigContext, read via useSchedulingConfig() below.
 
 const TIME_SLOTS = [
   '9:00 AM', '10:00 AM', '11:00 AM', '1:00 PM',
@@ -73,6 +71,7 @@ export function BookScreen({ navigation }: any) {
   const { user } = useAuth();
   const { requestAppointment } = useAppointments();
   const { recordBooking, recordPrivateSession } = useGamification();
+  const { sessionTypes, showPricing } = useSchedulingConfig();
   const [selectedInstructor, setSelectedInstructor] = useState(0);
   const [selectedType, setSelectedType] = useState(0);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
@@ -81,7 +80,10 @@ export function BookScreen({ navigation }: any) {
   const [submitting, setSubmitting] = useState(false);
   const currentDateStr = todayDateString();
   const currentDate = useMemo(() => new Date(), []);
-  const currentDuration = parseDurationMinutes(SESSION_TYPES[selectedType].duration);
+  // Clamp the selection in case the configured sessionTypes list is shorter
+  // than the current index (e.g. an admin removed a type).
+  const safeType = Math.min(selectedType, sessionTypes.length - 1);
+  const currentDuration = parseDurationMinutes(sessionTypes[safeType].duration);
 
   // Fetch the owner's busy intervals whenever the date we're booking for changes.
   // Today's the only bookable date right now, but this is structured to expand.
@@ -139,7 +141,7 @@ export function BookScreen({ navigation }: any) {
     if (!requireAuth(user, navigation, 'request a booking')) return;
 
     const instructor = INSTRUCTORS[selectedInstructor];
-    const sessionType = SESSION_TYPES[selectedType];
+    const sessionType = sessionTypes[safeType];
 
     setSubmitting(true);
     try {
@@ -240,11 +242,11 @@ export function BookScreen({ navigation }: any) {
         <View style={[styles.section, { marginTop: 12 }]}>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>SESSION TYPE</Text>
           <View style={styles.typeGrid}>
-            {SESSION_TYPES.map((type, index) => {
-              const isSelected = index === selectedType;
+            {sessionTypes.map((type, index) => {
+              const isSelected = index === safeType;
               return (
                 <SoundPressable
-                  key={type.label}
+                  key={type.id}
                   style={[
                     {
                       flex: 1,
@@ -267,12 +269,14 @@ export function BookScreen({ navigation }: any) {
                   <Text style={[styles.typeDuration, { color: isSelected ? colors.textInverse : colors.textMuted }]}>
                     {type.duration}
                   </Text>
-                  <Text style={[
-                    styles.typePrice,
-                    { color: isSelected ? colors.textInverse : colors.gold },
-                  ]}>
-                    {type.priceLabel}
-                  </Text>
+                  {showPricing && (
+                    <Text style={[
+                      styles.typePrice,
+                      { color: isSelected ? colors.textInverse : colors.gold },
+                    ]}>
+                      {priceLabelFor(type)}
+                    </Text>
+                  )}
                 </SoundPressable>
               );
             })}
@@ -354,15 +358,17 @@ export function BookScreen({ navigation }: any) {
           {selectedTime && (
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}>
               <Text style={{ fontSize: 12, color: colors.textMuted }}>
-                {SESSION_TYPES[selectedType].label} · {INSTRUCTORS[selectedInstructor].name} · {selectedTime}
+                {sessionTypes[safeType].label} · {INSTRUCTORS[selectedInstructor].name} · {selectedTime}
               </Text>
-              <Text style={{ fontSize: 16, fontWeight: '900', color: colors.gold }}>
-                {SESSION_TYPES[selectedType].priceLabel}
-              </Text>
+              {showPricing && (
+                <Text style={{ fontSize: 16, fontWeight: '900', color: colors.gold }}>
+                  {priceLabelFor(sessionTypes[safeType])}
+                </Text>
+              )}
             </View>
           )}
           <Button
-            title={selectedTime ? `Request Booking · ${SESSION_TYPES[selectedType].priceLabel}` : 'Select a Time'}
+            title={selectedTime ? (showPricing ? `Request Booking · ${priceLabelFor(sessionTypes[safeType])}` : 'Request Booking') : 'Select a Time'}
             onPress={handleBooking}
             fullWidth
             size="lg"

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TextInput,
+  Switch,
   Modal} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +15,7 @@ import { typography, spacing, borderRadius } from '../theme';
 import { Button, KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { showAlert, confirmAlert } from '../utils/alert';
 import { useSchedule, ScheduleClass, DayKey } from '../context/ScheduleContext';
+import { useSchedulingConfig, SessionTypeConfig } from '../context/SchedulingConfigContext';
 import { ClassType, DAYS } from '../data/schedule';
 
 const CLASS_TYPES: { value: ClassType; label: string }[] = [
@@ -33,9 +35,50 @@ const TYPE_COLORS: Record<ClassType, string> = {
 export function AdminScheduleScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { schedule, addClass, updateClass, removeClass } = useSchedule();
+  const { showPricing, sessionTypes, updateConfig, isSyncing } = useSchedulingConfig();
   const [selectedDay, setSelectedDay] = useState<DayKey>('Mon');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingClass, setEditingClass] = useState<ScheduleClass | null>(null);
+
+  // ── Session Pricing (admin-editable, Firestore-backed) ──
+  // Local edit buffer; seeded from the config and kept in sync as it loads.
+  const [pricingOn, setPricingOn] = useState(showPricing);
+  const [priceInputs, setPriceInputs] = useState<Record<string, string>>({});
+  const [savingPricing, setSavingPricing] = useState(false);
+
+  useEffect(() => {
+    setPricingOn(showPricing);
+  }, [showPricing]);
+
+  useEffect(() => {
+    const seeded: Record<string, string> = {};
+    sessionTypes.forEach((t) => { seeded[t.id] = String(t.price); });
+    setPriceInputs(seeded);
+  }, [sessionTypes]);
+
+  const handleSavePricing = async () => {
+    const editedTypes: SessionTypeConfig[] = [];
+    for (const t of sessionTypes) {
+      const raw = priceInputs[t.id] ?? String(t.price);
+      const price = parseFloat(raw);
+      if (isNaN(price) || price < 0) {
+        showAlert('Invalid price', `Enter a valid price for "${t.label}".`);
+        return;
+      }
+      editedTypes.push({ ...t, price });
+    }
+    setSavingPricing(true);
+    try {
+      await updateConfig({ showPricing: pricingOn, sessionTypes: editedTypes });
+      showAlert('Saved', pricingOn
+        ? 'Session pricing is now shown in booking.'
+        : 'Session pricing is now hidden in booking.');
+    } catch (err: any) {
+      showAlert('Save failed', err?.message || String(err));
+    } finally {
+      setSavingPricing(false);
+    }
+  };
 
   // Form
   const [className, setClassName] = useState('');
@@ -183,6 +226,57 @@ export function AdminScheduleScreen({ navigation }: any) {
             </SoundPressable>
           ))
         )}
+
+        {/* ── Session Pricing (booking) ── */}
+        <View style={[styles.pricingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.pricingTitle, { color: colors.textPrimary }]}>Session Pricing</Text>
+          <Text style={[styles.pricingHint, { color: colors.textMuted }]}>
+            Controls the prices shown on the Book Private screen. Turn pricing off to hide all prices there.
+            {isSyncing ? '  ·  Syncing…' : ''}
+          </Text>
+
+          <View style={styles.pricingToggleRow}>
+            <Text style={[styles.pricingToggleLabel, { color: colors.textSecondary }]}>
+              Show pricing in booking
+            </Text>
+            <Switch
+              value={pricingOn}
+              onValueChange={setPricingOn}
+              trackColor={{ false: colors.surfaceSecondary, true: colors.gold }}
+              thumbColor={colors.background}
+            />
+          </View>
+
+          {sessionTypes.map((t) => (
+            <View key={t.id} style={styles.priceRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.priceRowLabel, { color: colors.textPrimary }]}>{t.label}</Text>
+                <Text style={[styles.priceRowMeta, { color: colors.textMuted }]}>{t.duration}</Text>
+              </View>
+              <View style={styles.priceInputWrap}>
+                <Text style={[styles.priceCurrency, { color: colors.textMuted }]}>$</Text>
+                <TextInput
+                  style={[styles.priceInput, { backgroundColor: colors.surfaceSecondary, color: colors.textPrimary, borderColor: colors.border }]}
+                  value={priceInputs[t.id] ?? ''}
+                  onChangeText={(v) => setPriceInputs((prev) => ({ ...prev, [t.id]: v }))}
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+            </View>
+          ))}
+
+          <Button
+            title={savingPricing ? 'Saving…' : 'Save Pricing'}
+            onPress={handleSavePricing}
+            fullWidth
+            size="lg"
+            disabled={savingPricing}
+            style={{ marginTop: spacing.md }}
+          />
+        </View>
+
         <View style={{ height: spacing.xxl * 2 }} />
       </KeyboardAwareScrollView>
       </ScreenContainer>
@@ -322,4 +416,41 @@ const styles = StyleSheet.create({
   typeRow: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
   typeChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: borderRadius.sm },
   typeChipText: { ...typography.label, fontSize: 11 },
+  // Session Pricing section
+  pricingCard: {
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+  pricingTitle: { ...typography.cardTitle, fontSize: 16 },
+  pricingHint: { ...typography.bodySmall, marginTop: 4, lineHeight: 17 },
+  pricingToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  pricingToggleLabel: { ...typography.body, fontWeight: '600' },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+    gap: spacing.md,
+  },
+  priceRowLabel: { ...typography.body, fontWeight: '600' },
+  priceRowMeta: { ...typography.label, fontSize: 10, marginTop: 2 },
+  priceInputWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  priceCurrency: { ...typography.body, fontWeight: '700' },
+  priceInput: {
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: 16,
+    minWidth: 90,
+    textAlign: 'right',
+  },
 });

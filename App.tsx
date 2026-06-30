@@ -44,6 +44,7 @@ import { HeartRateProvider } from './src/context/HeartRateContext';
 import { GpsActivityProvider } from './src/context/GpsActivityContext';
 import { NutritionProvider } from './src/context/NutritionContext';
 import { ProductProvider } from './src/context/ProductContext';
+import { SchedulingConfigProvider } from './src/context/SchedulingConfigContext';
 import { CartProvider } from './src/context/CartContext';
 import { SpinWheelProvider } from './src/context/SpinWheelContext';
 import { CycleTrackerProvider } from './src/context/CycleTrackerContext';
@@ -240,6 +241,7 @@ export default function App() {
                         <GpsActivityProvider>
                         <NutritionProvider>
                         <ProductProvider>
+                          <SchedulingConfigProvider>
                           <CartProvider>
                           <SpinWheelProvider>
                           <CycleTrackerProvider>
@@ -257,6 +259,7 @@ export default function App() {
                           </CycleTrackerProvider>
                           </SpinWheelProvider>
                           </CartProvider>
+                          </SchedulingConfigProvider>
                         </ProductProvider>
                         </NutritionProvider>
                         </GpsActivityProvider>
