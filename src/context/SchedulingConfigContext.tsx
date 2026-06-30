@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { safeParseJSON } from '../utils/safeStorage';
+import { safeStorageGetJSON, safeStorageSet } from '../utils/safeStorage';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 
@@ -82,8 +81,7 @@ export function SchedulingConfigProvider({ children }: { children: React.ReactNo
 
   // ── Initial load: AsyncStorage first (fast), Firestore subscribe second
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
-      const parsed = safeParseJSON<any>(raw, null, (v) => v != null);
+    safeStorageGetJSON<any>(STORAGE_KEY, null, (v) => v != null).then((parsed) => {
       if (parsed) setConfig(sanitizeConfig(parsed));
     });
   }, []);
@@ -99,7 +97,7 @@ export function SchedulingConfigProvider({ children }: { children: React.ReactNo
         if (snap.exists()) {
           const merged = sanitizeConfig(snap.data());
           setConfig(merged);
-          AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          void safeStorageSet(STORAGE_KEY, merged, '[SchedulingConfig]');
         }
         // No doc yet → keep DEFAULT_CONFIG (pricing hidden).
         setIsSyncing(false);
@@ -114,14 +112,16 @@ export function SchedulingConfigProvider({ children }: { children: React.ReactNo
 
   const updateConfig = useCallback(async (partial: Partial<SchedulingConfig>): Promise<void> => {
     const merged: SchedulingConfig = sanitizeConfig({ ...config, ...partial });
-    // Optimistic local update + mirror so the change survives even if the cloud
-    // write fails (rules enforce admin-only).
-    setConfig(merged);
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-
+    // Cloud-first when configured: only mutate local state AFTER the write
+    // succeeds, so a failed admin save (e.g. a non-admin, or denied write) does
+    // NOT flip the on-device pricing UI while the caller surfaces "Save failed".
+    // The realtime onSnapshot will also re-assert the server state. Offline /
+    // no-Firebase falls back to a straight local write.
     if (cloudSyncEnabled && db) {
       await setDoc(doc(db, 'config', 'scheduling'), merged, { merge: true });
     }
+    setConfig(merged);
+    void safeStorageSet(STORAGE_KEY, merged, '[SchedulingConfig]');
   }, [config, cloudSyncEnabled]);
 
   return (

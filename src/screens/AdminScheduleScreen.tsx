@@ -51,9 +51,17 @@ export function AdminScheduleScreen({ navigation }: any) {
   }, [showPricing]);
 
   useEffect(() => {
-    const seeded: Record<string, string> = {};
-    sessionTypes.forEach((t) => { seeded[t.id] = String(t.price); });
-    setPriceInputs(seeded);
+    // Fill a buffer for any session type we don't have one for yet, but DON'T
+    // overwrite a price the admin is currently editing. onSnapshot echoes
+    // (including our own save) change the sessionTypes array reference and
+    // would otherwise wipe in-progress keystrokes.
+    setPriceInputs((prev) => {
+      const next = { ...prev };
+      sessionTypes.forEach((t) => {
+        if (next[t.id] === undefined) next[t.id] = String(t.price);
+      });
+      return next;
+    });
   }, [sessionTypes]);
 
   const handleSavePricing = async () => {
