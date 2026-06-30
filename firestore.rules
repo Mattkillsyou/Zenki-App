@@ -387,6 +387,13 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // App-wide config (e.g. scheduling pricing). Readable by any signed-in
+    // user; only admins may write.
+    match /config/{docId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
     // Waivers — submit-only. No one reads from client (admin reads server-side).
     match /waivers/{waiverId} {
       allow read: if false;
