@@ -1,7 +1,7 @@
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import {
   collection, addDoc, doc, getDoc, getDocFromServer, getDocs,
-  query, where, orderBy, limit, startAfter, runTransaction, documentId,
+  query, where, orderBy, limit, limitToLast, startAfter, runTransaction, documentId,
 } from 'firebase/firestore';
 import type { QueryDocumentSnapshot } from 'firebase/firestore';
 import { getCurrentUid, getCurrentIdToken } from './firebaseAuth';
@@ -245,6 +245,47 @@ export async function getFeed(
     hasMore: posts.length === pageSize,
   });
 
+  // Union parallel page-windows (each issued with the SAME composite cursor +
+  // page size) into the next global page: dedupe by doc id (the unfiltered
+  // own-uid query overlaps the public queries when the user is public), sort
+  // by the query's (createdAt DESC, docId DESC) total order on the COERCED
+  // ISO timestamp, and take the top pageSize. Items past pageSize are OLDER
+  // than the new cursor, so the next page re-fetches them — nothing is lost.
+  const mergeWindows = (snaps: { docs: QueryDocumentSnapshot[] }[]): QueryDocumentSnapshot[] => {
+    const seen = new Set<string>();
+    return snaps
+      .flatMap((snap) => snap.docs)
+      .filter((d) => {
+        if (seen.has(d.id)) return false;
+        seen.add(d.id);
+        return true;
+      })
+      .map((d) => ({ d, createdAt: coerceCreatedAt((d.data() as any).createdAt) }))
+      .filter((x): x is { d: QueryDocumentSnapshot; createdAt: string } => x.createdAt !== null)
+      .sort((a, b) => {
+        const c = b.createdAt.localeCompare(a.createdAt);
+        return c !== 0 ? c : b.d.id.localeCompare(a.d.id); // tiebreak by docId DESC — matches the query order
+      })
+      .slice(0, pageSize)
+      .map((x) => x.d);
+  };
+
+  // A private user's own posts can never pass the authorIsPrivate == false
+  // filter the public queries need, so BOTH feed paths run one extra
+  // unfiltered own-uid page-window in parallel and merge it in — provable via
+  // the rule's `userId == auth.uid` branch (the (userId, createdAt DESC)
+  // index exists). Without it a private account never sees its OWN posts in
+  // the home feed.
+  const ownPostsWindow = (cur: { createdAt: string; id: string } | null) =>
+    getDocs(query(
+      collection(firestore, 'posts'),
+      where('userId', '==', uid),
+      orderBy('createdAt', 'desc'),
+      orderBy(documentId(), 'desc'),
+      ...(cur ? [startAfter(cur.createdAt, cur.id)] : []),
+      limit(pageSize),
+    ));
+
   // If the user follows nobody, querying only their own posts gives an empty
   // feed for new accounts — bad first impression. Fall back to "all recent
   // posts" so the feed is populated and the user has something to scroll
@@ -261,12 +302,18 @@ export async function getFeed(
       ...(cur ? [startAfter(cur.createdAt, cur.id)] : []),
       limit(pageSize),
     ];
-    const snap = await getDocs(query(collection(db, 'posts'), ...constraints));
-    const posts = await hydrate(snap.docs);
-    return { ...makePage(posts), hasMore: snap.docs.length === pageSize };
+    const [snap, ownSnap] = await Promise.all([
+      getDocs(query(collection(db, 'posts'), ...constraints)),
+      ownPostsWindow(cur),
+    ]);
+    const merged = mergeWindows([snap, ownSnap]);
+    const posts = await hydrate(merged);
+    return { ...makePage(posts), hasMore: merged.length === pageSize };
   }
 
-  followedIds.push(uid);
+  // Own posts come from the dedicated unfiltered ownPostsWindow query below
+  // (NOT by pushing uid into the filtered batches, which drops a private
+  // user's own posts) — mergeWindows dedupes the overlap for public users.
 
   const batches: string[][] = [];
   for (let i = 0; i < followedIds.length; i += 30) {
@@ -282,32 +329,26 @@ export async function getFeed(
   // cursor, so the next page re-fetches them — nothing is lost. The public-author
   // filter keeps every branch on the rule's public path (SOCIAL_CONTRACT §10).
   const cur = decodeCursor(cursor);
-  const batchSnaps = await Promise.all(batches.map((batch) => {
-    const constraints = [
-      where('userId', 'in', batch),
-      where('authorIsPrivate', '==', false),
-      orderBy('createdAt', 'desc'),
-      orderBy(documentId(), 'desc'),
-      ...(cur ? [startAfter(cur.createdAt, cur.id)] : []),
-      limit(pageSize),
-    ];
-    return getDocs(query(collection(firestore, 'posts'), ...constraints));
-  }));
+  const batchSnaps = await Promise.all([
+    ...batches.map((batch) => {
+      const constraints = [
+        where('userId', 'in', batch),
+        where('authorIsPrivate', '==', false),
+        orderBy('createdAt', 'desc'),
+        orderBy(documentId(), 'desc'),
+        ...(cur ? [startAfter(cur.createdAt, cur.id)] : []),
+        limit(pageSize),
+      ];
+      return getDocs(query(collection(firestore, 'posts'), ...constraints));
+    }),
+    ownPostsWindow(cur),
+  ]);
 
-  // Merge, sort desc, take the page window BEFORE hydrating like-state so we
-  // only resolve `liked` for the posts we actually return. Sort on the COERCED
-  // ISO timestamp so a legacy Timestamp-typed createdAt is included here (hydrate
-  // coerces again — the two stay consistent) rather than silently excluded.
-  const merged = batchSnaps
-    .flatMap((snap) => snap.docs)
-    .map((d) => ({ d, createdAt: coerceCreatedAt((d.data() as any).createdAt) }))
-    .filter((x): x is { d: QueryDocumentSnapshot; createdAt: string } => x.createdAt !== null)
-    .sort((a, b) => {
-      const c = b.createdAt.localeCompare(a.createdAt);
-      return c !== 0 ? c : b.d.id.localeCompare(a.d.id); // tiebreak by docId DESC — matches the query order
-    })
-    .slice(0, pageSize)
-    .map((x) => x.d);
+  // Merge, dedupe, sort desc, take the page window BEFORE hydrating like-state
+  // so we only resolve `liked` for the posts we actually return (mergeWindows
+  // sorts on the COERCED ISO timestamp so a legacy Timestamp-typed createdAt
+  // is included here — hydrate coerces again, the two stay consistent).
+  const merged = mergeWindows(batchSnaps);
 
   const posts = await hydrate(merged);
   return { ...makePage(posts), hasMore: merged.length === pageSize };
@@ -315,20 +356,48 @@ export async function getFeed(
 
 export async function getUserPosts(userId: string, max = 30): Promise<Post[]> {
   if (!FIREBASE_CONFIGURED || !db) return [];
-  try {
-    const q = query(
-      collection(db, 'posts'),
+  const firestore = db;
+  const run = async (publicOnly: boolean) => {
+    const constraints = [
+      ...(publicOnly ? [where('authorIsPrivate', '==', false)] : []),
       where('userId', '==', userId),
       orderBy('createdAt', 'desc'),
       limit(max),
-    );
-    const snap = await getDocs(q);
+    ];
+    const snap = await getDocs(query(collection(firestore, 'posts'), ...constraints));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Post));
+  };
+
+  // Owner: the unfiltered single-author query is provable via the rule's
+  // `userId == auth.uid` branch.
+  if (getCurrentUid() === userId) {
+    try {
+      return await run(false);
+    } catch (err) {
+      console.warn('[getUserPosts] own-posts read failed:', err);
+      return [];
+    }
+  }
+
+  // Viewer ≠ owner: Firestore list rules must be provable for the WHOLE
+  // query, and the per-doc `authorIsPrivate != true` branch is unprovable
+  // without the filter — an unfiltered query is permission-denied even for a
+  // fully PUBLIC author (every non-follower saw an empty grid). Query the
+  // public branch first (composite index {authorIsPrivate, userId, createdAt
+  // DESC} exists). An empty result may mean a private author (their posts are
+  // all flagged true — updateProfile keeps the flag fanned out): retry
+  // unfiltered, which succeeds only for approved followers/admins
+  // (isApprovedFollowerOf resolves against the equality-pinned userId) and is
+  // rule-denied otherwise — treated as "no visible posts".
+  try {
+    const publicPosts = await run(true);
+    if (publicPosts.length > 0) return publicPosts;
   } catch (err) {
-    // A private author's posts are rule-denied to non-approved-followers (the
-    // single-author query can't satisfy the per-doc authorIsPrivate branch), so
-    // getDocs throws permission-denied. Treat it as "no visible posts" rather
-    // than letting it reject the caller's profile load.
+    console.warn('[getUserPosts] public read failed:', err);
+  }
+  try {
+    return await run(false);
+  } catch (err) {
     console.warn('[getUserPosts] read failed (likely private/not-following):', err);
     return [];
   }
@@ -418,10 +487,14 @@ export interface Comment {
 export async function listComments(postId: string, max = 100): Promise<Comment[]> {
   if (!FIREBASE_CONFIGURED || !db) return [];
   try {
+    // limitToLast (not limit) anchors the window at the NEWEST `max` comments;
+    // asc + limit() froze the list at the OLDEST 100, so a fresh comment
+    // vanished on reload once a post passed 100 (same class as the DM-thread
+    // limitToLast fix).
     const q = query(
       collection(db, 'posts', postId, 'comments'),
       orderBy('createdAt', 'asc'),
-      limit(max),
+      limitToLast(max),
     );
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Comment, 'id'>) }));
