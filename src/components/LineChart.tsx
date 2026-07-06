@@ -56,10 +56,22 @@ export function LineChart({
     );
   }
 
-  // Map indices to x-positions (evenly spaced)
+  // x positioning: only when a trend overlay is present do points map by
+  // `point.x` VALUE across a domain shared by the data series and the
+  // overlay, so the two stay temporally aligned when callers pass
+  // date-derived x. Standalone series keep the original even index spacing —
+  // some callers (PR history) pass date-derived x with duplicate/irregular
+  // values that value-mapping would collapse onto a single coordinate.
   const plotWidth = width - PADDING_X * 2;
   const plotHeight = height - PADDING_TOP - PADDING_BOTTOM;
   const n = data.length;
+  const useXDomain = (trendOverlay?.length ?? 0) > 0;
+  const xs = [...data.map((d) => d.x), ...(trendOverlay ?? []).map((d) => d.x)];
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const xRange = maxX - minX;
+  const xPos = (x: number) =>
+    PADDING_X + (xRange > 0 ? ((x - minX) / xRange) * plotWidth : plotWidth / 2);
   const xStep = n > 1 ? plotWidth / (n - 1) : 0;
 
   // With very few points the area fill becomes a single triangular block that
@@ -85,17 +97,15 @@ export function LineChart({
   const yRange = maxY - minY;
 
   const points = data.map((d, i) => ({
-    x: PADDING_X + (n > 1 ? i * xStep : plotWidth / 2),
+    x: useXDomain ? xPos(d.x) : PADDING_X + (n > 1 ? i * xStep : plotWidth / 2),
     y: PADDING_TOP + plotHeight - ((d.y - minY) / yRange) * plotHeight,
     value: d.y,
     label: d.label,
   }));
 
-  // Overlay points — distributed evenly across the same plot width.
-  const overlayN = trendOverlay?.length ?? 0;
-  const overlayStep = overlayN > 1 ? plotWidth / (overlayN - 1) : 0;
-  const overlayPoints = (trendOverlay ?? []).map((d, i) => ({
-    x: PADDING_X + (overlayN > 1 ? i * overlayStep : plotWidth / 2),
+  // Overlay points — positioned on the same x-domain as the data series.
+  const overlayPoints = (trendOverlay ?? []).map((d) => ({
+    x: xPos(d.x),
     y: PADDING_TOP + plotHeight - ((d.y - minY) / yRange) * plotHeight,
   }));
   const overlayPath = overlayPoints

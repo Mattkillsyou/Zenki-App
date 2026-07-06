@@ -22,6 +22,7 @@ import { FadeInView } from '../components';
 import { recognizeFood, RecognizedFood } from '../services/aiVision';
 import { getCurrentIdToken } from '../services/firebaseAuth';
 import { AI_IMAGE_MAX_DIMENSION } from '../config/api';
+import { todayIso } from '../components/WeekCalendar';
 
 type Phase =
   | { kind: 'idle' }
@@ -29,10 +30,6 @@ type Phase =
   | { kind: 'analyzing'; uri: string }
   | { kind: 'results'; uri: string; foods: RecognizedFood[]; selected: Set<number> }
   | { kind: 'error'; uri?: string; message: string };
-
-function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
-}
 
 export function PhotoFoodScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -145,7 +142,9 @@ export function PhotoFoodScreen({ navigation }: any) {
       Alert.alert('Nothing selected', 'Pick at least one item or go back and retake.');
       return;
     }
-    const today = todayISO();
+    // Local-time day key, matching MacroTracker's calendar convention
+    // (UTC would stamp evening photo logs on tomorrow's date).
+    const today = todayIso();
     for (const f of toLog) {
       addMacroEntry({
         memberId: user.id,
