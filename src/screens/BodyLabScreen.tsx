@@ -12,6 +12,17 @@ import { FadeInView, ScreenContainer, AppleHealthFootnote, MedicalCitations } fr
 
 type Tab = 'dashboard' | 'dexa' | 'bloodwork' | 'info';
 
+// Date-only values (YYYY-MM-DD, e.g. scanDate/testDate) parse as UTC midnight
+// and render a day EARLY west of UTC, so pin them to local noon (detail
+// screens parse the same way). Full ISO timestamps (the addedAt fallback)
+// must keep plain local parsing — slicing their UTC date portion would shift
+// an evening entry a day FORWARD instead.
+function formatListDate(value: unknown): string {
+  const s = String(value ?? '');
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + 'T12:00:00') : new Date(s);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 export function BodyLabScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
@@ -221,6 +232,21 @@ export function BodyLabScreen({ navigation }: any) {
               </SoundPressable>
             </FadeInView>
 
+            {/* Heart-rate workout history shortcut */}
+            <FadeInView delay={55}>
+              <SoundPressable
+                style={[styles.uploadCard, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 12 }]}
+                onPress={() => navigation.navigate('SessionHistory')}
+              >
+                <Ionicons name="heart-outline" size={24} color={colors.gold} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.uploadTitle, { color: colors.textPrimary }]}>Workout Sessions</Text>
+                  <Text style={[styles.uploadSub, { color: colors.textMuted }]}>Heart-rate history — strain, zones, calories</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </SoundPressable>
+            </FadeInView>
+
             {/* Flagged biomarkers summary */}
             {bloodwork.length > 0 && (() => {
               const latest = bloodwork[0];
@@ -301,7 +327,7 @@ export function BodyLabScreen({ navigation }: any) {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.listTitle, { color: colors.textPrimary }]}>
-                        {new Date(scan.scanDate || scan.addedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {formatListDate(scan.scanDate || scan.addedAt)}
                       </Text>
                       {scan.totalBodyFatPct != null && (
                         <Text style={[styles.listSub, { color: colors.textMuted }]}>
@@ -353,7 +379,7 @@ export function BodyLabScreen({ navigation }: any) {
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.listTitle, { color: colors.textPrimary }]}>
-                          {new Date(report.testDate || report.addedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {formatListDate(report.testDate || report.addedAt)}
                         </Text>
                         <Text style={[styles.listSub, { color: colors.textMuted }]}>
                           {report.biomarkers?.length || 0} biomarkers{flagged > 0 ? ` · ${flagged} flagged` : ' · all normal'}
@@ -363,6 +389,21 @@ export function BodyLabScreen({ navigation }: any) {
                     </SoundPressable>
                   );
                 })}
+
+                {/* Biomarker trends hub */}
+                <SoundPressable
+                  style={[styles.listCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}
+                  onPress={() => navigation.navigate('Bloodwork')}
+                >
+                  <View style={[styles.listIcon, { backgroundColor: colors.goldMuted }]}>
+                    <Ionicons name="trending-up" size={18} color={colors.gold} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.listTitle, { color: colors.textPrimary }]}>See all trends</Text>
+                    <Text style={[styles.listSub, { color: colors.textMuted }]}>Biomarker charts and flagged markers across every report</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </SoundPressable>
               </>
             ) : (
               <View style={styles.emptyState}>

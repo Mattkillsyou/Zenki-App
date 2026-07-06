@@ -13,7 +13,7 @@ import { FadeInView, KeyboardAwareScrollView, ScreenContainer } from '../compone
 import {
   CycleSymptom, FlowIntensity, SYMPTOM_LABELS, SYMPTOM_ICONS,
   PHASE_LABELS, PHASE_COLORS, PHASE_ICONS, PHASE_RECOMMENDATIONS,
-  CyclePhase, PeriodEntry, CycleInfo,
+  CyclePhase, PeriodEntry, CycleInfo, isValidCycleDate,
 } from '../types/cycle';
 
 type Tab = 'track' | 'calendar' | 'insights';
@@ -48,9 +48,14 @@ export function CycleTrackerScreen({ navigation }: any) {
 
   const handleLogPeriod = () => {
     if (!user) return;
+    const trimmedDate = startDate.trim();
+    if (!isValidCycleDate(trimmedDate)) {
+      Alert.alert('Invalid date', 'Enter the start date as YYYY-MM-DD (e.g. 2026-07-04).');
+      return;
+    }
     logPeriodStart({
       memberId: user.id,
-      startDate,
+      startDate: trimmedDate,
       flowIntensity: flow,
       symptoms,
       notes: notes.trim() || undefined,
@@ -118,10 +123,12 @@ export function CycleTrackerScreen({ navigation }: any) {
                     <Text style={[styles.phaseHeroSub, { color: colors.textSecondary }]}>
                       Day {cycleInfo.cycleDay} of ~{cycleInfo.avgCycleLength} day cycle
                     </Text>
-                    <Text style={[styles.phaseHeroPrediction, { color: PHASE_COLORS[cycleInfo.currentPhase] }]}>
+                    <Text style={[styles.phaseHeroPrediction, { color: cycleInfo.isOverdue ? PHASE_COLORS.menstrual : PHASE_COLORS[cycleInfo.currentPhase] }]}>
                       {cycleInfo.isOnPeriod
                         ? 'Currently menstruating'
-                        : `Next period in ~${cycleInfo.daysUntilNextPeriod} days`}
+                        : cycleInfo.isOverdue
+                          ? `Late · period expected ${cycleInfo.daysOverdue} day${cycleInfo.daysOverdue !== 1 ? 's' : ''} ago — log it to resume predictions`
+                          : `Next period in ~${cycleInfo.daysUntilNextPeriod} days`}
                     </Text>
                   </View>
                 </View>
@@ -234,8 +241,9 @@ export function CycleTrackerScreen({ navigation }: any) {
                   <View key={entry.id} style={[styles.historyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.historyDate, { color: colors.textPrimary }]}>
-                        {new Date(entry.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        {entry.endDate ? ` · ${new Date(entry.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ' (ongoing)'}
+                        {/* 'T12:00:00' — bare YYYY-MM-DD parses as UTC midnight and renders a day early west of UTC */}
+                        {new Date(entry.startDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {entry.endDate ? ` · ${new Date(entry.endDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ' (ongoing)'}
                       </Text>
                       <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
                         {entry.flowIntensity} flow · {entry.symptoms.length} symptom{entry.symptoms.length !== 1 ? 's' : ''}
@@ -371,8 +379,9 @@ function CycleCalendar({ entries, cycleInfo }: { entries: PeriodEntry[]; cycleIn
     const predictedDays = new Set<number>();
 
     for (const entry of entries) {
-      const start = new Date(entry.startDate);
-      const end = entry.endDate ? new Date(entry.endDate) : new Date(start.getTime() + 5 * 86400000);
+      // 'T12:00:00' — bare YYYY-MM-DD parses as UTC midnight and marks the previous local day
+      const start = new Date(entry.startDate + 'T12:00:00');
+      const end = entry.endDate ? new Date(entry.endDate + 'T12:00:00') : new Date(start.getTime() + 5 * 86400000);
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         if (d.getFullYear() === year && d.getMonth() === m) {
           periodDays.add(d.getDate());
@@ -382,7 +391,7 @@ function CycleCalendar({ entries, cycleInfo }: { entries: PeriodEntry[]; cycleIn
 
     // Add predicted next period
     if (cycleInfo) {
-      const predicted = new Date(cycleInfo.predictedNextPeriod);
+      const predicted = new Date(cycleInfo.predictedNextPeriod + 'T12:00:00');
       for (let i = 0; i < 5; i++) {
         const d = new Date(predicted);
         d.setDate(d.getDate() + i);
