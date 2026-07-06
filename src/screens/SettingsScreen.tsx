@@ -15,7 +15,6 @@ import { KeyboardAwareScrollView, ScreenContainer } from '../components';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { safeParseJSON } from '../utils/safeStorage';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { ALL_THEMES } from '../theme/themes';
 import type { ThemeDefinition } from '../theme/colors';
@@ -120,7 +119,9 @@ export function SettingsScreen({ navigation }: any) {
         } catch {
           /* ignore */
         }
-        navigation.replace('SignIn');
+        // reset (not replace) — replace() left the signed-out Main mounted
+        // beneath SignIn, piling a duplicate TabNavigator per auth cycle.
+        navigation.reset({ index: 0, routes: [{ name: 'SignIn' }] });
       },
     );
   };
@@ -203,7 +204,7 @@ export function SettingsScreen({ navigation }: any) {
               }
 
               await signOut();
-              navigation.replace('SignIn');
+              navigation.reset({ index: 0, routes: [{ name: 'SignIn' }] });
             } catch {
               Alert.alert('Could not delete account', 'Please try again or contact support.');
             }
@@ -227,35 +228,10 @@ export function SettingsScreen({ navigation }: any) {
     setVoiceEnabled: setSenpaiVoiceEnabled,
     resetTtsFailures: resetSenpaiTtsFailures,
   } = useSenpaiChat();
-  const [pushEnabled, setPushEnabled] = useState(true);
-  const [classReminders, setClassReminders] = useState(true);
-  const [emailUpdates, setEmailUpdates] = useState(false);
-  const [streakAlerts, setStreakAlerts] = useState(true);
-  const [achievementAlerts, setAchievementAlerts] = useState(true);
-  const [calendarSync, setCalendarSync] = useState(false);
-
-  // Load notification prefs
-  useEffect(() => {
-    AsyncStorage.getItem('@zenki_notif_prefs').then((raw) => {
-      const p = safeParseJSON<Record<string, boolean>>(raw, {}, (v) =>
-        typeof v === 'object' && v !== null && !Array.isArray(v),
-      );
-      if (p.pushEnabled !== undefined) setPushEnabled(p.pushEnabled);
-      if (p.classReminders !== undefined) setClassReminders(p.classReminders);
-      if (p.emailUpdates !== undefined) setEmailUpdates(p.emailUpdates);
-      if (p.streakAlerts !== undefined) setStreakAlerts(p.streakAlerts);
-      if (p.achievementAlerts !== undefined) setAchievementAlerts(p.achievementAlerts);
-      if (p.calendarSync !== undefined) setCalendarSync(p.calendarSync);
-    });
-  }, []);
-
-  // Persist notification prefs on change
-  useEffect(() => {
-    AsyncStorage.setItem('@zenki_notif_prefs', JSON.stringify({
-      pushEnabled, classReminders, emailUpdates, streakAlerts,
-      achievementAlerts, calendarSync,
-    }));
-  }, [pushEnabled, classReminders, emailUpdates, streakAlerts, achievementAlerts, calendarSync]);
+  // The old NOTIFICATIONS toggles (@zenki_notif_prefs) and the admin
+  // "Block busy times" switch were removed: nothing in the app ever read
+  // those prefs, so the switches controlled nothing. Don't re-add a toggle
+  // here until the backing feature actually consults it.
 
   // Preferences
   const [unitPref, setUnitPref] = useState<UnitPref>('imperial');
@@ -577,56 +553,6 @@ export function SettingsScreen({ navigation }: any) {
             handleSoundToggle,
           )}
         </View>
-
-        {/* Notifications */}
-        {renderSectionHeader('NOTIFICATIONS')}
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
-          {renderToggleRow(
-            'Push Notifications',
-            'Receive alerts on your device',
-            pushEnabled,
-            setPushEnabled,
-          )}
-          {renderToggleRow(
-            'Class Reminders',
-            '30 min before your booked class',
-            classReminders,
-            setClassReminders,
-          )}
-          {renderToggleRow(
-            'Streak Alerts',
-            'Reminder if your streak is about to end',
-            streakAlerts,
-            setStreakAlerts,
-          )}
-          {renderToggleRow(
-            'Achievement Unlocks',
-            'When you earn a new badge',
-            achievementAlerts,
-            setAchievementAlerts,
-          )}
-          {renderToggleRow(
-            'Email Updates',
-            'Dojo news and schedule changes',
-            emailUpdates,
-            setEmailUpdates,
-          )}
-        </View>
-
-        {/* Calendar — admin-only */}
-        {isAdmin && (
-          <>
-            {renderSectionHeader('CALENDAR')}
-            <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
-              {renderToggleRow(
-                'Block busy times from booking',
-                "When on, members can't book slots you already have an event for",
-                calendarSync,
-                setCalendarSync,
-              )}
-            </View>
-          </>
-        )}
 
         {/* Learn */}
         {renderSectionHeader('LEARN')}

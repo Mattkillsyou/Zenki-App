@@ -24,7 +24,6 @@ function withErrorBoundary(ScreenComponent: React.ComponentType<any>, screenName
 
 // Auth screens
 import { SignInScreen } from '../screens/auth/SignInScreen';
-import { SetPasswordScreen } from '../screens/auth/SetPasswordScreen';
 import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { ContactScreen } from '../screens/auth/ContactScreen';
 import { OnboardingScreen } from '../screens/auth/OnboardingScreen';
@@ -75,7 +74,6 @@ import { FollowRequestsScreen } from '../screens/FollowRequestsScreen';
 import { AchievementsScreen } from '../screens/AchievementsScreen';
 import { AchievementDetailScreen } from '../screens/AchievementDetailScreen';
 import { ContactSupportScreen } from '../screens/ContactSupportScreen';
-import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { MessagesListScreen } from '../screens/MessagesListScreen';
 import { MessagesChatScreen } from '../screens/MessagesChatScreen';
 import { UserSearchScreen } from '../screens/UserSearchScreen';
@@ -222,7 +220,6 @@ export function RootNavigator() {
         component={SignInScreen}
         options={{ ...crossfadeTransition, gestureEnabled: false }}
       />
-      <Stack.Screen name="SetPassword" component={SetPasswordScreen} options={pushTransition} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={pushTransition} />
       <Stack.Screen name="Contact" component={ContactScreen} options={pushTransition} />
       <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ ...crossfadeTransition, gestureEnabled: false }} />
@@ -286,7 +283,6 @@ export function RootNavigator() {
       <Stack.Screen name="Achievements" component={withErrorBoundary(AchievementsScreen, 'Achievements')} options={pushTransition} />
       <Stack.Screen name="AchievementDetail" component={withErrorBoundary(AchievementDetailScreen, 'Achievement Detail')} options={pushTransition} />
       <Stack.Screen name="ContactSupport" component={withErrorBoundary(ContactSupportScreen, 'Contact Support')} options={pushTransition} />
-      <Stack.Screen name="Notifications" component={withErrorBoundary(NotificationsScreen, 'Notifications')} options={pushTransition} />
       <Stack.Screen name="MessagesList" component={withErrorBoundary(MessagesListScreen, 'Messages')} options={pushTransition} />
       <Stack.Screen name="MessagesChat" component={withErrorBoundary(MessagesChatScreen, 'Chat')} options={pushTransition} />
       <Stack.Screen name="UserSearch" component={withErrorBoundary(UserSearchScreen, 'Search')} options={pushTransition} />

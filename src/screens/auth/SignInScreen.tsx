@@ -130,10 +130,12 @@ export function SignInScreen({ navigation }: any) {
         // same as email signups; returning users land straight on Main. We
         // pass { oauth: true } so OnboardingScreen skips the email/password
         // account step — the account already exists from the token exchange.
+        // reset (not replace) — replace() left any previously-mounted Main
+        // beneath, piling a duplicate TabNavigator per sign-out/sign-in cycle.
         if (isNewAccount) {
-          navigation.replace('Onboarding', { oauth: true });
+          navigation.reset({ index: 0, routes: [{ name: 'Onboarding', params: { oauth: true } }] });
         } else {
-          navigation.replace('Main');
+          navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
         }
       } catch (err: any) {
         setErrorMsg(err?.message ? `Google sign-in didn't go through — ${err.message}` : "Google sign-in didn't go through — try email + password instead.");
@@ -205,9 +207,9 @@ export function SignInScreen({ navigation }: any) {
       // { oauth: true } param tells OnboardingScreen to skip the
       // email/password account step — the account already exists.
       if (isNewAccount) {
-        navigation.replace('Onboarding', { oauth: true });
+        navigation.reset({ index: 0, routes: [{ name: 'Onboarding', params: { oauth: true } }] });
       } else {
-        navigation.replace('Main');
+        navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
       }
     } catch (err: any) {
       // User canceling the prompt is not a real error — silence it.
@@ -312,13 +314,6 @@ export function SignInScreen({ navigation }: any) {
     }
     setLoading(true);
 
-    // "temp" password is the short-circuit to the admin-onboarding set-password flow.
-    if (password === 'temp') {
-      navigation.navigate('SetPassword', { username });
-      setLoading(false);
-      return;
-    }
-
     const input = username.toLowerCase().trim();
     const isEmailInput = input.includes('@');
 
@@ -370,7 +365,7 @@ export function SignInScreen({ navigation }: any) {
           console.log('[SignIn] Seeded Firebase account for', input);
         }
         await auth.signIn(member);
-        navigation.replace('Main');
+        navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
         return;
       }
 
@@ -387,7 +382,7 @@ export function SignInScreen({ navigation }: any) {
         throw new Error('member-record-missing');
       }
       await auth.signIn(hydrated);
-      navigation.replace('Main');
+      navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
     } catch (error: any) {
       const code = error?.code ?? error?.message ?? 'unknown';
       const userMessage =
@@ -422,7 +417,7 @@ export function SignInScreen({ navigation }: any) {
       const cred = CREDENTIALS[username.toLowerCase()];
       if (cred && cred.password === password) {
         const member = MEMBERS.find((m) => m.id === cred.memberId);
-        if (member) { await auth.signIn(member); navigation.replace('Main'); return; }
+        if (member) { await auth.signIn(member); navigation.reset({ index: 0, routes: [{ name: 'Main' }] }); return; }
       }
       setErrorMsg("Hmm, that username or password doesn't look right.");
     } finally {
@@ -593,7 +588,7 @@ export function SignInScreen({ navigation }: any) {
               booking are browsable without an account; only checkout / booking /
               social actions require sign-in. */}
           <SoundPressable
-            onPress={async () => { await auth.continueAsGuest(); navigation.replace('Main'); }}
+            onPress={async () => { await auth.continueAsGuest(); navigation.reset({ index: 0, routes: [{ name: 'Main' }] }); }}
             style={{ alignSelf: 'center', paddingVertical: 10, marginTop: 4 }}
             accessibilityLabel="Browse as guest"
           >
