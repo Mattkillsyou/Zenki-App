@@ -12,7 +12,6 @@ import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { typography, spacing, borderRadius } from '../theme';
@@ -44,7 +43,7 @@ export function ProfileScreen({ navigation }: any) {
   const [showPhotoMenu, setShowPhotoMenu] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editBio, setEditBio] = useState('');
-  const [editGoals, setEditGoals] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // Re-sync local photo state when the Member doc changes (e.g. Firestore
   // subscription in AuthContext picks up an admin edit, or the user updates
@@ -243,7 +242,7 @@ export function ProfileScreen({ navigation }: any) {
           {/* Edit Profile — pinned to the top-right corner */}
           <SoundPressable
             style={[styles.editProfileCornerBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={() => setEditOpen(true)}
+            onPress={() => { setEditBio(user?.funFact ?? ''); setEditOpen(true); }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="create-outline" size={14} color={colors.textSecondary} />
@@ -480,28 +479,34 @@ export function ProfileScreen({ navigation }: any) {
             />
             <Text style={[styles.editCharCount, { color: colors.textMuted }]}>{editBio.length}/140</Text>
 
-            <Text style={[styles.editLabel, { color: colors.textMuted, marginTop: 12 }]}>TRAINING GOALS</Text>
-            <TextInput
-              style={[styles.editInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}
-              placeholder="What are you working toward?"
-              placeholderTextColor={colors.textMuted}
-              value={editGoals}
-              onChangeText={setEditGoals}
-              multiline
-              maxLength={200}
-            />
-
             <SoundPressable
-              style={[styles.editSaveBtn, { backgroundColor: colors.gold }]}
-              onPress={() => {
-                // Save to AsyncStorage (lightweight persistence)
-                AsyncStorage.setItem('@zenki_profile_bio', editBio);
-                AsyncStorage.setItem('@zenki_profile_goals', editGoals);
-                setEditOpen(false);
-                Alert.alert('Saved', 'Your profile has been updated.');
+              style={[styles.editSaveBtn, { backgroundColor: colors.gold, opacity: savingProfile ? 0.6 : 1 }]}
+              disabled={savingProfile}
+              onPress={async () => {
+                if (!user || savingProfile) return;
+                setSavingProfile(true);
+                try {
+                  // Persist to the member doc — same server-confirmed pattern
+                  // as persistPhoto, so "Saved" is never claimed for a write
+                  // that didn't land. The header renders user.funFact and the
+                  // AuthContext member subscription picks up the change.
+                  const ok = await pushMemberToFirestore({ ...user, funFact: editBio.trim() });
+                  if (!ok) throw new Error('members-write-rejected');
+                  setEditOpen(false);
+                  Alert.alert('Saved', 'Your profile has been updated.');
+                } catch (err: any) {
+                  Alert.alert(
+                    'Profile not saved',
+                    err?.message === 'members-write-rejected'
+                      ? "Couldn't write your profile record. Check your connection and try again."
+                      : `Couldn't save profile: ${err?.message || 'unknown error'}`,
+                  );
+                } finally {
+                  setSavingProfile(false);
+                }
               }}
             >
-              <Text style={styles.editSaveBtnText}>Save Changes</Text>
+              <Text style={styles.editSaveBtnText}>{savingProfile ? 'Saving…' : 'Save Changes'}</Text>
             </SoundPressable>
           </View>
         </View>

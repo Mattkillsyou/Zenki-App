@@ -646,8 +646,8 @@ export function HomeScreen({ navigation }: any) {
   // ── Module reorder (drag to rearrange) + show/hide ──
   // Employees swap the food / training tools for clock-in + today's checklist;
   // every other module (announcements, xp, dashboard, etc.) stays the same.
-  const NON_EMPLOYEE_MODULE_ORDER = ['announcements', 'vouchers', 'quote', 'xpBar', 'achievements', 'macroBars', 'quickFoodActions', 'training', 'dashboard', 'quickStats'];
-  const EMPLOYEE_MODULE_ORDER = ['timeclock', 'checklist', 'announcements', 'vouchers', 'quote', 'xpBar', 'achievements', 'macroBars', 'dashboard', 'quickStats'];
+  const NON_EMPLOYEE_MODULE_ORDER = ['announcements', 'vouchers', 'quote', 'xpBar', 'achievements', 'macroBars', 'quickFoodActions', 'training', 'dashboard', 'quickStats', 'schedule'];
+  const EMPLOYEE_MODULE_ORDER = ['timeclock', 'checklist', 'announcements', 'vouchers', 'quote', 'xpBar', 'achievements', 'macroBars', 'dashboard', 'quickStats', 'schedule'];
   const DEFAULT_MODULE_ORDER = isEmployee ? EMPLOYEE_MODULE_ORDER : NON_EMPLOYEE_MODULE_ORDER;
   const [moduleOrder, setModuleOrder] = useState<string[]>(DEFAULT_MODULE_ORDER);
   const [moduleVisibility, setModuleVisibility] = useState<Record<string, boolean>>({});
@@ -1209,6 +1209,22 @@ export function HomeScreen({ navigation }: any) {
                           <Ionicons name="chevron-forward" size={14} color={colors.gold} />
                         </TouchableOpacity>
                       </View>
+                      {nextClass && countdown !== '' && (
+                        <View style={[styles.nextClassCard, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 10 }]}>
+                          <View style={styles.nextClassLeft}>
+                            <View style={[styles.nextClassDot, { backgroundColor: colors.gold }]} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.nextClassName, { color: colors.textPrimary }]} numberOfLines={1}>{nextClass.name}</Text>
+                              <Text style={[styles.nextClassMeta, { color: colors.textMuted }]}>
+                                {nextClass.instructor} · {nextClass.duration}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.nextClassRight}>
+                            <Text style={[styles.nextClassCountdown, { color: colors.gold }]}>{countdown}</Text>
+                          </View>
+                        </View>
+                      )}
                       {todaysFullSchedule.slice(0, 5).map((cls) => (
                         <TouchableOpacity
                           key={cls.key}
