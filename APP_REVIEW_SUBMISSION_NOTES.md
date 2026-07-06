@@ -1,7 +1,7 @@
 # App Review Information — resubmission (v2.0.1, build 41)
 
 Paste the block below into **App Store Connect → [your version] → App Review Information → Notes to Reviewer**.
-Set **Sign-In Required: Yes**. Demo account fields: `reviewer` / `ZenkiTest2026!`.
+Set **Sign-In Required: Yes**. Demo account fields: `reviewer` / `reviewer123`.
 
 > ⚠️ **Critical correction vs. the old notes:** the app now processes **live payments** (Stripe / Apple Pay) for **physical goods**. The previous "does NOT process payments in-app" line is FALSE for this build and would get you rejected. The block below states the correct, compliant position (physical goods → Apple Pay, not IAP).
 
@@ -14,7 +14,7 @@ Thank you for reviewing Zenki Dojo — the members' companion app for a private 
 
 DEMO ACCOUNT (Sign-In Required: Yes)
 Username: reviewer
-Password: ZenkiTest2026!
+Password: reviewer123
 No invite code is needed — the first-launch invite gate is disabled in this build, so you go straight to the sign-in screen. Tap "Have an account? Sign in", enter the credentials above, tap Sign In.
 
 DEMO VIDEO — Bluetooth heart-rate pairing (Guideline 2.1)
