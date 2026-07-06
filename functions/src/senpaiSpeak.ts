@@ -5,7 +5,8 @@
  *
  * Flow per request:
  *   1. Verify Firebase Auth ID token (Authorization: Bearer ...).
- *   2. Validate body { text: string, voiceId?: string }.
+ *   2. Validate body { text: string }. A client-sent voiceId is deliberately
+ *      IGNORED — see the security note at DEFAULT_VOICE_ID below.
  *   3. Rate-limit per UID via enforceRateLimit('senpaiSpeak').
  *   4. POST to ElevenLabs /v1/text-to-speech/{voice_id} with model
  *      `eleven_flash_v2_5` — half the credit cost and ~75ms latency,
@@ -14,10 +15,10 @@
  *      and play via expo-audio without a separate file download step.
  *   6. Log usage to Firestore senpaiUsage for cost tracking.
  *
- * Voice selection: client passes a voiceId; falls back to the default
- * (currently `Rachel`, calm young female). Pick a different voice from
- * https://elevenlabs.io/app/voice-library and set it in
- * src/services/senpaiSpeak.ts → DEFAULT_VOICE_ID to change globally.
+ * Voice selection: pinned server-side to DEFAULT_VOICE_ID (Hina — see
+ * below). Pick a different voice from
+ * https://elevenlabs.io/app/voice-library and change DEFAULT_VOICE_ID
+ * here to change it globally.
  *
  * Cost note: ElevenLabs Starter ($5/mo) = 30K characters; Creator ($22/mo)
  * = 100K. At ~80 chars/reply, Starter covers ~375 replies/mo. Keep an eye
@@ -36,11 +37,21 @@ const ELEVENLABS_API_KEY = defineSecret('ELEVENLABS_API_KEY');
 // female, anime idol style, kawaii — Japanese-accent English via the
 // multilingual flash model. Picked from the ElevenLabs voice library
 // (29.4K users) as the closest match for インスタのビッチ's chaotic-feral
-// magical-girl energy. Override per-request via the `voiceId` body field.
+// magical-girl energy.
+//
+// SECURITY (audit E3): the voice is PINNED here. A client-sent `voiceId`
+// used to be honored, which made this endpoint an open TTS proxy — any
+// authed user could synthesize arbitrary text in ANY ElevenLabs voice on
+// the app's key. The shipped client never sent one (useSenpaiChat passes
+// undefined), so the override existed only as abuse surface. Ignore it.
 const DEFAULT_VOICE_ID = 'lhTvHflPVOqgSWyuWQry';
 
 const MODEL_ID = 'eleven_flash_v2_5';
-const MAX_TEXT_CHARS = 1500; // hard cap to avoid runaway TTS costs
+// Hard cap to avoid runaway TTS costs. SPEAK lines are 1–2 short Japanese
+// sentences (~80 chars typical, prompt-capped to ~6s of audio) — 300 gives
+// generous headroom while keeping the worst case at 60 req/day/uid from
+// burning the ElevenLabs quota (audit E3; was 1500).
+const MAX_TEXT_CHARS = 300;
 
 // ─────────────────────────────────────────────
 // Auth (mirror of senpaiChat.ts pattern)
@@ -64,6 +75,8 @@ async function authenticate(req: any): Promise<{ uid: string } | { error: string
 
 interface SpeakRequest {
   text?: string;
+  // Accepted in the body for backwards compat but IGNORED (audit E3) —
+  // the voice is pinned server-side to DEFAULT_VOICE_ID.
   voiceId?: string;
 }
 
@@ -95,18 +108,27 @@ export const senpaiSpeak = onRequest(
 
     // 2. Validate
     const body = (req.body ?? {}) as SpeakRequest;
-    const text = typeof body.text === 'string' ? body.text.trim() : '';
+    let text = typeof body.text === 'string' ? body.text.trim() : '';
     if (!text) {
       res.status(400).json({ error: 'text required (non-empty string)' });
       return;
     }
+    // Over-cap text is TRUNCATED, not rejected: nothing upstream bounds the
+    // model's SPEAK line (parseSenpaiResponse has no length cap and the
+    // client sends it verbatim), so a verbose reply used to 400 here — and
+    // the client maps any 4xx to 'tts_error', one of the E2 strike codes
+    // that auto-disable voice after two hits. Cutting the tail preserves the
+    // exact same cost cap while long lines still play. Slice on a code-point
+    // boundary so a surrogate pair (emoji) can't be split into a lone half.
     if (text.length > MAX_TEXT_CHARS) {
-      res.status(400).json({ error: `text too long (max ${MAX_TEXT_CHARS} chars)` });
-      return;
+      let cut = text.slice(0, MAX_TEXT_CHARS);
+      const lastUnit = cut.charCodeAt(cut.length - 1);
+      if (lastUnit >= 0xd800 && lastUnit <= 0xdbff) cut = cut.slice(0, -1);
+      text = cut;
     }
-    const voiceId = typeof body.voiceId === 'string' && body.voiceId.length > 0
-      ? body.voiceId
-      : DEFAULT_VOICE_ID;
+    // Deliberately ignore body.voiceId (audit E3): honoring it made this an
+    // open proxy for any ElevenLabs voice on the app's key.
+    const voiceId = DEFAULT_VOICE_ID;
 
     // 3. Rate limit
     const limit = await enforceRateLimit(uid, 'senpaiSpeak');
