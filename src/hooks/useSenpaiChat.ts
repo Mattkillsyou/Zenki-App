@@ -3,12 +3,13 @@
  * senpaiChat cloud function.
  *
  * The state is hoisted into a single SenpaiChatProvider (bottom of this file)
- * so the floating mascot, the full-screen chat modal, and Settings all share
- * ONE live conversation. Previously each useSenpaiChat() call got its own
+ * so the floating mascot's chat dock and Settings share ONE live
+ * conversation. Previously each useSenpaiChat() call got its own
  * copy, reconciled only loosely through AsyncStorage — which meant a message
  * sent in one surface didn't appear in another until an app restart.
  *
- * Persisted under @senpai_chat_history (last 50 turns trimmed on save).
+ * Persisted per account under @senpai_chat_history:<memberId> (guest bucket
+ * for guests; last 50 turns trimmed on save).
  * Each Senpai reply also fires triggerReaction so the floating mascot
  * animation matches the chat mood.
  */
@@ -37,9 +38,21 @@ import { randomDialogue } from '../data/senpaiDialogue';
 import type { FoodSearchResult } from '../types/food';
 import type { MealType, MacroEntry } from '../types/nutrition';
 
-const HISTORY_KEY = '@senpai_chat_history';
+// F4: chat history is per-account — the persisted key is suffixed with the
+// member id (guest bucket for guests) so signing in as a different member on
+// the same device never inherits the previous user's transcript. The old
+// unsuffixed key is migrated once: the first signed-in hydrate claims it,
+// then it's removed so a second account can't also inherit it.
+const HISTORY_KEY_BASE = '@senpai_chat_history';
+const LEGACY_HISTORY_KEY = HISTORY_KEY_BASE; // pre-per-account builds wrote here
+const historyKeyFor = (uid: string | null) => `${HISTORY_KEY_BASE}:${uid ?? 'guest'}`;
+// Deliberately device-global (a preference, not user data — audit F4).
 const VOICE_KEY = '@senpai_chat_voice_enabled';
 const MAX_PERSISTED_TURNS = 50;
+// C1: the backend rejects threads longer than 60 turns with a 400
+// (functions/src/senpaiChat.ts) — window API calls well under that so a
+// marathon session can never brick every subsequent send.
+const MAX_API_TURNS = 40;
 
 // Crisis pre-check — mirrors functions/src/senpaiChat.ts (CRISIS_PATTERNS) so
 // self-harm / suicide intent is caught even offline or before auth and is never
@@ -76,6 +89,33 @@ export interface ChatThreadMessage {
 
 let nextId = 0;
 const makeId = () => `msg_${Date.now()}_${nextId++}`;
+
+// C1: normalize a thread window before it's handed to the API (or restored
+// from storage): settled turns only, capped at `max`, and — critically —
+// opening on a USER turn. The backend 400s on assistant-first threads, and
+// pushSenpaiLine appends standalone assistant confirms, so a naive tail-slice
+// can open assistant-first and brick every subsequent send until the
+// destructive trash-clear.
+function normalizeThread(thread: ChatThreadMessage[], max: number): ChatThreadMessage[] {
+  const settled = thread.filter((m) => !m.pending && !m.error && m.content.length > 0);
+  const windowed = settled.slice(-max);
+  const firstUser = windowed.findIndex((m) => m.role === 'user');
+  return firstUser > 0 ? windowed.slice(firstUser) : windowed;
+}
+
+// C1 (defense-in-depth): cap the in-memory thread on append too, so one long
+// session can't grow an unbounded array. send() windows the API call
+// separately; appended messages land at the tail so id-keyed updates
+// (placeholder → reply) are unaffected.
+function appendCapped(prev: ChatThreadMessage[], ...msgs: ChatThreadMessage[]): ChatThreadMessage[] {
+  const next = [...prev, ...msgs];
+  return next.length > MAX_PERSISTED_TURNS ? next.slice(-MAX_PERSISTED_TURNS) : next;
+}
+
+// F3: scale how long a reply holds the mascot bubble with its length — a
+// fixed 4s cut multi-sentence replies (and the crisis resources) off
+// mid-read. ~55ms/char, clamped to 4-15s.
+const bubbleDurationMs = (text: string) => Math.min(15000, Math.max(4000, text.length * 55));
 
 /**
  * Compute days between today and the most recent workout date, or undefined
@@ -137,8 +177,11 @@ function useSenpaiChatState() {
   const { triggerReaction } = useSenpai();
   const { state: gamState } = useGamification();
   const { myLogs } = useWorkouts();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { addMacroEntry, removeMacroEntry, updateGoals, macrosForDate, rememberFood } = useNutrition();
+  // F4: history is keyed per account (guest bucket while signed out / guest).
+  const uid = user?.id ?? null;
+  const historyKey = historyKeyFor(uid);
   const [messages, setMessages] = useState<ChatThreadMessage[]>([]);
   // Item 4: a client-executed action awaiting user confirmation (log/remove
   // food, set goal). Resolved from the model's tool request; null when idle.
@@ -165,36 +208,81 @@ function useSenpaiChatState() {
   // we auto-flip voiceEnabled to false so the user isn't stuck waiting on
   // a known-bad TTS endpoint (e.g. ElevenLabs free-tier disabled). The
   // counter resets on a successful TTS playback.
+  //
+  // E2: only endpoint-health failures ('tts_error' / 'parse_error' /
+  // 'rate_limit') count as strikes — a transient 'no_network' blip (35s
+  // abort, connection drop) must never permanently persist voice-off.
+  // Strikes also decay: failures more than TTS_STRIKE_DECAY_MS apart are
+  // unrelated, so the counter restarts rather than accumulating forever.
   const ttsFailureCountRef = useRef(0);
+  const lastTtsFailureAtRef = useRef(0);
   const TTS_FAIL_AUTODISABLE = 2;
+  const TTS_STRIKE_CODES = ['tts_error', 'parse_error', 'rate_limit'];
+  const TTS_STRIKE_DECAY_MS = 10 * 60 * 1000;
   const hydratedRef = useRef(false);
 
-  // Load persisted history + voice flag on mount
+  // Load the voice flag once on mount — device-global by design (audit F4).
   useEffect(() => {
     (async () => {
       try {
-        const [historyRaw, voiceRaw] = await Promise.all([
-          AsyncStorage.getItem(HISTORY_KEY),
-          AsyncStorage.getItem(VOICE_KEY),
-        ]);
-        const parsed = safeParseJSON<ChatThreadMessage[]>(historyRaw, [], Array.isArray);
-        // Drop in-flight assistant placeholders (pending, empty content) that
-        // got persisted when the app closed mid-reply — otherwise a stuck
-        // "typing" bubble rehydrates forever. The user's real question is a
-        // separate non-pending message, so nothing is lost.
-        const restored = parsed.slice(-MAX_PERSISTED_TURNS).filter((m) => !m.pending);
-        if (restored.length > 0) setMessages(restored);
+        const voiceRaw = await AsyncStorage.getItem(VOICE_KEY);
         // Now that initial state is `true`, only override on an
         // explicit 'false' (auto-disable or user toggle). 'true' or
         // null both mean "keep voice on."
         if (voiceRaw === 'false') setVoiceEnabledState(false);
       } catch (err) {
-        console.warn('[useSenpaiChat] hydrate failed:', err);
-      } finally {
-        hydratedRef.current = true;
+        console.warn('[useSenpaiChat] voice hydrate failed:', err);
       }
     })();
   }, []);
+
+  // Load persisted history — re-keyed and re-run per account (F4). Waits for
+  // auth to resolve its persisted session so a relaunch-while-signed-in never
+  // hydrates (or migrates the legacy key into) the guest bucket by mistake.
+  useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
+    // Account switch: drop the previous user's thread from memory immediately
+    // so nothing leaks across accounts while the new history loads. Keeping
+    // hydratedRef false also blocks the persist effect from writing the old
+    // thread (or this transient empty one) under the new key.
+    hydratedRef.current = false;
+    setMessages([]);
+    setLastArrivedId(null);
+    setError(null);
+    setPendingAction(null);
+    (async () => {
+      try {
+        let historyRaw = await AsyncStorage.getItem(historyKey);
+        // One-time legacy migration: pre-per-account builds persisted under
+        // the unsuffixed key. Only a signed-in hydrate claims it (guests
+        // never do), then it's removed so the next account can't inherit it.
+        if (historyRaw == null && uid != null) {
+          const legacyRaw = await AsyncStorage.getItem(LEGACY_HISTORY_KEY);
+          if (legacyRaw != null) {
+            historyRaw = legacyRaw;
+            await AsyncStorage.setItem(historyKey, legacyRaw);
+            await AsyncStorage.removeItem(LEGACY_HISTORY_KEY);
+          }
+        }
+        if (cancelled) return;
+        const parsed = safeParseJSON<ChatThreadMessage[]>(historyRaw, [], Array.isArray);
+        // C1: same normalization as send()'s API window — drops in-flight
+        // placeholders persisted mid-reply (stuck "typing" bubble), failed
+        // turns, and a leading assistant turn (pushSenpaiLine confirms) that
+        // would make the backend reject the whole thread as assistant-first.
+        const restored = normalizeThread(parsed, MAX_PERSISTED_TURNS);
+        if (restored.length > 0) setMessages(restored);
+      } catch (err) {
+        console.warn('[useSenpaiChat] hydrate failed:', err);
+      } finally {
+        if (!cancelled) hydratedRef.current = true;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [historyKey, uid, authLoading]);
 
   const setVoiceEnabled = useCallback((on: boolean) => {
     setVoiceEnabledState(on);
@@ -208,6 +296,12 @@ function useSenpaiChatState() {
     } else {
       // Killed mid-clip — stop whatever's playing right now
       stopSenpaiAudio();
+      // E1 defense-in-depth: a cancel that lands during playSenpaiAudio's
+      // setup awaits can resolve without ever firing onEnded — and this
+      // else-branch also gates off the TTS block that would otherwise reset
+      // the flag. Clear it here so the walkie-talkie mic re-arm
+      // (SenpaiMascot reads ttsPlaying) can never stay wedged.
+      setTtsPlaying(false);
     }
   }, []);
 
@@ -219,12 +313,15 @@ function useSenpaiChatState() {
   const messagesRef = useRef<ChatThreadMessage[]>(messages);
   messagesRef.current = messages;
 
-  // Persist any time messages change (after initial hydration)
+  // Persist any time messages change (after hydration for the CURRENT
+  // account — the hydrate effect above flips hydratedRef false on an account
+  // switch, which is what stops this from writing user A's thread under
+  // user B's key in the switch-over commit).
   useEffect(() => {
     if (!hydratedRef.current) return;
     const trimmed = messages.slice(-MAX_PERSISTED_TURNS);
-    safeStorageSet(HISTORY_KEY, trimmed, '[useSenpaiChat]');
-  }, [messages]);
+    safeStorageSet(historyKey, trimmed, '[useSenpaiChat]');
+  }, [messages, historyKey]);
 
   // Append a locally-generated assistant line (used for action confirmations
   // — deterministic, in-character, no model round-trip). DISPLAY-only: scripted
@@ -232,10 +329,12 @@ function useSenpaiChatState() {
   const pushSenpaiLine = useCallback(
     (text: string, mood: MascotMood = 'cheering') => {
       const msg: ChatThreadMessage = { id: makeId(), role: 'assistant', content: text, mood };
-      setMessages((prev) => [...prev, msg]);
+      setMessages((prev) => appendCapped(prev, msg));
       setLastArrivedId(msg.id);
       try {
-        triggerReaction(mood, text, 4000);
+        // 'chat' source: pose + bubble only — confirms must not detonate the
+        // full-screen milestone effects (D2).
+        triggerReaction(mood, text, bubbleDurationMs(text), 'chat');
       } catch {
         /* non-fatal */
       }
@@ -321,9 +420,11 @@ function useSenpaiChatState() {
           content: CRISIS_REPLY,
           mood: 'encouraging',
         };
-        setMessages((prev) => [...prev, userMsg, reply]);
+        setMessages((prev) => appendCapped(prev, userMsg, reply));
         setLastArrivedId(reply.id);
-        try { triggerReaction('encouraging', CRISIS_REPLY, 8000); } catch { /* non-fatal */ }
+        // F3: length-scaled hold (hits the 15s cap for this reply — strictly
+        // longer than the old fixed 8s) so the hotline numbers stay readable.
+        try { triggerReaction('encouraging', CRISIS_REPLY, bubbleDurationMs(CRISIS_REPLY), 'chat'); } catch { /* non-fatal */ }
         return;
       }
 
@@ -341,11 +442,16 @@ function useSenpaiChatState() {
       // turn fired right after a clearChat() (we observed
       // `messages cannot be empty` 400s from the test button which
       // clears history and sends in the same handler).
-      const apiMessages: ChatTurn[] = [...messagesRef.current, userMsg]
-        .filter((m) => !m.pending && !m.error && m.content.length > 0)
+      // C1: normalizeThread windows to the last MAX_API_TURNS settled turns
+      // and guarantees the window opens on a user turn — the backend 400s
+      // both >60-turn and assistant-first threads, and each failed retry
+      // used to append another user turn, so an over-long thread could
+      // never self-heal. userMsg is always last, so the window is never
+      // empty.
+      const apiMessages: ChatTurn[] = normalizeThread([...messagesRef.current, userMsg], MAX_API_TURNS)
         .map((m) => ({ role: m.role, content: m.content }));
       // Optimistically render user message + assistant placeholder.
-      setMessages((prev) => [...prev, userMsg, placeholder]);
+      setMessages((prev) => appendCapped(prev, userMsg, placeholder));
 
       setLoading(true);
       try {
@@ -411,9 +517,12 @@ function useSenpaiChatState() {
         // typing-reveal it. Naturally decays when the next reply lands.
         setLastArrivedId(placeholderId);
 
-        // Mirror the chat reply into the floating mascot animation
+        // Mirror the chat reply into the floating mascot animation. F3:
+        // duration scales with reply length so multi-sentence answers stay
+        // readable; 'chat' source keeps casual replies from detonating the
+        // full-screen milestone effects (D2).
         try {
-          triggerReaction(mood, text, 4000);
+          triggerReaction(mood, text, bubbleDurationMs(text), 'chat');
         } catch {
           /* non-fatal */
         }
@@ -448,6 +557,17 @@ function useSenpaiChatState() {
               // eslint-disable-next-line no-console
               console.warn('[senpaiSpeak]', label, detail);
               setTtsPlaying(false);
+              // E2: only endpoint-health codes count toward auto-disable.
+              // 'no_network' (35s abort / connection drop), 'no_auth', and
+              // local 'playback_threw' are transient — two unrelated blips,
+              // arbitrarily far apart, must not permanently mute her.
+              if (!TTS_STRIKE_CODES.includes(label)) return;
+              const now = Date.now();
+              if (now - lastTtsFailureAtRef.current > TTS_STRIKE_DECAY_MS) {
+                // Stale strike — unrelated to this failure, start fresh.
+                ttsFailureCountRef.current = 0;
+              }
+              lastTtsFailureAtRef.current = now;
               ttsFailureCountRef.current += 1;
               if (ttsFailureCountRef.current >= TTS_FAIL_AUTODISABLE) {
                 // eslint-disable-next-line no-console
@@ -458,6 +578,12 @@ function useSenpaiChatState() {
                 );
                 setVoiceEnabledState(false);
                 safeStorageSet(VOICE_KEY, 'false', '[useSenpaiChat]');
+                // E2: say so in-character instead of going silently mute —
+                // recovery lives in Settings → Senpai Voice.
+                pushSenpaiLine(
+                  'my voice broke!! typing only until you flip Senpai Voice back on in settings 💕',
+                  'disappointed',
+                );
               }
             };
             try {
@@ -496,7 +622,7 @@ function useSenpaiChatState() {
         setLoading(false);
       }
     },
-    [loading, triggerReaction, gamState, myLogs, user, voiceEnabled, stageAction],
+    [loading, triggerReaction, gamState, myLogs, user, voiceEnabled, stageAction, pushSenpaiLine],
   );
 
   // ─── Action confirm / cancel (item 4) ───
@@ -587,10 +713,10 @@ function useSenpaiChatState() {
     setMessages([]);
     setError(null);
     setLastArrivedId(null);
-    await AsyncStorage.removeItem(HISTORY_KEY).catch((err) => {
+    await AsyncStorage.removeItem(historyKey).catch((err) => {
       console.warn('[useSenpaiChat] removeItem failed:', err);
     });
-  }, []);
+  }, [historyKey]);
 
   // Dismiss the current chat error without wiping history. Used by the
   // mascot's hold gestures so the user can always escape an error state

@@ -121,6 +121,17 @@ export async function playSenpaiAudio(
   // player, and remove the tempfile we just wrote so it doesn't leak.
   if (cancelled) {
     FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+    // This resolution never reaches cleanup(), so fire onEnded here or the
+    // consumer's "TTS done" state (ttsPlaying in useSenpaiChat) stays true
+    // forever and silently blocks the walkie-talkie mic re-arm. Fired ONLY
+    // in this branch — not in the early currentStop handle above — because
+    // a newer playSenpaiAudio() also routes its predecessor through here,
+    // and firing from both places would double-invoke onEnded.
+    try {
+      onEnded?.();
+    } catch {
+      /* consumer error must not break the cancel path */
+    }
     return { stop: () => {} };
   }
   // Past the cancellation guard `fileUri` is a written tempfile; capture a

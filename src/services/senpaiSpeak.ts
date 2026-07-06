@@ -39,6 +39,21 @@ export type SenpaiSpeakResponse =
 // stuck until the OS socket timeout (~1-2 min). Mirrors sendSenpaiChat.
 const REQUEST_TIMEOUT_MS = 35_000;
 
+// Mirror of the server's MAX_TEXT_CHARS (functions/src/senpaiSpeak.ts).
+// Truncate BEFORE sending: a deployed function may still hard-REJECT
+// over-cap text with a 400, which maps to 'tts_error' below — one of the
+// E2 strike codes that auto-disable voice after two hits. A clipped tail
+// on a rare verbose line beats a strike toward going permanently mute.
+const MAX_TTS_CHARS = 300;
+function capTtsText(t: string): string {
+  if (t.length <= MAX_TTS_CHARS) return t;
+  let cut = t.slice(0, MAX_TTS_CHARS);
+  // Don't split a surrogate pair (emoji) at the boundary.
+  const lastUnit = cut.charCodeAt(cut.length - 1);
+  if (lastUnit >= 0xd800 && lastUnit <= 0xdbff) cut = cut.slice(0, -1);
+  return cut;
+}
+
 export async function fetchSenpaiAudio(
   text: string,
   voiceId?: string,
@@ -53,7 +68,7 @@ export async function fetchSenpaiAudio(
     const res = await fetch(`${AI_FUNCTION_BASE_URL}/senpaiSpeak`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ text, voiceId }),
+      body: JSON.stringify({ text: capTtsText(text), voiceId }),
       signal: controller.signal,
     });
 
