@@ -30,6 +30,7 @@ const editModeLayoutAnim: any = {
 };
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
+import { useIsFocused } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -59,7 +60,7 @@ import { formatDistance, formatDurationHuman } from '../utils/gps';
 import { requireAuth } from '../utils/requireAuth';
 import { useCycleTracker } from '../context/CycleTrackerContext';
 import { useSenpai } from '../context/SenpaiContext';
-import { randomDialogue } from '../data/senpaiDialogue';
+import { randomDialogue, SENPAI_INTRO_SCRIPT } from '../data/senpaiDialogue';
 import { PHASE_LABELS, PHASE_COLORS, PHASE_ICONS } from '../types/cycle';
 
 function sessionTypeToClassType(s: string): 'jiu-jitsu' | 'muay-thai' | 'pilates' | 'open-mat' {
@@ -322,24 +323,43 @@ function DashboardPager({
   );
 }
 
+// One-time seen flag for the first-run Senpai introduction card (H5).
+// Device-scoped on purpose — the card is a once-per-install moment.
+const SENPAI_INTRO_SEEN_KEY = '@zenki_senpai_intro_seen';
+
 export function HomeScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const isEmployee = user?.isEmployee === true;
   const { state: gamState, levelInfo, dismissCelebration, recordAppOpen } = useGamification();
-  const { state: senpaiState, triggerReaction: senpaiReact, shouldReact: senpaiShouldReact } = useSenpai();
+  const { state: senpaiState, setEnabled: setSenpaiEnabled, triggerReaction: senpaiReact, shouldReact: senpaiShouldReact } = useSenpai();
+  const isFocused = useIsFocused();
   React.useEffect(() => { recordAppOpen(); }, [recordAppOpen]);
+  // Home greeting — once per app open (aligned with recordAppOpen above) and
+  // only while Home is actually FOCUSED. Home stays mounted under pushed
+  // screens, so without the focus gate the greeting fired 1.5s after
+  // toggling Senpai ON in Settings and stomped the enable-celebration
+  // there ("Welcome back, Senpai!" while standing in Settings). The ref —
+  // not just deps — is what stops a re-fire on every return to the tab.
+  const greetedThisOpenRef = useRef(false);
   React.useEffect(() => {
-    if (!senpaiState.enabled) return;
-    if (!senpaiShouldReact()) return;
-    const hour = new Date().getHours();
-    const key = hour < 12 ? 'morning' : hour >= 18 ? 'evening' : 'appOpen';
-    // 'cheering' — the morning/evening/appOpen greetings are high-energy
-    // ("SENPAI! You're here!"), so the mood should match the copy, not the
-    // calmer 'encouraging' pose.
-    const t = setTimeout(() => senpaiReact('cheering', randomDialogue(key), 4000), 1500);
+    if (greetedThisOpenRef.current) return;
+    if (!isFocused || !senpaiState.enabled) return;
+    const t = setTimeout(() => {
+      // Consume the slot BEFORE the volume roll so 'med'/'low' volume keeps
+      // the original one-roll-per-open odds instead of re-rolling on every
+      // focus change until it lands.
+      greetedThisOpenRef.current = true;
+      if (!senpaiShouldReact()) return;
+      const hour = new Date().getHours();
+      const key = hour < 12 ? 'morning' : hour >= 18 ? 'evening' : 'appOpen';
+      // 'cheering' — the morning/evening/appOpen greetings are high-energy
+      // ("SENPAI! You're here!"), so the mood should match the copy, not the
+      // calmer 'encouraging' pose.
+      senpaiReact('cheering', randomDialogue(key), 4000);
+    }, 1500);
     return () => clearTimeout(t);
-  }, [senpaiState.enabled]);
+  }, [senpaiState.enabled, isFocused]);
   const { announcements } = useAnnouncements();
 
   // ── Per-user dismissed-announcements list ──
@@ -378,6 +398,49 @@ export function HomeScreen({ navigation }: any) {
 
   useScreenSoundTheme('home');
   const { play } = useSound();
+
+  // ── First-run Senpai introduction (H5) ──
+  // One once-per-install Home card ("something is living in your app…").
+  // Accepting enables Senpai — the existing false→true SenpaiTransformation
+  // plays — then runs her scripted 3-line self-intro, landing on the dock's
+  // existing one-time disclaimer accept. null = still hydrating (render nothing).
+  const [senpaiIntroSeen, setSenpaiIntroSeen] = useState<boolean | null>(null);
+  useEffect(() => {
+    AsyncStorage.getItem(SENPAI_INTRO_SEEN_KEY)
+      .then((v) => setSenpaiIntroSeen(v === 'true'))
+      .catch(() => setSenpaiIntroSeen(true)); // storage error → never nag
+  }, []);
+  // Anyone who already has Senpai on (or enables her via Settings) has met
+  // her — retire the card so it can't appear after a later disable.
+  useEffect(() => {
+    if (senpaiState.enabled && senpaiIntroSeen === false) {
+      setSenpaiIntroSeen(true);
+      safeStorageSet(SENPAI_INTRO_SEEN_KEY, 'true', '[HomeScreen senpaiIntro]');
+    }
+  }, [senpaiState.enabled, senpaiIntroSeen]);
+  const dismissSenpaiIntro = useCallback(() => {
+    setSenpaiIntroSeen(true);
+    safeStorageSet(SENPAI_INTRO_SEEN_KEY, 'true', '[HomeScreen senpaiIntro]');
+  }, []);
+  const meetSenpai = useCallback(() => {
+    play('navigate');
+    dismissSenpaiIntro();
+    // The intro script owns the bubble for this app open — consume the Home
+    // greeting slot so it can't fire mid-transformation and churn the bubble.
+    greetedThisOpenRef.current = true;
+    setSenpaiEnabled(true); // false→true — SenpaiTransformation plays (~4s)
+    // Scripted self-intro, IN ORDER (not a random pool), timed to start
+    // after the transformation (4s) and let its closing catchphrase breathe.
+    // The last line is the serious "not a doctor" beat, so it gets the calm
+    // pose — and the dock's disclaimer accept ("got it 💕") waits below her.
+    const INTRO_MOODS = ['cheering', 'cheering', 'encouraging'] as const;
+    SENPAI_INTRO_SCRIPT.forEach((line, i) => {
+      setTimeout(() => {
+        try { senpaiReact(INTRO_MOODS[i] ?? 'cheering', line, 4200); } catch { /* ignore */ }
+      }, 6000 + i * 4400);
+    });
+  }, [play, dismissSenpaiIntro, setSenpaiEnabled, senpaiReact]);
+
   const {
     hasSpunToday,
     freeDrinkCredits,
@@ -811,6 +874,40 @@ export function HomeScreen({ navigation }: any) {
             </View>
           </View>
         </FadeInView>
+
+        {/* ── First-run Senpai introduction (once per install, H5) ── */}
+        {senpaiIntroSeen === false && !senpaiState.enabled && (
+          <FadeInView delay={140} slideUp={12}>
+            <View style={[styles.senpaiIntroCard, { backgroundColor: colors.surface, borderColor: '#FF2E5155' }]}>
+              <View style={[styles.senpaiIntroIcon, { backgroundColor: '#FF2E511A' }]}>
+                <Ionicons name="sparkles" size={22} color="#FF2E51" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.senpaiIntroTitle, { color: colors.textPrimary }]}>
+                  something is living in your app…
+                </Text>
+                <Text style={[styles.senpaiIntroDesc, { color: colors.textMuted }]}>
+                  A tiny companion moved in. She's loud, she's proud, and she already thinks you're hers.
+                </Text>
+                <TouchableOpacity
+                  style={styles.senpaiIntroBtn}
+                  onPress={meetSenpai}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.senpaiIntroBtnText}>WAKE HER UP 💕</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={styles.senpaiIntroDismiss}
+                onPress={dismissSenpaiIntro}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Dismiss Senpai introduction"
+              >
+                <Ionicons name="close" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          </FadeInView>
+        )}
 
         {/* ── Cycle Phase Pill (female members only) ── */}
         {showCyclePhase && cycleInfo && (
@@ -1625,6 +1722,57 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     marginTop: 3,
     lineHeight: 18,
+  },
+
+  // First-run Senpai introduction card (H5)
+  senpaiIntroCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginHorizontal: 20,
+    marginTop: spacing.md,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 16,
+    gap: 12,
+  },
+  senpaiIntroIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  senpaiIntroTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.1,
+  },
+  senpaiIntroDesc: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    lineHeight: 17,
+    marginTop: 3,
+  },
+  senpaiIntroBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FF2E51',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginTop: 10,
+  },
+  senpaiIntroBtnText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  senpaiIntroDismiss: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Announcements — top of feed, admin-editable

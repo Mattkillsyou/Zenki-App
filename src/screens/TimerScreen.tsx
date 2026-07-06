@@ -76,7 +76,21 @@ export function TimerScreen({ navigation, route }: any) {
     setHistory(next);
     AsyncStorage.setItem(TIMER_HISTORY_KEY, JSON.stringify(next));
     if (senpaiState.enabled && senpaiShouldReact()) {
-      try { senpaiTrigger('encouraging', randomDialogue('meditation'), 3500); } catch { /* ignore */ }
+      // Branch on what actually finished: only meditations get the chakra
+      // copy — round/interval (fight/HIIT) timers are workouts, and
+      // "your chakras are immaculate" after a 5×3min fight timer reads
+      // as a bug. Calm pose for meditation, cheer for a finished fight.
+      const isMeditation = session.type === 'meditate';
+      try {
+        // 'milestone' — a completed timer session is a "workout done" beat
+        // (ReactionSource tiering), so it keeps the full-screen effects.
+        senpaiTrigger(
+          isMeditation ? 'encouraging' : 'cheering',
+          randomDialogue(isMeditation ? 'meditation' : 'workoutComplete'),
+          3500,
+          'milestone',
+        );
+      } catch { /* ignore */ }
     }
   };
 
@@ -826,6 +840,19 @@ function MeditationTimer({ onComplete }: { onComplete?: (log: TimerSessionLog) =
         setRunning(false);
         setDone(true);
         playSingingBowl(true); // closing bell — richer, longer
+        // Report the finished sit — this timer previously never called
+        // onComplete, so meditations never reached timer history and
+        // never fired a Senpai reaction (the 'meditation' dialogue only
+        // played after fight/HIIT timers).
+        onComplete?.({
+          id: 'tl_' + Date.now().toString(36),
+          memberId: '',
+          type: 'meditate',
+          totalDurationSeconds: totalSecsRef.current,
+          roundsCompleted: 1,
+          roundsTarget: 1,
+          date: new Date().toISOString(),
+        });
       }
     }, 250);
   };
