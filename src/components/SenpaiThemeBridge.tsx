@@ -1,20 +1,24 @@
 import { useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { safeStorageSet } from '../utils/safeStorage';
 import { useSenpai } from '../context/SenpaiContext';
 import { useTheme, ThemeMode } from '../context/ThemeContext';
 
 const PREV_THEME_KEY = '@zenki_senpai_prev_theme';
 
 /**
- * When Senpai Mode toggles on, switches the app theme to 'senpai' and saves
- * the previously-active theme to AsyncStorage so it can be restored — even
- * across app relaunches — when Senpai turns off.
+ * Senpai (the companion) and the 'senpai' visual theme are UNBUNDLED:
+ * enabling the mascot no longer forces the app theme, and the senpai theme
+ * is a normal option in the Settings theme picker — the mascot works on any
+ * theme, and her theme works without her.
  *
- * Implemented as a RECONCILER over the live (enabled, mode) pair rather than a
- * one-render-lagged transition: whenever Senpai-on disagrees with theme-is-senpai
- * we fix it. This is race-free under fast enable→disable toggles (the old
- * `modeRef` lag could strand the user on the Senpai theme).
+ * The one job left for this bridge is unwinding the OLD bundling: builds
+ * before the split force-switched the theme to 'senpai' on enable and
+ * stashed the user's real theme under PREV_THEME_KEY. When Senpai is
+ * turned off IN THIS SESSION (a live true→false transition — never the
+ * pre-hydrate enabled=false default, which would un-theme legacy users on
+ * launch) while the theme is still 'senpai' and that stash exists, restore
+ * the stash and delete it. Nothing writes PREV_THEME_KEY anymore, so after
+ * the unwind this bridge never acts again.
  *
  * Lives inside both ThemeProvider and SenpaiProvider.
  */
@@ -23,40 +27,28 @@ export function SenpaiThemeBridge() {
   const { mode, setMode } = useTheme();
 
   const prevThemeRef = useRef<string | null>(null);
-  const loadedRef = useRef(false);
+  const prevEnabledRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(PREV_THEME_KEY).then((saved) => {
       if (saved) prevThemeRef.current = saved;
-      loadedRef.current = true;
     }).catch((err) => {
       console.warn('[SenpaiThemeBridge] hydrate failed:', err);
-      loadedRef.current = true;
     });
   }, []);
 
   useEffect(() => {
-    if (!loadedRef.current) return;
-
-    if (senpaiState.enabled) {
-      // Senpai on but theme isn't senpai → remember the current theme, switch.
-      if (mode !== 'senpai') {
-        prevThemeRef.current = mode;
-        safeStorageSet(PREV_THEME_KEY, mode, '[SenpaiThemeBridge]');
-        setMode('senpai');
-      }
-    } else {
-      // Senpai off but theme is still senpai (incl. the fast-toggle case, where
-      // a queued setMode('senpai') lands after disable) → restore the prior theme.
-      if (mode === 'senpai') {
-        const restore = (prevThemeRef.current as ThemeMode) || 'clean-dark';
-        setMode(restore);
-        prevThemeRef.current = null;
-        AsyncStorage.removeItem(PREV_THEME_KEY).catch((err) => {
-          console.warn('[SenpaiThemeBridge] removeItem failed:', err);
-        });
-      }
-    }
+    const prevEnabled = prevEnabledRef.current;
+    prevEnabledRef.current = senpaiState.enabled;
+    // Legacy unwind only fires on an observed enable→disable transition.
+    if (prevEnabled !== true || senpaiState.enabled) return;
+    if (mode !== 'senpai' || !prevThemeRef.current) return;
+    const restore = prevThemeRef.current as ThemeMode;
+    prevThemeRef.current = null;
+    setMode(restore);
+    AsyncStorage.removeItem(PREV_THEME_KEY).catch((err) => {
+      console.warn('[SenpaiThemeBridge] removeItem failed:', err);
+    });
   }, [senpaiState.enabled, mode, setMode]);
 
   return null;

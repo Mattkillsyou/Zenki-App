@@ -30,7 +30,7 @@ LogBox.ignoreLogs([
 ]);
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { MotionProvider } from './src/context/MotionContext';
-import { AuthProvider } from './src/context/AuthContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { TimeClockProvider } from './src/context/TimeClockContext';
 import { GamificationProvider } from './src/context/GamificationContext';
 import { DrinkTrackerProvider } from './src/context/DrinkTrackerContext';
@@ -71,6 +71,30 @@ import { initCrashReporter, reportError } from './src/services/crashReporter';
 // Init the crash reporter as early as possible so any error during the
 // provider tree's first render gets captured. Idempotent.
 initCrashReporter();
+
+/**
+ * The floating Senpai layer (chibi, dock, overlays, bridges), auth-gated on
+ * `user || isGuest` — mirroring RootNavigator's own gate — so she never
+ * floats over the SignIn screen and a signed-out session can't produce
+ * 401 "sign in expired" chat sends. SenpaiTransformation skips its initial
+ * mount, so remounting the cluster on sign-in never replays the transform.
+ */
+function SenpaiLayer({ navKey }: { navKey: number }) {
+  const { user, isGuest } = useAuth();
+  if (!user && !isGuest) return null;
+  return (
+    <>
+      <SenpaiThemeBridge />
+      <SenpaiReactionBridge />
+      <SenpaiMascot />
+      <SenpaiActionConfirm />
+      <SenpaiOverlay />
+      <SenpaiImpactBridge />
+      <SenpaiTransformation />
+      <SenpaiScreenFlash navKey={navKey} />
+    </>
+  );
+}
 
 function AppContent() {
   const { colors, isDark } = useTheme();
@@ -122,14 +146,7 @@ function AppContent() {
     >
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <RootNavigator />
-      <SenpaiThemeBridge />
-      <SenpaiReactionBridge />
-      <SenpaiMascot />
-      <SenpaiActionConfirm />
-      <SenpaiOverlay />
-      <SenpaiImpactBridge />
-      <SenpaiTransformation />
-      <SenpaiScreenFlash navKey={navKey} />
+      <SenpaiLayer navKey={navKey} />
       <ThemeOverlay />
     </NavigationContainer>
   );
