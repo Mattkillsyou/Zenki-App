@@ -24,6 +24,8 @@ import { BloodworkReport } from '../types/bloodwork';
 import { useAuth } from './AuthContext';
 import { useGamification } from './GamificationContext';
 import { getCurrentUid } from '../services/firebaseAuth';
+import { auth } from '../config/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import {
   subscribeNutrition,
   migrateNutritionToFirestore,
@@ -188,6 +190,18 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { recordMealLogged, recordWeightLogged, recordDexaScan, recordBloodwork } = useGamification();
 
+  // Firebase Auth's session restore is async (network round trip) and can
+  // settle AFTER AuthContext restores its local user — a one-shot
+  // getCurrentUid() sample in the sync effect would stay null for the whole
+  // session. Hold the uid in state fed by onAuthStateChanged so the effect
+  // re-runs when auth settles.
+  const [authUid, setAuthUid] = useState<string | null>(getCurrentUid());
+  useEffect(() => {
+    if (!auth) return;
+    const unsub = onAuthStateChanged(auth, (u) => setAuthUid(u?.uid ?? null));
+    return unsub;
+  }, []);
+
   // Re-read all slices from storage whenever the signed-in user changes.
   // This catches the case where another code path (e.g. seedReviewerData in
   // AuthContext.signIn) writes to AsyncStorage outside of this context's
@@ -252,7 +266,7 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   // See NUTRITION_FIRESTORE_SCHEMA.md.
   useEffect(() => {
     const memberId = user?.id;
-    const uid = getCurrentUid();
+    const uid = authUid;
     if (!uid || !memberId) return;
 
     let cancelled = false;
@@ -329,14 +343,18 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       unsub();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, authUid]);
 
   // ── Weight ──
   const myWeights = useCallback(
     (memberId: string) =>
       weights
         .filter((w) => w.memberId === memberId)
-        .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)),
+        // Tie-break same-date entries by createdAt desc so the NEWEST weigh-in
+        // of a day wins (a date-only sort is stable → the first logged wins).
+        .sort((a, b) =>
+          a.date < b.date ? 1 : a.date > b.date ? -1 : a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0,
+        ),
     [weights],
   );
 
@@ -431,7 +449,10 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       };
       for (const entry of dayEntries) {
         const mt = entry.mealType || 'snacks';
-        grouped[mt].push(entry);
+        // `|| 'snacks'` only catches falsy — a truthy off-enum string (e.g. a
+        // model-written 'snack' / 'Breakfast') would index undefined and crash
+        // the render, so bucket unknowns into snacks.
+        (grouped[mt as MealType] ?? grouped.snacks).push(entry);
       }
       return grouped;
     },
@@ -589,7 +610,9 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       // Fall back to Mifflin — use latest weigh-in for current kg
       const latest = weights
         .filter((w) => w.memberId === memberId)
-        .sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+        .sort((a, b) =>
+          a.date < b.date ? 1 : a.date > b.date ? -1 : a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0,
+        )[0];
       if (!latest) return 0;
       const weightKg = latest.unit === 'kg' ? latest.weight : latest.weight / 2.20462;
       const bmr = calculateBMR({
@@ -656,7 +679,9 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
         // Also recompute macro goals against the new TDEE
         const latest = weights
           .filter((w) => w.memberId === memberId)
-          .sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+          .sort((a, b) =>
+            a.date < b.date ? 1 : a.date > b.date ? -1 : a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0,
+          )[0];
         if (latest) {
           const weightKg = latest.unit === 'kg' ? latest.weight : latest.weight / 2.20462;
           const macros = calculateMacros({

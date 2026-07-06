@@ -191,12 +191,24 @@ function offProductToResult(code: string | undefined, p: any): FoodSearchResult 
       : undefined;
   // Treat non-positive / non-finite serving sizes as absent so the 100g
   // fallback fires (OFF sometimes returns serving_quantity === 0).
-  const servingGrams: number | undefined =
+  let servingGrams: number | undefined =
     rawServingGrams && rawServingGrams > 0 ? rawServingGrams : undefined;
 
-  const servingLabel: string =
-    (typeof p.serving_size === 'string' && p.serving_size.trim()) ||
-    (servingGrams ? `${servingGrams}g` : '100g');
+  const servingText = typeof p.serving_size === 'string' ? p.serving_size.trim() : '';
+  // When serving_quantity is absent/0, recover grams from the serving_size
+  // text ("30 g", "250ml") — otherwise the label would claim a serving while
+  // the macros below stay scaled to 100g.
+  if (!servingGrams && servingText) {
+    const m = servingText.match(/([\d.]+)\s*(?:g|ml)\b/i);
+    const parsed = m ? parseFloat(m[1]) : NaN;
+    if (Number.isFinite(parsed) && parsed > 0) servingGrams = parsed;
+  }
+
+  // If grams are still unresolvable, force the label to '100g' so label and
+  // macros always agree.
+  const servingLabel: string = servingGrams
+    ? servingText || `${servingGrams}g`
+    : '100g';
 
   const serving = { label: servingLabel, grams: servingGrams ?? 100 };
   const macros = scale(per100g, serving.grams ?? 100);

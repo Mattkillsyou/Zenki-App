@@ -82,6 +82,30 @@ async function saveSynced(set: SyncedSet): Promise<void> {
   await safeStorageSet(SYNCED_IDS_KEY, set, '[HealthKit synced]');
 }
 
+/** Drop per-sample 'hrsample:<sessId>_<ts>' keys for sessions whose
+ *  'hrsession:<sessId>' marker is set. Once a session is marked, its sample
+ *  keys are unreachable (pushPendingWorkouts `continue`s past the whole
+ *  session), so keeping them only bloats the blob — older builds accumulated
+ *  ~600 of them per session, forever. Returns true if anything was pruned. */
+function pruneSyncedSampleKeys(set: SyncedSet): boolean {
+  const prefixes: string[] = [];
+  for (const key of Object.keys(set)) {
+    if (key.startsWith('hrsession:')) {
+      prefixes.push(`hrsample:${key.slice('hrsession:'.length)}_`);
+    }
+  }
+  if (prefixes.length === 0) return false;
+  let changed = false;
+  for (const key of Object.keys(set)) {
+    if (!key.startsWith('hrsample:')) continue;
+    if (prefixes.some((p) => key.startsWith(p))) {
+      delete set[key];
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 // ─────────────────────────────────────────────────
 // Provider
 // ─────────────────────────────────────────────────
@@ -123,6 +147,11 @@ export function HealthKitProvider({ children }: { children: React.ReactNode }) {
         ]);
         if (enRaw === 'true') setEnabledState(true);
         syncedRef.current = syncedSet;
+        // One-time heal for blobs written by older builds that kept every
+        // per-sample key after the session was fully synced.
+        if (pruneSyncedSampleKeys(syncedRef.current)) {
+          await saveSynced(syncedRef.current);
+        }
       } catch {
         /* ignore */
       }
@@ -155,6 +184,17 @@ export function HealthKitProvider({ children }: { children: React.ReactNode }) {
 
   const markSynced = useCallback(async (kind: string, id: string) => {
     syncedRef.current[`${kind}:${id}`] = true;
+    await saveSynced(syncedRef.current);
+  }, []);
+
+  // In-memory-only mark for hot loops (HR samples): one AsyncStorage write of
+  // the ENTIRE map per sample is O(samples × map-size) JS-thread work — mark
+  // in memory during the loop and persist once per batch instead.
+  const markSyncedLocal = useCallback((kind: string, id: string) => {
+    syncedRef.current[`${kind}:${id}`] = true;
+  }, []);
+
+  const persistSynced = useCallback(async () => {
     await saveSynced(syncedRef.current);
   }, []);
 
@@ -225,15 +265,26 @@ export function HealthKitProvider({ children }: { children: React.ReactNode }) {
       if (ok) await markSynced('hrsession', sess.id);
 
       // Push downsampled HR samples too (one push per sample is expensive —
-      // we cap at the strain-key samples already in storage, ~600 max)
+      // we cap at the strain-key samples already in storage, ~600 max).
+      // Mark ids in memory during the loop and persist ONCE afterwards — the
+      // old per-sample markSynced did ~600 full-blob AsyncStorage writes of
+      // the entire map per session (O(samples × map-size) JS-thread work).
+      let samplesDirty = false;
       for (const sample of sess.samples) {
         const sampleKey = `${sess.id}_${sample.timestamp}`;
         if (isSynced('hrsample', sampleKey)) continue;
         const sampleOk = await pushHeartRate(sample.bpm, new Date(sample.timestamp).toISOString());
-        if (sampleOk) await markSynced('hrsample', sampleKey);
+        if (sampleOk) { markSyncedLocal('hrsample', sampleKey); samplesDirty = true; }
       }
+      // Once the 'hrsession' marker is set, this session's per-sample keys
+      // are unreachable (the `continue` above skips the whole session) —
+      // collapse them so the map stays bounded (~2 keys per synced session
+      // instead of ~601, forever). When ok=false the keys are kept so the
+      // retry doesn't double-push samples that already made it to Health.
+      if (ok && pruneSyncedSampleKeys(syncedRef.current)) samplesDirty = true;
+      if (samplesDirty) await persistSynced();
     }
-  }, [authorized, memberId, myWorkoutLogs, hrSessions, isSynced, markSynced]);
+  }, [authorized, memberId, myWorkoutLogs, hrSessions, isSynced, markSynced, markSyncedLocal, persistSynced]);
 
   // ─────────────────────────────────────────────────
   // PULL — fetch the latest read-only data from HK.

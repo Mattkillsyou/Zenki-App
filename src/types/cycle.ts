@@ -121,10 +121,30 @@ export interface CycleInfo {
   cycleDay: number;
   /** Predicted next period start date. */
   predictedNextPeriod: string; // YYYY-MM-DD
-  /** Days until predicted next period. */
+  /** Days until predicted next period (0 when due or overdue — see isOverdue). */
   daysUntilNextPeriod: number;
   /** Whether currently menstruating. */
   isOnPeriod: boolean;
+  /** True when the predicted next period has passed without a new log. */
+  isOverdue: boolean;
+  /** Days past the predicted start (0 when not overdue). */
+  daysOverdue: number;
+}
+
+/**
+ * Parse a YYYY-MM-DD string as LOCAL midnight. Returns null for anything
+ * unparseable. computeCycleInfo runs inside an app-root provider render, so
+ * one bad date must degrade gracefully — never throw.
+ */
+function parseLocalDate(dateStr: unknown): Date | null {
+  if (typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
+  const d = new Date(dateStr + 'T00:00:00');
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Whether a string is a real, parseable YYYY-MM-DD date. */
+export function isValidCycleDate(dateStr: string): boolean {
+  return parseLocalDate(dateStr) !== null;
 }
 
 /**
@@ -150,18 +170,22 @@ export function computePhase(cycleDay: number, cycleLength: number): CyclePhase 
  * Calculate cycle info from period entries.
  */
 export function computeCycleInfo(entries: PeriodEntry[]): CycleInfo | null {
-  if (entries.length === 0) return null;
+  // Drop entries whose startDate can't parse — an unparseable date must never
+  // reach the math below (a thrown RangeError here lands on the ROOT error
+  // boundary because the provider computes this during render).
+  const usable = entries.filter((e) => parseLocalDate(e.startDate) !== null);
+  if (usable.length === 0) return null;
 
   // Sort entries newest first
-  const sorted = [...entries].sort((a, b) => b.startDate.localeCompare(a.startDate));
+  const sorted = [...usable].sort((a, b) => b.startDate.localeCompare(a.startDate));
   const latest = sorted[0];
 
   // Calculate average cycle length from consecutive periods
   let totalCycleDays = 0;
   let cycleCount = 0;
   for (let i = 0; i < sorted.length - 1; i++) {
-    const current = new Date(sorted[i].startDate);
-    const previous = new Date(sorted[i + 1].startDate);
+    const current = parseLocalDate(sorted[i].startDate)!;
+    const previous = parseLocalDate(sorted[i + 1].startDate)!;
     const diff = Math.round((current.getTime() - previous.getTime()) / 86400000);
     if (diff >= 21 && diff <= 40) { // valid cycle range
       totalCycleDays += diff;
@@ -170,26 +194,35 @@ export function computeCycleInfo(entries: PeriodEntry[]): CycleInfo | null {
   }
   const avgCycleLength = cycleCount > 0 ? Math.round(totalCycleDays / cycleCount) : 28;
 
-  // Calculate current cycle day
-  const lastPeriodStart = new Date(latest.startDate);
+  // Calculate current cycle day. No modulo wrap — wrapping past avgCycleLength
+  // asserted "Menstrual · Day 1" for a period that was never logged; an overdue
+  // period is surfaced via isOverdue/daysOverdue instead.
+  const lastPeriodStart = parseLocalDate(latest.startDate)!;
   const now = new Date();
   const daysSinceLastPeriod = Math.floor((now.getTime() - lastPeriodStart.getTime()) / 86400000);
-  const cycleDay = (daysSinceLastPeriod % avgCycleLength) + 1;
+  const cycleDay = Math.max(1, daysSinceLastPeriod + 1);
 
   // Is currently on period?
   const isOnPeriod = latest.endDate
     ? now <= new Date(latest.endDate + 'T23:59:59')
     : daysSinceLastPeriod <= 7; // assume max 7 days if no end date
 
-  // Predicted next period
+  // Predicted next period — one avgCycleLength after the last logged start.
+  // Deliberately NOT rolled forward once it passes: lateness is reported,
+  // not masked as a fresh prediction.
   const nextPeriodDate = new Date(lastPeriodStart);
   nextPeriodDate.setDate(nextPeriodDate.getDate() + avgCycleLength);
-  while (nextPeriodDate <= now) {
-    nextPeriodDate.setDate(nextPeriodDate.getDate() + avgCycleLength);
-  }
-  const daysUntilNextPeriod = Math.ceil((nextPeriodDate.getTime() - now.getTime()) / 86400000);
-  const predictedNextPeriod = nextPeriodDate.toISOString().split('T')[0];
+  const rawDaysUntil = Math.ceil((nextPeriodDate.getTime() - now.getTime()) / 86400000);
+  const isOverdue = !isOnPeriod && rawDaysUntil < 0;
+  const daysOverdue = isOverdue ? -rawDaysUntil : 0;
+  const daysUntilNextPeriod = Math.max(0, rawDaysUntil);
+  // Format from local date fields (toISOString would shift the day for
+  // non-UTC timezones now that the base date is local midnight).
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const predictedNextPeriod = `${nextPeriodDate.getFullYear()}-${pad(nextPeriodDate.getMonth() + 1)}-${pad(nextPeriodDate.getDate())}`;
 
+  // Past avgCycleLength the ratio exceeds 1 → stays 'luteal' (never re-enters
+  // early phases while a period is overdue).
   const currentPhase = isOnPeriod ? 'menstrual' : computePhase(cycleDay, avgCycleLength);
 
   return {
@@ -199,5 +232,7 @@ export function computeCycleInfo(entries: PeriodEntry[]): CycleInfo | null {
     predictedNextPeriod,
     daysUntilNextPeriod,
     isOnPeriod,
+    isOverdue,
+    daysOverdue,
   };
 }

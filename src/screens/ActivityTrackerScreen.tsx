@@ -133,11 +133,27 @@ function CleanActivityTrackerScreen({ navigation }: any) {
               if (senpaiState.enabled && senpaiShouldReact()) {
                 try { senpaiTrigger('impressed', randomDialogue('gpsActivity'), 4000); } catch { /* ignore */ }
               }
+            } else {
+              // stopTracking returns null when <2 GPS points were recorded
+              // (e.g. an indoor run) — say so instead of silently discarding
+              // (mirrors WorkoutSessionScreen's "Nothing to save").
+              setRouteCoords([]);
+              Alert.alert('Activity not saved', "No GPS route was recorded, so this activity wasn't saved.");
             }
           },
         },
       ],
     );
+  };
+
+  const handleResume = async () => {
+    const ok = await resumeTracking();
+    if (!ok) {
+      Alert.alert(
+        'Could not resume',
+        'GPS tracking failed to restart, so the activity is still paused. Check that Location Services are enabled, then tap Resume again.',
+      );
+    }
   };
 
   const userLat = currentPosition?.latitude || initialLat;
@@ -226,7 +242,7 @@ function CleanActivityTrackerScreen({ navigation }: any) {
               isPaused={isPaused}
               onStart={handleStart}
               onPause={pauseTracking}
-              onResume={resumeTracking}
+              onResume={handleResume}
               onStop={handleStop}
             />
           )}

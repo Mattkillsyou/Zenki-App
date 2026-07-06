@@ -21,12 +21,8 @@ import { spacing, borderRadius } from '../theme';
 import { FadeInView, KeyboardAwareScrollView, ScreenContainer, AppleHealthFootnote, MedicalCitations } from '../components';
 import { FoodSearchModal } from '../components/FoodSearchModal';
 import { ReorderableSections, ReorderableItem } from '../components/ReorderableSections';
-import { WeekCalendar, WeekDay, startOfWeek, addDays } from '../components/WeekCalendar';
+import { WeekCalendar, WeekDay, startOfWeek, addDays, todayIso } from '../components/WeekCalendar';
 import { MealType, MEAL_TYPE_LABELS, MEAL_TYPE_ICONS } from '../types/nutrition';
-
-function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
-}
 
 function pct(value: number, goal: number): number {
   if (goal <= 0) return 0;
@@ -193,7 +189,10 @@ export function MacroTrackerScreen({ navigation, route }: any) {
     }
   }, [openSearchOnMount, navigation]);
 
-  const today = todayISO();
+  // Local-time day key — must match WeekCalendar's todayIso() so the cell the
+  // strip highlights as "today" is the same one this screen auto-selects and
+  // stamps entries with (UTC keys drift a day ahead after 4-5 PM Pacific).
+  const today = todayIso();
   const [selectedDate, setSelectedDate] = useState(today);
   const [weekStart, setWeekStart] = useState<string>(() => startOfWeek(today));
 

@@ -44,8 +44,6 @@ export interface Member {
   pushToken?: string; // Expo push token for notifications
   funFact?: string;   // Fun fact shown on profile, captured in onboarding
   nickname?: string;  // Optional nickname / title shown next to display name
-  isVisibleInFeed?: boolean;   // Whether this member shows up in the community feed (default true)
-  messagingEnabled?: boolean;  // Whether other members can DM them (default true)
   biologicalSex?: 'male' | 'female' | 'other';  // Used for health feature personalization
   trainingExperience?: 'beginner' | 'intermediate' | 'advanced'; // Captured at onboarding
   trainingDaysPerWeek?: number; // 1-7, planned training frequency

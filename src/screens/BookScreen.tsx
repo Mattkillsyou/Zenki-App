@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
@@ -19,9 +20,8 @@ import { addEventToCalendar } from '../services/calendarIntegration';
 import { requireAuth } from '../utils/requireAuth';
 import { useSchedulingConfig, priceLabelFor } from '../context/SchedulingConfigContext';
 
-// Generate today's date for display
-const getDisplayDate = () => {
-  const now = new Date();
+// Generate the booking date for display
+const getDisplayDate = (now: Date) => {
   const options: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
   return now.toLocaleDateString('en-US', options);
 };
@@ -61,8 +61,7 @@ function parseDurationMinutes(s: string): number {
   return m ? parseInt(m[1], 10) : 60;
 }
 
-function todayDateString(): string {
-  const d = new Date();
+function dateStringFor(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
@@ -78,8 +77,12 @@ export function BookScreen({ navigation }: any) {
   const [busyIntervals, setBusyIntervals] = useState<BusyInterval[]>([]);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const currentDateStr = todayDateString();
-  const currentDate = useMemo(() => new Date(), []);
+  // "Now" for slot math — refreshed on every focus, because tab screens stay
+  // mounted and a mount-frozen value goes stale (past slots stayed bookable;
+  // a post-midnight booking got stamped with yesterday's date).
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+  useFocusEffect(useCallback(() => { setCurrentDate(new Date()); }, []));
+  const currentDateStr = dateStringFor(currentDate);
   // Clamp the selection in case the configured sessionTypes list is shorter
   // than the current index (e.g. an admin removed a type).
   const safeType = Math.min(selectedType, sessionTypes.length - 1);
@@ -99,6 +102,13 @@ export function BookScreen({ navigation }: any) {
       });
     return () => { cancelled = true; };
   }, [currentDateStr]);
+
+  // Deselect a slot that has slipped into the past (e.g. re-focus later in the day).
+  useEffect(() => {
+    if (selectedTime && slotToDate(currentDate, selectedTime).getTime() <= currentDate.getTime()) {
+      setSelectedTime(null);
+    }
+  }, [currentDate, selectedTime]);
 
   // Offer to drop the booked session onto the member's own device calendar via
   // the native calendar helper (Apple Calendar / Android, web link fallback).
@@ -130,8 +140,14 @@ export function BookScreen({ navigation }: any) {
   const handleBooking = async () => {
     if (!selectedTime || submitting) return;
 
-    // Defensive — shouldn't be reachable since busy slots are disabled
     const slotDate = slotToDate(currentDate, selectedTime);
+    if (slotDate.getTime() <= Date.now()) {
+      Alert.alert('Time has passed', 'That time slot has already passed. Please choose a later time.');
+      setSelectedTime(null);
+      return;
+    }
+
+    // Defensive — shouldn't be reachable since busy slots are disabled
     const conflict = isSlotBusy(slotDate, currentDuration, busyIntervals);
     if (conflict) {
       Alert.alert('Unavailable', 'That time is already booked. Please choose another slot.');
@@ -295,14 +311,15 @@ export function BookScreen({ navigation }: any) {
             )}
           </View>
           <Text style={[styles.dateLabel, { color: colors.textSecondary }]}>
-            {getDisplayDate()}
+            {getDisplayDate(currentDate)}
           </Text>
           <View style={styles.timeGrid}>
             {TIME_SLOTS.map((time) => {
               const isSelected = time === selectedTime;
               const slotDate = slotToDate(currentDate, time);
               const conflict = isSlotBusy(slotDate, currentDuration, busyIntervals);
-              const isBusy = conflict !== null;
+              // Past slots are disabled exactly like calendar-busy ones.
+              const isBusy = conflict !== null || slotDate.getTime() <= currentDate.getTime();
               return (
                 <SoundPressable
                   key={time}

@@ -18,6 +18,10 @@ import { getProductImages } from '../data/products';
 import { useProducts } from '../context/ProductContext';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useGamification } from '../context/GamificationContext';
+import { Order } from '../types/orders';
+import { appendLocalOrder, saveOrderToFirestore } from '../services/orderSync';
+import { generateId } from '../utils/generateId';
 import { requireAuth } from '../utils/requireAuth';
 
 export function ProductDetailScreen({ navigation, route }: any) {
@@ -25,6 +29,7 @@ export function ProductDetailScreen({ navigation, route }: any) {
   const { products } = useProducts();
   const { addToCart } = useCart();
   const { user } = useAuth();
+  const { recordGearPurchase } = useGamification();
   const { productId } = route.params;
   const product = products.find((p) => p.id === productId);
 
@@ -91,10 +96,45 @@ export function ProductDetailScreen({ navigation, route }: any) {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Reserve',
-          onPress: () => {
+          onPress: async () => {
+            // Persist the reservation the same way StoreScreen checkout does —
+            // the confirm copy promises to "let the dojo know", so the record
+            // must exist (locally + best-effort Firestore) before we say so.
+            const total = product.memberPrice * quantity;
+            const order: Order = {
+              id: generateId('order'),
+              memberId: user?.id ?? 'unknown',
+              items: [{
+                productId: product.id,
+                productName: product.name,
+                quantity,
+                // Omit the key when size-less — `selectedSize: undefined`
+                // would make Firestore reject the whole order write.
+                ...(selectedSize ? { selectedSize } : {}),
+                unitPrice: product.memberPrice,
+              }],
+              subtotal: total,
+              pointsUsed: 0,
+              pointsValueUsd: 0,
+              promoDiscountUsd: 0,
+              balanceDueUsd: total,
+              status: 'reserved',
+              paymentMethod: 'pay_at_dojo',
+              createdAt: new Date().toISOString(),
+            };
+            try {
+              await appendLocalOrder(order);
+            } catch {
+              Alert.alert('Reservation failed', "We couldn't record your reservation. Please try again.");
+              return;
+            }
+            for (let i = 0; i < quantity; i++) recordGearPurchase();
+            saveOrderToFirestore(order).then((ok) => {
+              if (!ok) console.warn('[ProductDetail] reservation kept locally; cloud sync pending:', order.id);
+            });
             Alert.alert(
               'Reserved',
-              `We'll set aside ${product.name}${selectedSize ? ` (${selectedSize})` : ''} for you. Come by the dojo to complete your purchase.`,
+              `Order #${order.id.slice(-6).toUpperCase()} — we'll set aside ${product.name}${selectedSize ? ` (${selectedSize})` : ''} for you. Come by the dojo to complete your purchase.`,
             );
           },
         },

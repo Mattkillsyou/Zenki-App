@@ -14,15 +14,36 @@ import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 export const noopUnsubscribe: Unsubscribe = () => {};
 
 /**
- * Firestore rejects writes containing `undefined` values. Strip them before
- * sending so optional fields (e.g. `notificationId`) don't blow up the call.
+ * Firestore rejects writes containing `undefined` values — anywhere in the
+ * payload, not just at the top level (an order item's `selectedSize:
+ * undefined` inside the `items` array fails the whole setDoc). Strip them
+ * recursively before sending so optional fields (e.g. `notificationId`)
+ * don't blow up the call. Only plain objects/arrays are walked; class
+ * instances (Date, Timestamp, FieldValue…) pass through untouched.
  */
 export function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
   const out = {} as T;
   for (const k of Object.keys(obj) as (keyof T)[]) {
-    if (obj[k] !== undefined) out[k] = obj[k];
+    if (obj[k] !== undefined) out[k] = stripUndefinedDeep(obj[k]) as T[keyof T];
   }
   return out;
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v) &&
+    (v.constructor === Object || Object.getPrototypeOf(v) === null);
+}
+
+function stripUndefinedDeep(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripUndefinedDeep);
+  if (isPlainObject(value)) {
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(value)) {
+      if (value[k] !== undefined) out[k] = stripUndefinedDeep(value[k]);
+    }
+    return out;
+  }
+  return value;
 }
 
 /**

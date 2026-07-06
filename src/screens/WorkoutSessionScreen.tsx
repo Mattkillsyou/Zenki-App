@@ -160,14 +160,22 @@ export function WorkoutSessionScreen({ navigation }: any) {
                 'Nothing to save',
                 "No heart-rate data was recorded, so this session wasn't saved.",
               );
+              navigation.goBack();
             } else {
               recordHRSession();
               // An HR-tracked session is also a training session: count it toward
               // totalSessions + the daily/weekly streak (and the session/streak
               // achievements), matching the model claimed in data/achievements.ts.
               recordSession();
+              Alert.alert(
+                'Session Saved',
+                `${formatDuration(elapsed)} · ${liveCalories} kcal · Strain ${liveStrain.toFixed(1)}`,
+                [
+                  { text: 'Done', onPress: () => navigation.goBack() },
+                  { text: 'View History', onPress: () => navigation.replace('SessionHistory') },
+                ],
+              );
             }
-            navigation.goBack();
           },
         },
       ],

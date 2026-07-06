@@ -43,7 +43,7 @@ const POINTS_PER_DOLLAR = 10;
 
 export function StoreScreen({ navigation }: any) {
   const { colors } = useTheme();
-  const { state: gamState, redeemPoints, awardPoints, recordGearPurchase } = useGamification();
+  const { state: gamState, redeemPoints, restorePoints, recordGearPurchase } = useGamification();
   const { products: PRODUCTS } = useProducts();
   const { play } = useSound();
   useScreenSoundTheme('store');
@@ -113,6 +113,15 @@ export function StoreScreen({ navigation }: any) {
   };
 
   const dojoPoints = gamState.dojoPoints || 0;
+
+  // Single source of truth for checkout math, used by the toggle badge, cart
+  // total, button label AND the pay handler so they can never disagree. Points
+  // may only cover what the promo hasn't already discounted — otherwise
+  // stacking a promo silently redeems points past the payable total.
+  const promoDiscountFor = (total: number) =>
+    appliedPromo ? total * (appliedPromo.discountPercent / 100) : 0;
+  const pointsDiscountFor = (total: number) =>
+    Math.min(dojoPoints / POINTS_PER_DOLLAR, Math.max(0, total - promoDiscountFor(total)));
 
   const filtered = selectedCategory === 'All'
     ? PRODUCTS
@@ -305,7 +314,7 @@ export function StoreScreen({ navigation }: any) {
                   {usePoints && (
                     <View style={[styles.pointsAppliedBadge, { backgroundColor: colors.gold }]}>
                       <Text style={styles.pointsAppliedText}>
-                        −${Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal).toFixed(2)}
+                        −${pointsDiscountFor(cartTotal).toFixed(2)}
                       </Text>
                     </View>
                   )}
@@ -345,8 +354,8 @@ export function StoreScreen({ navigation }: any) {
               <View style={[styles.cartTotal, { borderTopColor: colors.divider }]}>
                 <Text style={[styles.cartTotalLabel, { color: colors.textMuted }]}>Total</Text>
                 {(() => {
-                  const pointsDiscount = usePoints ? Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal) : 0;
-                  const promoDiscount = appliedPromo ? cartTotal * (appliedPromo.discountPercent / 100) : 0;
+                  const pointsDiscount = usePoints ? pointsDiscountFor(cartTotal) : 0;
+                  const promoDiscount = promoDiscountFor(cartTotal);
                   const finalTotal = Math.max(0, cartTotal - pointsDiscount - promoDiscount);
                   return (
                     <View style={{ alignItems: 'flex-end' }}>
@@ -365,8 +374,8 @@ export function StoreScreen({ navigation }: any) {
                   // Account-based action (5.1.1(v)): checkout writes an order
                   // stamped with the member id, so a guest must sign in first.
                   if (!requireAuth(user, navigation, 'check out')) return;
-                  const requestedPointsDiscount = usePoints ? Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal) : 0;
-                  const promoDiscount = appliedPromo ? cartTotal * (appliedPromo.discountPercent / 100) : 0;
+                  const promoDiscount = promoDiscountFor(cartTotal);
+                  const requestedPointsDiscount = usePoints ? pointsDiscountFor(cartTotal) : 0;
                   const requestedPointsUsed = usePoints && requestedPointsDiscount > 0
                     ? Math.floor(requestedPointsDiscount * POINTS_PER_DOLLAR)
                     : 0;
@@ -396,7 +405,9 @@ export function StoreScreen({ navigation }: any) {
 
                   // Refund the just-deducted points if we bail before the order is
                   // recorded, so points and the order record never diverge.
-                  const refundPointsOnAbort = () => { if (pointsUsed > 0) awardPoints(pointsUsed, 'Refund: checkout aborted'); };
+                  // restorePoints (not awardPoints): a refund un-spends points, it
+                  // doesn't re-earn them, so pointsLifetime must stay untouched.
+                  const refundPointsOnAbort = () => { if (pointsUsed > 0) restorePoints(pointsUsed, 'Refund: checkout aborted'); };
 
                   // If there's a balance due and Apple Pay is available (Stripe
                   // configured + device supports it), charge it in-app; else fall
@@ -432,7 +443,10 @@ export function StoreScreen({ navigation }: any) {
                       productId: ci.product.id,
                       productName: ci.product.name,
                       quantity: ci.quantity,
-                      selectedSize: ci.selectedSize,
+                      // The grid "+" adds size-less items — omit the key rather
+                      // than emit `selectedSize: undefined`, which Firestore
+                      // rejects (the whole order write would fail silently).
+                      ...(ci.selectedSize ? { selectedSize: ci.selectedSize } : {}),
                       unitPrice: ci.product.memberPrice ?? ci.product.price,
                     })),
                     subtotal: cartTotal,
@@ -450,12 +464,30 @@ export function StoreScreen({ navigation }: any) {
                   // 1) Record locally. Points were already deducted up-front (and
                   //    verified against the live balance); if recording fails we
                   //    refund them so points and the order record never diverge.
-                  //    NOTE: a successful Apple Pay charge can't be refunded here —
-                  //    that gap is covered by the server-side reconciliation flagged
-                  //    for the Stripe webhook (F19).
                   try {
                     await appendLocalOrder(order);
                   } catch {
+                    if (paymentMethod === 'apple_pay') {
+                      // The charge already captured — the points were genuinely
+                      // spent and re-tapping PAY would charge a second time
+                      // (createPaymentIntent has no idempotency key). Keep the
+                      // points deducted, still push the order to Firestore so
+                      // the dojo has a record, and close out like the success
+                      // path so the button can't re-charge.
+                      saveOrderToFirestore(order).then((ok) => {
+                        if (!ok) console.warn('[Store] order record failed locally AND cloud sync pending:', order.id);
+                      });
+                      Alert.alert(
+                        'Payment complete',
+                        `Your Apple Pay payment of $${finalTotal.toFixed(2)} went through, but we couldn't save the receipt on this device. ` +
+                        `Do not pay again — mention payment ref ${paymentIntentId ?? 'Apple Pay'} at the dojo and we'll sort it out.`,
+                      );
+                      clearCart();
+                      setShowCart(false);
+                      setUsePoints(false);
+                      setAppliedPromo(null);
+                      return;
+                    }
                     refundPointsOnAbort();
                     Alert.alert('Checkout failed', "We couldn't record your order. Please try again.");
                     return;
@@ -483,8 +515,8 @@ export function StoreScreen({ navigation }: any) {
               >
                 <Text style={styles.checkoutText}>
                   {(() => {
-                    const pointsDiscount = usePoints ? Math.min(dojoPoints / POINTS_PER_DOLLAR, cartTotal) : 0;
-                    const promoDiscount = appliedPromo ? cartTotal * (appliedPromo.discountPercent / 100) : 0;
+                    const pointsDiscount = usePoints ? pointsDiscountFor(cartTotal) : 0;
+                    const promoDiscount = promoDiscountFor(cartTotal);
                     const finalTotal = Math.max(0, cartTotal - pointsDiscount - promoDiscount);
                     if (finalTotal === 0) return 'CONFIRM · FREE WITH POINTS';
                     return applePayReady

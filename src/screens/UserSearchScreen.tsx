@@ -6,11 +6,13 @@ import {
   FlatList,
   TextInput,
   Image,
-  ActivityIndicator} from 'react-native';
+  ActivityIndicator,
+  Alert} from 'react-native';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { useBlocks } from '../context/BlocksContext';
 import { spacing, MAX_CONTENT_WIDTH } from '../theme';
 import { getAllMembers, MemberProfile } from '../services/firebaseUsers';
@@ -18,6 +20,7 @@ import { getOrCreateConversation } from '../services/firebaseMessages';
 
 export function UserSearchScreen({ navigation, route }: any) {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const { filterBlocked } = useBlocks();
   const action: 'view' | 'message' = route?.params?.action || 'view';
   const [members, setMembers] = useState<MemberProfile[]>([]);
@@ -25,12 +28,19 @@ export function UserSearchScreen({ navigation, route }: any) {
   const [queryText, setQueryText] = useState('');
 
   useEffect(() => {
+    // Guests have no Firebase session and member reads are rules-gated to
+    // signed-in users — skip the doomed fetch; the dedicated sign-in state
+    // renders instead of a false "No members yet".
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     (async () => {
       const list = await getAllMembers();
       setMembers(list);
       setLoading(false);
     })();
-  }, []);
+  }, [user?.id]);
 
   const filtered = useMemo(() => {
     const q = queryText.trim().toLowerCase();
@@ -44,13 +54,18 @@ export function UserSearchScreen({ navigation, route }: any) {
 
   const handlePress = async (member: MemberProfile) => {
     if (action === 'message') {
-      const convId = await getOrCreateConversation(member.id);
-      navigation.replace('MessagesChat', {
-        conversationId: convId,
-        otherUserId: member.id,
-        otherUserName: member.displayName,
-        otherUserAvatar: member.avatar,
-      });
+      try {
+        const convId = await getOrCreateConversation(member.id);
+        navigation.replace('MessagesChat', {
+          conversationId: convId,
+          otherUserId: member.id,
+          otherUserName: member.displayName,
+          otherUserAvatar: member.avatar,
+        });
+      } catch {
+        // Offline or rules-rejected — tell the user instead of a silent no-op.
+        Alert.alert("Couldn't start conversation", 'Check your connection and try again.');
+      }
     } else {
       navigation.navigate('UserProfile', { userId: member.id });
     }
@@ -120,7 +135,23 @@ export function UserSearchScreen({ navigation, route }: any) {
         ) : null}
       </View>
 
-      {loading ? (
+      {!user ? (
+        <View style={styles.empty}>
+          <Ionicons name="people-outline" size={48} color={colors.textMuted} />
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Members only</Text>
+          <Text style={[styles.emptySub, { color: colors.textMuted }]}>
+            Sign in to see and connect with Zenki members.
+          </Text>
+          <SoundPressable
+            style={[styles.signInBtn, { backgroundColor: colors.gold }]}
+            onPress={() => navigation.navigate('SignIn')}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in"
+          >
+            <Text style={styles.signInLabel}>Sign In</Text>
+          </SoundPressable>
+        </View>
+      ) : loading ? (
         <View style={styles.empty}>
           <ActivityIndicator color={colors.gold} />
         </View>
@@ -210,4 +241,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 17, fontWeight: '800', marginTop: 4 },
   emptySub: { fontSize: 13, textAlign: 'center' },
+  signInBtn: {
+    marginTop: 12,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  signInLabel: { color: '#000', fontSize: 15, fontWeight: '800' },
 });

@@ -45,12 +45,15 @@ export function BloodworkReportDetailScreen({ route, navigation }: any) {
   const id: string = route.params?.id;
   const report = getBloodworkReport(id);
 
-  // Group by category in the canonical order
+  // Group by category in the canonical order. Off-enum categories (older
+  // AI-extracted reports predate the server-side enum clamp) fall into
+  // 'Other' — the render below iterates CATEGORY_ORDER, so an unknown
+  // bucket would otherwise silently show nowhere.
   const grouped = useMemo(() => {
     if (!report) return {} as Record<BiomarkerCategory, StoredBiomarker[]>;
     const out = {} as Record<BiomarkerCategory, StoredBiomarker[]>;
     for (const b of report.biomarkers) {
-      const cat = b.category ?? 'Other';
+      const cat: BiomarkerCategory = CATEGORY_ORDER.includes(b.category) ? b.category : 'Other';
       if (!out[cat]) out[cat] = [];
       out[cat].push(b);
     }

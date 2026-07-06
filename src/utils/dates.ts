@@ -41,11 +41,9 @@ export function nowTimestamp(): string {
  *  Use for `date`, `dueDate`, `testDate`, `memberSince`, etc. — anything
  *  that names a calendar day, not a moment.
  *
- *  Some screens still ship a private 3-line `function todayISO()` that
- *  inlines this same expression. They're equivalent — over time, replace
- *  per-file helpers with this import. The reverse-export of this function
- *  as `getTodayString` from `utils/location` exists so existing call sites
- *  don't churn just to get the canonical name.
+ *  The reverse-export of this function as `getTodayString` from
+ *  `utils/location` exists so existing call sites don't churn just to get
+ *  the canonical name.
  *
  *  IMPLEMENTATION NOTE: this uses UTC (the date prefix of an ISO 8601
  *  timestamp). It WILL roll over at UTC midnight (so US Pacific users at
@@ -53,9 +51,15 @@ export function nowTimestamp(): string {
  *  behavior change that needs a data migration for existing AsyncStorage
  *  and Firestore values keyed by these strings — track in a follow-up.
  *
- *  Exception: `MedicationTrackerContext.tsx` uses LOCAL-time date strings
- *  via its own `isoDateOf()`. That's an intentional deviation for that
- *  context and is documented inline there. */
+ *  Exception: day-keyed HEALTH fields — medication doses
+ *  (`MedicationTrackerContext.tsx`), meals and weigh-ins (MacroTracker /
+ *  WeightTracker / BarcodeScanner / PhotoFood) — use LOCAL-time date
+ *  strings via `todayIso()`/`isoDateOf()` from `components/WeekCalendar`,
+ *  so the day a user sees on the calendar strip is the day the entry is
+ *  stamped with. New day-keyed user-visible fields should follow the
+ *  local convention; entries written before that switch may carry a
+ *  UTC-shifted (next-day) date — a read-time re-key from `createdAt`
+ *  in the nutrition store is the remaining follow-up. */
 export function todayDateString(): string {
   return new Date().toISOString().slice(0, 10);
 }

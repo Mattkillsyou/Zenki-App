@@ -22,7 +22,7 @@ export function UserProfileScreen({ navigation, route }: any) {
   const { colors } = useTheme();
   const { userId } = route.params;
   const isOwnProfile = userId === getCurrentUid();
-  const { isBlocked, blockUser, unblockUser, isMuted, muteUser, unmuteUser } = useBlocks();
+  const { isBlocked, blockUser, unblockUser, isMuted, muteUser, unmuteUser, filterBlocked } = useBlocks();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -124,7 +124,9 @@ export function UserProfileScreen({ navigation, route }: any) {
     if (isOwnProfile) {
       try {
         const requests = await listFollowRequests();
-        setRequestCount(requests.length);
+        // Blocked/blocked-by requesters are hidden in the FollowRequests queue,
+        // so keep the badge count consistent with what the screen shows.
+        setRequestCount(filterBlocked(requests, 'requesterId').length);
       } catch (e) {
         console.warn('[UserProfile] follow-requests count failed:', e);
       }
@@ -154,6 +156,10 @@ export function UserProfileScreen({ navigation, route }: any) {
       } else if (result === 'followed') {
         setFollowing(true);
         setFollowers((p) => p + 1);
+        // Re-fetch the grid now that the viewer follows the author — the
+        // mount-time fetch may have been empty/partial (private author, or a
+        // privacy flip after mount), and the screen never remounts on Follow.
+        setPosts(await getUserPosts(userId));
       }
     }
   };

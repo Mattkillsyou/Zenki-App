@@ -36,7 +36,6 @@ export { MedicationTrackerScreen } from './MedicationTrackerScreen';
 
 // Auth
 export { SignInScreen } from './auth/SignInScreen';
-export { SetPasswordScreen } from './auth/SetPasswordScreen';
 export { ForgotPasswordScreen } from './auth/ForgotPasswordScreen';
 export { ContactScreen } from './auth/ContactScreen';
 export { OnboardingScreen } from './auth/OnboardingScreen';

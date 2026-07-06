@@ -15,7 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParseJSON } from '../utils/safeStorage';
-import { todayDateString } from '../utils/dates';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
@@ -43,12 +42,11 @@ const WEIGHT_BOUNDS = {
   kg: { min: 23, max: 318 },
 };
 
-function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
-}
-
+// Day keys use WeekCalendar's LOCAL-time todayIso() everywhere on this screen
+// so the calendar highlight, the stamped weigh-in date, and the "Today" label
+// all agree (a UTC key rolls to tomorrow after 4-5 PM Pacific).
 function formatDateShort(dateStr: string): string {
-  if (dateStr === todayISO()) return 'Today';
+  if (dateStr === todayIso()) return 'Today';
   const d = new Date(dateStr + 'T12:00:00');
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
@@ -139,8 +137,10 @@ export function WeightTrackerScreen({ navigation }: any) {
     const chronological = [...validMine].reverse();
     const filtered = chronological.filter((w) => now - new Date(w.date).getTime() <= maxAge);
     const series = filtered.length >= 2 ? filtered : chronological.slice(-Math.min(2, chronological.length));
+    // Date-derived x so LineChart can align these dots with the trend
+    // overlay on a shared time axis (both series parse date the same way).
     return series.map((w, i) => ({
-      x: i,
+      x: new Date(w.date).getTime(),
       y: toDisplay(w.unit === 'kg' ? w.weight : w.weight / 2.20462),
       label: i === 0 ? formatDateShort(w.date)
         : i === series.length - 1 ? formatDateShort(w.date)
@@ -157,7 +157,7 @@ export function WeightTrackerScreen({ navigation }: any) {
     const maxAge = rangeDays[chartRange] * dayMs;
     const filtered = trend.filter((t) => now - new Date(t.date).getTime() <= maxAge);
     const series = filtered.length >= 2 ? filtered : trend.slice(-2);
-    return series.map((t, i) => ({ x: i, y: toDisplay(t.trendKg) }));
+    return series.map((t) => ({ x: new Date(t.date).getTime(), y: toDisplay(t.trendKg) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trend, displayUnit, chartRange]);
 
@@ -214,7 +214,7 @@ export function WeightTrackerScreen({ navigation }: any) {
     }
     addWeight({
       memberId: user.id,
-      date: todayISO(),
+      date: todayIso(),
       weight: num,
       unit,
       note: undefined,
@@ -240,7 +240,7 @@ export function WeightTrackerScreen({ navigation }: any) {
       targetWeight: target,
       targetDate: goalDate || new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10),
       startWeight: latest.weight,
-      startDate: todayISO(),
+      startDate: todayIso(),
       unit: displayUnit,
     };
     setSavedGoal(goal);
@@ -562,7 +562,13 @@ export function WeightTrackerScreen({ navigation }: any) {
 
           {/* Goal Progress — current vs target with ETA from weekly rate */}
           {goalProgress && inlineStats && (() => {
-            const rate = inlineStats.weeklyRate; // signed lb (or kg) / week in displayUnit
+            // inlineStats.weeklyRate is in displayUnit; remaining is in the
+            // goal's unit (fixed at save time). Convert the rate into the
+            // goal's unit so the ETA division is unit-consistent and the
+            // footer number matches its unit label.
+            const rate = goalProgress.unit === displayUnit
+              ? inlineStats.weeklyRate
+              : goalProgress.unit === 'kg' ? inlineStats.weeklyRate / 2.20462 : kgToLbs(inlineStats.weeklyRate);
             const remaining = goalProgress.remaining; // signed: target - current
             const onTrack = rate !== 0 && remaining !== 0 && Math.sign(rate) === Math.sign(remaining);
             const etaWeeks = onTrack ? remaining / rate : null;
@@ -1226,7 +1232,7 @@ function WeightLogCalendar({ loggedDates }: { loggedDates: Set<string> }) {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const todayIso = todayDateString();
+  const today = todayIso();
 
   const goPrev = () => {
     setCursor((c) => c.month === 0
@@ -1264,7 +1270,7 @@ function WeightLogCalendar({ loggedDates }: { loggedDates: Set<string> }) {
           const dd = String(day).padStart(2, '0');
           const iso = `${cursor.year}-${mm}-${dd}`;
           const isLogged = loggedDates.has(iso);
-          const isToday = iso === todayIso;
+          const isToday = iso === today;
           return (
             <View key={i} style={styles.calCell}>
               <View style={[

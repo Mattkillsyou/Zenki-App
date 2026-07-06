@@ -22,7 +22,7 @@ export function AdminAppointmentsScreen({ navigation }: any) {
 
   const handleConfirm = async (a: Appointment) => {
     await confirmAppointment(a.id);
-    Alert.alert('Confirmed', `${a.memberName} will be reminded 1 hour before the session.`);
+    Alert.alert('Confirmed', `${a.memberName}'s booking is confirmed — they'll see it in their app.`);
   };
 
   const handleCancel = (a: Appointment) => {

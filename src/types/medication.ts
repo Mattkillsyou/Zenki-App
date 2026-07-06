@@ -169,7 +169,8 @@ export function isMedicationScheduledForDate(
   }
 
   const dayOfWeek = date.getDay(); // 0=Sun..6=Sat
-  const daysSinceStart = Math.floor((date.getTime() - start.getTime()) / 86400000);
+  // Round, not floor: a local-midnight diff is N whole days ±1h across DST shifts.
+  const daysSinceStart = Math.round((date.getTime() - start.getTime()) / 86400000);
 
   switch (med.frequency) {
     case 'daily':

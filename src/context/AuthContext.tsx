@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 import { Member, MEMBERS } from '../data/members';
-import { pushMemberToSheets, pushMemberToFirestore, subscribeToMember, fetchMemberByCurrentUid } from '../services/memberSync';
+import { pushMemberToSheets, pushMemberToFirestore, backfillMemberIfMissing, subscribeToMember, fetchMemberByCurrentUid } from '../services/memberSync';
 import { getMemberOverride, saveMemberOverride } from '../services/memberOverrides';
 import { registerForPushNotifications, savePushTokenToFirestore } from '../services/pushNotifications';
 import {
@@ -63,44 +63,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const id = await AsyncStorage.getItem(STORAGE_KEY);
-        if (!id) {
-          // No stored account — but a guest who chose "Browse as Guest" and
+
+        // Resolve the base record (seed first, then custom-signup blob).
+        let base: Member | null = null;
+        if (id) {
+          base = MEMBERS.find((m) => m.id === id) ?? null;
+          if (!base) {
+            const raw = await AsyncStorage.getItem(CUSTOM_MEMBER_KEY);
+            const custom = safeParseJSON<Member | null>(raw, null, (v) =>
+              typeof v === 'object' && v !== null && typeof (v as Member).id === 'string',
+            );
+            if (custom && custom.id === id) base = custom;
+          }
+        }
+        // Firestore fallback: local identity state is lost (or partially
+        // lost) but a live Firebase Auth session survives — rehydrate the
+        // member from /users/{uid} → /members/{memberId} and re-persist it
+        // locally so the next launch is fast and offline-safe. Note a truly
+        // FRESH device has no Firebase session either; this recovers
+        // partial-loss cases (storage cleared, custom blob corrupted or
+        // unmatched) only.
+        //
+        // firebase v12 restores the persisted session ASYNCHRONOUSLY (with a
+        // network accounts:lookup), so `auth.currentUser` is still null this
+        // early in cold start — wait for the auth state to settle, raced
+        // against a timeout so an offline launch can't hang the splash.
+        if (!base && FIREBASE_CONFIGURED && auth) {
+          await Promise.race([
+            auth.authStateReady(),
+            new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+          ]).catch(() => {});
+          if (auth.currentUser) {
+            const remote = await fetchMemberByCurrentUid().catch(() => null);
+            if (remote) {
+              base = remote;
+              try {
+                await AsyncStorage.setItem(CUSTOM_MEMBER_KEY, JSON.stringify(remote));
+                await AsyncStorage.setItem(STORAGE_KEY, remote.id);
+              } catch { /* non-fatal */ }
+            }
+          }
+        }
+        if (!base) {
+          // No account resolved — but a guest who chose "Browse as Guest" and
           // relaunched should land back in Main, not the sign-in wall.
           const guest = await AsyncStorage.getItem(GUEST_KEY);
           if (guest === 'true' && !cancelled) setIsGuest(true);
           return;
         }
 
-        // Resolve the base record (seed first, then custom-signup blob).
-        let base: Member | null = MEMBERS.find((m) => m.id === id) ?? null;
-        if (!base) {
-          const raw = await AsyncStorage.getItem(CUSTOM_MEMBER_KEY);
-          const custom = safeParseJSON<Member | null>(raw, null, (v) =>
-            typeof v === 'object' && v !== null && typeof (v as Member).id === 'string',
-          );
-          if (custom && custom.id === id) base = custom;
-        }
-        // Firestore fallback: if neither the seed array nor the local custom
-        // blob has this id but a live Firebase Auth session exists, rehydrate
-        // the member from /users/{uid} → /members/{memberId}. Covers OAuth
-        // users on a fresh device (or after a storage clear) whose member doc
-        // lives only in Firestore. Re-persist it locally so the next launch is
-        // fast and offline-safe.
-        if (!base && auth?.currentUser) {
-          const remote = await fetchMemberByCurrentUid().catch(() => null);
-          if (remote) {
-            base = remote;
-            try {
-              await AsyncStorage.setItem(CUSTOM_MEMBER_KEY, JSON.stringify(remote));
-              await AsyncStorage.setItem(STORAGE_KEY, remote.id);
-            } catch { /* non-fatal */ }
-          }
-        }
-        if (!base) return;
-
         // Apply admin overrides (set from AdminMembersScreen) so role / belt
-        // edits persist across reloads even when offline.
-        const override = await getMemberOverride(id);
+        // edits persist across reloads even when offline. Keyed by base.id —
+        // `id` can be null when the Firestore fallback resolved the member.
+        const override = await getMemberOverride(base.id);
         const merged: Member = override ? { ...base, ...override } : base;
 
         if (!cancelled) setUser(merged);
@@ -123,11 +138,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // up admin role flips (e.g. isEmployee true) made on another device and
   // mirrors them to the local override cache so they survive app reload.
   //
-  // ALSO: backfill /members on every app open. Past Apple/Google OAuth
-  // signups (and any other flow that wrote to /users but skipped /members)
-  // are silently missing from the admin members list. An idempotent
-  // upsert here ensures every signed-in user has a /members doc with the
-  // current firebaseUid stamp. Fire-and-forget — failures don't block UI.
+  // ALSO: backfill /members on app open — but ONLY when the server doc is
+  // missing (legacy OAuth signups that wrote /users but skipped /members) or
+  // unstamped (stamp firebaseUid only). Pushing the full locally-cached
+  // record on every open silently REVERTED admin edits (belt promotions,
+  // contact fixes) made while the app was closed, because this write landed
+  // before subscribeToMember below could deliver the fresh server doc.
+  // Fire-and-forget — failures don't block UI.
   useEffect(() => {
     const id = user?.id;
     if (!id) return;
@@ -136,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (stampedUid) {
         const memberWithUid: Member =
           user.firebaseUid === stampedUid ? user : { ...user, firebaseUid: stampedUid };
-        pushMemberToFirestore(memberWithUid).catch((err) =>
+        backfillMemberIfMissing(memberWithUid).catch((err) =>
           console.warn('[AuthContext] /members backfill failed:', err),
         );
       }

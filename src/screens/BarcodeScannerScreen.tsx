@@ -16,6 +16,7 @@ import { useNutrition } from '../context/NutritionContext';
 import { spacing, borderRadius } from '../theme';
 import { lookupBarcode } from '../services/foodSearch';
 import { FoodSearchResult, FoodMacros } from '../types/food';
+import { todayIso } from '../components/WeekCalendar';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -27,10 +28,6 @@ type ScanState =
   | { kind: 'looking_up'; code: string }
   | { kind: 'found'; code: string; food: FoodSearchResult }
   | { kind: 'not_found'; code: string };
-
-function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
-}
 
 export function BarcodeScannerScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -80,7 +77,9 @@ export function BarcodeScannerScreen({ navigation }: any) {
     };
     addMacroEntry({
       memberId: user.id,
-      date: todayISO(),
+      // Local-time day key, matching MacroTracker's calendar convention
+      // (UTC would stamp evening scans on tomorrow's date).
+      date: todayIso(),
       name: state.food.brand ? `${state.food.brand} · ${state.food.name}` : state.food.name,
       ...scaled,
     });

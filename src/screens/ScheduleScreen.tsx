@@ -115,15 +115,12 @@ export function ScheduleScreen({ navigation }: any) {
   });
 
   const todayIdx = getTodayIndex();
-  const selectedFullLabel = (() => {
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
-    const selectedDate = new Date(monday);
-    selectedDate.setDate(monday.getDate() + selectedDay);
-    return selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  })();
+  // "Today" only exists in the current week — paging to another week must not
+  // badge/ring the same weekday there.
+  const isTodaySelected = weekOffset === 0 && selectedDay === todayIdx;
+  // Derive from selectedDate (already weekOffset-aware via dateForWeekdayIndex) —
+  // recomputing from the current week's Monday showed THIS week's date after paging.
+  const selectedFullLabel = selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -162,7 +159,7 @@ export function ScheduleScreen({ navigation }: any) {
       <View style={styles.daySelector}>
         {DAYS.map((day, index) => {
           const isSelected = index === selectedDay;
-          const isToday = index === todayIdx;
+          const isToday = weekOffset === 0 && index === todayIdx;
           return (
             <SoundPressable
               key={day}
@@ -220,8 +217,8 @@ export function ScheduleScreen({ navigation }: any) {
           {selectedFullLabel}
         </Text>
         <Text style={[styles.dayHeaderMeta, { color: colors.textMuted }]}>
-          {selectedDay === todayIdx ? 'Today' : ''}
-          {selectedDay === todayIdx && filtered.length > 0 ? ' · ' : ''}
+          {isTodaySelected ? 'Today' : ''}
+          {isTodaySelected && filtered.length > 0 ? ' · ' : ''}
           {filtered.length} {filtered.length === 1 ? 'class' : 'classes'}
         </Text>
       </View>

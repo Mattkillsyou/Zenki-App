@@ -86,7 +86,9 @@ interface GpsActivityContextValue {
   startTracking: (type: GpsActivityType, memberId: string) => Promise<boolean>;
   stopTracking: (weightKg?: number) => GpsActivity | null;
   pauseTracking: () => void;
-  resumeTracking: () => void;
+  /** Resolves false when the GPS watch failed to restart (the session stays
+   *  paused so it can't tick while recording nothing) — callers should alert. */
+  resumeTracking: () => Promise<boolean>;
   removeActivity: (id: string) => void;
   activities: GpsActivity[];
   memberActivities: (memberId: string) => GpsActivity[];
@@ -108,7 +110,7 @@ const GpsActivityContext = createContext<GpsActivityContextValue>({
   startTracking: async () => false,
   stopTracking: () => null,
   pauseTracking: () => {},
-  resumeTracking: () => {},
+  resumeTracking: async () => false,
   removeActivity: () => {},
   activities: [],
   memberActivities: () => [],
@@ -472,8 +474,8 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     // Keep duration + drain timers running — they show elapsed time
   }, [isTracking, stopBgUpdates]);
 
-  const resumeTracking = useCallback(async () => {
-    if (!isTracking || !isPausedRef.current) return;
+  const resumeTracking = useCallback(async (): Promise<boolean> => {
+    if (!isTracking || !isPausedRef.current) return false;
     // Accumulate paused time
     pausedTimeRef.current += Date.now() - pauseStartRef.current;
     isPausedRef.current = false;
@@ -486,7 +488,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     if (bgModeRef.current) {
       bgPaused = false;
       if (await startBgUpdates(false)) {
-        return; // drain interval already running handles live UI
+        return true; // drain interval already running handles live UI
       }
       routeRef.current = [...bgPointBuffer];   // fold the bg route captured so far
       bgModeRef.current = false;
@@ -524,6 +526,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
           updateStats();
         },
       );
+      return true;
     } catch {
       if (Platform.OS === 'web') {
         let simLat = lastPoint?.latitude ?? 34.1006;
@@ -543,7 +546,17 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
           setLiveSpeed(point.speed || 0);
           updateStats();
         }, 3000);
+        return true;
       }
+      // Native watch failed to restart (e.g. Location Services turned off
+      // mid-pause) — do NOT proceed as if recording resumed, or the timer
+      // ticks an "active" session that records zero points (mirrors
+      // startTracking's guard above). Re-freeze the paused state and report
+      // failure so the caller can surface it.
+      isPausedRef.current = true;
+      setIsPaused(true);
+      pauseStartRef.current = Date.now();
+      return false;
     }
   }, [isTracking, startBgUpdates]);
 
