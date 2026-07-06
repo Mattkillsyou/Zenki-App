@@ -11,7 +11,8 @@ import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
-import { useSenpai } from '../context/SenpaiContext';
+import { useSenpai, type MascotMood } from '../context/SenpaiContext';
+import { useAuth } from '../context/AuthContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 import { useSenpaiChat } from '../hooks/useSenpaiChat';
 import { stopSenpaiAudio } from '../services/senpaiAudio';
@@ -35,9 +36,18 @@ const clampPos = (x: number, y: number) => ({
 // screen corners; the chat "dock" (reply bubble + Type/Talk switch + text box)
 // opens INWARD from whichever corner she's in, so it never runs off-screen.
 const MODE_KEY = '@zenki_senpai_mode';
-// One-time AI safety disclaimer gate (carried over from the deleted full-screen chat).
-const DISCLAIMER_KEY = '@senpai_chat_disclaimer_v1';
+// One-time AI safety disclaimer gate (carried over from the deleted full-screen
+// chat). PER-ACCOUNT: the real key is `${DISCLAIMER_KEY_BASE}:${accountId}`
+// (guest bucket for guests) so a second member on the same device gets their
+// own gate. The bare legacy key was device-global — it migrates once to the
+// current account on first read, then is deleted.
+const DISCLAIMER_KEY_BASE = '@senpai_chat_disclaimer_v1';
 const DOCK_W = 264;
+// Idle → quip → sleep pipeline (see the idle-timer effect below).
+const IDLE_QUIP_MS = 45000;        // no interaction while idle → idle quip
+const SLEEP_AFTER_QUIP_MS = 60000; // still nothing after the quip → 'zzz...'
+// Open chat dock auto-collapses back to chibi-only after this much quiet.
+const DOCK_IDLE_MS = 20000;
 type CornerKey = 'br' | 'bl' | 'tr' | 'tl';
 // basePos values that seat her flush in each corner. Derived from the
 // default bottom:110/right:16 anchor + the MASCOT_SIZE box (16px side margins,
@@ -82,6 +92,7 @@ export function SenpaiMascot() {
 
 function SenpaiMascotImpl() {
   const { state, triggerReaction } = useSenpai();
+  const { user } = useAuth();
   const [hidden, setHidden] = useState(false);
   const [showClose, setShowClose] = useState(false);
   // In-place chat surface: 'type' = inline text box you type into; 'talk' =
@@ -90,12 +101,31 @@ function SenpaiMascotImpl() {
   const [mode, setModeState] = useState<'type' | 'talk'>('type');
   const [draft, setDraft] = useState('');
   const inputRef = useRef<TextInput>(null);
+  // Chibi-only by default: the dock panel (Type/Talk switch + input/mic)
+  // renders ONLY while dockOpen — tap her to summon it; it auto-collapses
+  // after DOCK_IDLE_MS of quiet. Reaction bubbles still show while collapsed,
+  // so she stays a character on every screen without being UI furniture.
+  const [dockOpen, setDockOpen] = useState(false);
+  const dockCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Typed-reply persistence: in Type mode her last settled reply HOLDS the
+  // bubble after the 4s reaction mirror expires (it used to vanish with no
+  // re-read surface anywhere — the chat modal is gone). Dismissed by tapping
+  // her or by dock auto-collapse; reset on send/clear/mode-switch.
+  const [replyDismissed, setReplyDismissed] = useState(false);
+  // Wall-clock of the user's last direct interaction (tap / drag / keystroke /
+  // speech / send / reply arrival). The idle-quip, sleep, and dock-collapse
+  // timers re-check this when they fire, so she never quips mid-conversation
+  // or collapses the dock mid-thought.
+  const lastInteractionAtRef = useRef(Date.now());
+  const bumpInteraction = () => { lastInteractionAtRef.current = Date.now(); };
   // Which screen corner she's snapped to — drives which side the chat dock
   // opens from so it always expands inward (never off-screen).
   const [corner, setCorner] = useState<CornerKey>('br');
   // One-time AI disclaimer gate (null = still loading; false = must accept
   // before chatting; true = accepted). Replaces the deleted modal's gate.
+  // Keyed per account (guest bucket when signed out) — see DISCLAIMER_KEY_BASE.
   const [disclaimerOK, setDisclaimerOK] = useState<boolean | null>(null);
+  const disclaimerKey = `${DISCLAIMER_KEY_BASE}:${user?.id ?? 'guest'}`;
   // Keyboard height while the text box is focused — used to lift the dock so
   // the input isn't hidden behind the keyboard at a bottom corner.
   const [kbHeight, setKbHeight] = useState(0);
@@ -110,6 +140,7 @@ function SenpaiMascotImpl() {
     loading: chatLoading,
     error: chatError,
     ttsPlaying,
+    lastArrivedId,
     send: sendChat,
     clear: clearChat,
     clearError: clearChatError,
@@ -155,6 +186,7 @@ function SenpaiMascotImpl() {
   useSpeechRecognitionEvent('result', (event) => {
     const t = event.results?.[0]?.transcript ?? '';
     if (!t) return;
+    bumpInteraction();
     transcriptRef.current = t;
     setLiveTranscript(t);
   });
@@ -339,6 +371,14 @@ function SenpaiMascotImpl() {
     return null;
   }, [messages]);
 
+  // A settled reply counts as conversation activity — it feeds the idle-quip
+  // and dock-collapse timers so she doesn't quip / collapse right after
+  // answering (the user is presumably reading).
+  useEffect(() => {
+    if (lastAssistantMsg) bumpInteraction();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastAssistantMsg?.id]);
+
   useEffect(() => {
     if (!listening) return;
     if (!lastAssistantMsg) return;
@@ -422,10 +462,36 @@ function SenpaiMascotImpl() {
     });
   }, []);
 
-  // Restore the one-time AI disclaimer acceptance.
+  // Restore the one-time AI disclaimer acceptance — PER ACCOUNT. Re-runs on
+  // account switch (disclaimerKey embeds user.id) so a second member on the
+  // same device gets their own gate instead of inheriting the first's.
   useEffect(() => {
-    AsyncStorage.getItem(DISCLAIMER_KEY).then((v) => setDisclaimerOK(v === 'accepted'));
-  }, []);
+    let cancelled = false;
+    setDisclaimerOK(null); // account switched → gate unknown until read
+    (async () => {
+      try {
+        const v = await AsyncStorage.getItem(disclaimerKey);
+        if (v === 'accepted') {
+          if (!cancelled) setDisclaimerOK(true);
+          return;
+        }
+        // One-time migration: the legacy key was device-global. Credit it to
+        // the CURRENT account only, then delete it — every other account on
+        // this device must accept for themselves.
+        const legacy = await AsyncStorage.getItem(DISCLAIMER_KEY_BASE);
+        if (legacy === 'accepted') {
+          await AsyncStorage.setItem(disclaimerKey, 'accepted');
+          await AsyncStorage.removeItem(DISCLAIMER_KEY_BASE);
+          if (!cancelled) setDisclaimerOK(true);
+          return;
+        }
+        if (!cancelled) setDisclaimerOK(false);
+      } catch {
+        if (!cancelled) setDisclaimerOK(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [disclaimerKey]);
 
   // Track the keyboard so the dock can lift clear of it while typing.
   useEffect(() => {
@@ -471,8 +537,10 @@ function SenpaiMascotImpl() {
       onShouldBlockNativeResponder: () => false,
       onPanResponderGrant: () => {
         // A drag has started — mark it so the trailing onPress (if any) is
-        // swallowed by handleTap instead of toggling the mic.
+        // swallowed by handleTap instead of toggling the mic. Dragging is an
+        // interaction (keeps the idle/sleep timers from firing mid-gesture).
         didDragRef.current = true;
+        bumpInteraction();
         // Halt any in-flight corner-snap spring and capture her TRUE current
         // position. A native-driven value's JS-side _value is stale mid-spring;
         // stopAnimation's callback delivers the real value per axis.
@@ -545,20 +613,45 @@ function SenpaiMascotImpl() {
   const sleepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!state.enabled) return;
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (sleepTimerRef.current) clearTimeout(sleepTimerRef.current);
+    if (!state.enabled) return;
 
-    if (state.mascotMood !== 'idle' && state.mascotMood !== 'sleeping') {
+    // Arm while she's IDLE. (The old condition was inverted — it armed only
+    // while a reaction was displaying, and every reaction auto-clears to
+    // 'idle' within ≤8s, which re-ran this effect and its cleanup killed the
+    // timer; the new run then armed nothing. The whole quip → sleep pipeline
+    // was dead code.) The 45s quip keeps mood at 'idle', so this effect does
+    // NOT re-run and the chained sleep timer survives; any real reaction
+    // flips mood → cleanup cancels both; the auto-clear back to 'idle'
+    // re-arms. Timers re-check lastInteractionAtRef when they fire so she
+    // never quips or dozes off mid-conversation — they just re-arm for the
+    // remainder of the quiet window.
+    if (state.mascotMood !== 'idle') return;
+
+    const armIdleQuip = (waitMs: number) => {
       idleTimerRef.current = setTimeout(() => {
+        const sinceTouch = Date.now() - lastInteractionAtRef.current;
+        if (listeningRef.current || sinceTouch < IDLE_QUIP_MS) {
+          armIdleQuip(Math.max(IDLE_QUIP_MS - sinceTouch, 5000));
+          return;
+        }
         triggerReaction('idle', randomDialogue('idle'), 5000);
         sleepTimerRef.current = setTimeout(() => {
+          const sinceQuip = Date.now() - lastInteractionAtRef.current;
+          if (listeningRef.current || sinceQuip < SLEEP_AFTER_QUIP_MS) {
+            // Interacted after the quip without a mood change (e.g. typing)
+            // — restart the whole idle cycle instead of dozing off on them.
+            armIdleQuip(IDLE_QUIP_MS);
+            return;
+          }
           // Infinity = terminal reaction (no auto-clear) — she stays asleep
           // until the next interaction wakes her.
           triggerReaction('sleeping', 'zzz...', Infinity);
-        }, 60000);
-      }, 45000);
-    }
+        }, SLEEP_AFTER_QUIP_MS);
+      }, waitMs);
+    };
+    armIdleQuip(IDLE_QUIP_MS);
 
     return () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -584,6 +677,62 @@ function SenpaiMascotImpl() {
     bounceLoop.start();
     return () => bounceLoop.stop();
   }, [state.mascotMood, state.enabled]);
+
+  // ─── Reaction choreography (milestone beats) ─────────────────────────────
+  // Milestone reactions play a tiny runReactionScript() instead of
+  // everything-at-once soup:
+  //   t=0      anticipation squash on the CURRENT pose (150ms)
+  //   t=150ms  pose swap + squash releases with an overshoot stretch
+  //            (SenpaiOverlay delays its starburst to this same beat)
+  //   t=300ms  speech bubble pops in (bubbleHold releases)
+  //   t=550ms  ambient rain — hearts/kaomoji/confetti (delayed in the overlay)
+  // Milestone detection coordinates with D2's source tiers: only
+  // source==='milestone' reactions set sparkleActive (SenpaiContext), and it
+  // lands in the SAME commit as the mood change this effect keys on — so
+  // sparkleActive-at-commit ≙ "this reaction is a milestone". Chat mirrors and
+  // ambient quips swap instantly, exactly as before. displayMood is what the
+  // <Image> renders — it lags state.mascotMood by one beat only during a
+  // milestone script.
+  const [displayMood, setDisplayMood] = useState<MascotMood>(state.mascotMood);
+  const [bubbleHold, setBubbleHold] = useState(false);
+  const squashAnim = useRef(new Animated.Value(0)).current;
+  const scriptTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const clearReactionScript = () => {
+    scriptTimersRef.current.forEach(clearTimeout);
+    scriptTimersRef.current = [];
+  };
+
+  useEffect(() => {
+    const mood = state.mascotMood;
+    clearReactionScript();
+    const milestone = state.sparkleActive;
+    if (!milestone) {
+      // Instant swap — reset any half-played script.
+      squashAnim.stopAnimation();
+      squashAnim.setValue(0);
+      setBubbleHold(false);
+      setDisplayMood(mood);
+      return;
+    }
+    // Beat 1: squash down on the current pose (anticipation).
+    setBubbleHold(true);
+    squashAnim.setValue(0);
+    Animated.timing(squashAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+    // Beat 2: swap the pose; release the squash with a springy overshoot
+    // (the interpolation extrapolates past 0, so it reads as a stretch-pop).
+    scriptTimersRef.current.push(setTimeout(() => {
+      setDisplayMood(mood);
+      Animated.spring(squashAnim, { toValue: 0, friction: 4, tension: 160, useNativeDriver: true }).start();
+    }, 150));
+    // Beat 3: let the bubble pop in.
+    scriptTimersRef.current.push(setTimeout(() => setBubbleHold(false), 300));
+    return clearReactionScript;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.mascotMood]);
+
+  const squashScaleX = squashAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] });
+  const squashScaleY = squashAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.86] });
+  const squashSink = squashAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 5] });
 
   // Tap-to-toggle mic. One clear tap on the chibi:
   //   - Tap while idle      → mic ON  (charge ring flash + boot explosion)
@@ -620,6 +769,8 @@ function SenpaiMascotImpl() {
   // Entering 'type' closes the mic (if open) and focuses the box; entering
   // 'talk' drops keyboard focus. Persisted so it sticks across launches.
   const setMode = (m: 'type' | 'talk') => {
+    bumpInteraction();
+    setReplyDismissed(false);
     setModeState(m);
     AsyncStorage.setItem(MODE_KEY, m);
     if (m === 'type') {
@@ -634,15 +785,18 @@ function SenpaiMascotImpl() {
   const submitType = () => {
     const t = draft.trim();
     if (!t || chatLoading || disclaimerOK !== true) return;
+    bumpInteraction();
+    setReplyDismissed(false); // a new send un-dismisses so the fresh reply shows
     clearChatError();
     setDraft('');
     sendChat(t);
   };
 
-  // Accept the one-time AI disclaimer, unlocking chat.
+  // Accept the one-time AI disclaimer, unlocking chat (for THIS account).
   const acceptDisclaimer = () => {
+    bumpInteraction();
     setDisclaimerOK(true);
-    AsyncStorage.setItem(DISCLAIMER_KEY, 'accepted');
+    AsyncStorage.setItem(disclaimerKey, 'accepted');
     if (mode === 'type') setTimeout(() => inputRef.current?.focus(), 120);
   };
 
@@ -651,7 +805,7 @@ function SenpaiMascotImpl() {
   const confirmClear = () => {
     Alert.alert('Clear chat?', "this wipes the conversation — senpai won't remember 💕", [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Clear', style: 'destructive', onPress: () => { clearChatError(); clearChat(); } },
+      { text: 'Clear', style: 'destructive', onPress: () => { clearChatError(); setReplyDismissed(false); clearChat(); } },
     ]);
   };
 
@@ -662,12 +816,31 @@ function SenpaiMascotImpl() {
       didDragRef.current = false;
       return;
     }
+    bumpInteraction();
+    // Collapsed → the first tap just summons the dock ("a character who
+    // comes when called"). Works pre-disclaimer too — the dock opens on the
+    // disclaimer card. If she's asleep, the tap also wakes her.
+    if (!dockOpen) {
+      if (state.mascotMood === 'sleeping') {
+        // 'wake' pool — this tap only summons the dock; mascotTap lines
+        // claim the mic is ON, which is only true via activateListening.
+        triggerReaction('cheering', randomDialogue('wake'), 2500);
+      }
+      setDockOpen(true);
+      return;
+    }
     // Until the one-time AI disclaimer is accepted, the chibi does nothing
-    // (the disclaimer occupies the dock panel).
+    // more (the disclaimer occupies the dock panel).
     if (disclaimerOK !== true) return;
-    // In type mode the chibi isn't a mic — tapping her just pops the keyboard
-    // on the inline text box.
+    // In type mode the chibi isn't a mic — tapping her dismisses a held
+    // reply bubble (if any), wakes her if asleep, and pops the keyboard on
+    // the inline text box.
     if (mode === 'type') {
+      if (state.mascotMood === 'sleeping') {
+        // 'wake' pool — Type mode never opens the mic, so no "mic's ON" copy.
+        triggerReaction('cheering', randomDialogue('wake'), 2500);
+      }
+      setReplyDismissed(true);
       inputRef.current?.focus();
       return;
     }
@@ -801,11 +974,41 @@ function SenpaiMascotImpl() {
     return () => loop.stop();
   }, [listening, glowAnim]);
 
+  // Auto-collapse the dock back to chibi-only after DOCK_IDLE_MS of quiet.
+  // Deferred entirely (no timer armed) while the user is mid-something: mic
+  // open, reply in flight, keyboard up, or an unsent draft in the box. The
+  // timer re-checks lastInteractionAtRef when it fires and re-arms for the
+  // remainder if the user touched anything since arming. Collapsing also
+  // dismisses a held typed reply, so the bubble doesn't outlive the dock.
+  useEffect(() => {
+    if (!dockOpen) return;
+    if (listening || chatLoading || kbHeight > 0 || draft.trim().length > 0) return;
+    const armCollapse = (waitMs: number) => {
+      dockCollapseTimerRef.current = setTimeout(() => {
+        const sinceTouch = Date.now() - lastInteractionAtRef.current;
+        if (sinceTouch < DOCK_IDLE_MS) {
+          armCollapse(DOCK_IDLE_MS - sinceTouch);
+          return;
+        }
+        setDockOpen(false);
+        setReplyDismissed(true);
+      }, waitMs);
+    };
+    armCollapse(DOCK_IDLE_MS);
+    return () => {
+      if (dockCollapseTimerRef.current) clearTimeout(dockCollapseTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dockOpen, mode, listening, chatLoading, kbHeight, draft, lastAssistantMsg?.id, disclaimerOK]);
+
   if (hidden) return null;
 
   const mood = state.mascotMood;
   const opacity = mood === 'sleeping' ? 0.85 : 1;
-  const animSource = ANIM_ASSETS[mood] ?? ANIM_ASSETS.idle;
+  // displayMood (not mascotMood) drives the art — it lags one beat behind
+  // during a milestone reaction script so the anticipation squash plays on
+  // the OUTGOING pose. Identical to mascotMood at all other times.
+  const animSource = ANIM_ASSETS[displayMood] ?? ANIM_ASSETS.idle;
 
   // Which corner she's docked to → which side the chat dock opens from.
   const isTop = corner[0] === 't';
@@ -820,7 +1023,8 @@ function SenpaiMascotImpl() {
       : 0;
 
   // Bubble text priority: tap/loading override → live transcript → loading
-  // dots → typed error → her last reply → listening greeting → auto reaction.
+  // dots → typed error → (milestone beat hold) → active reaction → held typed
+  // reply → listening reply/greeting → auto reaction.
   const bubbleText = (() => {
     const errText = chatError
       ? chatError.code === 'no_auth'
@@ -838,7 +1042,12 @@ function SenpaiMascotImpl() {
     // An ACTIVE reaction (reactionExpiry in the future) outranks the last chat
     // reply — otherwise lastAssistantMsg (never-expiring, persisted) permanently
     // shadows the reaction engine in the bubble (the audit's Root-Cause-A freeze).
-    // lastAssistantMsg only wins while she's actively listening.
+    // Below the reaction branch, the last SETTLED reply may hold the bubble in
+    // Type mode — but only a reply that arrived THIS session (id === lastArrivedId,
+    // never rehydrated history) and only until dismissed (tap / dock collapse) —
+    // so typed answers stop vanishing after the 4s reaction mirror with no
+    // re-read surface anywhere. The reaction branch still outranks it, so the
+    // old bubble-priority freeze cannot return.
     const reactionActive = !!state.lastReaction && state.reactionExpiry > Date.now();
     return bubbleOverride
       ? bubbleOverride
@@ -848,8 +1057,12 @@ function SenpaiMascotImpl() {
       ? '...'
       : errText
       ? errText
+      : bubbleHold
+      ? null // milestone script beat 1–2: bubble pops in at beat 3
       : reactionActive
       ? state.lastReaction
+      : mode === 'type' && !replyDismissed && lastAssistantMsg && lastAssistantMsg.id === lastArrivedId
+      ? lastAssistantMsg.content
       : listening && lastAssistantMsg?.content
       ? lastAssistantMsg.content
       : listening
@@ -1143,10 +1356,14 @@ function SenpaiMascotImpl() {
           delayLongPress={500}
           accessibilityRole="button"
           accessibilityLabel={
-            mode === 'type' ? 'Type to Senpai' : listening ? 'Stop talking to Senpai' : 'Talk to Senpai'
+            !dockOpen
+              ? 'Open Senpai chat'
+              : mode === 'type' ? 'Type to Senpai' : listening ? 'Stop talking to Senpai' : 'Talk to Senpai'
           }
           accessibilityHint={
-            mode === 'type'
+            !dockOpen
+              ? 'Opens the chat controls. Long-press to show a dismiss button.'
+              : mode === 'type'
               ? 'Opens the keyboard. Long-press to show a dismiss button.'
               : listening
               ? 'Turns the microphone off. Long-press to show a dismiss button.'
@@ -1154,13 +1371,25 @@ function SenpaiMascotImpl() {
           }
           hitSlop={8}
         >
-          <Image
-            source={animSource}
-            style={styles.mascotImage}
-            contentFit="contain"
-            autoplay
-            cachePolicy="memory-disk"
-          />
+          {/* Squash-and-stretch wrapper — driven only by the milestone
+              reaction script (squashAnim rests at 0 otherwise). */}
+          <Animated.View
+            style={{
+              transform: [
+                { translateY: squashSink },
+                { scaleX: squashScaleX },
+                { scaleY: squashScaleY },
+              ],
+            }}
+          >
+            <Image
+              source={animSource}
+              style={styles.mascotImage}
+              contentFit="contain"
+              autoplay
+              cachePolicy="memory-disk"
+            />
+          </Animated.View>
         </Pressable>
         </View>
 
@@ -1168,6 +1397,9 @@ function SenpaiMascotImpl() {
             inward. Holds her reply bubble + the Type/Talk switch and (in
             Type mode) the inline text box. Replaces the old pills AND the
             full-screen chat page — nothing here opens a new screen.
+            The PANEL is collapsed by default (chibi-only): tap her to summon
+            it; it auto-collapses after DOCK_IDLE_MS of quiet. The reaction
+            BUBBLE renders regardless, so quips/milestones still surface.
             box-none so empty space never blocks a drag on the mascot. */}
         <View
           pointerEvents="box-none"
@@ -1180,7 +1412,7 @@ function SenpaiMascotImpl() {
         >
           {(() => {
             const bubbleEl = bubbleText ? <SpeechBubble key="bubble" text={bubbleText} /> : null;
-            const panelEl = (
+            const panelEl = !dockOpen ? null : (
               <View key="panel" style={styles.dockPanel}>
                 {disclaimerOK === null ? null : !disclaimerOK ? (
                   // One-time AI safety disclaimer — must accept before chatting.
@@ -1238,7 +1470,7 @@ function SenpaiMascotImpl() {
                         <TextInput
                           ref={inputRef}
                           value={draft}
-                          onChangeText={setDraft}
+                          onChangeText={(t) => { bumpInteraction(); setDraft(t); }}
                           onSubmitEditing={submitType}
                           placeholder="type to senpai…"
                           placeholderTextColor="rgba(255,255,255,0.5)"

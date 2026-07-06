@@ -389,30 +389,17 @@ export function SettingsScreen({ navigation }: any) {
           <View style={styles.backButton} />
         </View>
 
-        {/* Visual Theme Picker */}
+        {/* Visual Theme Picker — the theme is a free choice on its own,
+            independent of the Senpai companion toggle below: her theme is a
+            normal option here, and the mascot works on ANY theme. */}
         {renderSectionHeader('VISUAL THEME')}
-        {senpaiState.enabled && (
-          <Text style={{
-            color: colors.textMuted,
-            fontSize: 12,
-            fontStyle: 'italic',
-            paddingHorizontal: 20,
-            paddingBottom: 8,
-          }}>
-            Senpai Mode controls the theme. Disable Senpai to change.
-          </Text>
-        )}
-        <View
-          style={[styles.themeGrid, senpaiState.enabled && { opacity: 0.45 }]}
-          pointerEvents={senpaiState.enabled ? 'none' : 'auto'}
-        >
-          {ALL_THEMES.filter((t) => !['system', 'clean-light', 'clean-dark', 'senpai'].includes(t.id)).map((t: ThemeDefinition) => {
+        <View style={styles.themeGrid}>
+          {ALL_THEMES.filter((t) => !['system', 'clean-light', 'clean-dark'].includes(t.id)).map((t: ThemeDefinition) => {
             const isActive = mode === t.id;
             const c = t.colors;
             return (
               <TouchableOpacity
                 key={t.id}
-                disabled={senpaiState.enabled}
                 style={[
                   styles.themeCard,
                   {
@@ -452,11 +439,11 @@ export function SettingsScreen({ navigation }: any) {
           })}
         </View>
 
-        {/* Senpai Mode toggle — sits right under the theme picker because
-            enabling it locks the theme + spawns the floating chibi (the
-            most "I want this on" decision in the app). The expanded
-            senpai controls (volume, sparkles, memory) still live
-            in the SECRET LAB section further down. */}
+        {/* Senpai Mode toggle — the COMPANION only: it spawns the floating
+            chibi and no longer touches the visual theme (pick her theme
+            above if you want the full reskin too). The expanded senpai
+            controls (volume, sparkles, memory) still live in the
+            SECRET LAB section further down. */}
         <View
           style={[
             styles.sectionCard,

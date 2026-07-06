@@ -1,13 +1,22 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ImpactType } from '../components/SenpaiImpactEffect';
+import { useAuth } from './AuthContext';
 import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 
 const STORAGE_KEY = '@zenki_senpai_mode';
 const VOLUME_KEY = '@zenki_senpai_volume';
 const SPARKLE_KEY = '@zenki_senpai_sparkle';
+// Legacy device-global memory key (pre per-account). The diary is now stored
+// per account under `memoryKeyFor(...)`; the bare key is migrated once below.
 const MEMORY_KEY = '@zenki_senpai_memory';
 const AMBIENT_KEY = '@zenki_senpai_ambient';
+
+// The diary contains verbatim reaction/chat lines, so it must not leak across
+// members sharing a device. Signed-in members get their own bucket; guests and
+// signed-out share 'guest'. Preferences (enabled/volume/sparkle/ambient) stay
+// device-global on purpose.
+const memoryKeyFor = (accountId: string) => `${MEMORY_KEY}:${accountId}`;
 
 const MEMORY_CAP = 100;
 
@@ -22,6 +31,11 @@ export type MascotMood =
 
 export type SenpaiVolume = 'low' | 'med' | 'high';
 export type SparkleIntensity = 'normal' | 'maximum';
+
+// Who fired a reaction. Only 'milestone' (workout done, PR, level-up…) may
+// detonate the full-screen impact + sparkle layers; chat mirrors and ambient
+// chatter get pose + bubble only, so a real PR still looks special.
+export type ReactionSource = 'milestone' | 'chat' | 'ambient';
 
 export interface MemoryEntry {
   mood: MascotMood;
@@ -62,7 +76,7 @@ interface SenpaiState {
 interface SenpaiContextValue {
   state: SenpaiState;
   setEnabled: (on: boolean) => void;
-  triggerReaction: (mood: MascotMood, dialogue: string, durationMs?: number) => void;
+  triggerReaction: (mood: MascotMood, dialogue: string, durationMs?: number, source?: ReactionSource) => void;
   setVolume: (vol: SenpaiVolume) => void;
   setSparkleIntensity: (intensity: SparkleIntensity) => void;
   clearMemoryLog: () => void;
@@ -111,31 +125,38 @@ function isMemoryEntry(e: unknown): e is MemoryEntry {
 
 export function SenpaiProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<SenpaiState>(defaultState);
+  const { user } = useAuth();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const volumeRef = useRef<SenpaiVolume>(defaultState.volume);
   // Coalescing bookkeeping (see MOOD_PRIORITY).
   const lastTriggerAtRef = useRef(0);
   const lastPriorityRef = useRef(-1);
 
-  // Load all persisted values on mount
+  // Storage key for the active account's diary (guest bucket when signed out).
+  const accountId = user?.id ?? null;
+  const memoryKey = memoryKeyFor(accountId ?? 'guest');
+  // The key the in-memory memoryLog was hydrated FROM — null while a hydrate
+  // is in flight. The persist effect below only writes when this matches the
+  // current key, so (a) the pre-hydration [] can never overwrite the stored
+  // log on launch, and (b) an account switch can never write one member's
+  // diary into another's bucket.
+  const memoryHydratedKeyRef = useRef<string | null>(null);
+
+  // Load device-global preferences on mount (memory log is per-account and
+  // hydrated by its own effect below).
   useEffect(() => {
     (async () => {
       try {
-        const [enabledRaw, volumeRaw, sparkleRaw, memoryRaw, ambientRaw] = await Promise.all([
+        const [enabledRaw, volumeRaw, sparkleRaw, ambientRaw] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEY),
           AsyncStorage.getItem(VOLUME_KEY),
           AsyncStorage.getItem(SPARKLE_KEY),
-          AsyncStorage.getItem(MEMORY_KEY),
           AsyncStorage.getItem(AMBIENT_KEY),
         ]);
         const volume: SenpaiVolume =
           volumeRaw === 'low' || volumeRaw === 'med' || volumeRaw === 'high' ? volumeRaw : 'high';
         const sparkleIntensity: SparkleIntensity =
           sparkleRaw === 'maximum' ? 'maximum' : 'normal';
-        const parsedMemory = safeParseJSON<MemoryEntry[]>(memoryRaw, [], Array.isArray);
-        // Validate element shape, not just Array.isArray — a corrupt blob must
-        // not produce undefined-mood / Invalid-Date rows in the Memory screen.
-        const memoryLog: MemoryEntry[] = parsedMemory.filter(isMemoryEntry).slice(-MEMORY_CAP);
         const ambientEffects = ambientRaw === null ? true : ambientRaw === 'true';
         volumeRef.current = volume;
         setState((s) => ({
@@ -143,12 +164,61 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
           enabled: enabledRaw === 'true',
           volume,
           sparkleIntensity,
-          memoryLog,
           ambientEffects,
         }));
       } catch { /* ignore storage errors */ }
     })();
   }, []);
+
+  // Persist the memory log from committed state (G1). Computing the capped
+  // log inside the setState updater and persisting it after dispatch relied
+  // on React invoking the updater eagerly — the SECOND dispatch in one batch
+  // defers its updater, so the stale [] got persisted and wiped the diary.
+  // The hydration guard is essential: without it this same effect would
+  // re-open the wipe window by writing the pre-hydration [] on launch.
+  useEffect(() => {
+    if (memoryHydratedKeyRef.current !== memoryKey) return;
+    safeStorageSet(memoryKey, state.memoryLog, '[Senpai]');
+  }, [state.memoryLog, memoryKey]);
+
+  // Hydrate the per-account memory log on mount and on account switch,
+  // clearing the previous account's entries from memory (F4).
+  useEffect(() => {
+    let cancelled = false;
+    memoryHydratedKeyRef.current = null;
+    (async () => {
+      try {
+        let memoryRaw = await AsyncStorage.getItem(memoryKey);
+        // One-time migration: pre per-account builds stored the diary under
+        // the bare legacy key. The first SIGNED-IN account to hydrate adopts
+        // it; the legacy key is then removed so later accounts start fresh.
+        // Never migrate into the guest bucket — on cold launch this effect
+        // runs as 'guest' before AuthContext finishes restoring the session,
+        // and consuming the legacy key there would strand the returning
+        // member's diary.
+        if (memoryRaw === null && accountId !== null) {
+          const legacyRaw = await AsyncStorage.getItem(MEMORY_KEY);
+          if (legacyRaw !== null) {
+            memoryRaw = legacyRaw;
+            await AsyncStorage.setItem(memoryKey, legacyRaw);
+            await AsyncStorage.removeItem(MEMORY_KEY);
+          }
+        }
+        const parsedMemory = safeParseJSON<MemoryEntry[]>(memoryRaw, [], Array.isArray);
+        // Validate element shape, not just Array.isArray — a corrupt blob must
+        // not produce undefined-mood / Invalid-Date rows in the Memory screen.
+        const memoryLog: MemoryEntry[] = parsedMemory.filter(isMemoryEntry).slice(-MEMORY_CAP);
+        if (cancelled) return;
+        setState((s) => ({ ...s, memoryLog }));
+        memoryHydratedKeyRef.current = memoryKey;
+      } catch {
+        // Leave this key un-hydrated: better to skip persisting for the
+        // session than to overwrite a stored diary we failed to read.
+        if (!cancelled) setState((s) => ({ ...s, memoryLog: [] }));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [memoryKey, accountId]);
 
   const setEnabled = useCallback((on: boolean) => {
     // Disabling must fully quiesce the mascot: cancel the pending auto-clear
@@ -187,8 +257,8 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearMemoryLog = useCallback(() => {
+    // Persisted by the memory-log effect above (single writer).
     setState((s) => ({ ...s, memoryLog: [] }));
-    safeStorageSet(MEMORY_KEY, '[]', '[Senpai]');
   }, []);
 
   const markTransformationPlayed = useCallback(() => {
@@ -207,7 +277,7 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
     return Math.random() < 0.3;
   }, []);
 
-  const triggerReaction = useCallback((mood: MascotMood, dialogue: string, durationMs: number = 3000) => {
+  const triggerReaction = useCallback((mood: MascotMood, dialogue: string, durationMs: number = 3000, source: ReactionSource = 'ambient') => {
     const now = Date.now();
     const priority = MOOD_PRIORITY[mood] ?? 0;
     // A non-finite/0 duration means "terminal" — no auto-clear. Used by the
@@ -223,7 +293,12 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
     lastPriorityRef.current = priority;
 
     if (timerRef.current) clearTimeout(timerRef.current);
-    const sparkle = mood === 'cheering' || mood === 'impressed' || mood === 'celebrating';
+    // Earned celebrations (D2): only milestones may set sparkle/impact. Chat
+    // and ambient reactions still swap pose + bubble but leave the full-screen
+    // layers alone (preserved, not nulled — a chat reply arriving mid-PR must
+    // not cancel an in-flight milestone effect).
+    const isMilestone = source === 'milestone';
+    const sparkle = isMilestone && (mood === 'cheering' || mood === 'impressed' || mood === 'celebrating');
     // Mood-driven impact effect — every ImpactType is reachable from a mood.
     const impactMap: Partial<Record<MascotMood, ImpactType>> = {
       impressed: 'explosion',
@@ -231,25 +306,24 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
       cheering: 'hearts',
       encouraging: 'flash',
     };
-    const impact = impactMap[mood] ?? null;
+    const impact = isMilestone ? impactMap[mood] ?? null : null;
     const entry: MemoryEntry = { mood, dialogue, timestamp: now };
-    // Keep the updater pure (React may run it more than once): compute the next
-    // memory log here, then persist once OUTSIDE setState below.
-    let cappedLog: MemoryEntry[] = [];
+    // Updater stays pure (React may run it more than once); the memory log is
+    // persisted by the effect on state.memoryLog, NOT here — persisting a
+    // value computed inside the updater raced with batched dispatches (G1).
     setState((s) => {
       const nextLog = [...s.memoryLog, entry];
-      cappedLog = nextLog.length > MEMORY_CAP ? nextLog.slice(nextLog.length - MEMORY_CAP) : nextLog;
+      const cappedLog = nextLog.length > MEMORY_CAP ? nextLog.slice(nextLog.length - MEMORY_CAP) : nextLog;
       return {
         ...s,
         mascotMood: mood,
         lastReaction: dialogue,
         reactionExpiry: terminal ? Number.MAX_SAFE_INTEGER : now + durationMs,
-        sparkleActive: sparkle,
+        sparkleActive: isMilestone ? sparkle : s.sparkleActive,
         memoryLog: cappedLog,
-        activeImpact: impact,
+        activeImpact: isMilestone ? impact : s.activeImpact,
       };
     });
-    safeStorageSet(MEMORY_KEY, cappedLog, '[Senpai]');
     if (!terminal) {
       timerRef.current = setTimeout(() => {
         setState((s) => ({ ...s, mascotMood: 'idle', lastReaction: null, sparkleActive: false }));

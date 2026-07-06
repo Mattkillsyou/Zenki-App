@@ -131,7 +131,10 @@ function CleanActivityTrackerScreen({ navigation }: any) {
               Alert.alert('Activity saved', `${formatDistance(activity.distanceMeters)} ${distanceUnit()} recorded.`);
               setRouteCoords([]);
               if (senpaiState.enabled && senpaiShouldReact()) {
-                try { senpaiTrigger('impressed', randomDialogue('gpsActivity'), 4000); } catch { /* ignore */ }
+                // 'milestone' — a finished GPS activity counts as a workout
+                // done (it calls recordSession above), so it keeps the
+                // full-screen sparkle + impact (ReactionSource tiering).
+                try { senpaiTrigger('impressed', randomDialogue('gpsActivity'), 4000, 'milestone'); } catch { /* ignore */ }
               }
             } else {
               // stopTracking returns null when <2 GPS points were recorded
