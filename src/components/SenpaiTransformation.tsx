@@ -1,19 +1,21 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { View, StyleSheet, Animated, Dimensions, Text, Easing } from 'react-native';
+import { View, StyleSheet, Animated, Text, Easing, useWindowDimensions } from 'react-native';
 import { useSenpai } from '../context/SenpaiContext';
+import { useMotion } from '../context/MotionContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 import { playSynth } from '../sounds/synth';
-
-const { width: SW } = Dimensions.get('window');
-const SH = Math.min(Dimensions.get('window').height, 932);
-const CX = SW / 2;
-const CY = SH / 2;
+import { getSenpaiCornerInfo } from './senpaiCornerStore';
 
 const TOTAL_MS = 4000;
 const STAR_GLYPH = '\u2605';
 const GLINT_GLYPH = '\u2726';
 const HEART_GLYPH = '\u2661';
 const MOON_GLYPH = '\u263E';
+
+// D3: geometry passed down per-render from useWindowDimensions — the old
+// module-level `Math.min(height, 932)` clamp pushed the catchphrase, marbles,
+// and burst center into the top ~70% of an iPad.
+interface Dims { sw: number; sh: number; cx: number; cy: number }
 
 /**
  * SenpaiTransformation — plays a condensed Sailor Moon transformation when
@@ -25,9 +27,15 @@ const MOON_GLYPH = '\u263E';
  *   0.40–0.65  pink/blue ribbons swirling outward from center
  *   0.65–0.88  sparkle burst (stars/hearts/moons fanning outward)
  *   0.88–1.00  fade out, mascot emotes via triggerReaction('cheering')
+ *
+ * D5: under system Reduce Motion the strobing cinematic (0.95-opacity white
+ * flash!) is skipped entirely — the toggle still marks the transformation
+ * played and hands the moment to the mascot's pose + bubble.
  */
 export function SenpaiTransformation() {
   const { state, markTransformationPlayed, triggerReaction } = useSenpai();
+  const { reduceMotion } = useMotion();
+  const { width: sw, height: sh } = useWindowDimensions();
   const [playing, setPlaying] = useState(false);
   const prevEnabledRef = useRef<boolean | null>(null);
   const progress = useRef(new Animated.Value(0)).current;
@@ -41,6 +49,12 @@ export function SenpaiTransformation() {
     if (prev === null) return;
     if (state.enabled && !prev && !state.transformationPlayed) {
       catchphraseRef.current = randomDialogue('transformation');
+      if (reduceMotion) {
+        // Reduce Motion: no strobe, no ribbons — just the greeting beat.
+        markTransformationPlayed();
+        try { triggerReaction('cheering', catchphraseRef.current, 3500); } catch { /* ignore */ }
+        return;
+      }
       setPlaying(true);
       progress.setValue(0);
       try { playSynth('senpai', 'transform'); } catch { /* ignore */ }
@@ -59,22 +73,27 @@ export function SenpaiTransformation() {
 
   if (!playing) return null;
 
+  const dims: Dims = { sw, sh, cx: sw / 2, cy: sh / 2 };
+
   return (
     <View style={styles.container} pointerEvents="none">
       <WhiteFlash progress={progress} />
-      <BlueSilhouette progress={progress} />
-      <ColorMarbles progress={progress} />
-      <RibbonSwirl progress={progress} />
-      <SparkleBurst progress={progress} />
-      <CatchphraseText progress={progress} text={catchphraseRef.current} />
+      <BlueSilhouette progress={progress} dims={dims} />
+      <ColorMarbles progress={progress} dims={dims} />
+      <RibbonSwirl progress={progress} dims={dims} />
+      <SparkleBurst progress={progress} dims={dims} />
+      <CatchphraseText progress={progress} text={catchphraseRef.current} dims={dims} />
       <MascotStarburst progress={progress} />
-      <CompleteText progress={progress} />
+      <CompleteText progress={progress} dims={dims} />
     </View>
   );
 }
 
-/* ─── Phase 5: starburst ring expanding where mascot will appear (bottom-right) ─── */
+/* ─── Phase 5: starburst ring expanding where the mascot will appear — her
+       ACTUAL persisted dock corner (senpaiCornerStore), not hardcoded
+       bottom-right ─── */
 function MascotStarburst({ progress }: { progress: Animated.Value }) {
+  const center = useMemo(() => getSenpaiCornerInfo().center, []);
   const scale = progress.interpolate({
     inputRange: [0, 0.80, 0.95, 1],
     outputRange: [0, 0, 3, 3],
@@ -88,8 +107,8 @@ function MascotStarburst({ progress }: { progress: Animated.Value }) {
     <Animated.View
       style={{
         position: 'absolute',
-        right: 30,
-        bottom: 120,
+        left: center.x - 35,
+        top: center.y - 35,
         width: 70,
         height: 70,
         borderRadius: 35,
@@ -103,7 +122,7 @@ function MascotStarburst({ progress }: { progress: Animated.Value }) {
 }
 
 /* ─── Phase 5: brief "TRANSFORMATION COMPLETE!" text ─── */
-function CompleteText({ progress }: { progress: Animated.Value }) {
+function CompleteText({ progress, dims }: { progress: Animated.Value; dims: Dims }) {
   const opacity = progress.interpolate({
     inputRange: [0, 0.82, 0.86, 0.96, 1],
     outputRange: [0, 0, 1, 0, 0],
@@ -119,7 +138,7 @@ function CompleteText({ progress }: { progress: Animated.Value }) {
         position: 'absolute',
         left: 0,
         right: 0,
-        top: SH * 0.62,
+        top: dims.sh * 0.62,
         alignItems: 'center',
         opacity,
         transform: [{ scale }],
@@ -153,24 +172,24 @@ function WhiteFlash({ progress }: { progress: Animated.Value }) {
 }
 
 /* ─── Phase 2: sparkling blue silhouette (0.12 – 0.45) ─── */
-function BlueSilhouette({ progress }: { progress: Animated.Value }) {
+function BlueSilhouette({ progress, dims }: { progress: Animated.Value; dims: Dims }) {
   const opacity = progress.interpolate({
     inputRange: [0, 0.12, 0.30, 0.55, 0.90, 1],
     outputRange: [0, 0, 1, 1, 0.3, 0],
   });
   return (
     <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#1E2670', opacity }]}>
-      <SparklingBluePoints progress={progress} />
+      <SparklingBluePoints progress={progress} dims={dims} />
     </Animated.View>
   );
 }
 
-function SparklingBluePoints({ progress }: { progress: Animated.Value }) {
+function SparklingBluePoints({ progress, dims }: { progress: Animated.Value; dims: Dims }) {
   const points = useMemo(() =>
     Array.from({ length: 40 }).map((_, i) => ({
       key: i,
-      x: Math.random() * SW,
-      y: Math.random() * SH,
+      x: Math.random() * dims.sw,
+      y: Math.random() * dims.sh,
       size: 2 + Math.random() * 4,
       phase: Math.random(),
     })),
@@ -201,13 +220,13 @@ function SparklingBluePoints({ progress }: { progress: Animated.Value }) {
 }
 
 /* ─── Phase 2 overlay: kaleidoscopic color marbles (0.15 – 0.45) ─── */
-function ColorMarbles({ progress }: { progress: Animated.Value }) {
+function ColorMarbles({ progress, dims }: { progress: Animated.Value; dims: Dims }) {
   const marbles = [
-    { color: '#FF2E51', x: SW * 0.25, y: SH * 0.30, size: 320, phaseStart: 0.15, peak: 0.25 },
-    { color: '#5158FF', x: SW * 0.75, y: SH * 0.35, size: 360, phaseStart: 0.18, peak: 0.28 },
-    { color: '#D260FF', x: SW * 0.50, y: SH * 0.55, size: 340, phaseStart: 0.20, peak: 0.30 },
-    { color: '#FFF666', x: SW * 0.30, y: SH * 0.65, size: 260, phaseStart: 0.22, peak: 0.32 },
-    { color: '#FFB3DF', x: SW * 0.70, y: SH * 0.62, size: 300, phaseStart: 0.24, peak: 0.34 },
+    { color: '#FF2E51', x: dims.sw * 0.25, y: dims.sh * 0.30, size: 320, phaseStart: 0.15, peak: 0.25 },
+    { color: '#5158FF', x: dims.sw * 0.75, y: dims.sh * 0.35, size: 360, phaseStart: 0.18, peak: 0.28 },
+    { color: '#D260FF', x: dims.sw * 0.50, y: dims.sh * 0.55, size: 340, phaseStart: 0.20, peak: 0.30 },
+    { color: '#FFF666', x: dims.sw * 0.30, y: dims.sh * 0.65, size: 260, phaseStart: 0.22, peak: 0.32 },
+    { color: '#FFB3DF', x: dims.sw * 0.70, y: dims.sh * 0.62, size: 300, phaseStart: 0.24, peak: 0.34 },
   ];
   return (
     <>
@@ -243,7 +262,7 @@ function ColorMarbles({ progress }: { progress: Animated.Value }) {
 }
 
 /* ─── Phase 3: ribbon swirl (0.40 – 0.68) ─── */
-function RibbonSwirl({ progress }: { progress: Animated.Value }) {
+function RibbonSwirl({ progress, dims }: { progress: Animated.Value; dims: Dims }) {
   const ribbons = useMemo(() =>
     Array.from({ length: 10 }).map((_, i) => ({
       key: i,
@@ -269,7 +288,7 @@ function RibbonSwirl({ progress }: { progress: Animated.Value }) {
     <Animated.View
       style={{
         position: 'absolute',
-        left: CX, top: CY,
+        left: dims.cx, top: dims.cy,
         width: 0, height: 0,
         opacity,
         transform: [{ rotate }, { scale }],
@@ -295,7 +314,7 @@ function RibbonSwirl({ progress }: { progress: Animated.Value }) {
 }
 
 /* ─── Phase 4: sparkle burst (0.60 – 0.92) ─── */
-function SparkleBurst({ progress }: { progress: Animated.Value }) {
+function SparkleBurst({ progress, dims }: { progress: Animated.Value; dims: Dims }) {
   const sparkles = useMemo(() => {
     const glyphs = [STAR_GLYPH, GLINT_GLYPH, HEART_GLYPH, MOON_GLYPH];
     const colors = ['#FF2E51', '#FFB3DF', '#5EE1FF', '#FFF666', '#D260FF', '#FFFFFF'];
@@ -339,8 +358,8 @@ function SparkleBurst({ progress }: { progress: Animated.Value }) {
             key={s.key}
             style={{
               position: 'absolute',
-              left: CX,
-              top: CY,
+              left: dims.cx,
+              top: dims.cy,
               fontSize: s.size,
               color: s.color,
               opacity,
@@ -356,7 +375,7 @@ function SparkleBurst({ progress }: { progress: Animated.Value }) {
 }
 
 /* ─── Catchphrase text overlay (0.02 – 0.60) ─── */
-function CatchphraseText({ progress, text }: { progress: Animated.Value; text: string }) {
+function CatchphraseText({ progress, text, dims }: { progress: Animated.Value; text: string; dims: Dims }) {
   const opacity = progress.interpolate({
     inputRange: [0, 0.04, 0.15, 0.50, 0.62, 1],
     outputRange: [0, 1, 1, 1, 0, 0],
@@ -372,7 +391,7 @@ function CatchphraseText({ progress, text }: { progress: Animated.Value; text: s
         position: 'absolute',
         left: 0,
         right: 0,
-        top: SH * 0.38,
+        top: dims.sh * 0.38,
         alignItems: 'center',
         opacity,
         transform: [{ scale }],

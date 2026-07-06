@@ -13,10 +13,14 @@ import {
 } from 'expo-speech-recognition';
 import { useSenpai, type MascotMood } from '../context/SenpaiContext';
 import { useAuth } from '../context/AuthContext';
+import { useMotion } from '../context/MotionContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 import { useSenpaiChat } from '../hooks/useSenpaiChat';
 import { stopSenpaiAudio } from '../services/senpaiAudio';
-import { ANIM_ASSETS } from './senpaiMoodAssets';
+import { smallTick } from '../services/senpaiHaptics';
+import { ANIM_ASSETS, FLIPBOOK_ASSETS } from './senpaiMoodAssets';
+import { SenpaiFlipbook } from './SenpaiFlipbook';
+import { publishSenpaiCorner } from './senpaiCornerStore';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const POS_KEY = '@zenki_senpai_pos';
@@ -70,12 +74,14 @@ const nearestCorner = (pos: { x: number; y: number }): CornerKey => {
   return (v + h) as CornerKey;
 };
 
-/* ─── Animation asset map ────────────────────────────────────────────────── */
-// ANIM_ASSETS (mood→PNG) lives in ./senpaiMoodAssets so SenpaiVoiceModal can
-// share it without a circular import. Static PNG-per-mood + a JS bounce.
+/* ─── Animation asset maps ───────────────────────────────────────────────── */
+// ANIM_ASSETS (mood→static PNG) and FLIPBOOK_ASSETS (mood→sprite strip) live
+// in ./senpaiMoodAssets — see that file's header for the static-WebP-strip
+// rationale and the asset-versioning twin rule.
 
 /**
- * Senpai Mode mascot — a static chibi PNG per mood + a JS bounce for liveness.
+ * Senpai Mode mascot — sprite-flipbook animation per mood (SenpaiFlipbook,
+ * 12fps strips) with a static-PNG fallback (Reduce Motion / missing strip).
  * Floats on screen, reacts to user actions, shows speech bubbles. Draggable,
  * with idle/sleep timers.
  *
@@ -93,6 +99,13 @@ export function SenpaiMascot() {
 function SenpaiMascotImpl() {
   const { state, triggerReaction } = useSenpai();
   const { user } = useAuth();
+  // System Reduce Motion (live — toggling in iOS Settings takes effect without
+  // a restart). Gates the flipbook, bounce, rings/bursts, drag trail, dock
+  // spring and the milestone squash script (D5). Mirrored into a ref for the
+  // once-created PanResponder closures.
+  const { reduceMotion } = useMotion();
+  const reduceMotionRef = useRef(reduceMotion);
+  reduceMotionRef.current = reduceMotion;
   const [hidden, setHidden] = useState(false);
   const [showClose, setShowClose] = useState(false);
   // In-place chat surface: 'type' = inline text box you type into; 'talk' =
@@ -435,10 +448,40 @@ function SenpaiMascotImpl() {
   const trailBufRef = useRef<{ x: number; y: number; t: number }[]>([]);
   const lastSnapRef = useRef(0);
 
-  // (Removed the @senpai_asset_cache_v effect: the mascot moods are bundled
-  // `require()`d PNGs, so Image.clearDiskCache/clearMemoryCache — which only
-  // affect URI-sourced expo-image entries — was a no-op. Bundled asset bytes
-  // are already busted by each new app binary.)
+  // One-shot expo-image cache clear when the senpai asset set changes (the
+  // "black box / ghost trail" incident taught us stale caches ghost old
+  // frames). TWIN RULE (senpaiMoodAssets.ts header): bump VERSION together
+  // with the `_vN` in the flipbook strip filenames whenever any file under
+  // src/assets/senpai/** changes bytes. History: '2' was the last shipped
+  // value (commit b61357a) — never reuse ≤ '2' or already-updated installs
+  // silently skip the clear.
+  useEffect(() => {
+    const KEY = '@senpai_asset_cache_v';
+    const VERSION = '3';
+    AsyncStorage.getItem(KEY)
+      .then((v) => {
+        if (v !== VERSION) {
+          Image.clearMemoryCache();
+          Image.clearDiskCache();
+          AsyncStorage.setItem(KEY, VERSION);
+        }
+      })
+      .catch(() => { /* cache clear is best-effort */ });
+  }, []);
+
+  // Corner-aware effects (H5/D4): publish her true on-screen center so the
+  // starburst (SenpaiOverlay) and milestone impacts (SenpaiImpactEffect)
+  // erupt from HER dock corner, not a hardcoded bottom-right / screen center.
+  // Same center reconstruction as nearestCorner above.
+  useEffect(() => {
+    publishSenpaiCorner({
+      corner,
+      center: {
+        x: SW - (16 - basePos.x) - MASCOT_SIZE / 2,
+        y: SH - (110 - basePos.y) - MASCOT_SIZE / 2,
+      },
+    });
+  }, [corner, basePos]);
 
   useEffect(() => {
     AsyncStorage.getItem(POS_KEY).then((raw) => {
@@ -546,11 +589,14 @@ function SenpaiMascotImpl() {
         // stopAnimation's callback delivers the real value per axis.
         pan.stopAnimation((v) => pan.setOffset(v));
         pan.setValue({ x: 0, y: 0 });
-        // Reset trail to mascot origin and show dots
-        trailPositions.forEach((p) => p.setValue({ x: 0, y: 0 }));
-        trailOpacities[0].setValue(0.40);
-        trailOpacities[1].setValue(0.25);
-        trailOpacities[2].setValue(0.10);
+        // Reset trail to mascot origin and show dots (skipped under Reduce
+        // Motion — the trail is pure decoration, D5).
+        if (!reduceMotionRef.current) {
+          trailPositions.forEach((p) => p.setValue({ x: 0, y: 0 }));
+          trailOpacities[0].setValue(0.40);
+          trailOpacities[1].setValue(0.25);
+          trailOpacities[2].setValue(0.10);
+        }
         trailBufRef.current = [];
         lastSnapRef.current = 0;
       },
@@ -582,15 +628,19 @@ function SenpaiMascotImpl() {
         const dropped = clampPos(basePosRef.current.x + dx, basePosRef.current.y + dy);
         const key = nearestCorner(dropped);
         const target = CORNER_TARGETS[key];
-        Animated.spring(pan, {
-          toValue: { x: target.x - basePosRef.current.x, y: target.y - basePosRef.current.y },
-          useNativeDriver: true,
-          friction: 7,
-          tension: 80,
-        }).start(({ finished }) => {
+        const delta = { x: target.x - basePosRef.current.x, y: target.y - basePosRef.current.y };
+        // Reduce Motion: same settle contract, but a 0ms timing seats her
+        // instantly instead of the springy flourish (D5).
+        const settle = reduceMotionRef.current
+          ? Animated.timing(pan, { toValue: delta, duration: 0, useNativeDriver: true })
+          : Animated.spring(pan, { toValue: delta, useNativeDriver: true, friction: 7, tension: 80 });
+        settle.start(({ finished }) => {
           // If a new drag interrupted the snap, this fires with finished=false
           // — bail so we don't clobber the in-progress gesture.
           if (!finished) return;
+          // Dock snap lands — a light tick sells the magnetic settle
+          // (self-gated on sound prefs + Reduce Motion inside the util).
+          smallTick();
           setBasePos(target);
           pan.setValue({ x: 0, y: 0 });
         });
@@ -665,8 +715,18 @@ function SenpaiMascotImpl() {
   useEffect(() => {
     if (!state.enabled) return;
     const mood = state.mascotMood;
+    // Flipbook moods carry their own full-body motion — a JS bounce on top
+    // reads as jitter, so leave `bounce` at rest while the strip drives the
+    // art. Reduce Motion also rests it (D5); the static PNG then sits still.
+    if (reduceMotion || FLIPBOOK_ASSETS[mood]) {
+      bounce.stopAnimation();
+      bounce.setValue(0);
+      return;
+    }
     const bounceDist = mood === 'sleeping' ? 1.5 : mood === 'cheering' || mood === 'celebrating' ? 3 : 2;
-    const bounceDur = mood === 'sleeping' ? 4000 : mood === 'cheering' ? 600 : 2500;
+    // D9: celebrating is the TOP-priority mood — it now shares cheering's
+    // snappy 600ms beat instead of the sluggish 2500ms default.
+    const bounceDur = mood === 'sleeping' ? 4000 : mood === 'cheering' || mood === 'celebrating' ? 600 : 2500;
 
     const bounceLoop = Animated.loop(
       Animated.sequence([
@@ -676,7 +736,7 @@ function SenpaiMascotImpl() {
     );
     bounceLoop.start();
     return () => bounceLoop.stop();
-  }, [state.mascotMood, state.enabled]);
+  }, [state.mascotMood, state.enabled, reduceMotion]);
 
   // ─── Reaction choreography (milestone beats) ─────────────────────────────
   // Milestone reactions play a tiny runReactionScript() instead of
@@ -705,7 +765,9 @@ function SenpaiMascotImpl() {
   useEffect(() => {
     const mood = state.mascotMood;
     clearReactionScript();
-    const milestone = state.sparkleActive;
+    // Reduce Motion: milestones swap instantly — no anticipation squash,
+    // no delayed bubble (D5). The bubble + pose still land.
+    const milestone = state.sparkleActive && !reduceMotion;
     if (!milestone) {
       // Instant swap — reset any half-played script.
       squashAnim.stopAnimation();
@@ -728,11 +790,75 @@ function SenpaiMascotImpl() {
     scriptTimersRef.current.push(setTimeout(() => setBubbleHold(false), 300));
     return clearReactionScript;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.mascotMood]);
+  }, [state.mascotMood, reduceMotion]);
 
   const squashScaleX = squashAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] });
   const squashScaleY = squashAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.86] });
   const squashSink = squashAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 5] });
+
+  // D7(b): "talking" pulse — while TTS audio plays, a gentle 1↔1.03 scale so
+  // her voice never comes out of a frozen chibi. Subtle enough to layer over
+  // the flipbook without reading as jitter; rests under Reduce Motion.
+  const talkPulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!ttsPlaying || reduceMotion) {
+      talkPulse.stopAnimation();
+      Animated.timing(talkPulse, { toValue: 0, duration: 150, useNativeDriver: true }).start();
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(talkPulse, { toValue: 1, duration: 260, useNativeDriver: true }),
+        Animated.timing(talkPulse, { toValue: 0, duration: 260, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [ttsPlaying, reduceMotion, talkPulse]);
+  const talkScale = talkPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] });
+
+  // H5 wake-up arc: sleeping → tap → stretch/wave beat → greeting, instead of
+  // an instant pose cut. artOverride swaps the ART only (mood machinery is
+  // untouched — the cheering greet fires on the second beat). Guarded so a
+  // double-tap during the arc doesn't stack timers.
+  const [artOverride, setArtOverride] = useState<string | null>(null);
+  const wakeArcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playWakeArc = () => {
+    if (wakeArcTimerRef.current) return; // arc already mid-play
+    if (reduceMotionRef.current) {
+      // Reduce Motion: no beat theater — straight to the greeting.
+      triggerReaction('cheering', randomDialogue('wake'), 2500);
+      return;
+    }
+    setArtOverride('wave');
+    showBubbleOverride('*yawn* ...mm? ✨', 900);
+    wakeArcTimerRef.current = setTimeout(() => {
+      wakeArcTimerRef.current = null;
+      setArtOverride(null);
+      triggerReaction('cheering', randomDialogue('wake'), 2500);
+    }, 900);
+  };
+  useEffect(() => {
+    return () => { if (wakeArcTimerRef.current) clearTimeout(wakeArcTimerRef.current); };
+  }, []);
+
+  // Dock entrance/exit (D8): the panel scales/fades in from her side instead
+  // of popping, and plays a quick fade-out before unmounting. dockRendered
+  // keeps it mounted through the exit beat; Reduce Motion snaps both ways.
+  const dockAnim = useRef(new Animated.Value(0)).current;
+  const [dockRendered, setDockRendered] = useState(false);
+  useEffect(() => {
+    if (dockOpen) {
+      setDockRendered(true);
+      if (reduceMotion) { dockAnim.setValue(1); return; }
+      Animated.spring(dockAnim, { toValue: 1, friction: 8, tension: 140, useNativeDriver: true }).start();
+      return;
+    }
+    if (reduceMotion) { dockAnim.setValue(0); setDockRendered(false); return; }
+    Animated.timing(dockAnim, { toValue: 0, duration: 140, useNativeDriver: true }).start(({ finished }) => {
+      if (finished) setDockRendered(false);
+    });
+  }, [dockOpen, reduceMotion, dockAnim]);
 
   // Tap-to-toggle mic. One clear tap on the chibi:
   //   - Tap while idle      → mic ON  (charge ring flash + boot explosion)
@@ -803,7 +929,7 @@ function SenpaiMascotImpl() {
   // Clear the conversation — the only user-facing reset, mirroring the old
   // full-screen chat's trash button (history persists across launches).
   const confirmClear = () => {
-    Alert.alert('Clear chat?', "this wipes the conversation — senpai won't remember 💕", [
+    Alert.alert('Clear chat?', "this wipes our conversation — I'll still remember YOU, just not what we said 💕", [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Clear', style: 'destructive', onPress: () => { clearChatError(); setReplyDismissed(false); clearChat(); } },
     ]);
@@ -821,10 +947,12 @@ function SenpaiMascotImpl() {
     // comes when called"). Works pre-disclaimer too — the dock opens on the
     // disclaimer card. If she's asleep, the tap also wakes her.
     if (!dockOpen) {
+      smallTick(); // dock summon — subtle ack (self-gated in the util)
       if (state.mascotMood === 'sleeping') {
-        // 'wake' pool — this tap only summons the dock; mascotTap lines
-        // claim the mic is ON, which is only true via activateListening.
-        triggerReaction('cheering', randomDialogue('wake'), 2500);
+        // Wake-up arc (H5): stretch/wave beat, then the 'wake' greeting —
+        // this tap only summons the dock; mascotTap lines claim the mic is
+        // ON, which is only true via activateListening.
+        playWakeArc();
       }
       setDockOpen(true);
       return;
@@ -837,8 +965,8 @@ function SenpaiMascotImpl() {
     // the inline text box.
     if (mode === 'type') {
       if (state.mascotMood === 'sleeping') {
-        // 'wake' pool — Type mode never opens the mic, so no "mic's ON" copy.
-        triggerReaction('cheering', randomDialogue('wake'), 2500);
+        // Wake-up arc (H5) — Type mode never opens the mic, so no "mic's ON" copy.
+        playWakeArc();
       }
       setReplyDismissed(true);
       inputRef.current?.focus();
@@ -918,9 +1046,13 @@ function SenpaiMascotImpl() {
     startListening()
       .then((started) => {
         if (!started) return;
-        chargeAnim.setValue(1);
-        Animated.timing(chargeAnim, { toValue: 0, duration: 350, useNativeDriver: false }).start();
-        fireExplosion();
+        smallTick(); // mic really opened — tactile ack
+        if (!reduceMotionRef.current) {
+          // Boot flourish is decoration — skipped under Reduce Motion (D5).
+          chargeAnim.setValue(1);
+          Animated.timing(chargeAnim, { toValue: 0, duration: 350, useNativeDriver: false }).start();
+          fireExplosion();
+        }
         triggerReaction('cheering', randomDialogue('mascotTap'), 2500);
       })
       .catch((err) => {
@@ -930,14 +1062,18 @@ function SenpaiMascotImpl() {
 
   // Tap-to-stop: flash the discharge ring, fire the shutdown burst, close the mic.
   const deactivateListening = () => {
-    // Snap discharge ring to full then fade — visual symmetry with activate.
-    dischargeAnim.setValue(1);
-    Animated.timing(dischargeAnim, {
-      toValue: 0,
-      duration: 350,
-      useNativeDriver: false,
-    }).start();
-    fireShutdown();
+    smallTick(); // mic closing — tactile ack (mirrors activate)
+    if (!reduceMotionRef.current) {
+      // Snap discharge ring to full then fade — visual symmetry with activate.
+      // Shutdown flourish is decoration — skipped under Reduce Motion (D5).
+      dischargeAnim.setValue(1);
+      Animated.timing(dischargeAnim, {
+        toValue: 0,
+        duration: 350,
+        useNativeDriver: false,
+      }).start();
+      fireShutdown();
+    }
     // Same as activate: clear any stuck error so the off tap also doubles
     // as an "escape from this error" path.
     clearChatError();
@@ -956,6 +1092,13 @@ function SenpaiMascotImpl() {
       }).start();
       return;
     }
+    if (reduceMotion) {
+      // Reduce Motion: the glow is FUNCTIONAL (mic-open indicator), so keep
+      // it visible — just steady instead of pulsing (D5).
+      glowAnim.stopAnimation();
+      glowAnim.setValue(0.6);
+      return;
+    }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(glowAnim, {
@@ -972,7 +1115,7 @@ function SenpaiMascotImpl() {
     );
     loop.start();
     return () => loop.stop();
-  }, [listening, glowAnim]);
+  }, [listening, glowAnim, reduceMotion]);
 
   // Auto-collapse the dock back to chibi-only after DOCK_IDLE_MS of quiet.
   // Deferred entirely (no timer armed) while the user is mid-something: mic
@@ -1004,11 +1147,14 @@ function SenpaiMascotImpl() {
   if (hidden) return null;
 
   const mood = state.mascotMood;
-  const opacity = mood === 'sleeping' ? 0.85 : 1;
-  // displayMood (not mascotMood) drives the art — it lags one beat behind
-  // during a milestone reaction script so the anticipation squash plays on
-  // the OUTGOING pose. Identical to mascotMood at all other times.
-  const animSource = ANIM_ASSETS[displayMood] ?? ANIM_ASSETS.idle;
+  const opacity = mood === 'sleeping' && !artOverride ? 0.85 : 1;
+  // Art selection: wake-arc override > think pose while a reply is in flight
+  // (D7) > the scripted displayMood. displayMood (not mascotMood) lags one
+  // beat behind during a milestone reaction script so the anticipation squash
+  // plays on the OUTGOING pose; identical to mascotMood at all other times.
+  // The asset maps use string keys, so 'think'/'wave' work without widening
+  // MascotMood.
+  const artKey = artOverride ?? (chatLoading ? 'think' : displayMood);
 
   // Which corner she's docked to → which side the chat dock opens from.
   const isTop = corner[0] === 't';
@@ -1372,22 +1518,27 @@ function SenpaiMascotImpl() {
           hitSlop={8}
         >
           {/* Squash-and-stretch wrapper — driven only by the milestone
-              reaction script (squashAnim rests at 0 otherwise). */}
+              reaction script (squashAnim rests at 0 otherwise) plus the D7
+              talk pulse while TTS plays. MascotArt below renders the flipbook
+              strip (or the static PNG under Reduce Motion / missing strip)
+              in the exact same MASCOT_SIZE box, so swaps never re-layout the
+              dock, bubble, or hit boxes. */}
           <Animated.View
             style={{
               transform: [
                 { translateY: squashSink },
                 { scaleX: squashScaleX },
                 { scaleY: squashScaleY },
+                { scale: talkScale },
               ],
             }}
           >
-            <Image
-              source={animSource}
-              style={styles.mascotImage}
-              contentFit="contain"
-              autoplay
-              cachePolicy="memory-disk"
+            <MascotArt
+              artKey={artKey}
+              // D6: cross-fade mood swaps — EXCEPT mid-milestone-script, where
+              // the hard pose-pop on the squash release is the comic beat.
+              crossfade={!reduceMotion && !bubbleHold}
+              reduceMotion={reduceMotion}
             />
           </Animated.View>
         </Pressable>
@@ -1412,8 +1563,24 @@ function SenpaiMascotImpl() {
         >
           {(() => {
             const bubbleEl = bubbleText ? <SpeechBubble key="bubble" text={bubbleText} /> : null;
-            const panelEl = !dockOpen ? null : (
-              <View key="panel" style={styles.dockPanel}>
+            // dockRendered (not dockOpen) keeps the panel mounted through the
+            // 140ms exit fade (D8); pointerEvents drop the moment it starts
+            // closing so a mid-fade tap can't hit a dying control.
+            const panelEl = !dockRendered ? null : (
+              <Animated.View
+                key="panel"
+                pointerEvents={dockOpen ? 'auto' : 'none'}
+                style={[
+                  styles.dockPanel,
+                  {
+                    opacity: dockAnim,
+                    transform: [
+                      { translateY: dockAnim.interpolate({ inputRange: [0, 1], outputRange: [isTop ? -8 : 8, 0] }) },
+                      { scale: dockAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) },
+                    ],
+                  },
+                ]}
+              >
                 {disclaimerOK === null ? null : !disclaimerOK ? (
                   // One-time AI safety disclaimer — must accept before chatting.
                   <View style={styles.disclaimerBox}>
@@ -1505,7 +1672,7 @@ function SenpaiMascotImpl() {
                     )}
                   </>
                 )}
-              </View>
+              </Animated.View>
             );
             return isTop ? [bubbleEl, panelEl] : [panelEl, bubbleEl];
           })()}
@@ -1576,6 +1743,122 @@ function SpeechBubble({ text }: { text: string }) {
     </Animated.View>
   );
 }
+
+/* ─── Mascot art: flipbook-or-static with cross-faded swaps (D6) ─────────── */
+
+// One art layer. Flipbook strip when one exists for the key; otherwise the
+// static PNG (with expo-image's own crossfade for source swaps on reused
+// layers). Fades itself in on mount / out when superseded — the parent prunes
+// it once covered. Never rendered under Reduce Motion (MascotArt handles that
+// path with a single stable Image).
+function MascotArtLayer({
+  artKey,
+  fadeIn,
+  fadeOut,
+}: {
+  artKey: string;
+  fadeIn: boolean;
+  fadeOut: boolean;
+}) {
+  const layerOpacity = useRef(new Animated.Value(fadeIn ? 0 : 1)).current;
+  useEffect(() => {
+    if (fadeIn) {
+      Animated.timing(layerOpacity, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // mount-only — fadeIn is fixed for a layer's lifetime
+  useEffect(() => {
+    if (fadeOut) {
+      Animated.timing(layerOpacity, { toValue: 0, duration: 180, useNativeDriver: true }).start();
+    }
+  }, [fadeOut, layerOpacity]);
+
+  const entry = FLIPBOOK_ASSETS[artKey];
+  const fallback = ANIM_ASSETS[artKey] ?? ANIM_ASSETS.idle;
+  return (
+    <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: layerOpacity }]}>
+      {entry ? (
+        <SenpaiFlipbook entry={entry} size={MASCOT_SIZE} fallback={fallback} />
+      ) : (
+        <Image
+          source={fallback}
+          style={styles.mascotImage}
+          contentFit="contain"
+          transition={150}
+          cachePolicy="memory-disk"
+        />
+      )}
+    </Animated.View>
+  );
+}
+
+/**
+ * MascotArt — renders the current art key in a fixed MASCOT_SIZE box (zero
+ * re-layout on swap). On a key change with `crossfade`, the outgoing layer
+ * stays mounted ~240ms fading out while the incoming one fades in — a true
+ * cross-fade instead of the old hard cut (D6). Milestone scripts and Reduce
+ * Motion pass crossfade=false and swap instantly (the squash pop / a11y).
+ * At most 2 layers ever exist, and only for the fade window.
+ */
+const MascotArt = React.memo(function MascotArt({
+  artKey,
+  crossfade,
+  reduceMotion,
+}: {
+  artKey: string;
+  crossfade: boolean;
+  reduceMotion: boolean;
+}) {
+  const idRef = useRef(0);
+  const [layers, setLayers] = useState<{ id: number; artKey: string }[]>(
+    () => [{ id: 0, artKey }],
+  );
+
+  useEffect(() => {
+    setLayers((prev) => {
+      const top = prev[prev.length - 1];
+      if (top.artKey === artKey) return prev;
+      const next = { id: ++idRef.current, artKey };
+      return crossfade ? [top, next] : [next];
+    });
+  }, [artKey, crossfade]);
+
+  // Prune the outgoing layer once the incoming one has fully faded in.
+  useEffect(() => {
+    if (layers.length <= 1) return;
+    const t = setTimeout(() => setLayers((ls) => ls.slice(-1)), 240);
+    return () => clearTimeout(t);
+  }, [layers]);
+
+  // Reduce Motion: ONE stable Image whose source swaps in place — no strip,
+  // no remounts, no fades. Bit-identical to the pre-flipbook behavior.
+  // (Placed after the hooks so the hook order never varies with the setting.)
+  if (reduceMotion) {
+    return (
+      <View style={styles.mascotImage}>
+        <Image
+          source={ANIM_ASSETS[artKey] ?? ANIM_ASSETS.idle}
+          style={styles.mascotImage}
+          contentFit="contain"
+          cachePolicy="memory-disk"
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.mascotImage}>
+      {layers.map((l, i) => (
+        <MascotArtLayer
+          key={l.id}
+          artKey={l.artKey}
+          fadeIn={crossfade && layers.length > 1 && i === layers.length - 1}
+          fadeOut={layers.length > 1 && i < layers.length - 1}
+        />
+      ))}
+    </View>
+  );
+});
 
 /* ─── Styles ─────────────────────────────────────────────────────────────── */
 
