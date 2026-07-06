@@ -55,6 +55,10 @@ interface GamificationContextValue {
   awardStripe: () => void;
   redeemPoints: (amount: number, reason?: string) => boolean;
   awardPoints: (amount: number, reason?: string) => void;
+  // Return points from an aborted redemption (e.g. a checkout refund). Unlike
+  // awardPoints this leaves pointsLifetime alone — the points were never
+  // re-earned, just un-spent.
+  restorePoints: (amount: number, reason?: string) => void;
   // Reverse a prior award (e.g. deleting a PR that granted points). Clamps both
   // the spendable balance and the lifetime tally at 0 so it can't go negative.
   deductPoints: (amount: number, reason?: string) => void;
@@ -132,6 +136,7 @@ const GamificationContext = createContext<GamificationContextValue>({
   awardStripe: () => {},
   redeemPoints: () => false,
   awardPoints: () => {},
+  restorePoints: () => {},
   deductPoints: () => {},
   awardFlames: () => {},
   redeemFlames: () => false,
@@ -203,6 +208,14 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   // when this matches the active user's key, so a stale write from the previous
   // member can't clobber the new member's key while a switch is in flight.
   const loadedKeyRef = useRef<string | null>(null);
+  // Live mirror of `state` for synchronous redeem decisions (same pattern as
+  // SpinWheelContext). React skips the eager-updater pass whenever this fiber
+  // already has a pending update, so a flag set inside a setState updater is
+  // NOT reliably readable on the next line — redeem could report failure yet
+  // still deduct when the queued updater runs. Redeems decide from this ref,
+  // decrement it synchronously, and dispatch a clamped updater.
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
 
   // Re-read (or initialize) per-user gamification whenever the signed-in user
   // changes, so on a shared device member B never sees/overwrites member A's
@@ -507,6 +520,13 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     }));
   }, []);
 
+  const restorePoints = useCallback((amount: number) => {
+    setState((prev) => ({
+      ...prev,
+      dojoPoints: (prev.dojoPoints || 0) + amount,
+    }));
+  }, []);
+
   const deductPoints = useCallback((amount: number) => {
     setState((prev) => ({
       ...prev,
@@ -549,23 +569,22 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   }, [checkAchievements]);
 
   const redeemPoints = useCallback((amount: number): boolean => {
-    let success = false;
-    setState((prev) => {
-      if ((prev.dojoPoints || 0) < amount) return prev;
-      success = true;
-      return { ...prev, dojoPoints: (prev.dojoPoints || 0) - amount };
-    });
-    return success;
+    const balance = stateRef.current.dojoPoints || 0;
+    if (balance < amount) return false;
+    // Decrement the mirror synchronously so back-to-back redeems in the same
+    // tick see the reduced balance; the clamp keeps the committed state from
+    // going negative if the mirror was momentarily ahead of a pending update.
+    stateRef.current = { ...stateRef.current, dojoPoints: balance - amount };
+    setState((prev) => ({ ...prev, dojoPoints: Math.max(0, (prev.dojoPoints || 0) - amount) }));
+    return true;
   }, []);
 
   const redeemFlames = useCallback((amount: number): boolean => {
-    let success = false;
-    setState((prev) => {
-      if ((prev.flames || 0) < amount) return prev;
-      success = true;
-      return { ...prev, flames: (prev.flames || 0) - amount };
-    });
-    return success;
+    const balance = stateRef.current.flames || 0;
+    if (balance < amount) return false;
+    stateRef.current = { ...stateRef.current, flames: balance - amount };
+    setState((prev) => ({ ...prev, flames: Math.max(0, (prev.flames || 0) - amount) }));
+    return true;
   }, []);
 
   const dismissCelebration = useCallback(() => {
@@ -594,6 +613,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
         awardStripe,
         redeemPoints,
         awardPoints,
+        restorePoints,
         deductPoints,
         awardFlames,
         redeemFlames,
