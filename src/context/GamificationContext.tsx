@@ -39,6 +39,12 @@ export const FLAME_VALUE_USD = 1;
 
 interface GamificationContextValue {
   state: GamificationState;
+  // True once the ACTIVE user's AsyncStorage hydrate has completed — until
+  // then `state` is the zeroed defaults (or, mid account-switch, the
+  // previous user's numbers). Consumers that snapshot/baseline off `state`
+  // (e.g. SenpaiReactionBridge's bond streak seed) must wait for this, or
+  // they capture pre-hydration zeros / another account's data.
+  loaded: boolean;
   levelInfo: { level: number; currentXP: number; nextLevelXP: number; progress: number };
   addXP: (amount: number, reason?: string) => void;
   recordSession: () => void;
@@ -120,6 +126,7 @@ const defaultState: GamificationState = {
 
 const GamificationContext = createContext<GamificationContextValue>({
   state: defaultState,
+  loaded: false,
   levelInfo: { level: 1, currentXP: 0, nextLevelXP: 100, progress: 0 },
   addXP: () => {},
   recordSession: () => {},
@@ -597,6 +604,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     <GamificationContext.Provider
       value={{
         state,
+        loaded,
         levelInfo,
         addXP,
         recordSession,

@@ -18,6 +18,7 @@
 
 import { AI_FUNCTION_BASE_URL } from '../config/api';
 import type { MascotMood } from '../context/SenpaiContext';
+import type { SenpaiBondSummary } from './senpaiBond';
 
 export interface ChatTurn {
   role: 'user' | 'assistant';
@@ -47,7 +48,7 @@ export interface SenpaiUserContext {
  * `input` is the raw tool input; the client validates/normalizes it.
  */
 export interface SenpaiChatAction {
-  tool: 'log_food' | 'remove_food' | 'set_goal';
+  tool: 'log_food' | 'remove_food' | 'set_goal' | 'remember_fact';
   input: {
     query?: string;
     servings?: number;
@@ -58,6 +59,9 @@ export interface SenpaiChatAction {
     protein?: number;
     carbs?: number;
     fat?: number;
+    // remember_fact (H2): the fact to save to the bond file, ≤120 chars,
+    // third-person. Client-confirmed like every other action tool.
+    fact?: string;
   };
 }
 
@@ -68,6 +72,11 @@ export interface SenpaiChatReply {
   // contain a single English ALL-CAPS comedic word; otherwise pure
   // Japanese. Falls back to `text` if the model omitted SPEAK.
   speakText: string;
+  // HMAC signature the backend minted over speakText (audit E3). Opaque —
+  // pass it VERBATIM to fetchSenpaiAudio; senpaiSpeak refuses to synthesize
+  // text without a valid, fresh signature. Absent when there is nothing to
+  // voice (or from a not-yet-updated backend).
+  speakSignature?: string;
   mood: MascotMood;
   usage: {
     input: number;
@@ -97,6 +106,7 @@ export async function sendSenpaiChat(
   messages: ChatTurn[],
   userContext?: SenpaiUserContext,
   idToken?: string,
+  bond?: SenpaiBondSummary,
 ): Promise<SenpaiChatResult> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -107,7 +117,12 @@ export async function sendSenpaiChat(
     const res = await fetch(`${AI_FUNCTION_BASE_URL}/senpaiChat`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ messages, userContext }),
+      // bond (H2): compact relationship summary, sent on every turn — she
+      // should know it's day 3 vs day 300 from turn one. The function
+      // re-validates it server-side and folds it into a second, UNCACHED
+      // system block; a deployed backend that predates it just ignores the
+      // extra field. `undefined` serializes to an absent key.
+      body: JSON.stringify({ messages, userContext, bond }),
       signal: controller.signal,
     });
 

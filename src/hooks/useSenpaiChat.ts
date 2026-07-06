@@ -29,6 +29,7 @@ import { fetchSenpaiAudio } from '../services/senpaiSpeak';
 import { playSenpaiAudio, stopSenpaiAudio } from '../services/senpaiAudio';
 import { getCurrentIdToken } from '../services/firebaseAuth';
 import { useSenpai, type MascotMood } from '../context/SenpaiContext';
+import { buildBondSummary, FACT_CAP, FACT_MAX_LEN, bondHasFact } from '../services/senpaiBond';
 import { useGamification } from '../context/GamificationContext';
 import { useWorkouts } from '../context/WorkoutContext';
 import { useAuth } from '../context/AuthContext';
@@ -157,6 +158,11 @@ export type PendingAction =
       kind: 'set_goal';
       changes: { calories?: number; protein?: number; carbs?: number; fat?: number };
       status: 'ready';
+    }
+  | {
+      kind: 'remember_fact'; // H2: save one durable fact to the bond file
+      text: string; // trimmed + capped at 120 chars
+      status: 'ready' | 'duplicate'; // duplicate = she already knows it
     };
 
 const round0 = (n: number) => Math.round(n);
@@ -174,7 +180,7 @@ function defaultMealByTime(): MealType {
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 function useSenpaiChatState() {
-  const { triggerReaction } = useSenpai();
+  const { state: senpaiState, triggerReaction, recordBondEvent, addBondFact } = useSenpai();
   const { state: gamState } = useGamification();
   const { myLogs } = useWorkouts();
   const { user, isLoading: authLoading } = useAuth();
@@ -399,8 +405,22 @@ function useSenpaiChatState() {
         setPendingAction({ kind: 'set_goal', changes, status: 'ready' });
         return;
       }
+
+      // H2: remember_fact — the model wants to write one durable fact into
+      // the bond file. Trim + cap here; duplicates are pre-checked against
+      // the current bond so the confirm card can say "she already knows".
+      // (Unknown tools still fall through as a safe no-op — old clients
+      // receiving a newer tool just show the DISPLAY line.)
+      if (action.tool === 'remember_fact') {
+        const text = typeof input.fact === 'string' ? input.fact.trim().slice(0, FACT_MAX_LEN) : '';
+        if (!text) return; // nothing to remember — ignore the malformed call
+        const bond = senpaiState.bond;
+        const dup = !!bond && bondHasFact(bond, text);
+        setPendingAction({ kind: 'remember_fact', text, status: dup ? 'duplicate' : 'ready' });
+        return;
+      }
     },
-    [user, macrosForDate],
+    [user, macrosForDate, senpaiState.bond],
   );
 
   const send = useCallback(
@@ -425,6 +445,8 @@ function useSenpaiChatState() {
         // F3: length-scaled hold (hits the 15s cap for this reply — strictly
         // longer than the old fixed 8s) so the hotline numbers stay readable.
         try { triggerReaction('encouraging', CRISIS_REPLY, bubbleDurationMs(CRISIS_REPLY), 'chat'); } catch { /* non-fatal */ }
+        // H2: the crisis short-circuit still counts as a chat — she was there.
+        recordBondEvent({ type: 'chat' });
         return;
       }
 
@@ -479,8 +501,15 @@ function useSenpaiChatState() {
           })),
         };
 
+        // H2: pack the bond file into a compact summary, sent on EVERY turn
+        // (she should know it's day 3 vs day 300 from turn one). userContext
+        // stays tool-gated; the bond is ambient memory, so it rides in the
+        // request body and the function serializes it into a second, uncached
+        // system block. A pre-bond backend simply ignores the field.
+        const bondSummary = senpaiState.bond ? buildBondSummary(senpaiState.bond) : undefined;
+
         const token = await getCurrentIdToken();
-        const result = await sendSenpaiChat(apiMessages, userContext, token ?? undefined);
+        const result = await sendSenpaiChat(apiMessages, userContext, token ?? undefined, bondSummary);
 
         if (!result.ok) {
           // Surface to console so the metro logs / debugger show the
@@ -506,6 +535,10 @@ function useSenpaiChatState() {
         // it can't throw on the .slice()/regex below — we just skip TTS then.
         const { text, mood } = result.data;
         const speakText = result.data.speakText ?? '';
+        // E3: HMAC minted by senpaiChat over speakText. Threaded verbatim to
+        // fetchSenpaiAudio — senpaiSpeak only voices signed text once
+        // enforcement is on. May be undefined on a skewed/older backend.
+        const speakSignature = result.data.speakSignature;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === placeholderId
@@ -516,6 +549,10 @@ function useSenpaiChatState() {
         // Mark this as the freshly arrived id so the renderer knows to
         // typing-reveal it. Naturally decays when the next reply lands.
         setLastArrivedId(placeholderId);
+
+        // H2: a successful chat send is a bond moment (totalChats++ and the
+        // day touch happen in one pure reducer dispatch).
+        recordBondEvent({ type: 'chat' });
 
         // Mirror the chat reply into the floating mascot animation. F3:
         // duration scales with reply length so multi-sentence answers stay
@@ -603,8 +640,27 @@ function useSenpaiChatState() {
                 setTtsPlaying(false);
                 return;
               }
+              // E3 rollout guard: speakText without speakSignature means a
+              // version-skewed backend (a senpaiChat older than the signing
+              // deploy). Sending unsigned text anyway 400s the moment
+              // senpaiSpeak enforcement flips on — a 'tts_error' strike
+              // toward the PERSISTED voice auto-disable. Skipping is
+              // strike-free and self-heals on the next backend deploy.
+              if (!speakSignature) {
+                // eslint-disable-next-line no-console
+                console.warn(
+                  '[senpaiSpeak] skipping TTS — reply carried no speakSignature (backend skew?)',
+                );
+                setTtsPlaying(false);
+                return;
+              }
               const ttsToken = await getCurrentIdToken();
-              const ttsResult = await fetchSenpaiAudio(speakText, undefined, ttsToken ?? undefined);
+              const ttsResult = await fetchSenpaiAudio(
+                speakText,
+                undefined,
+                ttsToken ?? undefined,
+                speakSignature,
+              );
               if (ttsResult.ok) {
                 ttsFailureCountRef.current = 0;
                 await playSenpaiAudio(ttsResult.data.audioBase64, () => {
@@ -622,7 +678,7 @@ function useSenpaiChatState() {
         setLoading(false);
       }
     },
-    [loading, triggerReaction, gamState, myLogs, user, voiceEnabled, stageAction, pushSenpaiLine],
+    [loading, triggerReaction, gamState, myLogs, user, voiceEnabled, stageAction, pushSenpaiLine, senpaiState.bond, recordBondEvent],
   );
 
   // ─── Action confirm / cancel (item 4) ───
@@ -635,6 +691,32 @@ function useSenpaiChatState() {
     if (!action) return;
     const memberId = user?.id;
     setPendingAction(null);
+
+    // H2: remember_fact writes the bond file, which is per-account INCLUDING
+    // the guest bucket — so it's handled before the memberId guard the
+    // nutrition actions need. addBondFact answers synchronously (bond-ref
+    // mirror) and flushes the persist immediately: a confirmed fact can
+    // never be lost to the debounce window.
+    if (action.kind === 'remember_fact') {
+      if (action.status === 'duplicate') {
+        pushSenpaiLine('I already knew that one, senpai — keep up 💕', 'cheering');
+        return;
+      }
+      const willEvict = (senpaiState.bond?.facts.length ?? 0) >= FACT_CAP;
+      const result = addBondFact(action.text);
+      if (result === 'duplicate') {
+        pushSenpaiLine('I already knew that one, senpai — keep up 💕', 'cheering');
+        return;
+      }
+      pushSenpaiLine(
+        willEvict
+          ? "memory's full, so I evicted the oldest fact. survival of the cutest ✨"
+          : 'written in permanent marker. inside my soul. and my JSON 💕',
+        'cheering',
+      );
+      return;
+    }
+
     if (!memberId) {
       pushSenpaiLine("hmm I can't find your account senpai 💕 try signing in again", 'disappointed');
       return;
@@ -685,7 +767,7 @@ function useSenpaiChatState() {
       pushSenpaiLine(`done!! new goals — ${parts} 💕 ${randomDialogue('goalSet')}`, 'celebrating');
       return;
     }
-  }, [pendingAction, user, addMacroEntry, removeMacroEntry, updateGoals, rememberFood, pushSenpaiLine]);
+  }, [pendingAction, user, addMacroEntry, removeMacroEntry, updateGoals, rememberFood, pushSenpaiLine, addBondFact, senpaiState.bond]);
 
   const cancelAction = useCallback(() => {
     if (!pendingAction) return;
