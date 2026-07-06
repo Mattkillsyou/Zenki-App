@@ -3,8 +3,13 @@
  *
  *   POST {AI_FUNCTION_BASE_URL}/senpaiSpeak
  *   Headers: Authorization: Bearer <firebase-id-token>
- *   Body:    { text: string, voiceId?: string }
+ *   Body:    { text: string, voiceId?: string, signature?: string }
  *   Response: { audioBase64: string, mimeType: 'audio/mpeg', characters: number }
+ *
+ * `signature` is the speakSignature the senpaiChat endpoint returned
+ * alongside the reply (audit E3) — an opaque HMAC binding the text to that
+ * reply. The backend refuses to voice unsigned/stale text once enforcement
+ * is on, so callers must thread it through untouched.
  *
  * The audio is returned as base64-encoded MP3 so we can decode + play
  * via expo-audio without a separate file download. Caller writes the
@@ -58,6 +63,10 @@ export async function fetchSenpaiAudio(
   text: string,
   voiceId?: string,
   idToken?: string,
+  // speakSignature from the senpaiChat reply (audit E3). Optional only for
+  // legacy/version-skew tolerance — without it the backend rejects the
+  // request once signature enforcement is on.
+  signature?: string,
 ): Promise<SenpaiSpeakResponse> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -68,7 +77,10 @@ export async function fetchSenpaiAudio(
     const res = await fetch(`${AI_FUNCTION_BASE_URL}/senpaiSpeak`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ text: capTtsText(text), voiceId }),
+      // capTtsText mirrors the server's canonicalization (trim + 300-char
+      // cap), so truncating here can't invalidate the signature — the
+      // backend canonicalizes the received text before verifying.
+      body: JSON.stringify({ text: capTtsText(text), voiceId, signature }),
       signal: controller.signal,
     });
 

@@ -1,10 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { View, StyleSheet, Animated, Dimensions, Easing } from 'react-native';
-
-const { width: SW } = Dimensions.get('window');
-const SH = Math.min(Dimensions.get('window').height, 932);
-const CX = SW / 2;
-const CY = SH / 2;
+import { View, StyleSheet, Animated, Easing, useWindowDimensions } from 'react-native';
+import { getSenpaiCornerInfo, effectScaleFor } from './senpaiCornerStore';
 
 export type ImpactType = 'explosion' | 'hearts' | 'flash' | 'spiral';
 
@@ -19,6 +15,14 @@ interface Props {
  * - hearts: 25 hearts fall from top with drift + rotation (2500ms). Workout complete.
  * - flash: white → pink → transparent (400ms). Quick accent.
  * - spiral: 16 sparkles converge to center + final flash (1500ms). Streak milestone.
+ *
+ * Geometry (D3/H5): positions use REAL window dims via useWindowDimensions
+ * (the old module-level `Math.min(height, 932)` clamp landed everything in the
+ * top ~70% of an iPad); burst radii scale through effectScaleFor (clamped
+ * ×1–1.35 for 1024-1366pt widths). The explosion and spiral erupt from the
+ * mascot's ACTUAL dock corner (senpaiCornerStore) instead of screen center —
+ * the celebration is HERS. Reduce Motion is handled upstream: SenpaiImpactBridge
+ * never mounts this component when it's on (D5).
  */
 export function SenpaiImpactEffect({ type, onComplete }: Props) {
   switch (type) {
@@ -30,14 +34,19 @@ export function SenpaiImpactEffect({ type, onComplete }: Props) {
   }
 }
 
-/* ─── Explosion — 12 stars burst + center flash ─── */
+/* ─── Explosion — 12 stars burst + center flash, from her corner ─── */
 function ExplosionEffect({ onComplete }: { onComplete?: () => void }) {
+  const { width: sw, height: sh } = useWindowDimensions();
+  const scale = effectScaleFor(sw, sh);
+  // Read once at mount — the bridge remounts this per impact, so it always
+  // bursts from the corner she's docked in when the milestone fires.
+  const center = useMemo(() => getSenpaiCornerInfo().center, []);
   const COLORS = ['#FF2E51', '#FFF666', '#5158FF', '#FFB3DF'];
   const particles = useMemo(() =>
     Array.from({ length: 12 }).map((_, i) => {
       const baseAngle = (i / 12) * Math.PI * 2;
       const jitter = (Math.random() - 0.5) * (Math.PI / 18);
-      const distance = 120 + Math.random() * 80;
+      const distance = (120 + Math.random() * 80) * scale;
       return {
         key: i,
         dx: Math.cos(baseAngle + jitter) * distance,
@@ -46,7 +55,7 @@ function ExplosionEffect({ onComplete }: { onComplete?: () => void }) {
         color: COLORS[i % COLORS.length],
       };
     }),
-  []);
+  [scale]);
 
   const flashScale = useRef(new Animated.Value(0)).current;
   const flashOpacity = useRef(new Animated.Value(0)).current;
@@ -71,8 +80,8 @@ function ExplosionEffect({ onComplete }: { onComplete?: () => void }) {
       <Animated.View
         style={{
           position: 'absolute',
-          left: CX - 15,
-          top: CY - 15,
+          left: center.x - 15,
+          top: center.y - 15,
           width: 30,
           height: 30,
           borderRadius: 15,
@@ -82,13 +91,13 @@ function ExplosionEffect({ onComplete }: { onComplete?: () => void }) {
         }}
       />
       {particles.map((p) => (
-        <ExplosionStar key={p.key} config={p} />
+        <ExplosionStar key={p.key} config={p} center={center} />
       ))}
     </View>
   );
 }
 
-function ExplosionStar({ config }: { config: any }) {
+function ExplosionStar({ config, center }: { config: any; center: { x: number; y: number } }) {
   const translateX = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0.9)).current;
@@ -105,8 +114,8 @@ function ExplosionStar({ config }: { config: any }) {
     <Animated.Text
       style={{
         position: 'absolute',
-        left: CX,
-        top: CY,
+        left: center.x,
+        top: center.y,
         fontSize: config.size,
         color: config.color,
         opacity,
@@ -118,13 +127,15 @@ function ExplosionStar({ config }: { config: any }) {
   );
 }
 
-/* ─── Hearts — 25 hearts fall from top with rotation ─── */
+/* ─── Hearts — 25 hearts fall from top with rotation, full window ─── */
 function HeartsEffect({ onComplete }: { onComplete?: () => void }) {
+  const { width: sw, height: sh } = useWindowDimensions();
   const COLORS = ['#FF2E51', '#FFB3DF', '#D260FF'];
   const hearts = useMemo(() =>
     Array.from({ length: 25 }).map((_, i) => ({
       key: i,
-      x: Math.random() * SW,
+      sh,
+      x: Math.random() * sw,
       glyph: i % 2 === 0 ? '\u2661' : '\u2665',
       color: COLORS[i % COLORS.length],
       size: 12 + Math.random() * 8,
@@ -133,7 +144,7 @@ function HeartsEffect({ onComplete }: { onComplete?: () => void }) {
       sway: (Math.random() - 0.5) * 40,
       spinDir: Math.random() < 0.5 ? 1 : -1,
     })),
-  []);
+  [sw, sh]);
 
   useEffect(() => {
     const t = setTimeout(() => { try { onComplete?.(); } catch {} }, 2500);
@@ -157,7 +168,7 @@ function HeartFaller({ config }: { config: any }) {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(y, { toValue: SH + 30, duration: config.speed, delay: config.delay, useNativeDriver: true }),
+      Animated.timing(y, { toValue: config.sh + 30, duration: config.speed, delay: config.delay, useNativeDriver: true }),
       Animated.timing(x, { toValue: config.x + config.sway, duration: config.speed, delay: config.delay, useNativeDriver: true }),
       Animated.timing(rot, { toValue: config.spinDir, duration: config.speed, delay: config.delay, useNativeDriver: true }),
       Animated.sequence([
@@ -212,21 +223,24 @@ function FlashEffect({ onComplete }: { onComplete?: () => void }) {
   );
 }
 
-/* ─── Spiral — 16 sparkles converge to center ─── */
+/* ─── Spiral — 16 sparkles converge on her corner ─── */
 function SpiralEffect({ onComplete }: { onComplete?: () => void }) {
+  const { width: sw, height: sh } = useWindowDimensions();
+  const scale = effectScaleFor(sw, sh);
+  const center = useMemo(() => getSenpaiCornerInfo().center, []);
   const COLORS = ['#FF2E51', '#5158FF', '#FFF666', '#D260FF'];
   const sparkles = useMemo(() =>
     Array.from({ length: 16 }).map((_, i) => {
       const angle = (i / 16) * Math.PI * 2;
       return {
         key: i,
-        startX: Math.cos(angle) * 200,
-        startY: Math.sin(angle) * 200,
+        startX: Math.cos(angle) * 200 * scale,
+        startY: Math.sin(angle) * 200 * scale,
         color: COLORS[i % COLORS.length],
         delay: i * 30,
       };
     }),
-  []);
+  [scale]);
 
   const flashScale = useRef(new Animated.Value(0)).current;
   const flashOpacity = useRef(new Animated.Value(0)).current;
@@ -249,13 +263,13 @@ function SpiralEffect({ onComplete }: { onComplete?: () => void }) {
   return (
     <View style={styles.container} pointerEvents="none">
       {sparkles.map((s) => (
-        <SpiralSparkle key={s.key} config={s} />
+        <SpiralSparkle key={s.key} config={s} center={center} />
       ))}
       <Animated.Text
         style={{
           position: 'absolute',
-          left: CX,
-          top: CY,
+          left: center.x,
+          top: center.y,
           fontSize: 28,
           color: '#FFFFFF',
           opacity: flashOpacity,
@@ -268,7 +282,7 @@ function SpiralEffect({ onComplete }: { onComplete?: () => void }) {
   );
 }
 
-function SpiralSparkle({ config }: { config: any }) {
+function SpiralSparkle({ config, center }: { config: any; center: { x: number; y: number } }) {
   const translateX = useRef(new Animated.Value(config.startX)).current;
   const translateY = useRef(new Animated.Value(config.startY)).current;
   const rotation = useRef(new Animated.Value(0)).current;
@@ -301,8 +315,8 @@ function SpiralSparkle({ config }: { config: any }) {
     <Animated.Text
       style={{
         position: 'absolute',
-        left: CX,
-        top: CY,
+        left: center.x,
+        top: center.y,
         fontSize: 18,
         color: config.color,
         opacity,

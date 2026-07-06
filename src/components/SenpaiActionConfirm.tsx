@@ -2,10 +2,11 @@
  * SenpaiActionConfirm — the confirm-before-write sheet for Senpai's
  * client-executed actions (item 4: "add a ham sandwich to my macros").
  *
- * When the model requests log_food / remove_food / set_goal, the chat provider
- * resolves it into a `pendingAction` (real macros from the food DB — never the
- * model's numbers). This sheet shows exactly what will be written and only
- * mutates NutritionContext when the user taps confirm. Rendered once, globally,
+ * When the model requests log_food / remove_food / set_goal / remember_fact,
+ * the chat provider resolves it into a `pendingAction` (real macros from the
+ * food DB — never the model's numbers). This sheet shows exactly what will be
+ * written and only mutates NutritionContext (or the bond file, for
+ * remember_fact) when the user taps confirm. Rendered once, globally,
  * inside SenpaiChatProvider (App.tsx), so it works regardless of whether the
  * request came from the floating mascot or the full chat modal.
  */
@@ -39,16 +40,25 @@ export function SenpaiActionConfirm() {
   const canConfirm =
     (a.kind === 'log_food' && a.status === 'ready' && a.candidates.length > 0) ||
     (a.kind === 'remove_food' && a.status === 'ready' && !!a.targetId) ||
+    (a.kind === 'remember_fact' && a.status === 'ready') ||
     a.kind === 'set_goal';
 
   const primaryLabel =
-    a.kind === 'remove_food' ? 'Remove' : a.kind === 'set_goal' ? 'Save goals' : 'Log it';
+    a.kind === 'remove_food'
+      ? 'Remove'
+      : a.kind === 'set_goal'
+      ? 'Save goals'
+      : a.kind === 'remember_fact'
+      ? 'Remember it'
+      : 'Log it';
 
   const title =
     a.kind === 'log_food'
       ? 'Log this food?'
       : a.kind === 'remove_food'
       ? 'Remove this entry?'
+      : a.kind === 'remember_fact'
+      ? 'Remember this?'
       : 'Update your goals?';
 
   return (
@@ -98,6 +108,15 @@ export function SenpaiActionConfirm() {
               {a.status === 'ready' && a.targetId
                 ? `Remove ${a.label} from today's log?`
                 : `couldn't find ${a.label} in today's log to remove 💔`}
+            </Text>
+          )}
+
+          {/* ── remember_fact (H2) ── */}
+          {a.kind === 'remember_fact' && (
+            <Text style={[styles.body, { color: colors.textSecondary }]}>
+              {a.status === 'ready'
+                ? `senpai wants to remember: "${a.text}"`
+                : `she already knows "${a.text}" 💕 nothing to save.`}
             </Text>
           )}
 

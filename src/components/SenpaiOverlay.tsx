@@ -1,26 +1,73 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
-import { View, StyleSheet, Animated, Dimensions } from 'react-native';
+import { View, StyleSheet, Animated, useWindowDimensions } from 'react-native';
 import { useSenpai, type MascotMood } from '../context/SenpaiContext';
-
-const { width: SW } = Dimensions.get('window');
-const SH = Math.min(Dimensions.get('window').height, 932);
+import { useMotion } from '../context/MotionContext';
+import { getSenpaiCornerInfo } from './senpaiCornerStore';
 
 const STAR_GLYPH = '\u2605';       // ★
 const GLINT_GLYPH = '\u2726';      // ✦
 const MOON_GLYPH = '\u263D';       // ☽ (spec: waxing crescent)
 const HEART_GLYPH = '\u2661';      // ♡
 
-const AMBIENT_COLORS = ['#FFB3DF', '#5158FF', '#FFF666'];
 const CONFETTI_COLORS = ['#FF2E51', '#FFB3DF', '#5158FF', '#FFF666', '#D260FF', '#FFFFFF'];
+
+// H5: time-aware ambient palette — her magic dust (glow/aura layer ONLY, the
+// app theme is untouched) takes a subtle tint by time of day. 'day' is the
+// classic set that used to be the hardcoded AMBIENT_COLORS.
+const AMBIENT_PALETTES = {
+  morning: ['#FFD9A8', '#FFB3DF', '#FFF6B8'], // sunrise gold / peach
+  day:     ['#FFB3DF', '#5158FF', '#FFF666'], // the classic set
+  evening: ['#FFB37E', '#FF7EB3', '#FFE08A'], // dusk orange / warm pink
+  night:   ['#8FA0FF', '#C9B8FF', '#FFB3DF'], // moonlit indigo / lavender
+} as const;
+type AmbientBucket = keyof typeof AMBIENT_PALETTES;
+
+// Night wraps midnight (22:00–04:59), so it's tested FIRST — a plain
+// ascending-hour ternary chain routed 0–4am into the 'day' branch.
+const ambientBucket = (h: number): AmbientBucket =>
+  h >= 22 || h < 5 ? 'night' : h < 11 ? 'morning' : h < 17 ? 'day' : 'evening';
+
+// Re-checks the hour every 5 minutes; re-renders only when the bucket flips
+// (≤4 times/day), so long sessions drift from morning gold into evening amber.
+function useAmbientPalette(): readonly string[] {
+  const [bucket, setBucket] = useState<AmbientBucket>(() => ambientBucket(new Date().getHours()));
+  useEffect(() => {
+    const id = setInterval(() => {
+      const next = ambientBucket(new Date().getHours());
+      setBucket((prev) => (prev === next ? prev : next));
+    }, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+  return AMBIENT_PALETTES[bucket];
+}
+
+// D3: live window dims (the old module-level `Math.min(height, 932)` clamp
+// compressed every effect into the top ~70% of an iPad) + a gentle area-based
+// particle-count scale, clamped so 1024-1366pt screens get "a bit more rain",
+// not a proportional blizzard.
+interface Dims { sw: number; sh: number; areaScale: number }
 
 /**
  * SenpaiOverlay — layered magical-girl effects.
  * - Ambient layer: subtle stars/moons/shooting-stars when enabled + ambientEffects on.
  * - Reaction layer: hearts/kaomoji/sparkles/starburst/confetti during sparkleActive.
+ * Fully skipped under system Reduce Motion (D5) — this whole file is decoration.
  */
 export function SenpaiOverlay() {
   const { state } = useSenpai();
-  if (!state.enabled) return null;
+  const { reduceMotion } = useMotion();
+  const { width, height } = useWindowDimensions();
+  const palette = useAmbientPalette();
+  const dims = useMemo<Dims>(
+    () => ({
+      sw: width,
+      sh: height,
+      areaScale: Math.min(1.6, Math.max(1, (width * height) / (390 * 844))),
+    }),
+    [width, height],
+  );
+
+  if (!state.enabled || reduceMotion) return null;
 
   const max = state.sparkleIntensity === 'maximum';
   const mood = state.mascotMood;
@@ -29,17 +76,28 @@ export function SenpaiOverlay() {
     <View style={styles.container} pointerEvents="none">
       {state.ambientEffects && (
         <>
-          <AmbientStars max={max} />
-          <AmbientMoons max={max} />
-          <ShootingStarEmitter max={max} />
+          <AmbientStars max={max} dims={dims} palette={palette} />
+          <AmbientMoons max={max} dims={dims} palette={palette} />
+          <ShootingStarEmitter max={max} dims={dims} />
         </>
       )}
       {state.sparkleActive && (
-        <ReactionLayer mood={mood} max={max} trigger={state.reactionExpiry} />
+        <ReactionLayer mood={mood} max={max} trigger={state.reactionExpiry} dims={dims} />
       )}
     </View>
   );
 }
+
+// H5 earned intensity: milestone tier rides D2's source-tagging — only
+// milestone-sourced reactions set sparkleActive, and the milestone's mood
+// encodes its weight (celebrating = level-up > impressed = PR > cheering =
+// workout done). Scales the celebration particle counts so a level-up
+// visibly out-rains a routine workout.
+const MILESTONE_TIER: Partial<Record<MascotMood, number>> = {
+  celebrating: 1,
+  impressed: 0.8,
+  cheering: 0.6,
+};
 
 /**
  * ReactionLayer — the sparkleActive effects, with H4 beat timing.
@@ -58,9 +116,10 @@ export function SenpaiOverlay() {
  * are already celebrating, which is fine; when no milestone is active,
  * sparkleActive is false and chat replies mount nothing.
  */
-function ReactionLayer({ mood, max, trigger }: { mood: MascotMood; max: boolean; trigger: number }) {
+function ReactionLayer({ mood, max, trigger, dims }: { mood: MascotMood; max: boolean; trigger: number; dims: Dims }) {
   // beat 0 = nothing yet, 1 = burst, 2 = full rain.
   const [beat, setBeat] = useState(0);
+  const tier = MILESTONE_TIER[mood] ?? 0.6;
 
   useEffect(() => {
     setBeat(0);
@@ -74,10 +133,10 @@ function ReactionLayer({ mood, max, trigger }: { mood: MascotMood; max: boolean;
       {beat >= 1 && <StarburstRing trigger={trigger} />}
       {beat >= 2 && (
         <>
-          <FloatingHearts max={max} />
-          <FloatingKaomoji max={max} />
-          <SparkleParticles max={max} />
-          {mood === 'celebrating' && <ConfettiBurst max={max} />}
+          <FloatingHearts max={max} dims={dims} tier={tier} />
+          <FloatingKaomoji max={max} dims={dims} tier={tier} />
+          <SparkleParticles max={max} dims={dims} tier={tier} />
+          {mood === 'celebrating' && <ConfettiBurst max={max} dims={dims} />}
         </>
       )}
     </>
@@ -85,24 +144,26 @@ function ReactionLayer({ mood, max, trigger }: { mood: MascotMood; max: boolean;
 }
 
 const speedMult = (max: boolean) => (max ? 0.7 : 1);
+// Particle-count helper: base × maximum toggle × milestone tier × screen area.
+const scaledCount = (base: number, mult: number) => Math.max(1, Math.round(base * mult));
 
 /* ═══ AMBIENT LAYER ═══════════════════════════════════════════════════════ */
 
-function AmbientStars({ max }: { max: boolean }) {
-  const count = max ? 30 : 15;
+function AmbientStars({ max, dims, palette }: { max: boolean; dims: Dims; palette: readonly string[] }) {
+  const count = scaledCount(max ? 30 : 15, dims.areaScale);
   const stars = useMemo(() =>
     Array.from({ length: count }).map((_, i) => ({
       key: i,
       glyph: i % 2 === 0 ? STAR_GLYPH : GLINT_GLYPH,
-      color: AMBIENT_COLORS[i % AMBIENT_COLORS.length],
-      x: Math.random() * SW,
-      startY: Math.random() * SH,
+      color: palette[i % palette.length],
+      x: Math.random() * dims.sw,
+      startY: Math.random() * dims.sh,
       size: 6 + Math.random() * 6,
       twinkleMs: 4000 + Math.random() * 4000,
       driftMs: 22000 + Math.random() * 12000,
       delay: Math.random() * 4000,
     })),
-  [count]);
+  [count, dims, palette]);
 
   return (
     <>
@@ -156,18 +217,19 @@ function AmbientStarItem({ config }: { config: any }) {
   );
 }
 
-function AmbientMoons({ max }: { max: boolean }) {
-  const count = max ? 10 : 5;
+function AmbientMoons({ max, dims, palette }: { max: boolean; dims: Dims; palette: readonly string[] }) {
+  const count = scaledCount(max ? 10 : 5, dims.areaScale);
   const moons = useMemo(() =>
     Array.from({ length: count }).map((_, i) => ({
       key: i,
-      x: Math.random() * (SW - 20),
-      y: 30 + Math.random() * (SH - 80),
+      color: palette[0],
+      x: Math.random() * (dims.sw - 20),
+      y: 30 + Math.random() * (dims.sh - 80),
       size: 10 + Math.random() * 4,
       driftMs: 30000 + Math.random() * 20000,
       delay: Math.random() * 5000,
     })),
-  [count]);
+  [count, dims, palette]);
 
   return (
     <>
@@ -203,7 +265,7 @@ function AmbientMoonItem({ config }: { config: any }) {
         left: config.x,
         top: config.y,
         fontSize: config.size,
-        color: '#FFB3DF',
+        color: config.color,
         opacity,
         transform: [{ translateX }],
       }}
@@ -213,7 +275,7 @@ function AmbientMoonItem({ config }: { config: any }) {
   );
 }
 
-function ShootingStarEmitter({ max }: { max: boolean }) {
+function ShootingStarEmitter({ max, dims }: { max: boolean; dims: Dims }) {
   const [shootKey, setShootKey] = useState(0);
 
   useEffect(() => {
@@ -224,16 +286,16 @@ function ShootingStarEmitter({ max }: { max: boolean }) {
     return () => clearTimeout(t);
   }, [shootKey, max]);
 
-  return <ShootingStar key={shootKey} />;
+  return <ShootingStar key={shootKey} dims={dims} />;
 }
 
-function ShootingStar() {
+function ShootingStar({ dims }: { dims: Dims }) {
   const translateX = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-  const startX = useMemo(() => -40 + Math.random() * (SW * 0.3), []);
-  const startY = useMemo(() => 20 + Math.random() * (SH * 0.2), []);
-  const endX = startX + SW * 0.7;
+  const startX = useMemo(() => -40 + Math.random() * (dims.sw * 0.3), []);
+  const startY = useMemo(() => 20 + Math.random() * (dims.sh * 0.2), []);
+  const endX = startX + dims.sw * 0.7;
   const endY = startY + 60;
 
   useEffect(() => {
@@ -282,19 +344,20 @@ function ShootingStar() {
 
 /* ═══ REACTION LAYER ══════════════════════════════════════════════════════ */
 
-function FloatingHearts({ max }: { max: boolean }) {
-  const count = max ? 24 : 12;
+function FloatingHearts({ max, dims, tier }: { max: boolean; dims: Dims; tier: number }) {
+  const count = scaledCount(max ? 24 : 12, tier * dims.areaScale);
   const mult = speedMult(max);
   const hearts = useMemo(() =>
     Array.from({ length: count }).map((_, i) => ({
       key: i,
-      x: 50 + Math.random() * (SW - 100),
+      sh: dims.sh,
+      x: 50 + Math.random() * (dims.sw - 100),
       size: 12 + Math.random() * 10,
       speed: (1500 + Math.random() * 1500) * mult,
       delay: Math.random() * 1000,
       drift: (Math.random() - 0.5) * 40,
     })),
-  [count, mult]);
+  [count, mult, dims]);
 
   return (
     <>
@@ -306,7 +369,7 @@ function FloatingHearts({ max }: { max: boolean }) {
 }
 
 function FloatingHeart({ config }: { config: any }) {
-  const y = useRef(new Animated.Value(SH - 200)).current;
+  const y = useRef(new Animated.Value(config.sh - 200)).current;
   const x = useRef(new Animated.Value(config.x)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -314,11 +377,11 @@ function FloatingHeart({ config }: { config: any }) {
     let cancelled = false;
     const animate = () => {
       if (cancelled) return;
-      y.setValue(SH - 200);
+      y.setValue(config.sh - 200);
       x.setValue(config.x);
       opacity.setValue(0);
       Animated.parallel([
-        Animated.timing(y, { toValue: SH - 500, duration: config.speed, useNativeDriver: true }),
+        Animated.timing(y, { toValue: config.sh - 500, duration: config.speed, useNativeDriver: true }),
         Animated.timing(x, { toValue: config.x + config.drift, duration: config.speed, useNativeDriver: true }),
         Animated.sequence([
           Animated.timing(opacity, { toValue: 0.8, duration: 300, useNativeDriver: true }),
@@ -346,21 +409,22 @@ function FloatingHeart({ config }: { config: any }) {
   );
 }
 
-function FloatingKaomoji({ max }: { max: boolean }) {
+function FloatingKaomoji({ max, dims, tier }: { max: boolean; dims: Dims; tier: number }) {
   const emotes = max
     ? ['\u2605', '\u2661', '\u2727', '!', '\u266A', '\u2606', '\u2764', '\u2728', '\u273F', '\u269B']
     : ['\u2605', '\u2661', '\u2727', '!', '\u266A', '\u2606', '\u2764'];
-  const count = max ? 16 : 8;
+  const count = scaledCount(max ? 16 : 8, tier * dims.areaScale);
   const mult = speedMult(max);
   const items = useMemo(() =>
     Array.from({ length: count }).map((_, i) => ({
       key: i,
+      sh: dims.sh,
       text: emotes[i % emotes.length],
-      x: 30 + Math.random() * (SW - 60),
+      x: 30 + Math.random() * (dims.sw - 60),
       speed: (1200 + Math.random() * 800) * mult,
       delay: Math.random() * 2000,
     })),
-  [count, mult]);
+  [count, mult, dims]);
 
   return (
     <>
@@ -372,17 +436,17 @@ function FloatingKaomoji({ max }: { max: boolean }) {
 }
 
 function FloatingEmote({ config }: { config: any }) {
-  const y = useRef(new Animated.Value(SH - 180)).current;
+  const y = useRef(new Animated.Value(config.sh - 180)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     let cancelled = false;
     const animate = () => {
       if (cancelled) return;
-      y.setValue(SH - 180);
+      y.setValue(config.sh - 180);
       opacity.setValue(0);
       Animated.parallel([
-        Animated.timing(y, { toValue: SH - 400, duration: config.speed, useNativeDriver: true }),
+        Animated.timing(y, { toValue: config.sh - 400, duration: config.speed, useNativeDriver: true }),
         Animated.sequence([
           Animated.timing(opacity, { toValue: 0.7, duration: 200, useNativeDriver: true }),
           Animated.delay(Math.max(100, config.speed - 500)),
@@ -410,19 +474,19 @@ function FloatingEmote({ config }: { config: any }) {
   );
 }
 
-function SparkleParticles({ max }: { max: boolean }) {
-  const count = max ? 20 : 10;
+function SparkleParticles({ max, dims, tier }: { max: boolean; dims: Dims; tier: number }) {
+  const count = scaledCount(max ? 20 : 10, tier * dims.areaScale);
   const mult = speedMult(max);
   const sparkles = useMemo(() =>
     Array.from({ length: count }).map((_, i) => ({
       key: i,
-      x: 40 + Math.random() * (SW - 80),
-      y: SH * 0.4 + Math.random() * (SH * 0.4),
+      x: 40 + Math.random() * (dims.sw - 80),
+      y: dims.sh * 0.4 + Math.random() * (dims.sh * 0.4),
       size: 6 + Math.random() * 6,
       speed: (600 + Math.random() * 600) * mult,
       delay: Math.random() * 1500,
     })),
-  [count, mult]);
+  [count, mult, dims]);
 
   return (
     <>
@@ -500,16 +564,20 @@ function Sparkle({ config }: { config: any }) {
   );
 }
 
-/* One-shot 8-star burst from bottom-right (mascot area) — replays each reaction */
+/* One-shot 8-star burst from the mascot's ACTUAL dock corner (D4a/H5 — it
+   used to hardcode bottom-right, erupting from empty space when she was
+   docked elsewhere). Replays each reaction: stars are keyed by trigger (D4b)
+   AND the whole ring remounts per beat cycle. */
 function StarburstRing({ trigger }: { trigger: number }) {
-  const CENTER_X = SW - 60;
-  const CENTER_Y = SH - 140;
+  // Read at mount — this component remounts per reaction, so it always
+  // reflects the corner she is docked in when the milestone fires.
+  const center = useMemo(() => getSenpaiCornerInfo().center, []);
   const stars = useMemo(() =>
     Array.from({ length: 8 }).map((_, i) => {
       const angle = (i / 8) * Math.PI * 2;
       const distance = 70 + Math.random() * 40;
       return {
-        key: i,
+        key: `${trigger}-${i}`,
         dx: Math.cos(angle) * distance,
         dy: Math.sin(angle) * distance,
         size: 12 + Math.random() * 6,
@@ -521,7 +589,7 @@ function StarburstRing({ trigger }: { trigger: number }) {
   return (
     <>
       {stars.map((s) => (
-        <StarburstStar key={s.key} config={s} center={{ x: CENTER_X, y: CENTER_Y }} />
+        <StarburstStar key={s.key} config={s} center={center} />
       ))}
     </>
   );
@@ -560,13 +628,15 @@ function StarburstStar({ config, center }: { config: any; center: { x: number; y
   );
 }
 
-/* Celebrating-mood confetti: ~30 small rectangles falling from top for 2s */
-function ConfettiBurst({ max }: { max: boolean }) {
-  const count = max ? 60 : 30;
+/* Celebrating-mood confetti: small rectangles falling from the top, spanning
+   the REAL window width/height (D3). */
+function ConfettiBurst({ max, dims }: { max: boolean; dims: Dims }) {
+  const count = scaledCount(max ? 60 : 30, dims.areaScale);
   const pieces = useMemo(() =>
     Array.from({ length: count }).map((_, i) => ({
       key: i,
-      x: Math.random() * SW,
+      sh: dims.sh,
+      x: Math.random() * dims.sw,
       color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
       size: 4,
       speed: 1500 + Math.random() * 500,
@@ -574,7 +644,7 @@ function ConfettiBurst({ max }: { max: boolean }) {
       sway: (Math.random() - 0.5) * 40,
       spinDir: Math.random() < 0.5 ? 1 : -1,
     })),
-  [count]);
+  [count, dims]);
 
   return (
     <>
@@ -591,7 +661,7 @@ function ConfettiPiece({ config }: { config: any }) {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(y, { toValue: SH + 20, duration: config.speed, delay: config.delay, useNativeDriver: true }),
+      Animated.timing(y, { toValue: config.sh + 20, duration: config.speed, delay: config.delay, useNativeDriver: true }),
       Animated.timing(x, { toValue: config.x + config.sway, duration: config.speed, delay: config.delay, useNativeDriver: true }),
       Animated.timing(rot, { toValue: config.spinDir * 3, duration: config.speed, delay: config.delay, useNativeDriver: true }),
       Animated.sequence([

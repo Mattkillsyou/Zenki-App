@@ -5,15 +5,25 @@
  *
  * Flow per request:
  *   1. Verify Firebase Auth ID token (Authorization: Bearer ...).
- *   2. Validate body { text: string }. A client-sent voiceId is deliberately
- *      IGNORED — see the security note at DEFAULT_VOICE_ID below.
- *   3. Rate-limit per UID via enforceRateLimit('senpaiSpeak').
- *   4. POST to ElevenLabs /v1/text-to-speech/{voice_id} with model
+ *   2. Validate body { text: string, signature?: string }. A client-sent
+ *      voiceId is deliberately IGNORED — see the security note at
+ *      DEFAULT_VOICE_ID below.
+ *   3. Verify the HMAC signature senpaiChat minted over the text (audit E3):
+ *      only text the chat model actually returned — same uid, fresh — gets
+ *      voiced. Unsigned/invalid text is rejected with 400 when
+ *      SENPAI_TTS_REQUIRE_SIGNATURE is on (see senpaiTtsSigning.ts).
+ *   4. Rate-limit per UID via enforceRateLimit('senpaiSpeak').
+ *   5. Reserve characters against the GLOBAL daily budget (audit E3) —
+ *      Firestore counter senpaiTtsBudget/{YYYY-MM-DD}, atomic transaction.
+ *      Fail-open if the counter can't be read; fail-closed past the budget.
+ *      Default DAILY_CHAR_BUDGET_DEFAULT, overridable via the Firestore doc
+ *      config/senpaiTts { dailyCharBudget: number } (no redeploy needed).
+ *   6. POST to ElevenLabs /v1/text-to-speech/{voice_id} with model
  *      `eleven_flash_v2_5` — half the credit cost and ~75ms latency,
  *      well-suited for chat replies that are short and need to feel snappy.
- *   5. Return the MP3 bytes as base64 in JSON so the iOS client can decode
+ *   7. Return the MP3 bytes as base64 in JSON so the iOS client can decode
  *      and play via expo-audio without a separate file download step.
- *   6. Log usage to Firestore senpaiUsage for cost tracking.
+ *   8. Log usage to Firestore senpaiUsage for cost tracking.
  *
  * Voice selection: pinned server-side to DEFAULT_VOICE_ID (Hina — see
  * below). Pick a different voice from
@@ -26,12 +36,35 @@
  */
 
 import { onRequest } from 'firebase-functions/v2/https';
-import { defineSecret } from 'firebase-functions/params';
+import { defineBoolean, defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
 import { enforceRateLimit } from './rateLimit';
+import {
+  SENPAI_TTS_SIGNING_SECRET,
+  canonicalTtsText,
+  verifySpeakSignature,
+} from './senpaiTtsSigning';
 
 const ELEVENLABS_API_KEY = defineSecret('ELEVENLABS_API_KEY');
+
+// E3 HMAC enforcement switch. When true, text without a valid fresh
+// signature from senpaiChat is rejected with 400. ROLLOUT LANDMINE:
+// clients already in the wild (App Store build ≤47) don't send signatures —
+// enforcing before the signed client ships mutes their voice (two 400s trip
+// the client's tts_error auto-disable, which PERSISTS voice-off). The
+// default is therefore FALSE: `.env` files are gitignored, so a default of
+// true would silently re-arm enforcement in every deploy environment that
+// lacks the override. Flip to true via `SENPAI_TTS_REQUIRE_SIGNATURE=true`
+// in functions/.env ONLY once the signed client is the installed floor.
+// While false, invalid/missing signatures are logged (loudly) but synthesis
+// proceeds.
+const SENPAI_TTS_REQUIRE_SIGNATURE = defineBoolean('SENPAI_TTS_REQUIRE_SIGNATURE', {
+  default: false,
+  description:
+    'Reject senpaiSpeak text that lacks a valid HMAC signature from senpaiChat. ' +
+    'Keep false until all shipped clients pass speakSignature through.',
+});
 
 // Hina — community voice (Shunshun, "Japanese Cute Voice"). Young Japanese
 // female, anime idol style, kawaii — Japanese-accent English via the
@@ -47,11 +80,95 @@ const ELEVENLABS_API_KEY = defineSecret('ELEVENLABS_API_KEY');
 const DEFAULT_VOICE_ID = 'lhTvHflPVOqgSWyuWQry';
 
 const MODEL_ID = 'eleven_flash_v2_5';
-// Hard cap to avoid runaway TTS costs. SPEAK lines are 1–2 short Japanese
-// sentences (~80 chars typical, prompt-capped to ~6s of audio) — 300 gives
-// generous headroom while keeping the worst case at 60 req/day/uid from
-// burning the ElevenLabs quota (audit E3; was 1500).
-const MAX_TEXT_CHARS = 300;
+// Per-request hard cap (300 chars) lives in senpaiTtsSigning.ts
+// (MAX_TTS_TEXT_CHARS) — shared with senpaiChat so the signature is minted
+// over the exact same truncation the synthesis path applies. SPEAK lines are
+// 1–2 short Japanese sentences (~80 chars typical, prompt-capped to ~6s of
+// audio) — 300 gives generous headroom while keeping the worst case at
+// 60 req/day/uid from burning the ElevenLabs quota (audit E3; was 1500).
+
+// ─────────────────────────────────────────────
+// Global daily character budget (audit E3)
+//
+// A cost circuit-breaker across ALL users: a Firestore counter doc per UTC
+// day, incremented atomically BEFORE the ElevenLabs call (reserve-first — a
+// failed synthesis still counts its characters; conservative beats racy).
+// Semantics per the audit: fail-OPEN when the counter/config can't be read
+// (a Firestore blip must not mute the mascot), fail-CLOSED once the budget
+// is spent (429 → the client's 'rate_limit' path).
+//
+// Default: 2,000 chars/day ≈ 25 typical (~80-char) replies/day across the
+// whole dozen-person userbase, worst case 60K chars/mo — 2× the Starter
+// plan's 30K/mo quota, so one runaway day can't torch the month. Raise it
+// without a redeploy via Firestore: config/senpaiTts { dailyCharBudget: N }.
+// ─────────────────────────────────────────────
+const DAILY_CHAR_BUDGET_DEFAULT = 2000;
+const TTS_BUDGET_COLLECTION = 'senpaiTtsBudget';
+const BUDGET_CONFIG_DOC = 'config/senpaiTts';
+const BUDGET_CONFIG_TTL_MS = 60_000;
+
+// Module-level cache so warm instances don't re-read the config doc on
+// every request. Also serves as a stale fallback if a later read fails.
+let cachedBudget: { value: number; fetchedAtMs: number } | null = null;
+
+async function readDailyCharBudget(): Promise<number> {
+  const now = Date.now();
+  if (cachedBudget && now - cachedBudget.fetchedAtMs < BUDGET_CONFIG_TTL_MS) {
+    return cachedBudget.value;
+  }
+  try {
+    const snap = await admin.firestore().doc(BUDGET_CONFIG_DOC).get();
+    const raw = snap.data()?.dailyCharBudget;
+    const value =
+      typeof raw === 'number' && Number.isFinite(raw) && raw > 0
+        ? Math.floor(raw)
+        : DAILY_CHAR_BUDGET_DEFAULT;
+    cachedBudget = { value, fetchedAtMs: now };
+    return value;
+  } catch (e: any) {
+    logger.warn('[senpaiSpeak] budget config read failed — using fallback', {
+      error: e?.message,
+    });
+    // Stale cache beats the default if we have one (fail-open).
+    return cachedBudget?.value ?? DAILY_CHAR_BUDGET_DEFAULT;
+  }
+}
+
+/**
+ * Atomically reserve `chars` against today's global budget.
+ * ok:false = budget exhausted (fail-closed). Infra errors resolve ok:true
+ * (fail-open) — only an explicit over-budget read blocks synthesis.
+ */
+async function reserveTtsBudget(chars: number): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const budget = await readDailyCharBudget();
+  const day = new Date().toISOString().slice(0, 10); // UTC date, e.g. 2026-07-06
+  const ref = admin.firestore().collection(TTS_BUDGET_COLLECTION).doc(day);
+  try {
+    return await admin.firestore().runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const used = typeof snap.data()?.characters === 'number' ? (snap.data()!.characters as number) : 0;
+      if (used + chars > budget) {
+        return {
+          ok: false as const,
+          reason: `daily TTS budget exhausted (${used}/${budget} chars) — resets at midnight UTC`,
+        };
+      }
+      tx.set(
+        ref,
+        {
+          characters: used + chars,
+          requests: admin.firestore.FieldValue.increment(1),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      return { ok: true as const };
+    });
+  } catch (e: any) {
+    logger.warn('[senpaiSpeak] budget transaction failed — failing open', { error: e?.message });
+    return { ok: true };
+  }
+}
 
 // ─────────────────────────────────────────────
 // Auth (mirror of senpaiChat.ts pattern)
@@ -78,11 +195,14 @@ interface SpeakRequest {
   // Accepted in the body for backwards compat but IGNORED (audit E3) —
   // the voice is pinned server-side to DEFAULT_VOICE_ID.
   voiceId?: string;
+  // HMAC signature minted by senpaiChat over this exact text (audit E3).
+  // Verified below; without it (and enforcement on) synthesis is refused.
+  signature?: string;
 }
 
 export const senpaiSpeak = onRequest(
   {
-    secrets: [ELEVENLABS_API_KEY],
+    secrets: [ELEVENLABS_API_KEY, SENPAI_TTS_SIGNING_SECRET],
     cors: true,
     timeoutSeconds: 30,
     memory: '256MiB',
@@ -108,32 +228,74 @@ export const senpaiSpeak = onRequest(
 
     // 2. Validate
     const body = (req.body ?? {}) as SpeakRequest;
-    let text = typeof body.text === 'string' ? body.text.trim() : '';
-    if (!text) {
-      res.status(400).json({ error: 'text required (non-empty string)' });
-      return;
-    }
     // Over-cap text is TRUNCATED, not rejected: nothing upstream bounds the
     // model's SPEAK line (parseSenpaiResponse has no length cap and the
     // client sends it verbatim), so a verbose reply used to 400 here — and
     // the client maps any 4xx to 'tts_error', one of the E2 strike codes
-    // that auto-disable voice after two hits. Cutting the tail preserves the
-    // exact same cost cap while long lines still play. Slice on a code-point
-    // boundary so a surrogate pair (emoji) can't be split into a lone half.
-    if (text.length > MAX_TEXT_CHARS) {
-      let cut = text.slice(0, MAX_TEXT_CHARS);
-      const lastUnit = cut.charCodeAt(cut.length - 1);
-      if (lastUnit >= 0xd800 && lastUnit <= 0xdbff) cut = cut.slice(0, -1);
-      text = cut;
+    // that auto-disable voice after two hits. canonicalTtsText applies the
+    // same trim + 300-char surrogate-safe cap the signature was minted over
+    // (senpaiTtsSigning.ts), so truncation and verification can't disagree.
+    const text = canonicalTtsText(typeof body.text === 'string' ? body.text : '');
+    if (!text) {
+      res.status(400).json({ error: 'text required (non-empty string)' });
+      return;
     }
     // Deliberately ignore body.voiceId (audit E3): honoring it made this an
     // open proxy for any ElevenLabs voice on the app's key.
     const voiceId = DEFAULT_VOICE_ID;
 
-    // 3. Rate limit
+    // 2b. HMAC binding (audit E3): only voice text senpaiChat actually
+    // returned. The signature binds canonical text + uid + issue time; see
+    // senpaiTtsSigning.ts. When enforcement is off (rollout transition for
+    // unsigned clients in the wild), failures are logged but let through.
+    let signatureOk = false;
+    let signingSecret = '';
+    try {
+      signingSecret = SENPAI_TTS_SIGNING_SECRET.value();
+    } catch {
+      /* unbound/unset secret — handled below */
+    }
+    if (signingSecret) {
+      const check = verifySpeakSignature(text, uid, body.signature, signingSecret);
+      signatureOk = check.ok;
+      if (!check.ok) {
+        if (SENPAI_TTS_REQUIRE_SIGNATURE.value()) {
+          logger.warn('[senpaiSpeak] rejecting unsigned/invalid text', {
+            uid,
+            reason: check.reason,
+            chars: text.length,
+          });
+          res.status(400).json({ error: `speak signature invalid: ${check.reason}` });
+          return;
+        }
+        logger.warn('[senpaiSpeak] signature check failed (enforcement OFF — allowing)', {
+          uid,
+          reason: check.reason,
+        });
+      }
+    } else {
+      // Misconfiguration, not an attack: the secret should exist wherever
+      // this code is deployed (senpaiChat can't mint signatures without it
+      // either). Fail open so the mascot doesn't go mute, but say so loudly.
+      logger.error('[senpaiSpeak] SENPAI_TTS_SIGNING_SECRET unavailable — signature check skipped');
+    }
+
+    // 3. Rate limit (per-uid, before the shared budget so one user's spam
+    // burns their own allowance first).
     const limit = await enforceRateLimit(uid, 'senpaiSpeak');
     if (!limit.ok) {
       res.status(429).json({ error: limit.reason });
+      return;
+    }
+
+    // 3b. Global daily character budget (audit E3). Reserve BEFORE the
+    // ElevenLabs call; fail-closed past the budget, fail-open on infra
+    // errors (inside reserveTtsBudget). 429 maps to the client's
+    // 'rate_limit' handling, same as the per-uid limiter above.
+    const budgetResult = await reserveTtsBudget(text.length);
+    if (!budgetResult.ok) {
+      logger.warn('[senpaiSpeak] global daily budget exhausted', { uid, chars: text.length });
+      res.status(429).json({ error: budgetResult.reason });
       return;
     }
 
@@ -200,6 +362,9 @@ export const senpaiSpeak = onRequest(
         voiceId,
         characters: text.length,
         bytesReturned: audioBuffer.length,
+        // Observability for the E3 rollout: how much traffic is still
+        // unsigned (old clients) before flipping enforcement on.
+        signed: signatureOk,
       })
       .catch((e) => logger.warn('[senpaiSpeak] usage log failed', { error: e?.message }));
 

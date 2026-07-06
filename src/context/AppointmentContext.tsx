@@ -9,6 +9,10 @@ import {
   deleteAppointmentFromFirestore,
 } from '../services/appointmentSync';
 import { syncOrAlert } from '../utils/syncOrAlert';
+import {
+  isSenpaiNotificationVoiceEnabled,
+  senpaiClassReminderCopy,
+} from '../services/senpaiNotifications';
 import { useAuth } from './AuthContext';
 import { getCurrentUid } from '../services/firebaseAuth';
 import { auth, FIREBASE_CONFIGURED } from '../config/firebase';
@@ -64,6 +68,14 @@ const AppointmentContext = createContext<AppointmentContextValue>({
 
 // Lazy import to keep web bundling simple
 async function scheduleNotification(appointment: Appointment): Promise<string | undefined> {
+  // F5: opt-in Senpai-voiced reminder copy — same trigger, same facts,
+  // different narrator. Gated on the device-global Senpai Mode flag, read at
+  // schedule time (toggling takes effect on the next (re)schedule); null (off
+  // or storage failure) keeps the standard copy so a reminder is never lost.
+  const senpaiCopy = (await isSenpaiNotificationVoiceEnabled())
+    ? senpaiClassReminderCopy(appointment.sessionType, appointment.instructor)
+    : null;
+
   if (Platform.OS === 'web') {
     // Web fallback: setTimeout-based reminder while the tab is open
     const remindAt = new Date(appointment.startsAt).getTime() - 60 * 60 * 1000;
@@ -72,8 +84,8 @@ async function scheduleNotification(appointment: Appointment): Promise<string | 
     const timeoutId = setTimeout(() => {
       // Browser notification API (best-effort)
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        new Notification(`Zenki Dojo · ${appointment.sessionType}`, {
-          body: `Your session with ${appointment.instructor} is in 1 hour.`,
+        new Notification(senpaiCopy?.title ?? `Zenki Dojo · ${appointment.sessionType}`, {
+          body: senpaiCopy?.body ?? `Your session with ${appointment.instructor} is in 1 hour.`,
         });
       }
     }, delay);
@@ -87,8 +99,8 @@ async function scheduleNotification(appointment: Appointment): Promise<string | 
     if (remindAt <= Date.now()) return undefined;
     const id = await Notifications.scheduleNotificationAsync({
       content: {
-        title: `Upcoming: ${appointment.sessionType}`,
-        body: `Your session with ${appointment.instructor} starts in 1 hour.`,
+        title: senpaiCopy?.title ?? `Upcoming: ${appointment.sessionType}`,
+        body: senpaiCopy?.body ?? `Your session with ${appointment.instructor} starts in 1 hour.`,
         sound: 'default',
       },
       trigger: { seconds: Math.max(1, Math.floor((remindAt - Date.now()) / 1000)) } as any,
