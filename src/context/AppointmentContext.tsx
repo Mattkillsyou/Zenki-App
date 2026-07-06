@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Platform } from 'react-native';
+import { onAuthStateChanged } from 'firebase/auth';
 import { generateId } from '../utils/generateId';
 import { safeStorageGetJSON, safeStorageSet } from '../utils/safeStorage';
 import {
@@ -10,8 +11,13 @@ import {
 import { syncOrAlert } from '../utils/syncOrAlert';
 import { useAuth } from './AuthContext';
 import { getCurrentUid } from '../services/firebaseAuth';
+import { auth, FIREBASE_CONFIGURED } from '../config/firebase';
 
 const STORAGE_KEY = '@zenki_appointments';
+// Device-local map of appointment id → scheduled notification id. Kept OUT of
+// the shared Firestore doc: a notification id is only meaningful on the device
+// that scheduled it.
+const REMINDERS_KEY = '@zenki_appointment_reminders';
 
 export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 
@@ -26,7 +32,10 @@ export interface Appointment {
   price: number;
   status: AppointmentStatus;
   createdAt: string;
-  notificationId?: string; // ID of scheduled local notification
+  /** Legacy — reminder ids now live device-local under REMINDERS_KEY (a
+   *  notification id is meaningless on any other device). Kept so old docs
+   *  still parse and their on-device notifications still cancel cleanly. */
+  notificationId?: string;
   /** Auth uid of the booking member — stamped at creation and PRESERVED through
    *  admin edits (so the rule can scope reads to the owner). Not the admin who
    *  last wrote. Backfilled for legacy docs via backfillAppointmentOwners. */
@@ -107,6 +116,11 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const { user } = useAuth();
   const [loaded, setLoaded] = useState(false);
+  // Firebase session uid held in STATE and fed by onAuthStateChanged: the
+  // persistence restore is async, so getCurrentUid() sampled once inside the
+  // subscription effect could be null forever — the listener then never
+  // started for the whole session.
+  const [authUid, setAuthUid] = useState<string | null>(() => getCurrentUid());
 
   useEffect(() => {
     safeStorageGetJSON<Appointment[]>(STORAGE_KEY, [], Array.isArray).then((cached) => {
@@ -120,22 +134,86 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
     }
   }, []);
 
+  useEffect(() => {
+    if (!auth) return;
+    return onAuthStateChanged(auth, (u) => setAuthUid(u?.uid ?? null));
+  }, []);
+
+  // Reconcile device-local 1-hour reminders against the live snapshot. Runs on
+  // the MEMBER's own device (via their Firestore subscription), so the member
+  // gets the reminder — scheduling in confirmAppointment put it on the
+  // confirming ADMIN's phone instead.
+  const remindersRef = useRef<Record<string, string> | null>(null);
+  const syncReminders = useCallback(async (items: Appointment[]) => {
+    const memberId = user?.id;
+    if (!memberId) return;
+    if (!remindersRef.current) {
+      remindersRef.current = await safeStorageGetJSON<Record<string, string>>(
+        REMINDERS_KEY,
+        {},
+        (v) => typeof v === 'object' && v !== null && !Array.isArray(v),
+      );
+    }
+    const reminders = remindersRef.current;
+    let changed = false;
+
+    // Cancel reminders whose appointment is gone, not ours, or no longer confirmed.
+    const byId = new Map(items.map((a) => [a.id, a]));
+    for (const [apptId, notifId] of Object.entries(reminders)) {
+      const appt = byId.get(apptId);
+      if (appt && appt.memberId === memberId && appt.status === 'confirmed') continue;
+      cancelNotification(notifId).catch(() => {});
+      delete reminders[apptId];
+      changed = true;
+    }
+
+    // Schedule for our own confirmed, still-future appointments not yet
+    // scheduled on this device (scheduleNotification no-ops within 1h of start).
+    for (const appt of items) {
+      if (appt.memberId !== memberId || appt.status !== 'confirmed') continue;
+      if (reminders[appt.id]) continue;
+      const notifId = await scheduleNotification(appt);
+      if (notifId) {
+        reminders[appt.id] = notifId;
+        changed = true;
+      }
+    }
+
+    if (changed) safeStorageSet(REMINDERS_KEY, reminders, '[Appointments]');
+  }, [user?.id]);
+
+  // Serialize reminder syncs so back-to-back snapshots can't interleave their
+  // await points and double-schedule the same appointment.
+  const reminderQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const queueReminderSync = useCallback((items: Appointment[]) => {
+    reminderQueueRef.current = reminderQueueRef.current
+      .then(() => syncReminders(items))
+      .catch(() => {});
+  }, [syncReminders]);
+
   // Live Firestore subscription — source of truth across devices.
   useEffect(() => {
     // Scope the listener: members stream only their own appointments (rule
     // denies others), admins stream all. Re-subscribes on auth change.
-    const unsub = subscribeToAppointments(getCurrentUid(), !!user?.isAdmin, (items) => {
+    const unsub = subscribeToAppointments(authUid, !!user?.isAdmin, (items) => {
       setAppointments(items);
       safeStorageSet(STORAGE_KEY, items, '[Appointments]');
+      queueReminderSync(items);
     });
     return () => { unsub(); };
-  }, [user?.id, user?.isAdmin]);
+  }, [authUid, user?.isAdmin, queueReminderSync]);
 
   useEffect(() => {
     if (loaded) safeStorageSet(STORAGE_KEY, appointments, '[Appointments]');
   }, [appointments, loaded]);
 
   const requestAppointment = useCallback(async (a: Omit<Appointment, 'id' | 'status' | 'createdAt'>) => {
+    // Without a Firebase session the write is rules-rejected and the optimistic
+    // local insert lingers as a phantom "pending" the admin never sees — fail
+    // fast so the caller can surface a retry instead.
+    if (FIREBASE_CONFIGURED && !getCurrentUid()) {
+      throw new Error('no-auth-session');
+    }
     const next: Appointment = {
       ...a,
       id: generateId('appt'),
@@ -157,15 +235,11 @@ export function AppointmentProvider({ children }: { children: React.ReactNode })
     });
     if (!target) return;
 
-    const tentative: Appointment = { ...target, status: 'confirmed' as AppointmentStatus };
-    const notificationId = await scheduleNotification(tentative);
-    const finalAppt: Appointment = notificationId
-      ? { ...tentative, notificationId }
-      : tentative;
-
-    // Single state update + single Firestore upsert. Avoids the dual-set
-    // race where a concurrent snapshot could clobber the in-flight
-    // notificationId patch.
+    // Status change only — the member's 1-hour reminder is scheduled on the
+    // MEMBER's device by syncReminders when this transition arrives through
+    // their subscription. Scheduling here fired the reminder on the confirming
+    // admin's phone about someone else's booking.
+    const finalAppt: Appointment = { ...target, status: 'confirmed' as AppointmentStatus };
     setAppointments((prev) => prev.map((a) => (a.id === id ? finalAppt : a)));
     syncOrAlert(upsertAppointmentInFirestore(finalAppt), 'Appointment');
   }, []);
