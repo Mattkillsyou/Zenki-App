@@ -6,6 +6,7 @@ import {
   query,
   where,
   Query,
+  QuerySnapshot,
   DocumentData,
   Unsubscribe,
 } from 'firebase/firestore';
@@ -40,20 +41,67 @@ export async function deleteTaskFromFirestore(id: string): Promise<boolean> {
   }
 }
 
-export function subscribeToTasks(cb: (tasks: EmployeeTask[]) => void): Unsubscribe {
+export function subscribeToTasks(
+  isAdmin: boolean,
+  authUid: string | null,
+  cb: (tasks: EmployeeTask[]) => void,
+): Unsubscribe {
   if (!FIREBASE_CONFIGURED || !db) return noopUnsubscribe;
   try {
-    return onSnapshot(
-      collection(db, 'employeeTasks'),
+    // Personal tasks are owner-scoped in firestore.rules (their free text is
+    // private), so a whole-collection listen is permission-denied for
+    // non-admins — rules are not filters. Admins stream everything; everyone
+    // else gets two rule-provable queries (shared default/assigned tasks +
+    // their OWN personal tasks) merged into one callback. Mirrors
+    // subscribeToCompletions below.
+    //
+    // `authUid` is passed in from context STATE (fed by onAuthStateChanged)
+    // rather than sampled from auth.currentUser here: Firebase restores the
+    // session asynchronously, so a cold-start sample would be null and the
+    // personal listener would silently never attach for the whole session —
+    // the shared-only snapshot would then overwrite the cache and the
+    // employee's personal to-dos would vanish (same race AppointmentContext /
+    // NutritionContext document).
+    const col = collection(db, 'employeeTasks');
+    const mapDocs = (snap: QuerySnapshot<DocumentData>): EmployeeTask[] =>
+      snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<EmployeeTask, 'id'>) }));
+    const emitSorted = (items: EmployeeTask[]) => {
+      items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      cb(items);
+    };
+    if (isAdmin) {
+      return onSnapshot(
+        col,
+        (snap) => emitSorted(mapDocs(snap)),
+        (err) => console.warn('[Tasks Firestore] Subscribe failed:', err),
+      );
+    }
+    let sharedTasks: EmployeeTask[] = [];
+    let personalTasks: EmployeeTask[] = [];
+    const emit = () => emitSorted([...sharedTasks, ...personalTasks]);
+    const unsubShared = onSnapshot(
+      query(col, where('source', 'in', ['default', 'assigned'])),
       (snap) => {
-        const items: EmployeeTask[] = snap.docs.map(
-          (d) => ({ id: d.id, ...(d.data() as Omit<EmployeeTask, 'id'>) }),
-        );
-        items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-        cb(items);
+        sharedTasks = mapDocs(snap);
+        emit();
       },
-      (err) => console.warn('[Tasks Firestore] Subscribe failed:', err),
+      (err) => console.warn('[Tasks Firestore] Shared subscribe failed:', err),
     );
+    let unsubPersonal: Unsubscribe = noopUnsubscribe;
+    if (authUid) {
+      unsubPersonal = onSnapshot(
+        query(col, where('source', '==', 'personal'), where('firebaseUid', '==', authUid)),
+        (snap) => {
+          personalTasks = mapDocs(snap);
+          emit();
+        },
+        (err) => console.warn('[Tasks Firestore] Personal subscribe failed:', err),
+      );
+    }
+    return () => {
+      unsubShared();
+      unsubPersonal();
+    };
   } catch (err) {
     console.warn('[Tasks Firestore] Subscribe init failed:', err);
     return noopUnsubscribe;
@@ -93,6 +141,7 @@ export async function deleteCompletionFromFirestore(
 
 export function subscribeToCompletions(
   isAdmin: boolean,
+  authUid: string | null,
   cb: (cs: TaskCompletion[]) => void,
 ): Unsubscribe {
   if (!FIREBASE_CONFIGURED || !db) return noopUnsubscribe;
@@ -101,12 +150,13 @@ export function subscribeToCompletions(
     // the whole collection (the admin task view needs every member's records);
     // a regular member reads only their own — matching the security rule, which
     // would permission-deny an unfiltered collection read for non-admins.
+    // `authUid` comes from context state (see subscribeToTasks above) so the
+    // listener attaches once the async session restore settles.
     const col = collection(db, 'taskCompletions');
     let q: Query<DocumentData> = col;
     if (!isAdmin) {
-      const uid = auth?.currentUser?.uid;
-      if (!uid) return noopUnsubscribe; // signed out → nothing to read
-      q = query(col, where('firebaseUid', '==', uid));
+      if (!authUid) return noopUnsubscribe; // signed out → nothing to read
+      q = query(col, where('firebaseUid', '==', authUid));
     }
     return onSnapshot(
       q,

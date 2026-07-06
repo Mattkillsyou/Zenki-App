@@ -116,6 +116,58 @@ export async function pushMemberToFirestore(member: Member): Promise<boolean> {
 }
 
 /**
+ * App-open /members backfill — MISSING/UNSTAMPED docs only. Blind-pushing the
+ * full locally-cached record on every open silently reverted any admin edit
+ * (belt promotion, contact fix) made while the app was closed, because the
+ * push landed before subscribeToMember could deliver the fresh doc. Instead:
+ *   - doc missing on the server  → full upsert (the original backfill intent:
+ *     legacy OAuth signups that wrote /users but never /members);
+ *   - doc present but unstamped  → stamp firebaseUid + updatedAt ONLY (the
+ *     first-time-claim path in firestore.rules), leaving admin data intact;
+ *   - doc present and stamped    → no write at all (the live subscription is
+ *     the source of truth);
+ *   - read permission-denied     → attempt the create. Rules deny reads on
+ *     MISSING /members docs for non-admins (the read rule dereferences
+ *     resource.data), so this is how the legit "doc missing" case surfaces.
+ *     Safe: every doc this user could UPDATE is also one they can READ, so a
+ *     denied read means the write can only succeed as a fresh create;
+ *   - server unreachable (offline) → skip this session. Never push a stale
+ *     local copy on a failed read — that's exactly the clobber this replaces.
+ */
+export async function backfillMemberIfMissing(member: Member): Promise<boolean> {
+  if (!FIREBASE_CONFIGURED || !db) return false;
+  const ref = doc(db, 'members', member.id);
+  let snap;
+  try {
+    snap = await getDocFromServer(ref);
+  } catch (err: any) {
+    if (err?.code === 'permission-denied') {
+      return upsertMemberInFirestore(member);
+    }
+    console.warn('[Members Firestore] Backfill read failed — skipping push:', err);
+    return false;
+  }
+  if (!snap.exists()) {
+    return upsertMemberInFirestore(member);
+  }
+  const server = snap.data() as Member;
+  if (!server.firebaseUid && member.firebaseUid) {
+    try {
+      await setDoc(
+        ref,
+        { firebaseUid: member.firebaseUid, updatedAt: new Date().toISOString() },
+        { merge: true },
+      );
+      return true;
+    } catch (err) {
+      console.warn('[Members Firestore] Backfill uid stamp failed:', err);
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Sync the /admins/{uid} doc with a member's isAdmin flag. The Firestore
  * `isAdmin()` rule reads from /admins (not /members.isAdmin), so toggling
  * `Member.isAdmin` alone never granted real admin powers — the admin

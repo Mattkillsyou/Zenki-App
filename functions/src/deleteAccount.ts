@@ -25,6 +25,7 @@
  *   collectionGroup likes where uid == uid       (the user's likes on others' posts)
  *   collectionGroup comments where userId == uid (the user's comments on others' posts)
  *   attendance / waivers / supportMessages / aiRateLimits/{uid}
+ *   nutrition/{uid}                              (recursive: weightEntries + macroEntries + macroGoals + nutritionProfile)
  *   Storage users/{uid}/**  and  postMedia/{uid}/**
  *
  * Returns { ok: true, deleted: { collection: count } }.
@@ -249,7 +250,14 @@ export const deleteAccount = onRequest(
       deleted.appointments = await deleteByQuery(db.collection('appointments').where('firebaseUid', '==', uid));
       deleted.taskCompletions = await deleteByQuery(db.collection('taskCompletions').where('firebaseUid', '==', uid));
       deleted.supportMessages = await deleteByQuery(db.collection('supportMessages').where('senderId', '==', uid));
-      // DEXA scans + bloodwork are local-only (AsyncStorage via NutritionContext), never server-persisted — nothing to delete here.
+      // Nutrition is server-persisted health PII since the Firestore migration:
+      // /nutrition/{uid}/{weightEntries,macroEntries,macroGoals,nutritionProfile}
+      // (uid in the PATH; owner-only rules make it unreadable AND undeletable
+      // once the Auth user is gone, so it MUST be purged here — GDPR Art. 17).
+      // recursiveDelete covers all four subcollections even though the parent
+      // doc itself is never written. DEXA scans + bloodwork remain local-only
+      // (AsyncStorage via NutritionContext) — nothing server-side for those.
+      deleted.nutrition = await deleteDocDeep(db.collection('nutrition').doc(uid));
       deleted.aiRateLimits = await deleteDocDeep(db.collection('aiRateLimits').doc(uid));
 
       // 10. Member doc(s). Prefer the id resolved from the profile; also sweep

@@ -207,21 +207,32 @@ export function DexaUploadScreen({ navigation }: any) {
   function save() {
     if (phase.kind !== 'review' || !user) return;
     const e = editing;
+    // Belt-and-braces coercion (with the server-side clamp in extractDexa):
+    // a string number ("22.5") passes this review UI untouched and then
+    // crashes `.toFixed()` renders in DexaScansScreen — with the only delete
+    // UI behind the crashing list. Never persist a non-finite value.
+    const num = (v: unknown): number | undefined => {
+      if (v == null || v === '') return undefined;
+      const n = typeof v === 'string' ? parseFloat(v) : Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    };
+    const region = (r?: { leanKg?: number; fatKg?: number }) =>
+      r ? { leanKg: num(r.leanKg), fatKg: num(r.fatKg) } : undefined;
     addDexaScan({
       memberId: user.id,
       source: 'ai',
       scanDate: e.scanDate?.trim() || todayISO(),
-      totalBodyFatPct: e.totalBodyFatPct,
-      fatMassKg: e.fatMassKg,
-      leanMassKg: e.leanMassKg,
-      bmc: e.bmc,
-      vatCm2: e.vatCm2,
-      fmi: e.fmi,
-      ffmi: e.ffmi,
-      androidGynoidRatio: e.androidGynoidRatio,
-      arms: e.regional?.arms,
-      legs: e.regional?.legs,
-      trunk: e.regional?.trunk,
+      totalBodyFatPct: num(e.totalBodyFatPct),
+      fatMassKg: num(e.fatMassKg),
+      leanMassKg: num(e.leanMassKg),
+      bmc: num(e.bmc),
+      vatCm2: num(e.vatCm2),
+      fmi: num(e.fmi),
+      ffmi: num(e.ffmi),
+      androidGynoidRatio: num(e.androidGynoidRatio),
+      arms: region(e.regional?.arms),
+      legs: region(e.regional?.legs),
+      trunk: region(e.regional?.trunk),
       notes: e.notes,
     });
     navigation.goBack();

@@ -38,6 +38,12 @@ export const CATEGORIES: ProductCategory[] = ['All', 'Apparel', 'Gear', 'Accesso
 //   2. Copy any product block below
 //   3. Change id, name, prices, description, image require()
 //   4. Set sizes if applicable, inStock true/false
+//
+// ⚠️ SERVER PRICE MIRROR: checkout validates each item's unitPrice against
+// functions/src/createPaymentIntent.ts § PRODUCT_PRICES, which is keyed by
+// normalized product NAME (the order payload carries no productId). Any
+// rename or price change here MUST be mirrored there (and the function
+// redeployed) or that product's checkout will 400 for everyone.
 // ──────────────────────────────────────────────────────────
 
 // Wix CDN image transform helper — requests a high-res version suitable for mobile detail views.

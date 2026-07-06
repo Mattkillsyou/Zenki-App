@@ -14,6 +14,9 @@ import {
 } from '../services/employeeTaskSync';
 import { syncOrAlert } from '../utils/syncOrAlert';
 import { useAuth } from './AuthContext';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../config/firebase';
+import { getCurrentUid } from '../services/firebaseAuth';
 
 const TASKS_KEY = '@zenki_employee_tasks';
 const COMPLETIONS_KEY = '@zenki_task_completions';
@@ -65,6 +68,17 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
   const [loaded, setLoaded] = useState(false);
   const { user } = useAuth();
   const isAdmin = user?.isAdmin === true;
+  // Firebase session uid held in STATE and fed by onAuthStateChanged: the
+  // persistence restore is async, so a uid sampled once inside the
+  // subscription effect could be null on cold start — the personal-tasks
+  // listener would then never attach and the shared-only snapshot would
+  // overwrite the cache (same pattern as AppointmentContext).
+  const [authUid, setAuthUid] = useState<string | null>(() => getCurrentUid());
+
+  useEffect(() => {
+    if (!auth) return;
+    return onAuthStateChanged(auth, (u) => setAuthUid(u?.uid ?? null));
+  }, []);
 
   // AsyncStorage cache hydrate. Firestore subscription overwrites once it
   // fires; this just covers the offline cold-boot window.
@@ -86,13 +100,24 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
     })();
   }, []);
 
-  // Live Firestore subscriptions for both collections.
+  // Live Firestore subscriptions for both collections. Task lists (and their
+  // AsyncStorage cache) are staff-only: the checklist UI is gated to
+  // employees/admins everywhere, so a regular member's device has no reason
+  // to stream — or retain — staff to-do text (1-P2.32). `loaded` is a dep so
+  // the clear re-runs AFTER the cold-boot cache hydrate and can't lose the
+  // race to it.
+  const isEmployee = user?.isEmployee === true;
   useEffect(() => {
-    const unsubTasks = subscribeToTasks((items) => {
+    if (!isAdmin && !isEmployee) {
+      setTasks([]);
+      safeStorageSet(TASKS_KEY, [], '[EmployeeTasks tasks]');
+      return;
+    }
+    const unsubTasks = subscribeToTasks(isAdmin, authUid, (items) => {
       setTasks(items);
       safeStorageSet(TASKS_KEY, items, '[EmployeeTasks tasks]');
     });
-    const unsubCompletions = subscribeToCompletions(isAdmin, (items) => {
+    const unsubCompletions = subscribeToCompletions(isAdmin, authUid, (items) => {
       setCompletions(items);
       safeStorageSet(COMPLETIONS_KEY, items, '[EmployeeTasks completions]');
     });
@@ -100,7 +125,7 @@ export function EmployeeTaskProvider({ children }: { children: React.ReactNode }
       unsubTasks();
       unsubCompletions();
     };
-  }, [isAdmin, user?.id]);
+  }, [isAdmin, isEmployee, user?.id, loaded, authUid]);
 
   useEffect(() => {
     if (loaded) safeStorageSet(TASKS_KEY, tasks, '[EmployeeTasks tasks]');

@@ -29,7 +29,7 @@ import { parseBloodwork, BloodworkExtraction } from '../services/aiVision';
 import { getCurrentIdToken } from '../services/firebaseAuth';
 import { AI_IMAGE_MAX_DIMENSION } from '../config/api';
 import { BiomarkerStatus, StoredBiomarker } from '../types/bloodwork';
-import { lookupBiomarkerRef } from '../data/biomarkers';
+import { CATEGORY_ORDER, lookupBiomarkerRef } from '../data/biomarkers';
 
 type MimeType = 'image/jpeg' | 'image/png' | 'application/pdf';
 
@@ -206,19 +206,32 @@ export function BloodworkUploadScreen({ navigation }: any) {
 
   function save() {
     if (phase.kind !== 'review' || !user) return;
-    const stored: StoredBiomarker[] = (phase.extraction.biomarkers ?? []).map((b) => {
+    // Belt-and-braces coercion (with the server-side clamp in parseBloodwork):
+    // Number-coerce values, drop rows without a finite value, and whitelist
+    // the status/category enums — an off-enum truthy string sails through the
+    // `as any` cast and then renders nowhere in the grouped detail view.
+    const num = (v: unknown): number | undefined => {
+      if (v == null || v === '') return undefined;
+      const n = typeof v === 'string' ? parseFloat(v) : Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    };
+    const STATUSES: BiomarkerStatus[] = ['optimal', 'sufficient', 'out_of_range', 'unknown'];
+    const stored: StoredBiomarker[] = (phase.extraction.biomarkers ?? []).flatMap((b) => {
+      const value = num(b.value);
+      if (value === undefined) return [];
       // Enrich with our fallback ranges if the AI didn't find them on the report
       const ref = lookupBiomarkerRef(b.name);
-      return {
+      const category = b.category ?? ref?.category ?? 'Other';
+      return [{
         name: b.name,
         displayName: b.displayName,
-        value: b.value,
+        value,
         unit: b.unit || ref?.unit || '',
-        referenceLow: b.referenceLow ?? ref?.referenceLow,
-        referenceHigh: b.referenceHigh ?? ref?.referenceHigh,
-        status: b.status,
-        category: (b.category as any) ?? ref?.category ?? 'Other',
-      };
+        referenceLow: num(b.referenceLow) ?? ref?.referenceLow,
+        referenceHigh: num(b.referenceHigh) ?? ref?.referenceHigh,
+        status: STATUSES.includes(b.status) ? b.status : 'unknown',
+        category: CATEGORY_ORDER.includes(category as any) ? (category as any) : 'Other',
+      }];
     });
 
     addBloodworkReport({

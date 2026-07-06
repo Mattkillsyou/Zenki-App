@@ -342,8 +342,14 @@ function buildMemberFromOAuth(params: {
 
 /**
  * Look up or create a Member record tied to a Firebase UID.
- * Stored under `users/{uid}` with the full Member payload so OAuth users can
- * sign back in across devices.
+ *
+ * The /users doc stores ONLY the public projection + a `memberId` pointer;
+ * the Member record itself lives in /members. It used to also stash the full
+ * Member payload (real email + name) as a `member:` field on the
+ * signed-in-readable /users doc — a mass PII leak (finding 1-P1.2) that also
+ * froze returning OAuth users to their signup-day snapshot (1-P1.1). Legacy
+ * docs still carrying `member:` are read once here as a last-resort pointer/
+ * fallback until backfillUsersPii strips the field server-side.
  */
 async function rehydrateOrCreateOAuthMember(
   uid: string,
@@ -356,39 +362,58 @@ async function rehydrateOrCreateOAuthMember(
   let isNewAccount = true;
   if (snap.exists()) {
     const data = snap.data();
-    // If we previously stored the full member, rehydrate it; otherwise the
-    // doc has just displayName/avatar (legacy email-password format) — keep
-    // the fallback but reuse the existing memberId so analytics line up.
-    const existingMember = (data as any).member as Member | undefined;
-    if (existingMember && existingMember.id) {
-      member = existingMember;
+    // Returning user: resolve their memberId (pointer field, or the id inside
+    // a legacy full-member blob) and rehydrate the CURRENT record from
+    // /members — never the frozen signup-time snapshot, which silently
+    // reverted belt/profile edits made since.
+    const legacyMember = (data as any).member as Member | undefined;
+    const memberId: string | undefined =
+      (data as { memberId?: string }).memberId || legacyMember?.id;
+    if (memberId) {
       isNewAccount = false;
+      let fresh: Member | null = null;
+      try {
+        const memberSnap = await getDoc(doc(db, 'members', memberId));
+        if (memberSnap.exists()) fresh = memberSnap.data() as Member;
+      } catch (err) {
+        console.warn('[firebaseAuth] OAuth /members rehydrate failed:', err);
+      }
+      // Fresh server doc → best; legacy blob → better than rebuilding from
+      // OAuth profile scraps; last resort keeps the existing memberId so
+      // analytics line up.
+      member = fresh ?? (legacyMember && legacyMember.id ? legacyMember : { ...fallback, id: memberId });
     }
   }
   if (isNewAccount) {
-    // First-time OAuth — write the full member payload so future sessions can rehydrate
+    // First-time OAuth — write the PUBLIC projection + memberId pointer only.
+    // The Member record goes to /members below (locked-down read rule); no
+    // `member:` payload here ever again (1-P1.2).
     await setDoc(userDoc, {
       displayName: `${fallback.firstName} ${fallback.lastName}`.trim(),
       avatar: null,
       bio: '',
       isPrivate: false,
       memberId: fallback.id,
-      member: fallback,
       createdAt: new Date().toISOString(),
       authProvider: 'oauth',
     }, { merge: true });
   }
-  // Always upsert to /members/{id} (idempotent via merge). The admin members
-  // list reads from /members, not /users, and the OAuth path historically
-  // never wrote there — so older Apple/Google signups are missing from the
-  // admin list. Pushing on every sign-in backfills them and keeps email/oauth
-  // parity. Stamps firebaseUid so the /members create rule passes.
+  // Ensure /members/{id} exists and is uid-stamped. The admin members list
+  // reads from /members, not /users, and the OAuth path historically never
+  // wrote there. New accounts get a full create; returning users get the
+  // missing/unstamped-only backfill — a blind every-sign-in upsert clobbered
+  // fresher server data with whatever this device had (1-P1.1).
   try {
     const memberWithUid: Member = member.firebaseUid === uid
       ? member
       : { ...member, firebaseUid: uid };
-    const { upsertMemberInFirestore } = await import('./memberSync');
-    await upsertMemberInFirestore(memberWithUid);
+    const { upsertMemberInFirestore, backfillMemberIfMissing } = await import('./memberSync');
+    if (isNewAccount) {
+      await upsertMemberInFirestore(memberWithUid);
+    } else {
+      await backfillMemberIfMissing(memberWithUid);
+    }
+    member = memberWithUid;
   } catch (err) {
     console.warn('[firebaseAuth] OAuth → /members upsert failed:', err);
   }

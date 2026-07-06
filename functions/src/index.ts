@@ -61,6 +61,20 @@ export { backfillFollowCounts } from './backfillFollowCounts';
 // bookings (F25). Run once after deploying the tightened rule.
 export { backfillAppointmentOwners } from './backfillAppointmentOwners';
 
+// One-shot admin migration — strip the legacy `member:` PII blob (real email
+// + name) from every /users doc (finding 1-P1.2). Run once after deploy.
+export { backfillUsersPii } from './backfillUsersPii';
+
+// One-shot admin migration — stamp firebaseUid on legacy PERSONAL employee
+// tasks so the owner-scoped read rule doesn't hide them (1-P2.32). Run once
+// with the tightened /employeeTasks rules deploy.
+export { backfillEmployeeTaskOwners } from './backfillEmployeeTaskOwners';
+
+// One-shot admin sweep — purge /nutrition/{uid} trees whose Auth user no
+// longer exists (accounts deleted before deleteAccount purged nutrition —
+// finding 1-P1.3). Dry-run by default; pass {"dryRun":false} to delete.
+export { sweepOrphanedNutrition } from './sweepOrphanedNutrition';
+
 // Stripe webhook — server-authoritative payment reconciliation (records every
 // succeeded/failed PaymentIntent in payments/{id}). Owner sets STRIPE_WEBHOOK_SECRET
 // + registers the endpoint; inert until then.
@@ -281,7 +295,49 @@ export const extractDexa = onRequest(
       const parsed = safeParseJson<any>(text);
       if (!parsed) { res.status(502).send('Invalid model output'); return; }
 
-      res.json(parsed);
+      // Shape guard + clamp (mirrors recognizeFood). The model occasionally
+      // returns string numbers ("22.5"), which pass the client's review UI
+      // untouched and then crash `.toFixed()` renders in DexaScansScreen.
+      // Number-coerce every metric, drop non-finite values, and whitelist
+      // the known keys so the client only ever sees clean shapes.
+      const num = (v: unknown): number | undefined => {
+        if (v == null || v === '') return undefined;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : undefined;
+      };
+      const region = (r: any): { leanKg?: number; fatKg?: number } | undefined => {
+        if (!r || typeof r !== 'object') return undefined;
+        const leanKg = num(r.leanKg);
+        const fatKg = num(r.fatKg);
+        if (leanKg === undefined && fatKg === undefined) return undefined;
+        return {
+          ...(leanKg !== undefined ? { leanKg } : {}),
+          ...(fatKg !== undefined ? { fatKg } : {}),
+        };
+      };
+      const clean: Record<string, unknown> = {};
+      if (typeof parsed.scanDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.scanDate)) {
+        clean.scanDate = parsed.scanDate;
+      }
+      const NUM_FIELDS = [
+        'totalBodyFatPct', 'fatMassKg', 'leanMassKg', 'bmc',
+        'vatCm2', 'fmi', 'ffmi', 'androidGynoidRatio',
+      ] as const;
+      for (const key of NUM_FIELDS) {
+        const n = num(parsed[key]);
+        if (n !== undefined) clean[key] = n;
+      }
+      const regional: Record<string, unknown> = {};
+      for (const part of ['arms', 'legs', 'trunk'] as const) {
+        const r = region(parsed.regional?.[part]);
+        if (r) regional[part] = r;
+      }
+      if (Object.keys(regional).length > 0) clean.regional = regional;
+      if (typeof parsed.notes === 'string' && parsed.notes.trim()) {
+        clean.notes = parsed.notes.slice(0, 500);
+      }
+
+      res.json(clean);
     } catch (e: any) {
       logger.error('extractDexa failed', e);
       res.status(500).send('Processing failed');
@@ -315,12 +371,49 @@ export const parseBloodwork = onRequest(
         req.body.mimeType as any,
         ANTHROPIC_API_KEY.value(),
       );
-      const parsed = safeParseJson<{ biomarkers: any[] }>(text);
+      const parsed = safeParseJson<{ testDate?: unknown; labName?: unknown; biomarkers: any[] }>(text);
       if (!parsed || !Array.isArray(parsed.biomarkers)) {
         res.status(502).send('Invalid model output');
         return;
       }
-      res.json(parsed);
+
+      // Shape guard + clamp (mirrors recognizeFood): Number-coerce values,
+      // drop biomarkers without a finite value (the prompt already asks the
+      // model to drop them), and whitelist status/category enums so an
+      // off-enum string can't hide rows in the client's grouped detail view.
+      const num = (v: unknown): number | undefined => {
+        if (v == null || v === '') return undefined;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : undefined;
+      };
+      const STATUSES = ['optimal', 'sufficient', 'out_of_range', 'unknown'];
+      const CATEGORIES = ['CBC', 'Lipid', 'Metabolic', 'Thyroid', 'Hormone', 'Vitamin', 'Other'];
+      const biomarkers = parsed.biomarkers.slice(0, 100).flatMap((b: any) => {
+        const value = num(b?.value);
+        if (value === undefined) return [];
+        const referenceLow = num(b?.referenceLow);
+        const referenceHigh = num(b?.referenceHigh);
+        return [{
+          name: String(b?.name ?? 'Unknown').slice(0, 80),
+          ...(typeof b?.displayName === 'string' && b.displayName.trim()
+            ? { displayName: b.displayName.slice(0, 80) }
+            : {}),
+          value,
+          unit: String(b?.unit ?? '').slice(0, 24),
+          ...(referenceLow !== undefined ? { referenceLow } : {}),
+          ...(referenceHigh !== undefined ? { referenceHigh } : {}),
+          status: STATUSES.includes(b?.status) ? b.status : 'unknown',
+          category: CATEGORIES.includes(b?.category) ? b.category : 'Other',
+        }];
+      });
+      const out: Record<string, unknown> = { biomarkers };
+      if (typeof parsed.testDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.testDate)) {
+        out.testDate = parsed.testDate;
+      }
+      if (typeof parsed.labName === 'string' && parsed.labName.trim()) {
+        out.labName = parsed.labName.slice(0, 80);
+      }
+      res.json(out);
     } catch (e: any) {
       logger.error('parseBloodwork failed', e);
       res.status(500).send('Processing failed');

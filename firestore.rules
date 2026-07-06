@@ -84,9 +84,36 @@ service cloud.firestore {
     // Member profiles keyed by Firebase Auth uid.
     // Anyone signed in can read profiles (for community features).
     // Only the owner can create/update/delete their own profile.
+    //
+    // /users is the PUBLIC cross-user projection (displayName / avatar / bio /
+    // isPrivate / counters + the memberId pointer). It must never carry the
+    // full Member record: older OAuth builds stored it here as a `member:`
+    // field (real email + name, readable by any signed-in user — finding
+    // 1-P1.2), silently defeating the /members PII lockdown below. The write
+    // guard blocks the field from ever coming back; backfillUsersPii strips
+    // it from existing docs.
+    // ⚠️ DEPLOY SEQUENCING: app builds ≤ 2.0.2 still write `member:` on a
+    // FIRST-TIME OAuth sign-in — those creates are denied for as long as such
+    // installs exist (not just a release window), so deploy this guard only
+    // with/after the client release that stops doing so, and expect stragglers
+    // on old builds to need an app update before their first OAuth sign-in
+    // succeeds. Run backfillUsersPii right after deploying these rules to
+    // strip the legacy blob from existing docs.
     match /users/{uid} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isOwner(uid);
+      allow create: if isOwner(uid)
+                    && !('member' in request.resource.data);
+      // UPDATE: request.resource.data is the POST-write doc, so a blanket
+      // !('member' in ...) would deny EVERY owner update to a legacy doc that
+      // still carries the blob (profile edits, privacy toggle, follow
+      // counters, acceptedTermsAt) until backfillUsersPii has run. Tolerate a
+      // pre-existing `member` that the write leaves byte-identical (or
+      // deletes); still block introducing or modifying it.
+      allow update: if isOwner(uid)
+                    && (!('member' in request.resource.data)
+                        || ('member' in resource.data
+                            && request.resource.data.member == resource.data.member));
+      allow delete: if isOwner(uid);
     }
 
     // Members collection — keyed by the app's local member id (not the
@@ -332,7 +359,10 @@ service cloud.firestore {
     // follow flow was silently broken.
     match /followRequests/{targetUid}/requests/{requesterUid} {
       allow read: if isOwner(targetUid);
-      allow create: if isOwner(requesterUid);
+      // A blocked user may not file (or re-file) a follow request against
+      // either side of the block — same guard as the DM create rule.
+      allow create: if isOwner(requesterUid)
+                    && !blockedBetween(requesterUid, targetUid);
       allow delete: if isOwner(requesterUid) || isOwner(targetUid);
     }
 
@@ -385,6 +415,17 @@ service cloud.firestore {
     match /customProducts/{productId} {
       allow read: if isSignedIn();
       allow create, update, delete: if isAdmin();
+    }
+
+    // Scheduling config (session names / prices / showPricing) is
+    // non-sensitive display data that Book Private needs BEFORE sign-in —
+    // guests (App Review 5.1.1(v)) have no Firebase session, so the
+    // signed-in gate below permission-denied their listener and they were
+    // stuck on hardcoded defaults forever. Public read, scoped to this ONE
+    // doc; every other /config doc keeps the signed-in gate.
+    match /config/scheduling {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // App-wide config (e.g. scheduling pricing). Readable by any signed-in
@@ -499,7 +540,20 @@ service cloud.firestore {
     // members can create/edit/delete their own personal tasks (source must
     // be 'personal' and the doc's `firebaseUid` must match their auth uid).
     match /employeeTasks/{taskId} {
-      allow read: if isSignedIn();
+      // Personal tasks carry the owner's private to-do text — readable only
+      // by the owner or an admin (was: any signed-in user, which let every
+      // member's device download all staff personal to-dos). Shared
+      // default/assigned tasks stay readable by any signed-in user. Rules
+      // are NOT filters: the client's non-admin listeners are split so each
+      // query is provably inside one branch (employeeTaskSync.subscribeToTasks).
+      // Legacy personal docs need firebaseUid stamped first — run
+      // backfillEmployeeTaskOwners with this deploy or they vanish from
+      // their owners' lists.
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.source in ['default', 'assigned'])
+        || (isSignedIn()
+            && resource.data.source == 'personal'
+            && resource.data.firebaseUid == request.auth.uid);
       allow create: if isAdmin()
         || (isSignedIn()
             && request.resource.data.source == 'personal'

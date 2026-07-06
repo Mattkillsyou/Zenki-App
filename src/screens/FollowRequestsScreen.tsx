@@ -7,6 +7,7 @@ import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useBlocks } from '../context/BlocksContext';
 import {
   listFollowRequests, acceptFollowRequest, declineFollowRequest, getUserProfile,
 } from '../services/firebaseFollow';
@@ -21,10 +22,19 @@ interface RequestRow {
 
 export function FollowRequestsScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const { blockedIds, blockedByIds } = useBlocks();
   const [rows, setRows] = useState<RequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   // Per-row in-flight guard so a double-tap can't fire Accept/Decline twice.
   const [busy, setBusy] = useState<Set<string>>(new Set());
+
+  // Hide requests across a block, in either direction — the block dialog
+  // promises "they won't be able to follow you", and pre-block requests
+  // shouldn't keep the blocked user visible in this queue. Filtered at
+  // render so a block made while this screen is open takes effect too.
+  const visibleRows = rows.filter(
+    (r) => !blockedIds.has(r.requesterId) && !blockedByIds.has(r.requesterId),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -134,7 +144,7 @@ export function FollowRequestsScreen({ navigation }: any) {
         <View style={styles.center}>
           <ActivityIndicator color={colors.gold} />
         </View>
-      ) : rows.length === 0 ? (
+      ) : visibleRows.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name="person-add-outline" size={48} color={colors.textMuted} />
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No follow requests</Text>
@@ -144,7 +154,7 @@ export function FollowRequestsScreen({ navigation }: any) {
         </View>
       ) : (
         <FlatList
-          data={rows}
+          data={visibleRows}
           keyExtractor={(r) => r.requesterId}
           renderItem={renderItem}
           contentContainerStyle={{ padding: spacing.lg, gap: spacing.xs, width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' }}
