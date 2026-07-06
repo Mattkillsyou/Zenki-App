@@ -184,8 +184,10 @@ export async function scheduleMedicationNotifications(
       }
       case 'weekly':
       case 'biweekly': {
-        // Use the weekday of startDate (JS getDay: 0=Sun..6=Sat → expo: 1..7)
-        const startDay = new Date(med.startDate).getDay();
+        // Use the weekday of startDate (JS getDay: 0=Sun..6=Sat → expo: 1..7).
+        // Parse as LOCAL midnight — a bare 'YYYY-MM-DD' parses as UTC, which
+        // is the previous weekday west of UTC (matches isMedicationScheduledForDate).
+        const startDay = new Date(med.startDate.slice(0, 10) + 'T00:00:00').getDay();
         const expoWeekday = startDay + 1;
         const id = await scheduleWeekly(Notifications, med, expoWeekday, time, hhmm);
         if (id) ids.push(id);

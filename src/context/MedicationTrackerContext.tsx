@@ -1,5 +1,5 @@
 import React, {
-  createContext, useContext, useState, useEffect, useCallback, useMemo,
+  createContext, useContext, useState, useEffect, useCallback, useMemo, useRef,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
@@ -16,6 +16,10 @@ import {
 
 const STORAGE_KEY = '@zenki_medications';
 const LOG_STORAGE_KEY = '@zenki_medication_logs';
+// One-time migration marker: weekly/biweekly reminders scheduled before the
+// startDate weekday fix (UTC parse fired a day early west of UTC) have the
+// wrong weekday baked into the OS triggers and must be re-scheduled once.
+const WEEKDAY_FIX_KEY = '@zenki_med_notif_weekday_fix_v1';
 
 // ─────────────────────────────────────────────────
 // Types
@@ -178,6 +182,50 @@ export function MedicationTrackerProvider({ children }: { children: React.ReactN
   // Persist on change
   useEffect(() => { if (loaded) safeStorageSet(STORAGE_KEY, medications, '[Medications]'); }, [medications, loaded]);
   useEffect(() => { if (loaded) safeStorageSet(LOG_STORAGE_KEY, logs, '[Medication logs]'); }, [logs, loaded]);
+
+  // Ref mirror of medications so one-shot effects can read COMMITTED state.
+  // Reading via an identity setState updater (`setX((prev) => { copy = prev;
+  // return prev; })`) is unreliable — React only runs the updater eagerly when
+  // the fiber has no pending update, so the copy can silently stay stale/empty
+  // (same pitfall documented in GamificationContext).
+  const medicationsRef = useRef<MedicationEntry[]>(medications);
+  useEffect(() => { medicationsRef.current = medications; }, [medications]);
+
+  // One-time weekday-fix migration (see WEEKDAY_FIX_KEY)
+  useEffect(() => {
+    if (!loaded) return;
+    (async () => {
+      try {
+        const done = await AsyncStorage.getItem(WEEKDAY_FIX_KEY);
+        if (done) return;
+        // `loaded` flips in the same batch that commits the hydrated meds, so
+        // by the time this async body resumes the ref holds the real list.
+        const targets = medicationsRef.current.filter(
+          (m) => (m.frequency === 'weekly' || m.frequency === 'biweekly') &&
+            m.notificationsEnabled &&
+            (m.scheduledNotificationIds?.length ?? 0) > 0,
+        );
+        let allOk = true;
+        for (const med of targets) {
+          try {
+            const newIds = await rescheduleMedicationNotifications(med);
+            setMedications((prev) =>
+              prev.map((m) => (m.id === med.id ? { ...m, scheduledNotificationIds: newIds } : m)),
+            );
+          } catch (err) {
+            allOk = false;
+            console.warn('[MedicationTracker] weekday-fix reschedule failed:', err);
+          }
+        }
+        // Only burn the one-shot marker when every target actually
+        // rescheduled — a partial failure retries on the next launch instead
+        // of leaving wrong-weekday triggers in place forever.
+        if (allOk) await AsyncStorage.setItem(WEEKDAY_FIX_KEY, '1');
+      } catch (err) {
+        console.warn('[MedicationTracker] weekday-fix migration failed:', err);
+      }
+    })();
+  }, [loaded]);
 
   // ─────────────────────────────────────────────────
   // Mutations
