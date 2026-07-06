@@ -36,6 +36,10 @@ export function MessagesChatScreen({ navigation, route }: any) {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  // True when getOrCreateConversation failed (offline / rules-rejected) — the
+  // composer is replaced with a Retry banner instead of silently dead-ending.
+  const [createError, setCreateError] = useState(false);
+  const [createAttempt, setCreateAttempt] = useState(0);
   const listRef = useRef<FlatList<Message>>(null);
   const blocked = !!otherUserId && isBlocked(otherUserId);
 
@@ -77,13 +81,28 @@ export function MessagesChatScreen({ navigation, route }: any) {
 
   // Ensure conversation exists
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       if (!conversationId && otherUserId) {
-        const id = await getOrCreateConversation(otherUserId);
-        if (id) setConversationId(id);
+        try {
+          const id = await getOrCreateConversation(otherUserId);
+          if (cancelled) return;
+          if (id) {
+            setConversationId(id);
+            setCreateError(false);
+          } else {
+            // No Firebase session / unconfigured — the thread can't open.
+            setCreateError(true);
+          }
+        } catch {
+          // Offline or rules-rejected — surface a retryable state instead of
+          // an unhandled rejection and a composer whose Send silently no-ops.
+          if (!cancelled) setCreateError(true);
+        }
       }
     })();
-  }, [conversationId, otherUserId]);
+    return () => { cancelled = true; };
+  }, [conversationId, otherUserId, createAttempt]);
 
   // Subscribe to messages
   useEffect(() => {
@@ -103,10 +122,17 @@ export function MessagesChatScreen({ navigation, route }: any) {
     const text = draft;
     setDraft('');
     try {
-      await sendMessage(conversationId, text);
+      const sent = await sendMessage(conversationId, text);
+      if (!sent) {
+        // A null resolve (e.g. missing conversation doc) means nothing was
+        // written — restore the draft and say so instead of dropping it.
+        setDraft(text);
+        Alert.alert('Message not sent', "Couldn't send your message. Please try again.");
+      }
     } catch (err: any) {
       // Restore the draft so it isn't lost on a transient failure.
       setDraft(text);
+      Alert.alert('Message not sent', "Couldn't send your message. Please try again.");
     } finally {
       setSending(false);
     }
@@ -195,7 +221,21 @@ export function MessagesChatScreen({ navigation, route }: any) {
           }
         />
 
-        {blocked ? (
+        {createError && !conversationId ? (
+          <View style={[styles.inputBar, { backgroundColor: colors.background, borderTopColor: colors.border, alignItems: 'center' }]}>
+            <Text style={{ flex: 1, color: colors.textMuted, fontSize: 13 }}>
+              Couldn't open this conversation.
+            </Text>
+            <SoundPressable
+              onPress={() => { setCreateError(false); setCreateAttempt((n) => n + 1); }}
+              style={[styles.retryBtn, { backgroundColor: colors.gold }]}
+              accessibilityRole="button"
+              accessibilityLabel="Retry opening the conversation"
+            >
+              <Text style={styles.retryLabel}>Retry</Text>
+            </SoundPressable>
+          </View>
+        ) : blocked ? (
           <View style={[styles.inputBar, { backgroundColor: colors.background, borderTopColor: colors.border, justifyContent: 'center' }]}>
             <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center' }}>
               You've blocked {otherUserName}. Unblock from the ••• menu above to resume messaging.
@@ -287,4 +327,10 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',
   },
+  retryBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  retryLabel: { color: '#000', fontSize: 13, fontWeight: '800' },
 });

@@ -7,6 +7,7 @@ import {
   where,
   orderBy,
   limit,
+  limitToLast,
   updateDoc,
   onSnapshot,
   serverTimestamp,
@@ -212,10 +213,13 @@ export function subscribeToInbox(onUpdate: (convs: Conversation[]) => void): Uns
 /** Subscribe to messages in a conversation, ordered oldest-first. */
 export function subscribeToThread(conversationId: string, onUpdate: (msgs: Message[]) => void): Unsubscribe {
   if (!FIREBASE_CONFIGURED || !db) return () => {};
+  // limitToLast anchors the window at the END of the asc order — the NEWEST
+  // 200. A plain limit() kept the OLDEST 200, so once a thread passed 200
+  // messages every new send was permanently invisible to both participants.
   const q = query(
     collection(db, 'conversations', conversationId, 'messages'),
     orderBy('createdAt', 'asc'),
-    limit(200),
+    limitToLast(200),
   );
   return onSnapshot(q, (snap) => {
     const list: Message[] = [];

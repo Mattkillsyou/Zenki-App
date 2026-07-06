@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import {
   blockUser as blockUserRemote,
   unblockUser as unblockUserRemote,
@@ -8,6 +10,7 @@ import {
   getMutedUserIds,
   getUsersWhoBlockedMe,
 } from '../services/firebaseModeration';
+import { getCurrentUid } from '../services/firebaseAuth';
 import { useAuth } from './AuthContext';
 
 interface BlocksContextValue {
@@ -75,9 +78,37 @@ export function BlocksProvider({ children }: { children: React.ReactNode }) {
     setBlockedByIds(blockedBy);
   }, [user?.id]);
 
+  // Live-subscribe to the three tiny owner-readable collections instead of a
+  // one-shot fetch, so a block made (or received — /blockedBy mirror) while the
+  // app is open takes effect this session, not after a force-quit. The
+  // optimistic set updates in blockUser/muteUser below still apply instantly;
+  // the snapshots simply confirm and pick up remote changes.
   useEffect(() => {
-    refresh().catch((e) => console.warn('[Blocks] refresh failed:', e));
-  }, [refresh]);
+    if (!user?.id) {
+      setBlockedIds(new Set());
+      setMutedIds(new Set());
+      setBlockedByIds(new Set());
+      return;
+    }
+    if (!FIREBASE_CONFIGURED || !db) return;
+    const uid = getCurrentUid();
+    if (!uid) {
+      // No Firebase session yet — fall back to the one-shot path (empty sets).
+      refresh().catch((e) => console.warn('[Blocks] refresh failed:', e));
+      return;
+    }
+    const onErr = (label: string) => (e: unknown) =>
+      console.warn(`[Blocks] ${label} subscribe failed:`, e);
+    const unsubs = [
+      onSnapshot(collection(db, 'blocks', uid, 'blocked'),
+        (snap) => setBlockedIds(new Set(snap.docs.map((d) => d.id))), onErr('blocked')),
+      onSnapshot(collection(db, 'mutes', uid, 'muted'),
+        (snap) => setMutedIds(new Set(snap.docs.map((d) => d.id))), onErr('muted')),
+      onSnapshot(collection(db, 'blockedBy', uid, 'by'),
+        (snap) => setBlockedByIds(new Set(snap.docs.map((d) => d.id))), onErr('blockedBy')),
+    ];
+    return () => unsubs.forEach((u) => u());
+  }, [user?.id, refresh]);
 
   const isBlocked = useCallback((uid: string) => blockedIds.has(uid), [blockedIds]);
   const isMuted = useCallback((uid: string) => mutedIds.has(uid), [mutedIds]);

@@ -118,8 +118,15 @@ export function CommunityScreen({ navigation }: any) {
   // reads on every revisit (P0-8). Newly created posts surface on next manual
   // pull-to-refresh.
   useEffect(() => {
+    // Guests have no Firebase session and post reads are rules-gated to
+    // signed-in users — skip the doomed fetch; the dedicated sign-in state
+    // renders instead of a false "Be the first to share".
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     loadFeed();
-  }, [loadFeed]);
+  }, [loadFeed, user?.id]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -239,7 +246,23 @@ export function CommunityScreen({ navigation }: any) {
         </View>
       </View>
 
-      {loading ? (
+      {!user ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="people-outline" size={56} color={colors.textMuted} />
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>The Dojo Feed</Text>
+          <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
+            Sign in to see what members are sharing.
+          </Text>
+          <SoundPressable
+            style={[styles.retryButton, { backgroundColor: colors.gold }]}
+            onPress={() => navigation.navigate('SignIn')}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in"
+          >
+            <Text style={styles.retryLabel}>Sign In</Text>
+          </SoundPressable>
+        </View>
+      ) : loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.gold} />
         </View>
