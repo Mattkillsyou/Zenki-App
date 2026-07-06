@@ -32,6 +32,9 @@ const BATTERY_CHAR = '00002A19-0000-1000-8000-00805f9b34fb';
 
 /** How long a user-initiated scan runs before giving up (ms). */
 const SCAN_TIMEOUT_MS = 12000;
+/** Max wait for the adapter to leave 'Unknown'/'Resetting' before a scan or
+ *  reconnect gives up on getting a settled state (ms). */
+const ADAPTER_SETTLE_TIMEOUT_MS = 2000;
 /** Poll interval for live signal-strength reads while connected (ms). */
 const RSSI_POLL_MS = 5000;
 /** Consecutive readRSSI() rejections that count as a silent link death.
@@ -396,6 +399,43 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     return manager;
   }, [clearConnectionState]);
 
+  // ── Wait for the adapter state to settle. ble-plx delivers the current state
+  // asynchronously (onStateChange(cb, true) emits on a later tick; a bare
+  // manager.state() is not reliable pre-settle on iOS), so on the FIRST BLE
+  // action after a cold launch bleAdapterStateRef is still 'Unknown' when a
+  // gate reads it — and the ref can also be momentarily stale when the
+  // PoweredOn handler invokes reconnectSaved (see handleDrop's gate comment).
+  // Always subscribe fresh with emitCurrent=true and resolve with the first
+  // settled state, or whatever was seen last after ADAPTER_SETTLE_TIMEOUT_MS
+  // ('Unknown' if nothing ever arrived). Never rejects.
+  const awaitSettledAdapterState = useCallback((manager: any): Promise<string> => {
+    return new Promise((resolve) => {
+      let sub: any = null;
+      let done = false;
+      let latest = bleAdapterStateRef.current;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const finish = (state: string) => {
+        if (done) return;
+        done = true;
+        if (timer) { clearTimeout(timer); timer = null; }
+        try { sub?.remove(); } catch { /* ignore */ }
+        resolve(state);
+      };
+      timer = setTimeout(() => finish(latest), ADAPTER_SETTLE_TIMEOUT_MS);
+      try {
+        sub = manager.onStateChange((state: string) => {
+          latest = state;
+          if (state !== 'Unknown' && state !== 'Resetting') finish(state);
+        }, true);
+      } catch {
+        finish(latest);
+      }
+      // If the emission ran synchronously (before `sub` was assigned), the
+      // finish() above couldn't remove it — clean up now.
+      if (done) { try { sub?.remove(); } catch { /* ignore */ } }
+    });
+  }, []);
+
   // ── Shared connect tail for ALL connect paths (connectToDevice,
   // reconnectSaved, scanAndConnect). Assumes `device` is already connected at
   // the GATT level. Discovers services, wires the HR monitor (parser verbatim
@@ -571,11 +611,23 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     if (!manager) return; // ensureManager already set unavailable/unsupported
 
     // Don't scan if the adapter isn't usable — surface the reason instead.
-    const state = bleAdapterStateRef.current;
-    if (state && state !== 'PoweredOn') {
+    // On the first BLE action after a cold launch the adapter is still
+    // 'Unknown' (ble-plx reports the real state asynchronously), so wait for
+    // it to settle instead of gating on the stale ref — otherwise the first
+    // tap was a silent no-op. Every non-PoweredOn branch sets an honest
+    // status/reason; the gate can never bare-return.
+    const state = await awaitSettledAdapterState(manager);
+    // The settle wait yields — if a connect started meanwhile, don't stomp it.
+    if (connectingRef.current) return;
+    if (state !== 'PoweredOn') {
       if (state === 'PoweredOff') { setBleStatus('disconnected'); setBleReason('poweredOff'); }
       else if (state === 'Unauthorized') { setBleStatus('disconnected'); setBleReason('unauthorized'); }
       else if (state === 'Unsupported') { setBleStatus('unavailable'); setBleReason('unsupported'); }
+      else {
+        // 'Unknown'/'Resetting' after the timeout — adapter never settled.
+        setBleStatus('disconnected');
+        setBleReason('failed');
+      }
       return;
     }
 
@@ -648,7 +700,7 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
         setDiscoveredDevices(sortDiscovered(Array.from(scanFoundRef.current.values())));
       }
     });
-  }, [ensureManager]);
+  }, [ensureManager, awaitSettledAdapterState]);
 
   // ── Connect to a specific device id chosen from the picker.
   const connectToDevice = useCallback(async (deviceId: string): Promise<boolean> => {
@@ -711,6 +763,22 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     // previous device (so reconnect-after-drop is unaffected).
     clearConnectionState(true);
     try {
+      // Pre-connect adapter gate (same cold-launch fix as startScan): wait for
+      // the state to settle — the ref is 'Unknown' on the first BLE action of
+      // a process, and stale when the PoweredOn handler invoked us — then bail
+      // with the honest blocking reason instead of a doomed connect → generic
+      // 'failed'. Inside the try so `finally` still frees connectingRef.
+      const adapterState = await awaitSettledAdapterState(manager);
+      if (adapterState !== 'PoweredOn') {
+        setBleStatus('disconnected');
+        setBleReason(
+          adapterState === 'PoweredOff' ? 'poweredOff'
+          : adapterState === 'Unauthorized' ? 'unauthorized'
+          : adapterState === 'Unsupported' ? 'unsupported'
+          : 'failed',
+        );
+        return false;
+      }
       const device = await manager.connectToDevice(saved.id);
       return await finalizeConnection(device);
     } catch {
@@ -733,7 +801,7 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
     } finally {
       connectingRef.current = false;
     }
-  }, [ensureManager, cancelPendingDropReconnect, finalizeConnection, clearConnectionState]);
+  }, [ensureManager, awaitSettledAdapterState, cancelPendingDropReconnect, finalizeConnection, clearConnectionState]);
   useEffect(() => { reconnectSavedRef.current = reconnectSaved; }, [reconnectSaved]);
 
   // ── BLE scan + connect (COMPAT — kept for BLE_CONTRACT.md back-compat).
