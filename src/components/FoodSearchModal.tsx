@@ -52,12 +52,18 @@ export function FoodSearchModal({ visible, onClose, onSelect, recentFoods = [], 
       return;
     }
     setLoading(true);
+    // Staleness guard: clearTimeout only stops a search that hasn't fired yet.
+    // An already-in-flight searchFoods can resolve late (up to ~5s) and must
+    // not overwrite results for a newer query.
+    let cancelled = false;
     debounceRef.current = setTimeout(async () => {
       const r = await searchFoods(q, 30);
+      if (cancelled) return;
       setResults(r);
       setLoading(false);
     }, 350);
     return () => {
+      cancelled = true;
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [query, visible]);
