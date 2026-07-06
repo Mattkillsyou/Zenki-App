@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { View, StyleSheet, Animated, Dimensions } from 'react-native';
-import { useSenpai } from '../context/SenpaiContext';
+import { useSenpai, type MascotMood } from '../context/SenpaiContext';
 
 const { width: SW } = Dimensions.get('window');
 const SH = Math.min(Dimensions.get('window').height, 932);
@@ -35,15 +35,52 @@ export function SenpaiOverlay() {
         </>
       )}
       {state.sparkleActive && (
+        <ReactionLayer mood={mood} max={max} trigger={state.reactionExpiry} />
+      )}
+    </View>
+  );
+}
+
+/**
+ * ReactionLayer — the sparkleActive effects, with H4 beat timing.
+ * Since D2's source tiers, sparkleActive is set ONLY by milestone-sourced
+ * reactions, so every mount of this layer IS a milestone — and it staggers
+ * its effects to match the mascot's runReactionScript beats instead of
+ * detonating everything at once:
+ *   +150ms  starburst (lands with the mascot's pose swap)
+ *   +550ms  ambient rain — hearts / kaomoji / sparkles / confetti
+ *   (the speech bubble pops at +300ms, in between)
+ * Timing hooks only — no new effects. `trigger` (reactionExpiry) changes per
+ * reaction, so back-to-back milestones restart the beats (and remount
+ * StarburstRing, which also lets its one-shot animation actually replay).
+ * Known small edge: a chat reply landing INSIDE a milestone's window also
+ * changes `trigger` and restarts the beats — a brief re-pop of effects that
+ * are already celebrating, which is fine; when no milestone is active,
+ * sparkleActive is false and chat replies mount nothing.
+ */
+function ReactionLayer({ mood, max, trigger }: { mood: MascotMood; max: boolean; trigger: number }) {
+  // beat 0 = nothing yet, 1 = burst, 2 = full rain.
+  const [beat, setBeat] = useState(0);
+
+  useEffect(() => {
+    setBeat(0);
+    const t1 = setTimeout(() => setBeat(1), 150);
+    const t2 = setTimeout(() => setBeat(2), 550);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [trigger]);
+
+  return (
+    <>
+      {beat >= 1 && <StarburstRing trigger={trigger} />}
+      {beat >= 2 && (
         <>
           <FloatingHearts max={max} />
           <FloatingKaomoji max={max} />
           <SparkleParticles max={max} />
-          <StarburstRing trigger={state.reactionExpiry} />
           {mood === 'celebrating' && <ConfettiBurst max={max} />}
         </>
       )}
-    </View>
+    </>
   );
 }
 
