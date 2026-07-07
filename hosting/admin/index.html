@@ -25,63 +25,42 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       -webkit-font-smoothing: antialiased; line-height: 1.45;
     }
-    button { font-family: inherit; cursor: pointer; }
+    button, input, textarea, select { font-family: inherit; }
+    button { cursor: pointer; }
     .hidden { display: none !important; }
 
-    /* ---- Login ---- */
     .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
-    .login-card {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
-      padding: 32px; width: 100%; max-width: 380px;
-    }
+    .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 32px; width: 100%; max-width: 380px; }
     .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
     .brand .dot { width: 12px; height: 12px; border-radius: 3px; background: var(--red); }
     .brand h1 { font-size: 20px; margin: 0; letter-spacing: -0.3px; }
     .login-card p.sub { color: var(--muted); font-size: 13px; margin: 4px 0 22px; }
-    .btn {
-      display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
-      padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border);
-      background: var(--surface2); color: var(--text); font-size: 15px; font-weight: 600;
-    }
+    .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 15px; font-weight: 600; }
     .btn.primary { background: var(--gold); color: #000; border-color: transparent; }
     .btn.danger { background: transparent; color: var(--red); border-color: var(--red); padding: 8px 12px; width: auto; font-size: 13px; }
+    .btn.small { width: auto; padding: 8px 14px; font-size: 13px; }
     .btn:disabled { opacity: 0.5; cursor: default; }
     .divider { display: flex; align-items: center; gap: 10px; color: var(--tertiary); font-size: 12px; margin: 18px 0; }
     .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
     .field { margin-bottom: 10px; }
-    .field input {
-      width: 100%; padding: 11px 13px; border-radius: 10px; border: 1px solid var(--border);
-      background: var(--bg); color: var(--text); font-size: 14px;
-    }
+    label.fl { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 5px; }
+    input, textarea, select { width: 100%; padding: 11px 13px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; }
+    textarea { min-height: 90px; resize: vertical; }
     .msg { font-size: 13px; margin-top: 14px; min-height: 18px; }
-    .msg.err { color: var(--red); }
-    .msg.ok { color: var(--green); }
+    .msg.err { color: var(--red); } .msg.ok { color: var(--green); }
 
-    /* ---- App shell ---- */
-    header.top {
-      display: flex; align-items: center; gap: 12px; padding: 14px 20px;
-      border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 10;
-    }
+    header.top { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 10; }
     header.top .dot { width: 12px; height: 12px; border-radius: 3px; background: var(--red); }
     header.top h1 { font-size: 16px; margin: 0; flex: 1; letter-spacing: -0.2px; }
     header.top .who { color: var(--muted); font-size: 13px; }
     nav.tabs { display: flex; gap: 4px; padding: 12px 20px 0; overflow-x: auto; }
-    nav.tabs button {
-      padding: 9px 16px; border-radius: 999px; border: 1px solid var(--border);
-      background: var(--surface); color: var(--muted); font-size: 14px; font-weight: 600; white-space: nowrap;
-    }
+    nav.tabs button { padding: 9px 16px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 14px; font-weight: 600; white-space: nowrap; }
     nav.tabs button.active { background: var(--gold); color: #000; border-color: transparent; }
     main { padding: 16px 20px 60px; max-width: 900px; margin: 0 auto; }
     .section-label { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; color: var(--muted); margin: 6px 0 12px; }
 
-    .row {
-      display: flex; align-items: center; gap: 12px; padding: 12px;
-      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px;
-    }
-    .thumb {
-      width: 52px; height: 52px; border-radius: 10px; background: var(--surface2);
-      display: flex; align-items: center; justify-content: center; overflow: hidden; flex: 0 0 auto; color: var(--muted); font-size: 20px;
-    }
+    .row { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; }
+    .thumb { width: 52px; height: 52px; border-radius: 10px; background: var(--surface2); display: flex; align-items: center; justify-content: center; overflow: hidden; flex: 0 0 auto; color: var(--muted); font-size: 20px; }
     .thumb img { width: 100%; height: 100%; object-fit: cover; }
     .row .body { flex: 1; min-width: 0; }
     .row .name { font-weight: 700; font-size: 14px; }
@@ -89,6 +68,7 @@
     .row .date { color: var(--tertiary); font-size: 11px; margin-top: 3px; }
     .badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: var(--surface2); color: var(--muted); margin-left: 6px; }
     .badge.red { background: rgba(226,54,54,0.15); color: var(--red); }
+    .badge.gold { background: rgba(227,178,60,0.18); color: var(--gold); }
     .state { text-align: center; color: var(--muted); padding: 40px 16px; }
     .state .big { font-size: 15px; color: var(--text); font-weight: 600; margin-bottom: 4px; }
     .spinner { width: 22px; height: 22px; border: 3px solid var(--border); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
@@ -96,10 +76,17 @@
     .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
     .toolbar .grow { flex: 1; }
     .refresh { background: var(--surface); border: 1px solid var(--border); color: var(--muted); border-radius: 10px; padding: 7px 12px; font-size: 13px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .rowbtns { display: flex; gap: 6px; flex: 0 0 auto; }
+    .iconbtn { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font-size: 13px; color: var(--text); }
+    .charcount { font-size: 11px; color: var(--tertiary); text-align: right; margin-top: 4px; }
+    .pill { display: inline-flex; align-items: center; gap: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-size: 12px; color: var(--muted); margin: 8px 0; }
+    .checkrow { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+    .checkrow input { width: auto; }
   </style>
 </head>
 <body>
-  <!-- LOGIN -->
   <div id="login" class="login-wrap">
     <div class="login-card">
       <div class="brand"><span class="dot"></span><h1>Zenki Dojo Admin</h1></div>
@@ -113,7 +100,6 @@
     </div>
   </div>
 
-  <!-- APP -->
   <div id="app" class="hidden">
     <header class="top">
       <span class="dot"></span>
@@ -125,6 +111,8 @@
       <button data-tab="posts" class="active">Community</button>
       <button data-tab="reports">Reports</button>
       <button data-tab="members">Members</button>
+      <button data-tab="announcements">Announcements</button>
+      <button data-tab="broadcast">Broadcast</button>
     </nav>
     <main id="content"></main>
   </div>
@@ -132,11 +120,11 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import {
-      getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword,
-      signOut, onAuthStateChanged,
+      getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, signOut, onAuthStateChanged,
     } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
     import {
-      getFirestore, collection, query, where, orderBy, limit, getDocs, doc, getDoc,
+      getFirestore, collection, query, where, orderBy, limit, getDocs, getCountFromServer,
+      doc, getDoc, setDoc, deleteDoc,
     } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
     // Public web config (safe to expose — security is enforced by Firestore rules).
@@ -149,6 +137,7 @@
       appId: '1:277160279219:web:4b04763265c86d17a484c6',
     };
     const FN_BASE = 'https://us-central1-zenki-dojo.cloudfunctions.net';
+    const BELTS = ['none', 'white', 'blue', 'purple', 'brown', 'black'];
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
@@ -157,21 +146,21 @@
     const $ = (id) => document.getElementById(id);
     const loginView = $('login'), appView = $('app'), content = $('content');
 
-    // ---- helpers: DOM built with textContent only (no innerHTML on user data) ----
+    // DOM built with textContent only (no innerHTML on user data).
     function el(tag, props = {}, children = []) {
       const n = document.createElement(tag);
       for (const [k, v] of Object.entries(props)) {
         if (k === 'class') n.className = v;
         else if (k === 'text') n.textContent = v;
         else if (k === 'onclick') n.addEventListener('click', v);
+        else if (k === 'value') n.value = v;
+        else if (k === 'checked') n.checked = !!v;
         else n.setAttribute(k, v);
       }
       for (const c of [].concat(children)) if (c) n.appendChild(c);
       return n;
     }
-    function stateBox(big, small) {
-      return el('div', { class: 'state' }, [el('div', { class: 'big', text: big }), el('div', { text: small || '' })]);
-    }
+    function stateBox(big, small) { return el('div', { class: 'state' }, [el('div', { class: 'big', text: big }), el('div', { text: small || '' })]); }
     function spinnerBox() { return el('div', { class: 'state' }, [el('span', { class: 'spinner' })]); }
     function fmtDate(v) {
       if (!v) return '';
@@ -186,29 +175,23 @@
         img.onerror = () => { wrap.textContent = '🖼'; };
         img.src = url;
         wrap.appendChild(img);
-      } else {
-        wrap.textContent = '📝';
-      }
+      } else { wrap.textContent = '👤'; }
       return wrap;
     }
+    function rid(prefix) { return prefix + '_' + Math.abs(Date.now() ^ (performance.now() * 1000 | 0)).toString(36) + Math.floor(1e6 * (crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296)).toString(36); }
 
     // ---- auth ----
-    $('googleBtn').addEventListener('click', async () => {
-      setLoginMsg('');
-      try { await signInWithPopup(auth, new GoogleAuthProvider()); }
-      catch (e) { setLoginMsg(authErr(e), true); }
-    });
+    $('googleBtn').addEventListener('click', async () => { setLoginMsg(''); try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (e) { setLoginMsg(authErr(e), true); } });
     $('emailBtn').addEventListener('click', async () => {
       setLoginMsg('');
       const email = $('email').value.trim(), pw = $('password').value;
       if (!email || !pw) { setLoginMsg('Enter email and password.', true); return; }
-      try { await signInWithEmailAndPassword(auth, email, pw); }
-      catch (e) { setLoginMsg(authErr(e), true); }
+      try { await signInWithEmailAndPassword(auth, email, pw); } catch (e) { setLoginMsg(authErr(e), true); }
     });
     $('signOutBtn').addEventListener('click', () => signOut(auth));
     function setLoginMsg(t, err) { const m = $('loginMsg'); m.textContent = t; m.className = 'msg' + (err ? ' err' : ''); }
     function authErr(e) {
-      const c = e && e.code || '';
+      const c = (e && e.code) || '';
       if (c.includes('popup-closed') || c.includes('cancelled-popup')) return 'Sign-in cancelled.';
       if (c.includes('wrong-password') || c.includes('invalid-credential') || c.includes('user-not-found')) return 'Wrong email or password.';
       if (c.includes('popup-blocked')) return 'Popup blocked — allow popups and retry.';
@@ -217,8 +200,6 @@
 
     onAuthStateChanged(auth, async (user) => {
       if (!user) { appView.classList.add('hidden'); loginView.classList.remove('hidden'); return; }
-      // Admin gate: /admins/{uid} must exist. A user may read their OWN admin doc
-      // (rule: isAdmin() || isOwner(uid)), so this check is permitted for anyone.
       let adminSnap;
       try { adminSnap = await getDoc(doc(db, 'admins', user.uid)); }
       catch (e) {
@@ -227,11 +208,7 @@
         setLoginMsg('Could not verify admin access — check your connection and reload.', true);
         return;
       }
-      if (!adminSnap.exists()) {
-        setLoginMsg('That account is not an admin.', true);
-        await signOut(auth);
-        return;
-      }
+      if (!adminSnap.exists()) { setLoginMsg('That account is not an admin.', true); await signOut(auth); return; }
       $('who').textContent = user.email || user.uid;
       loginView.classList.add('hidden');
       appView.classList.remove('hidden');
@@ -252,9 +229,11 @@
       if (tab === 'posts') return renderPosts();
       if (tab === 'reports') return renderReports();
       if (tab === 'members') return renderMembers();
+      if (tab === 'announcements') return renderAnnouncements();
+      if (tab === 'broadcast') return renderBroadcast();
     }
 
-    // ---- Posts ----
+    // ---- Community ----
     async function renderPosts() {
       content.replaceChildren(spinnerBox());
       let posts = [], capped = false;
@@ -262,18 +241,12 @@
         const snap = await getDocs(query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(200)));
         capped = snap.size === 200;
         posts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      } catch (e) {
-        content.replaceChildren(stateBox('Could not load posts', (e && e.message) || String(e)));
-        return;
-      }
+      } catch (e) { content.replaceChildren(stateBox('Could not load posts', (e && e.message) || String(e))); return; }
       let remaining = posts.length;
       const labelText = () => `${remaining} POST${remaining === 1 ? '' : 'S'}${capped ? ' (newest 200 shown)' : ''} · newest first`;
       const label = el('div', { class: 'section-label grow', text: labelText() });
       const frame = el('div');
-      frame.appendChild(el('div', { class: 'toolbar' }, [
-        label,
-        el('button', { class: 'refresh', text: 'Refresh', onclick: renderPosts }),
-      ]));
+      frame.appendChild(el('div', { class: 'toolbar' }, [label, el('button', { class: 'refresh', text: 'Refresh', onclick: renderPosts })]));
       if (posts.length === 0) { frame.appendChild(stateBox('No posts', 'The community feed is empty.')); content.replaceChildren(frame); return; }
       const onDeleted = () => { remaining = Math.max(0, remaining - 1); label.textContent = labelText(); };
       for (const p of posts) frame.appendChild(postRow(p, onDeleted));
@@ -284,12 +257,11 @@
       row.appendChild(safeImg(p.mediaType === 'photo' ? p.mediaUrl : null));
       const caption = (p.caption || '').trim();
       const kind = p.mediaType === 'video' ? 'Video post' : p.mediaType === 'photo' ? 'Photo post' : 'Text post';
-      const body = el('div', { class: 'body' }, [
+      row.appendChild(el('div', { class: 'body' }, [
         el('div', { class: 'name', text: p.displayName || 'Member' }),
         el('div', { class: 'meta', text: caption || kind }),
         el('div', { class: 'date', text: fmtDate(p.createdAt) }),
-      ]);
-      row.appendChild(body);
+      ]));
       const delBtn = el('button', { class: 'btn danger', text: 'Delete' });
       delBtn.addEventListener('click', async () => {
         if (!confirm(`Delete this post by ${p.displayName || 'Member'}? Removes the post, its comments, likes, and any media. This cannot be undone.`)) return;
@@ -309,51 +281,222 @@
       try {
         const snap = await getDocs(query(collection(db, 'reports'), where('status', '==', 'open'), orderBy('createdAt', 'desc')));
         reports = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      } catch (e) {
-        content.replaceChildren(stateBox('Could not load reports', (e && e.message) || String(e)));
-        return;
-      }
+      } catch (e) { content.replaceChildren(stateBox('Could not load reports', (e && e.message) || String(e))); return; }
       const frame = el('div', {}, [el('div', { class: 'section-label', text: `${reports.length} OPEN REPORT${reports.length === 1 ? '' : 'S'}` })]);
       if (reports.length === 0) { frame.appendChild(stateBox('All clear', 'No open reports.')); content.replaceChildren(frame); return; }
       for (const r of reports) {
-        const row = el('div', { class: 'row' }, [
+        const nm = el('div', { class: 'name' });
+        nm.appendChild(document.createTextNode(String(r.targetType || 'item')));
+        nm.appendChild(el('span', { class: 'badge red', text: r.reason || 'reported' }));
+        frame.appendChild(el('div', { class: 'row' }, [
           el('div', { class: 'thumb', text: '🚩' }),
           el('div', { class: 'body' }, [
-            (() => { const n = el('div', { class: 'name' }); n.appendChild(document.createTextNode(String(r.targetType || 'item'))); n.appendChild(el('span', { class: 'badge red', text: r.reason || 'reported' })); return n; })(),
+            nm,
             el('div', { class: 'meta', text: (r.context && String(r.context).trim()) || 'No extra detail.' }),
             el('div', { class: 'date', text: fmtDate(r.createdAt) }),
           ]),
-        ]);
-        frame.appendChild(row);
+        ]));
       }
       content.replaceChildren(frame);
     }
 
-    // ---- Members ----
+    // ---- Members (editable) ----
     async function renderMembers() {
       content.replaceChildren(spinnerBox());
       let members = [];
       try {
         const snap = await getDocs(query(collection(db, 'members'), limit(500)));
         members = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      } catch (e) {
-        content.replaceChildren(stateBox('Could not load members', (e && e.message) || String(e)));
-        return;
-      }
+      } catch (e) { content.replaceChildren(stateBox('Could not load members', (e && e.message) || String(e))); return; }
       members.sort((a, b) => String(a.firstName || a.name || '').localeCompare(String(b.firstName || b.name || '')));
-      const frame = el('div', {}, [el('div', { class: 'section-label', text: `${members.length} MEMBER${members.length === 1 ? '' : 'S'}` })]);
-      for (const m of members) {
-        const name = [m.firstName, m.lastName].filter(Boolean).join(' ') || m.name || m.displayName || '(no name)';
-        const bits = [m.email, m.belt ? `${m.belt} belt` : null, m.isAdmin ? 'admin' : m.isEmployee ? 'staff' : null].filter(Boolean).join(' · ');
-        frame.appendChild(el('div', { class: 'row' }, [
-          safeImg(m.profilePhoto || m.avatar),
-          el('div', { class: 'body' }, [
-            el('div', { class: 'name', text: name }),
-            el('div', { class: 'meta', text: bits || '—' }),
-          ]),
-        ]));
-      }
+      const frame = el('div', {}, [el('div', { class: 'section-label', text: `${members.length} MEMBER${members.length === 1 ? '' : 'S'} · tap Edit to promote belts or fix details` })]);
+      for (const m of members) frame.appendChild(memberRow(m));
       content.replaceChildren(frame);
+    }
+    function memberDisplay(m) {
+      const name = [m.firstName, m.lastName].filter(Boolean).join(' ') || m.name || m.displayName || '(no name)';
+      const bits = [m.email, m.belt ? `${m.belt}${m.stripes ? ' · ' + m.stripes + ' stripe' + (m.stripes === 1 ? '' : 's') : ''} belt` : null, m.phone, m.isAdmin ? 'admin' : m.isEmployee ? 'staff' : null].filter(Boolean).join(' · ');
+      return { name, bits };
+    }
+    function memberRow(m) {
+      const row = el('div', { class: 'row' });
+      const render = () => {
+        row.replaceChildren();
+        const { name, bits } = memberDisplay(m);
+        row.appendChild(safeImg(m.profilePhoto || m.avatar));
+        row.appendChild(el('div', { class: 'body' }, [
+          el('div', { class: 'name', text: name }),
+          el('div', { class: 'meta', text: bits || '—' }),
+        ]));
+        row.appendChild(el('button', { class: 'iconbtn', text: 'Edit', onclick: edit }));
+      };
+      const edit = () => {
+        row.replaceChildren();
+        const first = el('input', { value: m.firstName || '', placeholder: 'First name' });
+        const last = el('input', { value: m.lastName || '', placeholder: 'Last name' });
+        const phone = el('input', { value: m.phone || '', placeholder: 'Phone' });
+        const origBelt = BELTS.includes(m.belt) ? m.belt : 'none';   // app's neutral default is 'none', not 'white'
+        const belt = el('select', {}, BELTS.map((b) => el('option', { value: b, text: b })));
+        belt.value = origBelt;
+        const origStripes = [0, 1, 2, 3, 4].includes(m.stripes) ? m.stripes : 0;
+        const stripes = el('select', {}, [0, 1, 2, 3, 4].map((n) => el('option', { value: String(n), text: n + ' stripe' + (n === 1 ? '' : 's') })));
+        stripes.value = String(origStripes);
+        const msg = el('div', { class: 'msg' });
+        const save = el('button', { class: 'btn primary small', text: 'Save' });
+        const cancel = el('button', { class: 'btn small', text: 'Cancel', onclick: render });
+        save.addEventListener('click', async () => {
+          save.disabled = true; save.textContent = 'Saving…'; msg.textContent = ''; msg.className = 'msg';
+          const patch = {
+            firstName: first.value.trim(), lastName: last.value.trim(), phone: phone.value.trim(),
+            updatedAt: new Date().toISOString(),
+          };
+          // Only touch rank when the admin actually changed it, so an unrelated
+          // edit (e.g. fixing a phone number) can never fabricate/overwrite a belt.
+          const newBelt = belt.value, newStripes = parseInt(stripes.value, 10) || 0;
+          if (newBelt !== origBelt) patch.belt = newBelt;
+          if (newStripes !== origStripes) patch.stripes = newStripes;
+          try {
+            await setDoc(doc(db, 'members', m.id), patch, { merge: true });
+            Object.assign(m, patch);
+            render();
+          } catch (e) {
+            save.disabled = false; save.textContent = 'Save';
+            msg.textContent = 'Save failed: ' + ((e && e.message) || 'unknown'); msg.className = 'msg err';
+          }
+        });
+        const form = el('div', { class: 'body' }, [
+          el('div', { class: 'grid2' }, [first, last]),
+          el('div', { class: 'grid2', style: 'margin-top:8px' }, [belt, stripes]),
+          el('div', { style: 'margin-top:8px' }, [phone]),
+          msg,
+          el('div', { class: 'rowbtns', style: 'margin-top:8px' }, [save, cancel]),
+        ]);
+        row.appendChild(safeImg(m.profilePhoto || m.avatar));
+        row.appendChild(form);
+      };
+      render();
+      return row;
+    }
+
+    // ---- Announcements (Home-screen notices) ----
+    async function renderAnnouncements() {
+      content.replaceChildren(spinnerBox());
+      let items = [];
+      try {
+        const snap = await getDocs(query(collection(db, 'announcements'), orderBy('createdAt', 'desc')));
+        items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      } catch (e) {
+        // Fall back to an unordered read if the createdAt order errors on legacy data.
+        try { const s2 = await getDocs(query(collection(db, 'announcements'), limit(200))); items = s2.docs.map((d) => ({ id: d.id, ...d.data() })); }
+        catch (e2) { content.replaceChildren(stateBox('Could not load announcements', (e2 && e2.message) || String(e2))); return; }
+      }
+      const frame = el('div');
+      frame.appendChild(el('div', { class: 'toolbar' }, [
+        el('div', { class: 'section-label grow', text: `${items.length} ANNOUNCEMENT${items.length === 1 ? '' : 'S'}` }),
+        el('button', { class: 'btn primary small', text: '+ New', onclick: () => openAnnEditor(null, frame) }),
+      ]));
+      const list = el('div');
+      frame.appendChild(list);
+      if (items.length === 0) list.appendChild(stateBox('No announcements', 'Add one — it shows on every member’s Home screen.'));
+      for (const a of items) list.appendChild(annRow(a));
+      content.replaceChildren(frame);
+    }
+    function annRow(a) {
+      const row = el('div', { class: 'row' });
+      const title = el('div', { class: 'name' });
+      if (a.pinned) title.appendChild(el('span', { class: 'badge gold', text: '📌 pinned' }));
+      title.appendChild(document.createTextNode((a.pinned ? ' ' : '') + (a.title || '(untitled)')));
+      row.appendChild(el('div', { class: 'body' }, [
+        title,
+        el('div', { class: 'meta', text: a.description || '' }),
+        el('div', { class: 'date', text: fmtDate(a.createdAt) }),
+      ]));
+      const editBtn = el('button', { class: 'iconbtn', text: 'Edit', onclick: () => openAnnEditor(a, row) });
+      const delBtn = el('button', { class: 'btn danger', text: 'Delete' });
+      delBtn.addEventListener('click', async () => {
+        if (!confirm(`Delete announcement "${a.title || ''}"?`)) return;
+        delBtn.disabled = true;
+        try { await deleteDoc(doc(db, 'announcements', a.id)); row.remove(); }
+        catch (e) { delBtn.disabled = false; alert('Delete failed: ' + ((e && e.message) || 'unknown')); }
+      });
+      row.appendChild(el('div', { class: 'rowbtns' }, [editBtn, delBtn]));
+      return row;
+    }
+    function openAnnEditor(existing, anchor) {
+      const isNew = !existing;
+      const titleI = el('input', { value: existing ? (existing.title || '') : '', placeholder: 'Title (e.g. Mat cleaning Saturday 8AM)', maxlength: '80' });
+      const descI = el('textarea', { placeholder: 'Short description (optional)', maxlength: '140' });
+      descI.value = existing ? (existing.description || '') : '';
+      const pin = el('input', { type: 'checkbox', checked: existing ? !!existing.pinned : false });
+      const msg = el('div', { class: 'msg' });
+      const saveBtn = el('button', { class: 'btn primary small', text: isNew ? 'Post' : 'Save' });
+      const cancelBtn = el('button', { class: 'btn small', text: 'Cancel', onclick: renderAnnouncements });
+      saveBtn.addEventListener('click', async () => {
+        const title = titleI.value.trim();
+        if (!title) { msg.textContent = 'Enter a title.'; msg.className = 'msg err'; return; }
+        saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; msg.textContent = ''; msg.className = 'msg';
+        const id = existing ? existing.id : rid('ann');
+        const rec = {
+          title, description: descI.value.trim(), pinned: pin.checked,
+          createdAt: existing && existing.createdAt ? existing.createdAt : new Date().toISOString(),
+        };
+        try { await setDoc(doc(db, 'announcements', id), rec, { merge: true }); renderAnnouncements(); }
+        catch (e) { saveBtn.disabled = false; saveBtn.textContent = isNew ? 'Post' : 'Save'; msg.textContent = 'Save failed: ' + ((e && e.message) || 'unknown'); msg.className = 'msg err'; }
+      });
+      const card = el('div', { class: 'card' }, [
+        el('div', { class: 'section-label', text: isNew ? 'NEW ANNOUNCEMENT' : 'EDIT ANNOUNCEMENT' }),
+        el('label', { class: 'fl', text: 'Title' }), titleI,
+        el('label', { class: 'fl', text: 'Description' }), descI,
+        el('label', { class: 'checkrow' }, [pin, el('span', { text: 'Pin to top of Home' })]),
+        msg,
+        el('div', { class: 'rowbtns' }, [saveBtn, cancelBtn]),
+      ]);
+      content.replaceChildren(card);
+    }
+
+    // ---- Broadcast (push to all members via broadcastPush CF) ----
+    async function renderBroadcast() {
+      const titleI = el('input', { placeholder: 'e.g. Class canceled tonight', maxlength: '100' });
+      const bodyI = el('textarea', { placeholder: 'What would you like to say?', maxlength: '400' });
+      const tc = el('div', { class: 'charcount', text: '0/100' });
+      const bc = el('div', { class: 'charcount', text: '0/400' });
+      titleI.addEventListener('input', () => { tc.textContent = `${titleI.value.length}/100`; });
+      bodyI.addEventListener('input', () => { bc.textContent = `${bodyI.value.length}/400`; });
+      const recip = el('div', { class: 'pill', text: 'Counting recipients…' });
+      const msg = el('div', { class: 'msg' });
+      const sendBtn = el('button', { class: 'btn primary', text: 'Send to all members' });
+
+      getCountFromServer(collection(db, 'pushTokens'))
+        .then((agg) => { const n = agg.data().count; recip.textContent = n === 0 ? '0 devices have push enabled — members must sign in on a phone and allow notifications first' : `${n} device${n === 1 ? '' : 's'} will receive this`; })
+        .catch(() => { recip.textContent = 'Recipient count unavailable'; });
+
+      sendBtn.addEventListener('click', async () => {
+        const title = titleI.value.trim(), body = bodyI.value.trim();
+        if (!title || !body) { msg.textContent = 'Enter both a title and a message.'; msg.className = 'msg err'; return; }
+        if (!confirm(`Send "${title}" as a push notification to every member with the app installed?`)) return;
+        sendBtn.disabled = true; sendBtn.textContent = 'Sending…'; msg.textContent = ''; msg.className = 'msg';
+        const res = await callFn('broadcastPush', { title, body });
+        sendBtn.disabled = false; sendBtn.textContent = 'Send to all members';
+        if (!res.ok) { msg.textContent = 'Failed: ' + (res.error || 'unknown'); msg.className = 'msg err'; return; }
+        const d = res.data || {};
+        msg.textContent = d.recipients === 0
+          ? 'No recipients had push tokens registered yet.'
+          : `Delivered to ${d.sent} of ${d.recipients}${d.errors ? ` (${d.errors} failed)` : ''}.`;
+        msg.className = 'msg ok';
+        titleI.value = ''; bodyI.value = ''; tc.textContent = '0/100'; bc.textContent = '0/400';
+      });
+
+      content.replaceChildren(el('div', {}, [
+        el('div', { class: 'card' }, [
+          el('div', { class: 'section-label', text: 'NEW BROADCAST' }),
+          el('label', { class: 'fl', text: 'Title' }), titleI, tc,
+          el('label', { class: 'fl', text: 'Message' }), bodyI, bc,
+          recip,
+          sendBtn,
+          msg,
+        ]),
+        el('div', { class: 'section-label', text: 'Push notifications reach only phones that have signed in and granted notification permission (not web or simulators).' }),
+      ]));
     }
 
     // ---- Cloud Function call (Bearer ID token) ----
@@ -370,9 +513,7 @@
         const data = await res.json().catch(() => ({}));
         if (!res.ok) return { ok: false, error: data.error || `http-${res.status}` };
         return { ok: true, data };
-      } catch (e) {
-        return { ok: false, error: (e && e.message) || 'network-error' };
-      }
+      } catch (e) { return { ok: false, error: (e && e.message) || 'network-error' }; }
     }
   </script>
 </body>
