@@ -50,6 +50,7 @@ import { PRDetailScreen } from '../screens/PRDetailScreen';
 import { EmployeeChecklistScreen } from '../screens/EmployeeChecklistScreen';
 import { AdminEmployeeTasksScreen } from '../screens/AdminEmployeeTasksScreen';
 import { AdminReportsScreen } from '../screens/AdminReportsScreen';
+import { AdminPostsScreen } from '../screens/AdminPostsScreen';
 import { WeightTrackerScreen } from '../screens/WeightTrackerScreen';
 import { OrderHistoryScreen } from '../screens/OrderHistoryScreen';
 import { MacroTrackerScreen } from '../screens/MacroTrackerScreen';
@@ -256,6 +257,7 @@ export function RootNavigator() {
       <Stack.Screen name="EmployeeChecklist" component={withErrorBoundary(EmployeeChecklistScreen, 'Checklist')} options={pushTransition} />
       <Stack.Screen name="AdminEmployeeTasks" component={withErrorBoundary(AdminEmployeeTasksScreen, 'Employee Tasks')} options={pushTransition} />
       <Stack.Screen name="AdminReports" component={withErrorBoundary(AdminReportsScreen, 'Reports')} options={pushTransition} />
+      <Stack.Screen name="AdminPosts" component={withErrorBoundary(AdminPostsScreen, 'Community Posts')} options={pushTransition} />
       <Stack.Screen name="WeightTracker" component={withErrorBoundary(WeightTrackerScreen, 'Weight Tracker')} options={pushTransition} />
       <Stack.Screen name="OrderHistory" component={withErrorBoundary(OrderHistoryScreen, 'My Orders')} options={pushTransition} />
       <Stack.Screen name="MacroTracker" component={withErrorBoundary(MacroTrackerScreen, 'Macro Tracker')} options={pushTransition} />

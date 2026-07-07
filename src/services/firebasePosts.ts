@@ -1,6 +1,6 @@
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import {
-  collection, addDoc, doc, getDoc, getDocFromServer, getDocs,
+  collection, addDoc, doc, getDoc, getDocFromServer, getDocs, getCountFromServer,
   query, where, orderBy, limit, limitToLast, startAfter, runTransaction, documentId,
 } from 'firebase/firestore';
 import type { QueryDocumentSnapshot } from 'firebase/firestore';
@@ -469,6 +469,48 @@ async function isLiked(postId: string): Promise<boolean> {
 export async function deletePost(postId: string): Promise<{ ok: boolean; error?: string }> {
   if (!FIREBASE_CONFIGURED || !db) return { ok: false, error: 'firebase-not-configured' };
   return deletePostCascadeViaFunction(postId);
+}
+
+/**
+ * Admin-only: every post, newest first, unfiltered by author privacy. An admin
+ * passes the /posts read rule via isAdmin(), so this unfiltered list query is
+ * allowed for them (it is NOT for a regular member, whose queries must carry
+ * `authorIsPrivate == false`). Powers the Admin → Community moderation screen.
+ * Legacy shapes are coerced the same way the feed does, so nothing silently
+ * disappears from the moderation list.
+ */
+export async function listAllPostsForAdmin(max = 200): Promise<Post[]> {
+  if (!FIREBASE_CONFIGURED || !db) return [];
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'posts'),
+      orderBy('createdAt', 'desc'),
+      limit(max),
+    ));
+    return snap.docs
+      .map((d) => {
+        const data = d.data() as any;
+        const createdAt = coerceCreatedAt(data.createdAt);
+        if (createdAt === null) return null;
+        return { ...data, id: d.id, createdAt, displayName: coerceDisplayName(data.displayName) } as Post;
+      })
+      .filter((p): p is Post => p !== null);
+  } catch (err) {
+    console.warn('[listAllPostsForAdmin] failed:', err);
+    return [];
+  }
+}
+
+/** Admin-only: total post count (server aggregation — one read) for the dashboard badge. */
+export async function countAllPosts(): Promise<number> {
+  if (!FIREBASE_CONFIGURED || !db) return 0;
+  try {
+    const agg = await getCountFromServer(collection(db, 'posts'));
+    return agg.data().count;
+  } catch (err) {
+    console.warn('[countAllPosts] failed:', err);
+    return 0;
+  }
 }
 
 // ─────────────────────────────────────────────────
