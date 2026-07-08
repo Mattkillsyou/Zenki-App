@@ -18,6 +18,7 @@ import { useAnnouncements } from '../context/AnnouncementContext';
 import { useAppointments } from '../context/AppointmentContext';
 import { useEmployeeTasks } from '../context/EmployeeTaskContext';
 import { countOpenReports } from '../services/firebaseModeration';
+import { countAllPosts } from '../services/firebasePosts';
 import { subscribeToAllMembers } from '../services/memberSync';
 
 interface AdminCardProps {
@@ -63,6 +64,18 @@ export function AdminScreen({ navigation }: any) {
     let cancelled = false;
     countOpenReports().then((n) => {
       if (!cancelled) setOpenReportsCount(n);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Live badge: total community posts, for the Community moderation card.
+  const [postsCount, setPostsCount] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    countAllPosts().then((n) => {
+      if (!cancelled) setPostsCount(n);
     });
     return () => {
       cancelled = true;
@@ -248,6 +261,16 @@ export function AdminScreen({ navigation }: any) {
               count={openReportsCount ?? 0}
               accentColor={openReportsCount && openReportsCount > 0 ? colors.red : colors.warning}
               onPress={() => navigation.navigate('AdminReports')}
+            />
+          </FadeInView>
+          <FadeInView delay={480} slideUp={12} style={styles.gridItem}>
+            <AdminCard
+              icon="images-outline"
+              title="Community"
+              subtitle="Browse & delete any post"
+              count={postsCount ?? 0}
+              accentColor={colors.info}
+              onPress={() => navigation.navigate('AdminPosts')}
             />
           </FadeInView>
         </View>

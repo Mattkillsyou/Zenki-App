@@ -38,6 +38,10 @@ export { banUser } from './banUser';
 // Firestore trigger: push admins on every new report (≤24h review SLA backstop).
 export { notifyOnReport } from './notifyOnReport';
 
+// HTTP (admin-gated): broadcast a push notification to all members. The web
+// admin can't call Expo directly (browser CORS), so it routes through here.
+export { broadcastPush } from './broadcastPush';
+
 // Firestore triggers: maintain denormalized follower/following counts on /users
 // from the follower-edge source of truth (abuse-proof; client can't write them).
 export { onFollowerEdgeCreated, onFollowerEdgeDeleted } from './followerCounters';

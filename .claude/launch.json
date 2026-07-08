@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["node_modules/expo/bin/cli", "start", "--web", "--port", "8082"],
       "port": 8082
+    },
+    {
+      "name": "Web Admin",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5050", "--directory", "hosting"],
+      "port": 5050
     }
   ]
 }
