@@ -43,6 +43,18 @@
         "headers": [
           { "key": "Cache-Control", "value": "public, max-age=300, must-revalidate" }
         ]
+      },
+      {
+        "source": "/admin/app.js",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=300, must-revalidate" }
+        ]
+      },
+      {
+        "source": "/admin{,/**}",
+        "headers": [
+          { "key": "X-Frame-Options", "value": "DENY" }
+        ]
       }
     ]
   }
