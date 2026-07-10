@@ -613,12 +613,17 @@ function useSenpaiChatState() {
                   ttsFailureCountRef.current,
                   'consecutive failures',
                 );
+                // 2.0.5: mute for THIS session only — do NOT persist 'false'.
+                // The old auto-disable wrote 'false' to storage, so a transient
+                // TTS outage (or a signature-enforcement skew) muted her
+                // permanently — recoverable only by digging into Settings. Now a
+                // relaunch clears the strike counter and voiceEnabled hydrates
+                // back to true, so she retries on her own. A user's MANUAL
+                // Settings toggle still persists (setVoiceEnabled), which is the
+                // only voice-off intent that should survive a relaunch.
                 setVoiceEnabledState(false);
-                safeStorageSet(VOICE_KEY, 'false', '[useSenpaiChat]');
-                // E2: say so in-character instead of going silently mute —
-                // recovery lives in Settings → Senpai Voice.
                 pushSenpaiLine(
-                  'my voice broke!! typing only until you flip Senpai Voice back on in settings 💕',
+                  "my voice glitched — typing only for now. I'll try again next time you open the app 💕",
                   'disappointed',
                 );
               }
@@ -640,20 +645,16 @@ function useSenpaiChatState() {
                 setTtsPlaying(false);
                 return;
               }
-              // E3 rollout guard: speakText without speakSignature means a
-              // version-skewed backend (a senpaiChat older than the signing
-              // deploy). Sending unsigned text anyway 400s the moment
-              // senpaiSpeak enforcement flips on — a 'tts_error' strike
-              // toward the PERSISTED voice auto-disable. Skipping is
-              // strike-free and self-heals on the next backend deploy.
-              if (!speakSignature) {
-                // eslint-disable-next-line no-console
-                console.warn(
-                  '[senpaiSpeak] skipping TTS — reply carried no speakSignature (backend skew?)',
-                );
-                setTtsPlaying(false);
-                return;
-              }
+              // 2.0.5: do NOT locally skip when speakSignature is missing. The
+              // client can't know the server's enforcement state, and the old
+              // skip silently muted EVERY reply whenever the deployed senpaiChat
+              // returned unsigned text (e.g. the signing secret was unbound) —
+              // no strike, no signal, permanent-feeling. senpaiSpeak voices
+              // unsigned text while SENPAI_TTS_REQUIRE_SIGNATURE is off (its
+              // default), so let the server decide; a valid signature (when
+              // present) still verifies. If enforcement is ever turned on, the
+              // now-session-only auto-disable above keeps a rejection from
+              // muting her permanently.
               const ttsToken = await getCurrentIdToken();
               const ttsResult = await fetchSenpaiAudio(
                 speakText,
