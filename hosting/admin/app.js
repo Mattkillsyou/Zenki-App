@@ -422,14 +422,15 @@ async function renderMembers() {
   if (gen !== renderGen) return;
   members.sort((a, b) => String(a.firstName || a.name || '').localeCompare(String(b.firstName || b.name || '')));
 
-  let filter = '';
+  let filter = '', deleted = 0;
   const label = el('div', { class: 'section-label grow' });
   const list = el('div');
   const hay = (m) => [m.firstName, m.lastName, m.name, m.displayName, m.email, m.phone, m.username].filter(Boolean).join(' ').toLowerCase();
+  const onDeleted = (m) => { members = members.filter((x) => x.id !== m.id); deleted += 1; redraw(); };
   const redraw = () => {
     const visible = members.filter((m) => !filter || hay(m).includes(filter));
-    label.textContent = `${visible.length} of ${members.length} member${members.length === 1 ? '' : 's'}${members.length === 500 ? ' (first 500)' : ''}`;
-    list.replaceChildren(...(visible.length ? visible.map(memberRow) : [stateBox('No matching members', 'Try a different search.')]));
+    label.textContent = `${visible.length} of ${members.length} member${members.length === 1 ? '' : 's'}${members.length === 500 ? ' (first 500)' : ''}${deleted ? ` · ${deleted} deleted` : ''}`;
+    list.replaceChildren(...(visible.length ? visible.map((m) => memberRow(m, onDeleted)) : [stateBox('No matching members', 'Try a different search.')]));
   };
   const search = el('input', { class: 'search', placeholder: 'Search name, email, phone…' });
   search.addEventListener('input', () => { filter = search.value.trim().toLowerCase(); redraw(); });
@@ -445,7 +446,7 @@ function memberDisplay(m) {
   const bits = [m.email, m.belt ? `${m.belt}${m.stripes ? ' · ' + m.stripes + ' stripe' + (m.stripes === 1 ? '' : 's') : ''} belt` : null, m.phone, m.isAdmin ? 'admin' : m.isEmployee ? 'staff' : null].filter(Boolean).join(' · ');
   return { name, bits };
 }
-function memberRow(m) {
+function memberRow(m, onDeleted) {
   const row = el('div', { class: 'row' });
   const render = () => {
     row.replaceChildren();
@@ -455,7 +456,35 @@ function memberRow(m) {
       el('div', { class: 'name', text: name }),
       el('div', { class: 'meta', text: bits || '—' }),
     ]));
-    row.appendChild(el('button', { class: 'iconbtn', text: 'Edit', onclick: edit }));
+    const editBtn = el('button', { class: 'iconbtn', text: 'Edit', onclick: edit });
+    const delBtn = el('button', { class: 'btn danger', text: 'Delete' });
+    if (!m.firebaseUid) {
+      // No linked Auth account (member created by staff, never signed in) — there
+      // is no uid to erase server-side, so hard delete doesn't apply.
+      delBtn.disabled = true;
+      delBtn.title = 'No linked login for this member — nothing to delete server-side.';
+    } else {
+      delBtn.addEventListener('click', async () => {
+        const nm = safeName(name);
+        if (!confirm(`PERMANENTLY DELETE ${nm}'s account?\n\nErases their profile, posts, comments, likes, follows, DMs, personal records, uploaded media, and their login. This cannot be undone.`)) return;
+        const typed = prompt(`This is irreversible. Type DELETE to confirm removing ${nm}.`);
+        if (typed !== 'DELETE') { if (typed !== null) alert('Not deleted — the confirmation text did not match.'); return; }
+        editBtn.disabled = true; delBtn.disabled = true; delBtn.textContent = 'Deleting…';
+        const res = await callFn('adminDeleteUser', { targetUid: m.firebaseUid });
+        if (res.ok) {
+          const d = (res.data && res.data.deleted) || {};
+          const errs = (res.data && res.data.errors) || {};
+          const summary = Object.entries(d).filter(([, v]) => v > 0).map(([k, v]) => `${k}: ${v}`).join(', ') || 'no residual data';
+          const errNote = Object.keys(errs).length ? ` (some steps had issues: ${Object.keys(errs).join(', ')})` : '';
+          if (onDeleted) onDeleted(m);
+          alert(`Deleted ${nm}. Removed — ${summary}.${errNote}`);
+        } else {
+          editBtn.disabled = false; delBtn.disabled = false; delBtn.textContent = 'Delete';
+          alert('Delete failed: ' + (res.error || 'unknown'));
+        }
+      });
+    }
+    row.appendChild(el('div', { class: 'rowbtns' }, [editBtn, delBtn]));
   };
   const edit = () => {
     row.replaceChildren();

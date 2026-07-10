@@ -35,6 +35,11 @@ export { deletePostCascade } from './deletePostCascade';
 // Admin "ban / eject user" — disables the Firebase Auth account (Apple 1.2).
 export { banUser } from './banUser';
 
+// Admin HARD delete — fully erases a target user (same cascade as self-service
+// deleteAccount). Admin-gated; refuses self / other admins. Used by the web
+// admin's Members tab to clear out test accounts.
+export { adminDeleteUser } from './adminDeleteUser';
+
 // Firestore trigger: push admins on every new report (≤24h review SLA backstop).
 export { notifyOnReport } from './notifyOnReport';
 
