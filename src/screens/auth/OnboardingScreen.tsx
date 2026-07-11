@@ -10,6 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeStorageSet } from '../../utils/safeStorage';
 import { todayDateString } from '../../utils/dates';
+import { todayIso } from '../../components/WeekCalendar';
 import { useTheme } from '../../context/ThemeContext';
 import { useMotion } from '../../context/MotionContext';
 import { useAuth } from '../../context/AuthContext';
@@ -395,7 +396,8 @@ export function OnboardingScreen({ navigation, route }: any) {
       }
 
       // Initial weigh-in
-      const today = todayDateString();
+      // Audit 2.0.5: weigh-ins use the LOCAL day convention (see dates.ts).
+      const today = todayIso();
       try {
         addWeight({
           memberId: id,

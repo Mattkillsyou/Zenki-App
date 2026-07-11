@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
-import { todayDateString } from '../utils/dates';
+import { todayIso } from '../components/WeekCalendar';
 import { spacing, borderRadius } from '../theme';
 import { FadeInView, KeyboardView, ScreenContainer, MedicalCitations } from '../components';
 import {
@@ -135,7 +135,10 @@ export function MacroSetupScreen({ navigation }: any) {
       weightKg,
     );
     // Also record a fresh weigh-in if they don't have one today
-    const today = todayDateString();
+    // Audit 2.0.5: weigh-ins are day-keyed HEALTH data — LOCAL day, not UTC
+    // (an evening setup weigh-in used to land on tomorrow, duplicating the
+    // same-day entry).
+    const today = todayIso();
     if (!latest || latest.date !== today) {
       addWeight({
         memberId: user.id,
