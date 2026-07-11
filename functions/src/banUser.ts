@@ -14,7 +14,10 @@
  * /admins/{uid} doc).
  *
  * Body: { targetUid: string, reason?: string }
- * Returns: { ok: true, targetUid, disabled: true, purged: { posts, comments } }
+ * Returns: { ok: true, targetUid, disabled: true, purged: { posts, comments },
+ *            errors: {step: msg} } — `errors` is empty when the purge was clean;
+ * a non-empty entry means the ban (auth disable) succeeded but that purge step
+ * failed and its content may still be visible.
  */
 
 import { onRequest } from 'firebase-functions/v2/https';
@@ -78,9 +81,13 @@ export const banUser = onRequest(
       // their posts (+ likes/comments subcollections via recursiveDelete) and any
       // comments they left on OTHER users' posts. Best-effort and AFTER the
       // auth-disable — a purge hiccup must never fail the ban (the disable above is
-      // the real enforcement). Single-field collection-group indexes are
-      // auto-maintained, so the comments query needs no explicit index.
+      // the real enforcement). NOTE: collection-group queries are NOT auto-indexed
+      // — the comments query needs the comments.userId COLLECTION_GROUP fieldOverride
+      // in firestore.indexes.json (it FAILED_PRECONDITION'd in prod without it).
+      // Purge failures are recorded in `errors` so the caller sees that content
+      // may still be live, instead of a silent ok/purged:0.
       const purged: { posts: number; comments: number } = { posts: 0, comments: 0 };
+      const errors: Record<string, string> = {};
       try {
         const myPosts = await admin.firestore()
           .collection('posts').where('userId', '==', targetUid).get();
@@ -88,8 +95,9 @@ export const banUser = onRequest(
           await admin.firestore().recursiveDelete(p.ref);
           purged.posts++;
         }
-      } catch (e) {
-        logger.warn('banUser: post purge failed (non-fatal)', e);
+      } catch (e: any) {
+        errors.posts = e?.message ?? String(e);
+        logger.error('banUser: post purge failed for targetUid=' + targetUid + ' — posts may still be visible', e);
       }
       try {
         const myComments = await admin.firestore()
@@ -101,11 +109,12 @@ export const banUser = onRequest(
           await batch.commit();
         }
         purged.comments = myComments.docs.length;
-      } catch (e) {
-        logger.warn('banUser: comment purge failed (non-fatal)', e);
+      } catch (e: any) {
+        errors.comments = e?.message ?? String(e);
+        logger.error('banUser: comment purge failed for targetUid=' + targetUid + ' — comments may still be visible', e);
       }
 
-      res.json({ ok: true, targetUid, disabled: true, purged });
+      res.json({ ok: true, targetUid, disabled: true, purged, errors });
     } catch (e: any) {
       logger.error('banUser failed for targetUid=' + targetUid, e);
       res.status(500).json({ ok: false, error: e?.message ?? 'Unknown error' });

@@ -510,9 +510,12 @@ service cloud.firestore {
     }
 
     // Class schedule — one doc per day key (`Mon`, `Tue`, …) holding the
-    // full classes array. Anyone signed in reads; only admins write.
+    // full classes array. PUBLIC read: guests (App Review 5.1.1(v)) have no
+    // Firebase session, so the old signed-in gate left them stuck on the stale
+    // hardcoded seed schedule forever — same rationale (and precedent) as
+    // /config/scheduling above. Only admins write.
     match /schedule/{dayKey} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 

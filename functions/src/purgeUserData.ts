@@ -21,6 +21,7 @@
  *   conversations where participants contains uid (redact messages; drop self / delete if alone)
  *   pushTokens/{uid}
  *   attendance / waivers / appointments / taskCompletions / supportMessages / aiRateLimits/{uid}
+ *   senpaiUsage where uid == uid                  (per-turn AI usage logs)
  *   nutrition/{uid}                              (recursive: weight/macro/goals/profile)
  *   Storage users/{uid}/**  and  postMedia/{uid}/**
  *   Firebase Auth user (admin.auth().deleteUser)
@@ -261,6 +262,10 @@ export async function purgeUserData(uid: string): Promise<PurgeResult> {
   // covers all four subcollections even though the parent doc is never written.
   await step('nutrition', () => deleteDocDeep(db.collection('nutrition').doc(uid)));
   await step('aiRateLimits', () => deleteDocDeep(db.collection('aiRateLimits').doc(uid)));
+  // Senpai usage logs: senpaiChat + senpaiSpeak write uid-keyed per-turn docs
+  // (ts, model, mood, characters, …) to the top-level /senpaiUsage collection —
+  // an interaction trail that must not outlive the account (GDPR erasure).
+  await step('senpaiUsage', () => deleteByQuery(db.collection('senpaiUsage').where('uid', '==', uid)));
 
   // 10. Member doc(s). Prefer the id resolved from the profile; also sweep by
   //     firebaseUid in case the profile pointer was missing.
