@@ -329,7 +329,7 @@ export function HomeScreen({ navigation }: any) {
   const { user } = useAuth();
   const isEmployee = user?.isEmployee === true;
   const { state: gamState, levelInfo, dismissCelebration, recordAppOpen } = useGamification();
-  const { state: senpaiState, setEnabled: setSenpaiEnabled, triggerReaction: senpaiReact, shouldReact: senpaiShouldReact } = useSenpai();
+  const { state: senpaiState, triggerReaction: senpaiReact, shouldReact: senpaiShouldReact } = useSenpai();
   const isFocused = useIsFocused();
   React.useEffect(() => { recordAppOpen(); }, [recordAppOpen]);
   // Home greeting — once per app open (aligned with recordAppOpen above) and
@@ -385,7 +385,15 @@ export function HomeScreen({ navigation }: any) {
       return next;
     });
   }, [dismissedKey]);
-  const visibleAnnouncements = announcements.filter((a) => !dismissedIds.includes(a.id));
+  // Pinned first, then newest — matches the web admin's "Pin to top of Home"
+  // control. Without this the newest-3 window below silently dropped any
+  // pinned notice older than three newer ones.
+  const visibleAnnouncements = announcements
+    .filter((a) => !dismissedIds.includes(a.id))
+    .sort((a, b) =>
+      (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) ||
+      (b.createdAt || '').localeCompare(a.createdAt || ''),
+    );
   const { myAppointments } = useAppointments();
   const { myLogs, myPRs } = useWorkouts();
   const userLogsCount = user?.id ? myLogs(user.id).length : 0;

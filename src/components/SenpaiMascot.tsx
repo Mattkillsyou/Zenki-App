@@ -95,6 +95,13 @@ const isGoodbyeIntent = (t: string): boolean => {
 const isLikelyGarbage = (t: string): boolean =>
   t.replace(/[^\p{L}\p{N}]/gu, '').length <= 1;
 
+// P2 (guest dead-end): chat needs a signed-in Firebase session — the CF
+// rejects tokenless calls with 401. Guests used to burn the round-trip and
+// land on "sign in expired — open the app fresh", which can never recover
+// for someone who was never signed in. One honest line, shared by the dock's
+// guest panel, the mic gate, and the no_auth error copy in the bubble.
+const GUEST_SIGNIN_LINE = 'gotta sign in first senpai — then I can actually talk to you 💕';
+
 /* ─── Animation asset maps ───────────────────────────────────────────────── */
 // ANIM_ASSETS (mood→static PNG) and FLIPBOOK_ASSETS (mood→sprite strip) live
 // in ./senpaiMoodAssets — see that file's header for the static-WebP-strip
@@ -219,6 +226,14 @@ function SenpaiMascotImpl() {
       setBubbleOverride(null);
       bubbleOverrideTimerRef.current = null;
     }, ms);
+  };
+  // P2 (guest dead-end): the mic-side "sign in to chat" beat. The dock panel
+  // gates composition at the source (guest box in the panel below); this
+  // covers the chibi tap-to-talk + the deferred TTS-finished open, so the
+  // mic never arms into doomed 401 sends.
+  const showGuestSignInGate = () => {
+    triggerReaction('encouraging', GUEST_SIGNIN_LINE, 3000);
+    showBubbleOverride(GUEST_SIGNIN_LINE, 3000);
   };
   // The most recent assistant reply id we've already scheduled a
   // re-arm-after for — prevents firing the timer twice on the same turn.
@@ -1199,6 +1214,13 @@ function SenpaiMascotImpl() {
   // resolves true means a permission denial doesn't flash "mic's ON" and then
   // immediately alert "mic access needed".
   const activateListening = () => {
+    // P2 (guest dead-end): no Firebase user → the walkie-talkie would only
+    // ever transcribe speech into 401s. Never open the mic for a guest —
+    // say the honest thing instead. Also covers the deferred open below.
+    if (!user) {
+      showGuestSignInGate();
+      return;
+    }
     // Clear any prior chat error so activating also escapes a stale error
     // bubble (the other escape is the 8s auto-dismiss inside useSenpaiChat).
     clearChatError();
@@ -1369,7 +1391,13 @@ function SenpaiMascotImpl() {
   const bubbleText = (() => {
     const errText = chatError
       ? chatError.code === 'no_auth'
-        ? 'sign in expired senpai — open the app fresh 💕'
+        // P2 (guest dead-end): "expired" is a lie for someone who never
+        // signed in, and reopening the app can't fix it — point guests at
+        // the real remedy. Signed-in members keep the relaunch copy (their
+        // token really did lapse and a fresh launch re-mints it).
+        ? user
+          ? 'sign in expired senpai — open the app fresh 💕'
+          : GUEST_SIGNIN_LINE
         : chatError.code === 'no_network'
         ? chatError.message + ' 💕'
         : chatError.code === 'rate_limit'
@@ -1845,7 +1873,19 @@ function SenpaiMascotImpl() {
                   },
                 ]}
               >
-                {disclaimerOK === null ? null : !disclaimerOK ? (
+                {!user ? (
+                  // P2 (guest dead-end): signed-out guests have no Firebase
+                  // token, so every send 401s (the old "sign in expired —
+                  // open the app fresh" copy could never recover). Gate BOTH
+                  // input paths at the source — no text box, no mic button —
+                  // with the honest sign-in line. Deliberately a dock-panel
+                  // state (like the disclaimer) rather than a check inside
+                  // submitType: any message that IS ever composed must still
+                  // flow through sendChat's local crisis short-circuit.
+                  <View style={styles.disclaimerBox}>
+                    <Text style={styles.disclaimerText}>{GUEST_SIGNIN_LINE}</Text>
+                  </View>
+                ) : disclaimerOK === null ? null : !disclaimerOK ? (
                   // One-time AI safety disclaimer — must accept before chatting.
                   <View style={styles.disclaimerBox}>
                     <Text style={styles.disclaimerText}>
