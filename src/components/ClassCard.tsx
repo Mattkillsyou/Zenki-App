@@ -16,10 +16,18 @@ interface ClassCardProps {
   onBook: () => void;
   booked?: boolean;                                        // user already has this class booked
   status?: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  /** Calendar day the card represents (Schedule's selected day). */
+  eventDate?: Date;
+  /** Real start instant for booked private sessions (overrides eventDate+time). */
+  startsAtIso?: string;
 }
 
 /** Parse "12:00 PM" + today's date into a Date object. */
-function toTodayAt(timeLabel: string): Date | null {
+// Audit 2.0.5 P2: the quick-add used to hardcode TODAY — selecting Thursday
+// and tapping the calendar icon wrote a Monday event ("Added to calendar"
+// success included). Callers now pass the SELECTED day (and private sessions
+// their real startsAt); today remains the fallback.
+function toDayAt(base: Date, timeLabel: string): Date | null {
   const m = timeLabel.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
   if (!m) return null;
   let h = parseInt(m[1], 10);
@@ -27,7 +35,7 @@ function toTodayAt(timeLabel: string): Date | null {
   const mer = m[3].toUpperCase();
   if (mer === 'PM' && h !== 12) h += 12;
   if (mer === 'AM' && h === 12) h = 0;
-  const d = new Date();
+  const d = new Date(base);
   d.setHours(h, min, 0, 0);
   return d;
 }
@@ -51,7 +59,7 @@ const typeColors: Record<string, string> = {
   'open-mat': '#3B82F6',
 };
 
-export function ClassCard({ name, instructor, time, duration, spotsLeft, type, onBook, booked, status }: ClassCardProps) {
+export function ClassCard({ name, instructor, time, duration, spotsLeft, type, onBook, booked, status, eventDate, startsAtIso }: ClassCardProps) {
   const { colors } = useTheme();
   const [addingToCal, setAddingToCal] = useState(false);
   const isAlmostFull = spotsLeft <= 3;
@@ -67,7 +75,11 @@ export function ClassCard({ name, instructor, time, duration, spotsLeft, type, o
 
   const handleAddToCalendar = async (e: any) => {
     e.stopPropagation();
-    const startsAt = toTodayAt(time);
+    // Prefer the session's real instant, then the selected day, then today.
+    const fromIso = startsAtIso ? new Date(startsAtIso) : null;
+    const startsAt = fromIso && !Number.isNaN(fromIso.getTime())
+      ? fromIso
+      : toDayAt(eventDate ?? new Date(), time);
     if (!startsAt) {
       Alert.alert('Can’t add to calendar', 'This class doesn’t have a scheduled time.');
       return;

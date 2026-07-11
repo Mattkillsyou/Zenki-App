@@ -238,13 +238,19 @@ export function DexaUploadScreen({ navigation }: any) {
     navigation.goBack();
   }
 
+  // Audit 2.0.5: keep the RAW text per field — round-tripping every keystroke
+  // through parseFloat ate the decimal point ("2." parsed to 2, rendered "2"),
+  // making fractional values untypeable in all 8 numeric review fields.
+  const [fieldDrafts, setFieldDrafts] = useState<Record<string, string>>({});
   function setField<K extends keyof DexaExtraction>(key: K, text: string) {
+    setFieldDrafts((prev) => ({ ...prev, [key]: text }));
     const n = parseFloat(text);
     setEditing((prev) => ({
       ...prev,
       [key]: text === '' ? undefined : Number.isFinite(n) ? n : prev[key],
     }));
   }
+  const draftOr = (key: keyof DexaExtraction, fallback: string) => fieldDrafts[key as string] ?? fallback;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -329,14 +335,14 @@ export function DexaUploadScreen({ navigation }: any) {
               <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>REVIEW & EDIT</Text>
               <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <EditRow label="Scan date"       value={String(editing.scanDate ?? '')}   onChange={(v) => setEditing((p) => ({ ...p, scanDate: v }))} hint="YYYY-MM-DD" colors={colors} />
-                <EditRow label="Body fat %"      value={numStr(editing.totalBodyFatPct)}  onChange={(v) => setField('totalBodyFatPct', v)} keyboard="decimal-pad" colors={colors} />
-                <EditRow label="Fat mass (kg)"   value={numStr(editing.fatMassKg)}        onChange={(v) => setField('fatMassKg', v)}       keyboard="decimal-pad" colors={colors} />
-                <EditRow label="Lean mass (kg)"  value={numStr(editing.leanMassKg)}       onChange={(v) => setField('leanMassKg', v)}      keyboard="decimal-pad" colors={colors} />
-                <EditRow label="Bone (kg)"       value={numStr(editing.bmc)}              onChange={(v) => setField('bmc', v)}             keyboard="decimal-pad" colors={colors} />
-                <EditRow label="VAT (cm²)"       value={numStr(editing.vatCm2)}           onChange={(v) => setField('vatCm2', v)}          keyboard="decimal-pad" colors={colors} />
-                <EditRow label="FMI"             value={numStr(editing.fmi)}              onChange={(v) => setField('fmi', v)}             keyboard="decimal-pad" colors={colors} />
-                <EditRow label="FFMI"            value={numStr(editing.ffmi)}             onChange={(v) => setField('ffmi', v)}            keyboard="decimal-pad" colors={colors} />
-                <EditRow label="A/G ratio"       value={numStr(editing.androidGynoidRatio)} onChange={(v) => setField('androidGynoidRatio', v)} keyboard="decimal-pad" colors={colors} />
+                <EditRow label="Body fat %"      value={draftOr('totalBodyFatPct', numStr(editing.totalBodyFatPct))}  onChange={(v) => setField('totalBodyFatPct', v)} keyboard="decimal-pad" colors={colors} />
+                <EditRow label="Fat mass (kg)"   value={draftOr('fatMassKg', numStr(editing.fatMassKg))}        onChange={(v) => setField('fatMassKg', v)}       keyboard="decimal-pad" colors={colors} />
+                <EditRow label="Lean mass (kg)"  value={draftOr('leanMassKg', numStr(editing.leanMassKg))}       onChange={(v) => setField('leanMassKg', v)}      keyboard="decimal-pad" colors={colors} />
+                <EditRow label="Bone (kg)"       value={draftOr('bmc', numStr(editing.bmc))}              onChange={(v) => setField('bmc', v)}             keyboard="decimal-pad" colors={colors} />
+                <EditRow label="VAT (cm²)"       value={draftOr('vatCm2', numStr(editing.vatCm2))}           onChange={(v) => setField('vatCm2', v)}          keyboard="decimal-pad" colors={colors} />
+                <EditRow label="FMI"             value={draftOr('fmi', numStr(editing.fmi))}              onChange={(v) => setField('fmi', v)}             keyboard="decimal-pad" colors={colors} />
+                <EditRow label="FFMI"            value={draftOr('ffmi', numStr(editing.ffmi))}             onChange={(v) => setField('ffmi', v)}            keyboard="decimal-pad" colors={colors} />
+                <EditRow label="A/G ratio"       value={draftOr('androidGynoidRatio', numStr(editing.androidGynoidRatio))} onChange={(v) => setField('androidGynoidRatio', v)} keyboard="decimal-pad" colors={colors} />
               </View>
 
               <SoundPressable

@@ -465,5 +465,17 @@ export function buildBondSlots(bond: SenpaiBond): BondSlots {
   };
   // "your best was {bestStreak} days" needs a streak worth citing.
   if (bond.bestStreakSeen >= 3) slots.bestStreak = String(bond.bestStreakSeen);
+  // {fact}: one random user-confirmed fact. Left unset when there are none, so
+  // {fact}-slotted greeting lines filter out of the pool exactly like {days}
+  // pre-bond. Random per build — slots refresh on every bond change, so the
+  // cited fact rotates over time. Facts can be up to FACT_MAX_LEN (120) chars,
+  // which would balloon an ~80-char greeting template to ~200 rendered chars —
+  // prefer a SHORT fact for the inline slot and only fall back to any fact when
+  // no short one exists (a long fact still beats a filtered-out line).
+  if (bond.facts.length > 0) {
+    const short = bond.facts.filter((f) => f.text.length <= 60);
+    const pool = short.length > 0 ? short : bond.facts;
+    slots.fact = pool[Math.floor(Math.random() * pool.length)].text;
+  }
   return slots;
 }

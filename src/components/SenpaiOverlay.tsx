@@ -1,13 +1,58 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
-import { View, StyleSheet, Animated, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, Animated, Easing, useWindowDimensions } from 'react-native';
+import Svg, { Circle, Path, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { useSenpai, type MascotMood } from '../context/SenpaiContext';
 import { useMotion } from '../context/MotionContext';
 import { getSenpaiCornerInfo } from './senpaiCornerStore';
 
-const STAR_GLYPH = '\u2605';       // ★
-const GLINT_GLYPH = '\u2726';      // ✦
-const MOON_GLYPH = '\u263D';       // ☽ (spec: waxing crescent)
-const HEART_GLYPH = '\u2661';      // ♡
+/* ═══ SVG GLOW PARTICLES ═══
+   Particles used to be Animated.Text glyphs (star/glint/moon/heart) whose
+   "glow" came from textShadow — which silently drops in the native renderer,
+   so on device they read as flat colored type. Each particle is now a tiny
+   react-native-svg shape filled with a RadialGradient (bright core →
+   transparent edge): a real gradient brush on native, so the bloom actually
+   ships. The Svg mounts once and NEVER re-renders per frame — all motion
+   lives on the wrapping Animated.View (transform/opacity only, native
+   driver). Mirrored in SenpaiImpactEffect.tsx; the two effect layers stay
+   self-contained on purpose (they mount/unmount independently). */
+
+type GlowShapeKind = 'star' | 'heart' | 'moon' | 'dot';
+
+// Concave 4-point sparkle star — the classic anime glint (24×24 box).
+const STAR4_D = 'M12 0C13.2 7.4 16.6 10.8 24 12C16.6 13.2 13.2 16.6 12 24C10.8 16.6 7.4 13.2 0 12C7.4 10.8 10.8 7.4 12 0Z';
+// Filled heart (24×24 box).
+const HEART_D = 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z';
+// Crescent moon (24×24 box) — spec: waxing crescent, replaces the old glyph.
+const MOON_D = 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z';
+
+function GlowShape({ kind, size, color, id }: { kind: GlowShapeKind; size: number; color: string; id: string }) {
+  // ids are unique per instance: react-native-svg scopes <Defs> per <Svg> on
+  // native, but unique ids keep us safe on any renderer that hoists defs.
+  const fill = `url(#${id})`;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Defs>
+        <RadialGradient id={id} cx="50%" cy="50%" r="50%">
+          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="1" />
+          <Stop offset="45%" stopColor={color} stopOpacity="0.95" />
+          <Stop offset="100%" stopColor={color} stopOpacity="0" />
+        </RadialGradient>
+      </Defs>
+      {kind === 'dot'
+        ? <Circle cx="12" cy="12" r="12" fill={fill} />
+        : <Path d={kind === 'star' ? STAR4_D : kind === 'heart' ? HEART_D : MOON_D} fill={fill} />}
+    </Svg>
+  );
+}
+
+// Pre-sampled sine for the hearts' x-sway. The native driver lerps between
+// interpolate samples (SenpaiFlipbook.tsx header has the 120Hz note), so the
+// wave shape lives HERE in the interpolate node — the driving timing stays a
+// plain linear 0→1. Amplitude + phase are baked per particle so each heart
+// traces its own slice of the wave.
+const SWAY_STOPS = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1];
+const swayOutput = (amp: number, phase: number) =>
+  SWAY_STOPS.map((t) => Math.sin((t + phase) * Math.PI * 2) * amp);
 
 const CONFETTI_COLORS = ['#FF2E51', '#FFB3DF', '#5158FF', '#FFF666', '#D260FF', '#FFFFFF'];
 
@@ -50,7 +95,7 @@ interface Dims { sw: number; sh: number; areaScale: number }
 /**
  * SenpaiOverlay — layered magical-girl effects.
  * - Ambient layer: subtle stars/moons/shooting-stars when enabled + ambientEffects on.
- * - Reaction layer: hearts/kaomoji/sparkles/starburst/confetti during sparkleActive.
+ * - Reaction layer: hearts/motes/sparkles/starburst/confetti during sparkleActive.
  * Fully skipped under system Reduce Motion (D5) — this whole file is decoration.
  */
 export function SenpaiOverlay() {
@@ -106,7 +151,7 @@ const MILESTONE_TIER: Partial<Record<MascotMood, number>> = {
  * its effects to match the mascot's runReactionScript beats instead of
  * detonating everything at once:
  *   +150ms  starburst (lands with the mascot's pose swap)
- *   +550ms  ambient rain — hearts / kaomoji / sparkles / confetti
+ *   +550ms  ambient rain — hearts / motes / sparkles / confetti
  *   (the speech bubble pops at +300ms, in between)
  * Timing hooks only — no new effects. `trigger` (reactionExpiry) changes per
  * reaction, so back-to-back milestones restart the beats (and remount
@@ -134,7 +179,7 @@ function ReactionLayer({ mood, max, trigger, dims }: { mood: MascotMood; max: bo
       {beat >= 2 && (
         <>
           <FloatingHearts max={max} dims={dims} tier={tier} />
-          <FloatingKaomoji max={max} dims={dims} tier={tier} />
+          <FloatingMotes max={max} dims={dims} tier={tier} />
           <SparkleParticles max={max} dims={dims} tier={tier} />
           {mood === 'celebrating' && <ConfettiBurst max={max} dims={dims} />}
         </>
@@ -154,11 +199,14 @@ function AmbientStars({ max, dims, palette }: { max: boolean; dims: Dims; palett
   const stars = useMemo(() =>
     Array.from({ length: count }).map((_, i) => ({
       key: i,
-      glyph: i % 2 === 0 ? STAR_GLYPH : GLINT_GLYPH,
+      // alternate glint shapes: concave star / soft dot (was ★ / ✦ glyphs)
+      kind: (i % 2 === 0 ? 'star' : 'dot') as GlowShapeKind,
       color: palette[i % palette.length],
       x: Math.random() * dims.sw,
       startY: Math.random() * dims.sh,
-      size: 6 + Math.random() * 6,
+      // ~×1.3 vs the old glyph sizes — the gradient edge is transparent, so
+      // the perceived footprint shrinks; this keeps the old visual weight.
+      size: 8 + Math.random() * 8,
       twinkleMs: 4000 + Math.random() * 4000,
       driftMs: 22000 + Math.random() * 12000,
       delay: Math.random() * 4000,
@@ -184,9 +232,10 @@ function AmbientStarItem({ config }: { config: any }) {
     let cancelled = false;
     const twinkle = () => {
       if (cancelled) return;
+      // sin ease breathes; the old default easing read mechanical at 4-8s.
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.12, duration: config.twinkleMs * 0.5, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.03, duration: config.twinkleMs * 0.5, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.12, duration: config.twinkleMs * 0.5, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.03, duration: config.twinkleMs * 0.5, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]).start(() => { if (!cancelled) twinkle(); });
     };
     const doDrift = () => {
@@ -201,19 +250,17 @@ function AmbientStarItem({ config }: { config: any }) {
   const translateY = drift.interpolate({ inputRange: [0, 1], outputRange: [0, -50] });
 
   return (
-    <Animated.Text
+    <Animated.View
       style={{
         position: 'absolute',
         left: config.x,
         top: config.startY,
-        fontSize: config.size,
-        color: config.color,
         opacity,
         transform: [{ translateY }],
       }}
     >
-      {config.glyph}
-    </Animated.Text>
+      <GlowShape kind={config.kind} size={config.size} color={config.color} id={`amb-s-${config.key}`} />
+    </Animated.View>
   );
 }
 
@@ -225,7 +272,8 @@ function AmbientMoons({ max, dims, palette }: { max: boolean; dims: Dims; palett
       color: palette[0],
       x: Math.random() * (dims.sw - 20),
       y: 30 + Math.random() * (dims.sh - 80),
-      size: 10 + Math.random() * 4,
+      // ~×1.3 vs the old glyph size (transparent gradient edge, see stars)
+      size: 13 + Math.random() * 5,
       driftMs: 30000 + Math.random() * 20000,
       delay: Math.random() * 5000,
     })),
@@ -256,22 +304,25 @@ function AmbientMoonItem({ config }: { config: any }) {
     return () => { cancelled = true; clearTimeout(t); };
   }, []);
 
-  const translateX = drift.interpolate({ inputRange: [0, 1], outputRange: [0, 40] });
+  // Out-and-back half-sine drift: the old 0→1 loop snapped 40px home at each
+  // cycle boundary. Sine samples live in the interpolate node (120Hz note).
+  const translateX = drift.interpolate({
+    inputRange: [0, 0.25, 0.5, 0.75, 1],
+    outputRange: [0, 28.3, 40, 28.3, 0],
+  });
 
   return (
-    <Animated.Text
+    <Animated.View
       style={{
         position: 'absolute',
         left: config.x,
         top: config.y,
-        fontSize: config.size,
-        color: config.color,
         opacity,
         transform: [{ translateX }],
       }}
     >
-      {MOON_GLYPH}
-    </Animated.Text>
+      <GlowShape kind="moon" size={config.size} color={config.color} id={`amb-m-${config.key}`} />
+    </Animated.View>
   );
 }
 
@@ -337,7 +388,8 @@ function ShootingStar({ dims }: { dims: Dims }) {
           }}
         />
       ))}
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' }} />
+      {/* glow head — radial-gradient dot; the flat #FFF View couldn't bloom */}
+      <GlowShape kind="dot" size={10} color="#FFFFFF" id="shoot-head" />
     </Animated.View>
   );
 }
@@ -352,10 +404,13 @@ function FloatingHearts({ max, dims, tier }: { max: boolean; dims: Dims; tier: n
       key: i,
       sh: dims.sh,
       x: 50 + Math.random() * (dims.sw - 100),
-      size: 12 + Math.random() * 10,
+      // ~×1.3 vs the old glyph sizes (transparent gradient edge)
+      size: 16 + Math.random() * 12,
       speed: (1500 + Math.random() * 1500) * mult,
       delay: Math.random() * 1000,
-      drift: (Math.random() - 0.5) * 40,
+      // sinusoidal x-sway (replaces the old linear drift): amplitude + phase
+      // baked into the interpolate output, so no per-frame JS work.
+      swayOut: swayOutput(8 + Math.random() * 10, i / count),
     })),
   [count, mult, dims]);
 
@@ -369,20 +424,24 @@ function FloatingHearts({ max, dims, tier }: { max: boolean; dims: Dims; tier: n
 }
 
 function FloatingHeart({ config }: { config: any }) {
-  const y = useRef(new Animated.Value(config.sh - 200)).current;
-  const x = useRef(new Animated.Value(config.x)).current;
+  const rise = useRef(new Animated.Value(0)).current;
+  const swayT = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     let cancelled = false;
     const animate = () => {
       if (cancelled) return;
-      y.setValue(config.sh - 200);
-      x.setValue(config.x);
+      rise.setValue(0);
+      swayT.setValue(0);
       opacity.setValue(0);
       Animated.parallel([
-        Animated.timing(y, { toValue: config.sh - 500, duration: config.speed, useNativeDriver: true }),
-        Animated.timing(x, { toValue: config.x + config.drift, duration: config.speed, useNativeDriver: true }),
+        // Ease-out rise — hearts leave quickly then hang, like they're
+        // buoyant; the old constant-speed rise read as a conveyor belt.
+        Animated.timing(rise, { toValue: 1, duration: config.speed, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        // Sway driver stays LINEAR — the sine shape lives in the interpolate
+        // below (stepping/shaping belongs in interpolate, per the 120Hz note).
+        Animated.timing(swayT, { toValue: 1, duration: config.speed, easing: Easing.linear, useNativeDriver: true }),
         Animated.sequence([
           Animated.timing(opacity, { toValue: 0.8, duration: 300, useNativeDriver: true }),
           Animated.delay(Math.max(100, config.speed - 700)),
@@ -394,32 +453,38 @@ function FloatingHeart({ config }: { config: any }) {
     return () => { cancelled = true; clearTimeout(t); };
   }, []);
 
+  const translateY = rise.interpolate({ inputRange: [0, 1], outputRange: [config.sh - 200, config.sh - 500] });
+  const translateX = swayT.interpolate({ inputRange: SWAY_STOPS, outputRange: config.swayOut });
+
   return (
-    <Animated.Text
+    <Animated.View
       style={{
         position: 'absolute',
-        fontSize: config.size,
-        color: '#FF69B4',
+        left: config.x,
         opacity,
-        transform: [{ translateX: x }, { translateY: y }],
+        transform: [{ translateY }, { translateX }],
       }}
     >
-      {HEART_GLYPH}
-    </Animated.Text>
+      <GlowShape kind="heart" size={config.size} color="#FF69B4" id={`fh-${config.key}`} />
+    </Animated.View>
   );
 }
 
-function FloatingKaomoji({ max, dims, tier }: { max: boolean; dims: Dims; tier: number }) {
-  const emotes = max
-    ? ['\u2605', '\u2661', '\u2727', '!', '\u266A', '\u2606', '\u2764', '\u2728', '\u273F', '\u269B']
-    : ['\u2605', '\u2661', '\u2727', '!', '\u266A', '\u2606', '\u2764'];
+// (was FloatingKaomoji) The glyph grab-bag (music notes, "!", flowers…) is now
+// a cycle of glow shapes at the same counts and rise band — Animated.Text
+// can't glow on native, and the mixed glyph metrics made the layer look
+// pasted-on next to the gradient particles.
+function FloatingMotes({ max, dims, tier }: { max: boolean; dims: Dims; tier: number }) {
+  const kinds: GlowShapeKind[] = max ? ['star', 'heart', 'dot', 'moon'] : ['star', 'heart', 'dot'];
+  const colors = ['#FFD700', '#FFB3DF', '#FFF666'];
   const count = scaledCount(max ? 16 : 8, tier * dims.areaScale);
   const mult = speedMult(max);
   const items = useMemo(() =>
     Array.from({ length: count }).map((_, i) => ({
       key: i,
       sh: dims.sh,
-      text: emotes[i % emotes.length],
+      kind: kinds[i % kinds.length],
+      color: colors[i % colors.length],
       x: 30 + Math.random() * (dims.sw - 60),
       speed: (1200 + Math.random() * 800) * mult,
       delay: Math.random() * 2000,
@@ -429,24 +494,25 @@ function FloatingKaomoji({ max, dims, tier }: { max: boolean; dims: Dims; tier: 
   return (
     <>
       {items.map((item) => (
-        <FloatingEmote key={item.key} config={item} />
+        <FloatingMote key={item.key} config={item} />
       ))}
     </>
   );
 }
 
-function FloatingEmote({ config }: { config: any }) {
-  const y = useRef(new Animated.Value(config.sh - 180)).current;
+function FloatingMote({ config }: { config: any }) {
+  const rise = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     let cancelled = false;
     const animate = () => {
       if (cancelled) return;
-      y.setValue(config.sh - 180);
+      rise.setValue(0);
       opacity.setValue(0);
       Animated.parallel([
-        Animated.timing(y, { toValue: config.sh - 400, duration: config.speed, useNativeDriver: true }),
+        // ease-out rise, same physics as the hearts
+        Animated.timing(rise, { toValue: 1, duration: config.speed, easing: Easing.out(Easing.quad), useNativeDriver: true }),
         Animated.sequence([
           Animated.timing(opacity, { toValue: 0.7, duration: 200, useNativeDriver: true }),
           Animated.delay(Math.max(100, config.speed - 500)),
@@ -458,19 +524,19 @@ function FloatingEmote({ config }: { config: any }) {
     return () => { cancelled = true; clearTimeout(t); };
   }, []);
 
+  const translateY = rise.interpolate({ inputRange: [0, 1], outputRange: [config.sh - 180, config.sh - 400] });
+
   return (
-    <Animated.Text
+    <Animated.View
       style={{
         position: 'absolute',
         left: config.x,
-        fontSize: 16,
-        color: '#FFD700',
         opacity,
-        transform: [{ translateY: y }],
+        transform: [{ translateY }],
       }}
     >
-      {config.text}
-    </Animated.Text>
+      <GlowShape kind={config.kind} size={20} color={config.color} id={`fm-${config.key}`} />
+    </Animated.View>
   );
 }
 
@@ -482,7 +548,8 @@ function SparkleParticles({ max, dims, tier }: { max: boolean; dims: Dims; tier:
       key: i,
       x: 40 + Math.random() * (dims.sw - 80),
       y: dims.sh * 0.4 + Math.random() * (dims.sh * 0.4),
-      size: 6 + Math.random() * 6,
+      // ~×1.5 vs the old crossed-Views size (transparent gradient edge)
+      size: 9 + Math.random() * 9,
       speed: (600 + Math.random() * 600) * mult,
       delay: Math.random() * 1500,
     })),
@@ -516,12 +583,14 @@ function Sparkle({ config }: { config: any }) {
       rotation.setValue(0);
       Animated.parallel([
         Animated.sequence([
-          Animated.timing(scale, { toValue: 1.2, duration: config.speed * 0.3, useNativeDriver: true }),
-          Animated.timing(scale, { toValue: 0, duration: config.speed * 0.7, useNativeDriver: true }),
+          // pop-in with a back(1.5) overshoot, then an accelerating collapse —
+          // the old linear in/out read as a blinking cursor, not a glint.
+          Animated.timing(scale, { toValue: 1, duration: config.speed * 0.35, easing: Easing.out(Easing.back(1.5)), useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 0, duration: config.speed * 0.65, easing: Easing.in(Easing.quad), useNativeDriver: true }),
         ]),
         Animated.sequence([
           Animated.timing(opacity, { toValue: 0.9, duration: config.speed * 0.2, useNativeDriver: true }),
-          Animated.timing(opacity, { toValue: 0, duration: config.speed * 0.8, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0, duration: config.speed * 0.8, easing: Easing.in(Easing.quad), useNativeDriver: true }),
         ]),
         Animated.timing(rotation, { toValue: 1, duration: config.speed, useNativeDriver: true }),
       ]).start(() => {
@@ -545,21 +614,11 @@ function Sparkle({ config }: { config: any }) {
         position: 'absolute',
         left: config.x,
         top: config.y,
-        width: config.size,
-        height: config.size,
         opacity,
         transform: [{ scale }, { rotate: spin }],
       }}
     >
-      <View style={{
-        position: 'absolute', width: '100%', height: '100%',
-        backgroundColor: '#FFD700', borderRadius: 1,
-      }} />
-      <View style={{
-        position: 'absolute', width: '100%', height: '100%',
-        backgroundColor: '#FFD700', borderRadius: 1,
-        transform: [{ rotate: '45deg' }],
-      }} />
+      <GlowShape kind="star" size={config.size} color="#FFD700" id={`sp-${config.key}`} />
     </Animated.View>
   );
 }
@@ -580,8 +639,13 @@ function StarburstRing({ trigger }: { trigger: number }) {
         key: `${trigger}-${i}`,
         dx: Math.cos(angle) * distance,
         dy: Math.sin(angle) * distance,
-        size: 12 + Math.random() * 6,
+        // ~×1.3 vs the old glyph sizes (transparent gradient edge)
+        size: 16 + Math.random() * 8,
         color: ['#FF2E51', '#FFF666', '#5158FF', '#FFB3DF'][i % 4],
+        // deterministic per-star duration stagger — 8 identical 600ms pops
+        // read as a single mechanical unit; (i*53)%5 scatters 520–700ms while
+        // keeping the whole ring inside the beat window.
+        dur: 520 + ((i * 53) % 5) * 45,
       };
     }),
   [trigger]);
@@ -605,31 +669,37 @@ function StarburstStar({ config, center }: { config: any; center: { x: number; y
     translateY.setValue(0);
     opacity.setValue(0.9);
     Animated.parallel([
-      Animated.timing(translateX, { toValue: config.dx, duration: 600, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: config.dy, duration: 600, useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 0, duration: 600, useNativeDriver: true }),
+      // ease-out throw: fast eruption that dies at the rim, like sparks —
+      // the old linear fling had no sense of force.
+      Animated.timing(translateX, { toValue: config.dx, duration: config.dur, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: config.dy, duration: config.dur, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.sequence([
+        // hold bright through the throw, fade on the tail
+        Animated.delay(config.dur * 0.4),
+        Animated.timing(opacity, { toValue: 0, duration: config.dur * 0.6, useNativeDriver: true }),
+      ]),
     ]).start();
   }, []);
 
   return (
-    <Animated.Text
+    <Animated.View
       style={{
         position: 'absolute',
-        left: center.x,
-        top: center.y,
-        fontSize: config.size,
-        color: config.color,
+        left: center.x - config.size / 2,
+        top: center.y - config.size / 2,
         opacity,
         transform: [{ translateX }, { translateY }],
       }}
     >
-      {STAR_GLYPH}
-    </Animated.Text>
+      <GlowShape kind="star" size={config.size} color={config.color} id={`sb-${config.key}`} />
+    </Animated.View>
   );
 }
 
 /* Celebrating-mood confetti: small rectangles falling from the top, spanning
-   the REAL window width/height (D3). */
+   the REAL window width/height (D3). Confetti stays plain Views on purpose —
+   flat paper flecks don't glow, and it keeps the biggest particle count off
+   the Svg budget. */
 function ConfettiBurst({ max, dims }: { max: boolean; dims: Dims }) {
   const count = scaledCount(max ? 60 : 30, dims.areaScale);
   const pieces = useMemo(() =>
@@ -638,9 +708,11 @@ function ConfettiBurst({ max, dims }: { max: boolean; dims: Dims }) {
       sh: dims.sh,
       x: Math.random() * dims.sw,
       color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-      size: 4,
-      speed: 1500 + Math.random() * 500,
-      delay: Math.random() * 500,
+      // slight size/duration/delay scatter so the burst doesn't read as one
+      // mechanical sheet of pixels
+      size: 3 + Math.random() * 3,
+      speed: 1300 + Math.random() * 900,
+      delay: Math.random() * 650,
       sway: (Math.random() - 0.5) * 40,
       spinDir: Math.random() < 0.5 ? 1 : -1,
     })),
@@ -661,7 +733,9 @@ function ConfettiPiece({ config }: { config: any }) {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(y, { toValue: config.sh + 20, duration: config.speed, delay: config.delay, useNativeDriver: true }),
+      // Gravity: pieces hang at the top of the throw then accelerate — the
+      // old linear fall read as sliding down glass, not falling.
+      Animated.timing(y, { toValue: config.sh + 20, duration: config.speed, delay: config.delay, easing: Easing.in(Easing.quad), useNativeDriver: true }),
       Animated.timing(x, { toValue: config.x + config.sway, duration: config.speed, delay: config.delay, useNativeDriver: true }),
       Animated.timing(rot, { toValue: config.spinDir * 3, duration: config.speed, delay: config.delay, useNativeDriver: true }),
       Animated.sequence([

@@ -66,12 +66,52 @@ export interface NutritionDelta {
   profile?: NutritionProfile | null;
 }
 
+
+// ── Audit 2.0.5: rule-bound sanitizers ──────────────────────────────────
+// firestore.rules validates /nutrition writes (calories < 20000, macros
+// < 5000, weight 0..2000). Out-of-range local values used to be written
+// as-is, rejected server-side, warn-swallowed — the entry existed locally
+// and silently NEVER synced (other devices + Senpai diverged forever).
+// Clamp to the rule bounds at the write boundary and say so in the log.
+function clampNum(v: unknown, min: number, max: number, fallback: number): number {
+  const n = typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+  return Math.min(Math.max(n, min), max);
+}
+export function sanitizeWeightEntry(e: WeightEntry): WeightEntry {
+  const weight = clampNum(e.weight, 0.1, 1999.9, 0.1);
+  if (weight !== e.weight) console.warn(`${TAG} weight clamped to rule bounds:`, e.weight, '->', weight);
+  return { ...e, weight, unit: e.unit === 'kg' ? 'kg' : 'lb' };
+}
+export function sanitizeMacroEntry(e: MacroEntry): MacroEntry {
+  const out = {
+    ...e,
+    name: typeof e.name === 'string' && e.name.trim() ? e.name : 'Food',
+    calories: clampNum(e.calories, 0, 19999, 0),
+    protein: clampNum(e.protein, 0, 4999, 0),
+    carbs: clampNum(e.carbs, 0, 4999, 0),
+    fat: clampNum(e.fat, 0, 4999, 0),
+  };
+  if (out.calories !== e.calories || out.protein !== e.protein || out.carbs !== e.carbs || out.fat !== e.fat) {
+    console.warn(`${TAG} macro entry clamped to rule bounds:`, e.id);
+  }
+  return out;
+}
+function sanitizeGoals<T extends { calories?: number; protein?: number; carbs?: number; fat?: number }>(g: T): T {
+  return {
+    ...g,
+    calories: clampNum(g.calories, 0, 19999, 2200),
+    protein: clampNum(g.protein, 0, 4999, 160),
+    carbs: clampNum(g.carbs, 0, 4999, 220),
+    fat: clampNum(g.fat, 0, 4999, 70),
+  };
+}
+
 // ── Writes — single records (called by NutritionContext mutators) ──
 
 export async function upsertWeightEntry(uid: string, entry: WeightEntry): Promise<boolean> {
   if (!FIREBASE_CONFIGURED || !db || !uid) return false;
   try {
-    await setDoc(doc(db, ROOT, uid, WEIGHT_SUB, entry.id), stripUndefined({ ...entry }), { merge: true });
+    await setDoc(doc(db, ROOT, uid, WEIGHT_SUB, entry.id), stripUndefined({ ...sanitizeWeightEntry(entry) }), { merge: true });
     return true;
   } catch (err) {
     console.warn(`${TAG} upsertWeightEntry failed:`, err);
@@ -93,7 +133,7 @@ export async function deleteWeightEntry(uid: string, id: string): Promise<boolea
 export async function upsertMacroEntry(uid: string, entry: MacroEntry): Promise<boolean> {
   if (!FIREBASE_CONFIGURED || !db || !uid) return false;
   try {
-    await setDoc(doc(db, ROOT, uid, MACRO_SUB, entry.id), stripUndefined({ ...entry }), { merge: true });
+    await setDoc(doc(db, ROOT, uid, MACRO_SUB, entry.id), stripUndefined({ ...sanitizeMacroEntry(entry) }), { merge: true });
     return true;
   } catch (err) {
     console.warn(`${TAG} upsertMacroEntry failed:`, err);
@@ -176,31 +216,45 @@ export async function migrateNutritionToFirestore(
   // Flatten every write into (ref, data) pairs, then commit in <=450 chunks.
   const ops: { ref: ReturnType<typeof doc>; data: Record<string, unknown> }[] = [];
   for (const w of records.weights) {
-    ops.push({ ref: doc(database, ROOT, uid, WEIGHT_SUB, w.id), data: stripUndefined({ ...w }) });
+    ops.push({ ref: doc(database, ROOT, uid, WEIGHT_SUB, w.id), data: stripUndefined({ ...sanitizeWeightEntry(w) }) });
   }
   for (const m of records.macros) {
-    ops.push({ ref: doc(database, ROOT, uid, MACRO_SUB, m.id), data: stripUndefined({ ...m }) });
+    ops.push({ ref: doc(database, ROOT, uid, MACRO_SUB, m.id), data: stripUndefined({ ...sanitizeMacroEntry(m) }) });
   }
   if (records.goals) {
-    ops.push({ ref: doc(database, ROOT, uid, GOALS_SUB, SINGLETON_ID), data: stripUndefined({ ...records.goals }) });
+    ops.push({ ref: doc(database, ROOT, uid, GOALS_SUB, SINGLETON_ID), data: stripUndefined({ ...sanitizeGoals(records.goals) }) });
   }
   if (records.profile) {
     ops.push({ ref: doc(database, ROOT, uid, PROFILE_SUB, SINGLETON_ID), data: stripUndefined({ ...records.profile }) });
   }
 
-  try {
-    for (let i = 0; i < ops.length; i += BATCH_LIMIT) {
+  // Audit 2.0.5: batches are ATOMIC — one rule-rejected legacy row used to
+  // poison its whole 450-write chunk, the migrated flag never set, and the
+  // migration re-ran and re-failed every launch forever. On a failed chunk,
+  // fall back to per-doc writes and SKIP (loudly) only the poisoned rows —
+  // same strategy memberSync's backfill uses. Sanitizers above make genuine
+  // rejections rare; this is the backstop.
+  let skipped = 0;
+  for (let i = 0; i < ops.length; i += BATCH_LIMIT) {
+    const chunk = ops.slice(i, i + BATCH_LIMIT);
+    try {
       const batch = writeBatch(database);
-      for (const op of ops.slice(i, i + BATCH_LIMIT)) {
-        batch.set(op.ref, op.data, { merge: true });
-      }
+      for (const op of chunk) batch.set(op.ref, op.data, { merge: true });
       await batch.commit();
+    } catch (batchErr) {
+      console.warn(`${TAG} migrate chunk failed — retrying per-doc:`, batchErr);
+      for (const op of chunk) {
+        try {
+          await setDoc(op.ref, op.data, { merge: true });
+        } catch (docErr) {
+          skipped++;
+          console.warn(`${TAG} migrate: skipping poisoned row`, op.ref.path, docErr);
+        }
+      }
     }
-    return true;
-  } catch (err) {
-    console.warn(`${TAG} migrate failed:`, err);
-    return false;
   }
+  if (skipped > 0) console.warn(`${TAG} migrate completed with ${skipped} skipped row(s)`);
+  return true;
 }
 
 // ── Live subscription — Firestore is the source of truth when signed in ──

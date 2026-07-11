@@ -128,7 +128,8 @@ export function AdminScheduleScreen({ navigation }: any) {
       instructor,
       time,
       duration: dur,
-      spotsLeft: parseInt(spots) || 10,
+      // Audit 2.0.5: `|| 10` turned an explicit 0 (full class) into "10 left".
+      spotsLeft: Number.isFinite(parseInt(spots, 10)) ? Math.max(0, parseInt(spots, 10)) : 10,
       type: classType,
     };
     try {

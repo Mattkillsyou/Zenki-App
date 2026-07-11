@@ -36,6 +36,7 @@ import {
   deleteMacroEntry,
   setMacroGoals,
   setNutritionProfile,
+  sanitizeMacroEntry,
 } from '../services/nutritionSync';
 
 const WEIGHT_KEY = '@zenki_weight_entries';
@@ -426,11 +427,14 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   );
 
   const addMacroEntry = useCallback((entry: Omit<MacroEntry, 'id' | 'createdAt'>): MacroEntry => {
-    const full: MacroEntry = {
+    // Audit 2.0.5: clamp to the /nutrition rule bounds HERE so local state
+    // and the cloud copy agree — an unclamped 25000-cal fat-finger used to
+    // live locally while the server rejected the sync forever.
+    const full: MacroEntry = sanitizeMacroEntry({
       ...entry,
       id: genId('m'),
       createdAt: new Date().toISOString(),
-    };
+    } as MacroEntry);
     setMacros((prev) => [...prev, full]);
     recordMealLogged();
     const uid = getCurrentUid();

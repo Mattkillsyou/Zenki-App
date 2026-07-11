@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, Alert, Animated, PanResponder, Dimensions, Pressable, TextInput,
+  View, Text, StyleSheet, Alert, Animated, Easing, PanResponder, Dimensions, Pressable, TextInput,
   Keyboard, Platform,
 } from 'react-native';
 import { SoundPressable } from './SoundPressable';
@@ -100,7 +100,8 @@ function SenpaiMascotImpl() {
   const { state, triggerReaction } = useSenpai();
   const { user } = useAuth();
   // System Reduce Motion (live — toggling in iOS Settings takes effect without
-  // a restart). Gates the flipbook, bounce, rings/bursts, drag trail, dock
+  // a restart). Gates the flipbook, breath/head-bob, rings/bursts, drag
+  // trail, dock
   // spring and the milestone squash script (D5). Mirrored into a ref for the
   // once-created PanResponder closures.
   const { reduceMotion } = useMotion();
@@ -616,24 +617,27 @@ function SenpaiMascotImpl() {
           if (buf[4]) trailPositions[2].setValue({ x: buf[4].x - gs.dx, y: buf[4].y - gs.dy });
         }
       },
-      onPanResponderRelease: () => {
+      onPanResponderRelease: (_evt, gs) => {
         pan.flattenOffset();
         const dx = (pan.x as any)._value;
         const dy = (pan.y as any)._value;
         // Where she was dropped (clamped on-screen), then snap to the nearest
         // of the 4 corners. The transform springs from the drop delta to the
         // corner; on settle we commit basePos (layout) and zero the pan so the
-        // rendered spot is unchanged. Native driver to stay in sync with the
-        // native bounce loop on the same transform.
+        // rendered spot is unchanged. Native driver so the snap never waits
+        // on the JS thread mid-gesture.
         const dropped = clampPos(basePosRef.current.x + dx, basePosRef.current.y + dy);
         const key = nearestCorner(dropped);
         const target = CORNER_TARGETS[key];
         const delta = { x: target.x - basePosRef.current.x, y: target.y - basePosRef.current.y };
         // Reduce Motion: same settle contract, but a 0ms timing seats her
         // instantly instead of the springy flourish (D5).
+        // friction 6 / tension 120: a touch under-damped, so she overshoots
+        // the corner a hair and settles back — reads magnetic instead of the
+        // old uniform damped glide (friction 7 / tension 80).
         const settle = reduceMotionRef.current
           ? Animated.timing(pan, { toValue: delta, duration: 0, useNativeDriver: true })
-          : Animated.spring(pan, { toValue: delta, useNativeDriver: true, friction: 7, tension: 80 });
+          : Animated.spring(pan, { toValue: delta, useNativeDriver: true, friction: 6, tension: 120 });
         settle.start(({ finished }) => {
           // If a new drag interrupted the snap, this fires with finished=false
           // — bail so we don't clobber the in-progress gesture.
@@ -650,9 +654,13 @@ function SenpaiMascotImpl() {
         // press-release that trails this drag to fire (and be swallowed by
         // handleTap) first, so the *next* genuine tap still toggles the mic.
         setTimeout(() => { didDragRef.current = false; }, 60);
-        // Fade trail out
+        // Fade trail out — a faster fling leaves the trail lingering a touch
+        // longer (velocity is free on the gesture state), so the fade reads
+        // as momentum rather than a fixed switch-off. vx/vy are px/ms;
+        // clamped so a wild fling can't stretch the fade past ~400ms.
+        const flingSpeed = Math.min(3, Math.hypot(gs.vx, gs.vy));
         Animated.parallel(
-          trailOpacities.map((o) => Animated.timing(o, { toValue: 0, duration: 200, useNativeDriver: true })),
+          trailOpacities.map((o) => Animated.timing(o, { toValue: 0, duration: 160 + flingSpeed * 80, useNativeDriver: true })),
         ).start();
       },
     }),
@@ -709,34 +717,74 @@ function SenpaiMascotImpl() {
     };
   }, [state.mascotMood, state.enabled]);
 
-  // Subtle bounce for the whole mascot (supplements the built-in animation)
-  const bounce = useRef(new Animated.Value(0)).current;
-
+  // Breathing — a slow sine breath layered OVER the flipbook. (Replaces the
+  // old secondary translateY bounce: its `FLIPBOOK_ASSETS[mood]` gate skipped
+  // the loop whenever a strip existed — which is EVERY mood since all strips
+  // shipped — so the whole block was dead code feeding a constant 0 into the
+  // container transform. The gate is gone rather than repurposed: breathing
+  // is designed to COMPOSE with the strip — the strip animates the pose, this
+  // scales the body volume — so there is nothing left to gate on.)
+  // Awake: subtle chest rise + a whisper of sway. Asleep: slower, deeper,
+  // uniform belly breath (the sleep treatment also adds drifting z glyphs —
+  // see zAnims below). Rests at 0 under Reduce Motion (D5) — the static PNG
+  // then sits perfectly still.
+  const breath = useRef(new Animated.Value(0)).current;
+  const isAsleep = state.mascotMood === 'sleeping';
   useEffect(() => {
-    if (!state.enabled) return;
-    const mood = state.mascotMood;
-    // Flipbook moods carry their own full-body motion — a JS bounce on top
-    // reads as jitter, so leave `bounce` at rest while the strip drives the
-    // art. Reduce Motion also rests it (D5); the static PNG then sits still.
-    if (reduceMotion || FLIPBOOK_ASSETS[mood]) {
-      bounce.stopAnimation();
-      bounce.setValue(0);
+    if (!state.enabled || reduceMotion) {
+      breath.stopAnimation();
+      breath.setValue(0);
       return;
     }
-    const bounceDist = mood === 'sleeping' ? 1.5 : mood === 'cheering' || mood === 'celebrating' ? 3 : 2;
-    // D9: celebrating is the TOP-priority mood — it now shares cheering's
-    // snappy 600ms beat instead of the sluggish 2500ms default.
-    const bounceDur = mood === 'sleeping' ? 4000 : mood === 'cheering' || mood === 'celebrating' ? 600 : 2500;
-
-    const bounceLoop = Animated.loop(
+    // Awake: ~3.5s full period. Asleep: 0.25Hz (4s) — the deep-sleep tempo.
+    const half = isAsleep ? 2000 : 1750;
+    // Eased sine halves — smooth easing only, per the 120Hz note in
+    // SenpaiFlipbook's header (timing pre-samples easing at 60Hz and the
+    // native driver lerps between samples, so stepped easings judder).
+    const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(bounce, { toValue: -bounceDist, duration: bounceDur / 2, useNativeDriver: true }),
-        Animated.timing(bounce, { toValue: 0, duration: bounceDur / 2, useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 1, duration: half, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 0, duration: half, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]),
     );
-    bounceLoop.start();
-    return () => bounceLoop.stop();
-  }, [state.mascotMood, state.enabled, reduceMotion]);
+    loop.start();
+    return () => loop.stop();
+  }, [state.enabled, isAsleep, reduceMotion, breath]);
+  // The tilt maps 0 (rest) → 0deg at BOTH ends of the cycle so stopping the
+  // loop never leaves her tilted — the -0.5° ↔ +0.5° swing lives mid-cycle
+  // inside the interpolate node (curve shaping in interpolate, not in the
+  // timing's easing — the SenpaiFlipbook 120Hz precedent).
+  const breathScaleY = breath.interpolate({ inputRange: [0, 1], outputRange: isAsleep ? [1, 1.03] : [1, 1.015] });
+  const breathScaleX = breath.interpolate({ inputRange: [0, 1], outputRange: isAsleep ? [1, 1.03] : [1, 1] });
+  const breathTilt = breath.interpolate({
+    inputRange: [0, 0.25, 0.75, 1],
+    outputRange: isAsleep ? ['0deg', '0deg', '0deg', '0deg'] : ['0deg', '-0.5deg', '0.5deg', '0deg'],
+  });
+
+  // Sleeping "z" drift — 2-3 typographic z's float up from her head, easing
+  // out as they fade, on a staggered loop. Animated.Text is deliberate: the
+  // z's ARE typography, not art assets. The stagger delay sits INSIDE each
+  // loop so the three periods differ (2200 + 700i ms) and the glyphs slowly
+  // de-sync — organic drift instead of a marching column. Replaces the old
+  // flat 0.85-opacity dim, which read as a rendering bug, not sleep.
+  // Reduce Motion: no drift — the static sleeping art alone carries it (D5).
+  const zAnims = useRef(Array.from({ length: 3 }, () => new Animated.Value(0))).current;
+  useEffect(() => {
+    if (!state.enabled || !isAsleep || reduceMotion) {
+      zAnims.forEach((a) => { a.stopAnimation(); a.setValue(0); });
+      return;
+    }
+    const loops = zAnims.map((a, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(700 * i),
+          Animated.timing(a, { toValue: 1, duration: 2200, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        ]),
+      ),
+    );
+    loops.forEach((l) => l.start());
+    return () => loops.forEach((l) => l.stop());
+  }, [state.enabled, isAsleep, reduceMotion, zAnims]);
 
   // ─── Reaction choreography (milestone beats) ─────────────────────────────
   // Milestone reactions play a tiny runReactionScript() instead of
@@ -796,26 +844,37 @@ function SenpaiMascotImpl() {
   const squashScaleY = squashAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.86] });
   const squashSink = squashAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 5] });
 
-  // D7(b): "talking" pulse — while TTS audio plays, a gentle 1↔1.03 scale so
-  // her voice never comes out of a frozen chibi. Subtle enough to layer over
-  // the flipbook without reading as jitter; rests under Reduce Motion.
-  const talkPulse = useRef(new Animated.Value(0)).current;
+  // D7(b): talk head-bob — while TTS audio plays, a small translateY bob plus
+  // a head tilt on an IRREGULAR four-beat rhythm (four timings, four
+  // durations) so she reads as *talking*, not inflating (the old uniform
+  // 1↔1.03 scale pulse read as a balloon). Rests under Reduce Motion.
+  const talkAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!ttsPlaying || reduceMotion) {
-      talkPulse.stopAnimation();
-      Animated.timing(talkPulse, { toValue: 0, duration: 150, useNativeDriver: true }).start();
+      talkAnim.stopAnimation();
+      Animated.timing(talkAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start();
       return;
     }
+    // Uneven beats — the 1040ms loop period deliberately avoids dividing
+    // into the flipbook's 12fps cadence so the bob never locks step with it.
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(talkPulse, { toValue: 1, duration: 260, useNativeDriver: true }),
-        Animated.timing(talkPulse, { toValue: 0, duration: 260, useNativeDriver: true }),
+        Animated.timing(talkAnim, { toValue: 1, duration: 190, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(talkAnim, { toValue: 0.3, duration: 260, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(talkAnim, { toValue: 0.8, duration: 170, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(talkAnim, { toValue: 0, duration: 420, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       ]),
     );
     loop.start();
     return () => loop.stop();
-  }, [ttsPlaying, reduceMotion, talkPulse]);
-  const talkScale = talkPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] });
+  }, [ttsPlaying, reduceMotion, talkAnim]);
+  const talkBobY = talkAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -2] });
+  // Same rest-at-neutral trick as breathTilt: 0deg at both ends so the
+  // 150ms settle-to-0 after TTS never parks her tilted.
+  const talkTilt = talkAnim.interpolate({
+    inputRange: [0, 0.35, 0.8, 1],
+    outputRange: ['0deg', '-1.5deg', '1.5deg', '0deg'],
+  });
 
   // H5 wake-up arc: sleeping → tap → stretch/wave beat → greeting, instead of
   // an instant pose cut. artOverride swaps the ART only (mood machinery is
@@ -1050,7 +1109,7 @@ function SenpaiMascotImpl() {
         if (!reduceMotionRef.current) {
           // Boot flourish is decoration — skipped under Reduce Motion (D5).
           chargeAnim.setValue(1);
-          Animated.timing(chargeAnim, { toValue: 0, duration: 350, useNativeDriver: false }).start();
+          Animated.timing(chargeAnim, { toValue: 0, duration: 350, useNativeDriver: true }).start();
           fireExplosion();
         }
         triggerReaction('cheering', randomDialogue('mascotTap'), 2500);
@@ -1070,7 +1129,7 @@ function SenpaiMascotImpl() {
       Animated.timing(dischargeAnim, {
         toValue: 0,
         duration: 350,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }).start();
       fireShutdown();
     }
@@ -1082,13 +1141,16 @@ function SenpaiMascotImpl() {
   };
 
   // Pulsing glow whenever the mic is open. Loops until listening flips off.
+  // The glow only ever drove opacity + scale, so nothing stops it running on
+  // the native driver — the old useNativeDriver:false here was the same
+  // JS-thread jank class as the border-animated rings (both fixed together).
   useEffect(() => {
     if (!listening) {
       glowAnim.stopAnimation();
       Animated.timing(glowAnim, {
         toValue: 0,
         duration: 220,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }).start();
       return;
     }
@@ -1104,12 +1166,14 @@ function SenpaiMascotImpl() {
         Animated.timing(glowAnim, {
           toValue: 1,
           duration: 950,
-          useNativeDriver: false,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
         }),
         Animated.timing(glowAnim, {
           toValue: 0.35,
           duration: 950,
-          useNativeDriver: false,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
         }),
       ]),
     );
@@ -1146,8 +1210,9 @@ function SenpaiMascotImpl() {
 
   if (hidden) return null;
 
-  const mood = state.mascotMood;
-  const opacity = mood === 'sleeping' && !artOverride ? 0.85 : 1;
+  // (The old flat 0.85 sleep dim is gone — sleep now reads through the deep
+  // breath + drifting z glyphs instead of a translucency that looked like a
+  // rendering bug. Under Reduce Motion the static sleeping art carries it.)
   // Art selection: wake-arc override > think pose while a reply is in flight
   // (D7) > the scripted displayMood. displayMood (not mascotMood) lags one
   // beat behind during a milestone reaction script so the anticipation squash
@@ -1227,9 +1292,7 @@ function SenpaiMascotImpl() {
             transform: [
               { translateX: pan.x },
               { translateY: pan.y },
-              { translateY: bounce },
             ],
-            opacity,
           },
         ]}
       >
@@ -1294,25 +1357,45 @@ function SenpaiMascotImpl() {
             me senpai 💕" while listening. Two indicators were redundant.) */}
 
         {/* Charge ring — flashes pink → gold on tap-to-start, then fades.
-            A quick boot flourish (no more multi-second charge-up). */}
+            A quick boot flourish (no more multi-second charge-up).
+            TWO pre-styled border skins cross-faded by opacity: as chargeAnim
+            decays 1 → 0 the gold peak layer drops out first and the pink
+            pass shows through — the same brighten-then-cool color story the
+            old borderColor interpolation told, but every animated property
+            is now transform/opacity, so the flash runs on the native driver
+            (animating border props forced useNativeDriver:false and janked
+            the JS thread — the class of thing this rebuild removes). */}
         <Animated.View
           pointerEvents="none"
           style={[
             styles.chargeRing,
+            styles.chargeRingPink,
             {
-              borderWidth: chargeAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 6],
-              }),
-              borderColor: chargeAnim.interpolate({
+              opacity: chargeAnim.interpolate({
                 inputRange: [0, 0.5, 1],
-                outputRange: [
-                  'rgba(255, 46, 81, 0)',
-                  'rgba(255, 46, 81, 0.7)',
-                  'rgba(255, 215, 0, 1)',
-                ],
+                outputRange: [0, 0.8, 0],
               }),
-              opacity: chargeAnim,
+              transform: [
+                {
+                  scale: chargeAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 1.08],
+                  }),
+                },
+              ],
+            },
+          ]}
+        />
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.chargeRing,
+            styles.chargeRingGold,
+            {
+              opacity: chargeAnim.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [0, 0.35, 1],
+              }),
               transform: [
                 {
                   scale: chargeAnim.interpolate({
@@ -1327,26 +1410,40 @@ function SenpaiMascotImpl() {
 
         {/* Discharge ring — flashes orange → deep red on tap-to-stop so the
             user reads it as a distinct "powering down", not a second
-            start-up. Same geometry as the charge ring, separate
-            Animated.Value so they can coexist without state conflicts. */}
+            start-up. Same geometry + dual-skin scheme as the charge ring
+            (native-driven opacity/scale only), separate Animated.Value so
+            they can coexist without state conflicts. */}
         <Animated.View
           pointerEvents="none"
           style={[
             styles.chargeRing,
+            styles.dischargeRingOrange,
             {
-              borderWidth: dischargeAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 6],
-              }),
-              borderColor: dischargeAnim.interpolate({
+              opacity: dischargeAnim.interpolate({
                 inputRange: [0, 0.5, 1],
-                outputRange: [
-                  'rgba(255, 140, 0, 0)',
-                  'rgba(255, 140, 0, 0.75)',
-                  'rgba(220, 38, 38, 1)',
-                ],
+                outputRange: [0, 0.8, 0],
               }),
-              opacity: dischargeAnim,
+              transform: [
+                {
+                  scale: dischargeAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 1.08],
+                  }),
+                },
+              ],
+            },
+          ]}
+        />
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.chargeRing,
+            styles.dischargeRingRed,
+            {
+              opacity: dischargeAnim.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [0, 0.35, 1],
+              }),
               transform: [
                 {
                   scale: dischargeAnim.interpolate({
@@ -1490,6 +1587,36 @@ function SenpaiMascotImpl() {
           );
         })}
 
+        {/* Sleeping z's — drift up from her head and fade (zAnims effect has
+            the stagger rationale). Hidden during the wake arc (artOverride)
+            and under Reduce Motion, matching the old sleep-dim guards. */}
+        {isAsleep && !artOverride && !reduceMotion && zAnims.map((a, i) => (
+          <Animated.Text
+            key={`sleep-z-${i}`}
+            pointerEvents="none"
+            style={[
+              styles.sleepZ,
+              {
+                // Fan the spawn points + sizes so the three z's read as a
+                // trail (big near her head, small drifting away).
+                right: 26 + i * 11,
+                fontSize: 17 - i * 3,
+                // Invisible at BOTH ends of the cycle, so the in-loop stagger
+                // delay (value parked at 1) never shows a frozen glyph.
+                opacity: a.interpolate({ inputRange: [0, 0.15, 0.7, 1], outputRange: [0, 0.9, 0.5, 0] }),
+                transform: [
+                  { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [0, -34] }) },
+                  // Alternate the sideways drift so they don't stack rank.
+                  { translateX: a.interpolate({ inputRange: [0, 1], outputRange: [0, i % 2 === 0 ? 8 : -6] }) },
+                  { scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.15] }) },
+                ],
+              },
+            ]}
+          >
+            z
+          </Animated.Text>
+        ))}
+
         {/* Animated mascot — gestures:
               - Tap (idle):        mic ON  (charge ring flash + boot explosion)
               - Tap (listening):   mic OFF (discharge ring flash + shutdown)
@@ -1517,19 +1644,26 @@ function SenpaiMascotImpl() {
           }
           hitSlop={8}
         >
-          {/* Squash-and-stretch wrapper — driven only by the milestone
-              reaction script (squashAnim rests at 0 otherwise) plus the D7
-              talk pulse while TTS plays. MascotArt below renders the flipbook
-              strip (or the static PNG under Reduce Motion / missing strip)
-              in the exact same MASCOT_SIZE box, so swaps never re-layout the
-              dock, bubble, or hit boxes. */}
+          {/* Squash-and-stretch wrapper — the milestone reaction script
+              (squashAnim rests at 0 otherwise), the always-on breath, and the
+              D7 talk head-bob all compose here. Repeated transform keys are
+              legal in RN — each entry is its own matrix op, multiplied in
+              order — so the squash scaleY and breath scaleY stack cleanly.
+              MascotArt below renders the flipbook strip (or the static PNG
+              under Reduce Motion / missing strip) in the exact same
+              MASCOT_SIZE box, so swaps never re-layout the dock, bubble, or
+              hit boxes. */}
           <Animated.View
             style={{
               transform: [
                 { translateY: squashSink },
                 { scaleX: squashScaleX },
                 { scaleY: squashScaleY },
-                { scale: talkScale },
+                { rotate: breathTilt },
+                { scaleX: breathScaleX },
+                { scaleY: breathScaleY },
+                { translateY: talkBobY },
+                { rotate: talkTilt },
               ],
             }}
           >
@@ -1786,9 +1920,13 @@ function MascotArtLayer({
 
   const entry = FLIPBOOK_ASSETS[artKey];
   const fallback = ANIM_ASSETS[artKey] ?? ANIM_ASSETS.idle;
+  // Ghost-free swaps: the OUTGOING layer freezes to its static mood PNG
+  // (ANIM_ASSETS first-frame) for the fade — two flipbook loops running
+  // unsynced during the crossfade double-exposed into a ghost. Only the
+  // incoming layer's strip ever plays.
   return (
     <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: layerOpacity }]}>
-      {entry ? (
+      {entry && !fadeOut ? (
         <SenpaiFlipbook entry={entry} size={MASCOT_SIZE} fallback={fallback} />
       ) : (
         <Image
@@ -1805,11 +1943,15 @@ function MascotArtLayer({
 
 /**
  * MascotArt — renders the current art key in a fixed MASCOT_SIZE box (zero
- * re-layout on swap). On a key change with `crossfade`, the outgoing layer
- * stays mounted ~240ms fading out while the incoming one fades in — a true
- * cross-fade instead of the old hard cut (D6). Milestone scripts and Reduce
- * Motion pass crossfade=false and swap instantly (the squash pop / a11y).
- * At most 2 layers ever exist, and only for the fade window.
+ * re-layout on swap). On a key change with `crossfade`, an ~80ms anticipation
+ * micro-squash plays on the CURRENT pose first (a mini version of the
+ * milestone script's squash — cartoon anticipation, not just a dissolve),
+ * THEN the outgoing layer stays mounted ~240ms fading out (frozen as its
+ * static PNG — see MascotArtLayer) while the incoming one fades in and the
+ * squash springs back. Milestone scripts and Reduce Motion pass
+ * crossfade=false and swap instantly (the milestone's own hard pose-pop on
+ * the squash release IS the intended comedy beat — D2/D5 untouched). At most
+ * 2 layers ever exist, and only for the fade window.
  */
 const MascotArt = React.memo(function MascotArt({
   artKey,
@@ -1824,15 +1966,52 @@ const MascotArt = React.memo(function MascotArt({
   const [layers, setLayers] = useState<{ id: number; artKey: string }[]>(
     () => [{ id: 0, artKey }],
   );
+  // Anticipation micro-squash (0 = rest). Native-driven; only ever runs on
+  // the crossfade path, which the parent already gates off under Reduce
+  // Motion and mid-milestone (crossfade=false both times).
+  const microSquash = useRef(new Animated.Value(0)).current;
+  const pendingSwapRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirrors the top layer's key so a re-run that changes only `crossfade`
+  // (e.g. bubbleHold flipping) never replays the squash on the same pose.
+  const topKeyRef = useRef(artKey);
 
   useEffect(() => {
-    setLayers((prev) => {
-      const top = prev[prev.length - 1];
-      if (top.artKey === artKey) return prev;
-      const next = { id: ++idRef.current, artKey };
-      return crossfade ? [top, next] : [next];
-    });
-  }, [artKey, crossfade]);
+    if (topKeyRef.current === artKey) return;
+    const commit = () => {
+      topKeyRef.current = artKey;
+      setLayers((prev) => {
+        const top = prev[prev.length - 1];
+        if (top.artKey === artKey) return prev;
+        const next = { id: ++idRef.current, artKey };
+        return crossfade ? [top, next] : [next];
+      });
+    };
+    if (!crossfade) {
+      // Milestone / Reduce Motion: instant swap, and park the squash at rest
+      // in case an anticipation was interrupted mid-play.
+      microSquash.stopAnimation();
+      microSquash.setValue(0);
+      commit();
+      return;
+    }
+    // Non-milestone swap: squash down for 80ms on the outgoing pose, then
+    // crossfade + spring back (slight overshoot past 0 reads as the release
+    // stretch, same trick as the milestone script's interpolation).
+    Animated.timing(microSquash, { toValue: 1, duration: 80, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+    pendingSwapRef.current = setTimeout(() => {
+      pendingSwapRef.current = null;
+      commit();
+      Animated.spring(microSquash, { toValue: 0, friction: 5, tension: 220, useNativeDriver: true }).start();
+    }, 80);
+    return () => {
+      // A newer key (or unmount) arrived mid-anticipation — drop the stale
+      // commit; the next effect run schedules its own.
+      if (pendingSwapRef.current) {
+        clearTimeout(pendingSwapRef.current);
+        pendingSwapRef.current = null;
+      }
+    };
+  }, [artKey, crossfade, microSquash]);
 
   // Prune the outgoing layer once the incoming one has fully faded in.
   useEffect(() => {
@@ -1858,7 +2037,20 @@ const MascotArt = React.memo(function MascotArt({
   }
 
   return (
-    <View style={styles.mascotImage}>
+    <Animated.View
+      style={[
+        styles.mascotImage,
+        {
+          // scaleX up / scaleY down — the anticipation squash. The spring
+          // back to 0 may overshoot negative, which extrapolates into a
+          // brief stretch: intended, it sells the release.
+          transform: [
+            { scaleX: microSquash.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }) },
+            { scaleY: microSquash.interpolate({ inputRange: [0, 1], outputRange: [1, 0.93] }) },
+          ],
+        },
+      ]}
+    >
       {layers.map((l, i) => (
         <MascotArtLayer
           key={l.id}
@@ -1867,7 +2059,7 @@ const MascotArt = React.memo(function MascotArt({
           fadeOut={layers.length > 1 && i < layers.length - 1}
         />
       ))}
-    </View>
+    </Animated.View>
   );
 });
 
@@ -1908,9 +2100,11 @@ const styles = StyleSheet.create({
     zIndex: 0,
   },
 
-  // Charge / discharge ring — same geometry, two consumers. Sits behind
-  // the mascot. Border thickness, color, and scale are all driven by the
-  // respective Animated.Value, flashed 1 → 0 on tap-to-start / tap-to-stop.
+  // Charge / discharge ring — same geometry, four consumers (two color
+  // skins per ring). Sits behind the mascot, flashed 1 → 0 on tap-to-start /
+  // tap-to-stop. Border props live HERE as constants so the flash animates
+  // only opacity + scale and stays on the native driver — animating
+  // borderWidth/borderColor forces useNativeDriver:false (JS-thread jank).
   chargeRing: {
     position: 'absolute',
     width: MASCOT_SIZE + 24,
@@ -1920,6 +2114,12 @@ const styles = StyleSheet.create({
     borderRadius: (MASCOT_SIZE + 24) / 2,
     zIndex: 1,
   },
+  // Pre-styled ring skins — the "pass" color is what shows mid-decay, the
+  // "peak" color dominates at full flash (opacity cross-fade in the JSX).
+  chargeRingPink: { borderWidth: 5, borderColor: 'rgba(255, 46, 81, 0.85)' },
+  chargeRingGold: { borderWidth: 6, borderColor: '#FFD700' },
+  dischargeRingOrange: { borderWidth: 5, borderColor: 'rgba(255, 140, 0, 0.85)' },
+  dischargeRingRed: { borderWidth: 6, borderColor: 'rgb(220, 38, 38)' },
 
   // Explosion burst — quick gold ring that expands + fades on charge complete.
   explosionRing: {
@@ -1976,6 +2176,16 @@ const styles = StyleSheet.create({
     zIndex: 6,
     // @ts-ignore — boxShadow web-only fallback
     boxShadow: '0 0 8px rgba(255, 140, 0, 0.9)',
+  },
+
+  // Sleeping "z" glyph — intentionally typographic (Animated.Text, not an
+  // art asset). Spawns near her head; per-glyph size/offset set inline.
+  sleepZ: {
+    position: 'absolute',
+    top: 8,
+    color: 'rgba(255, 255, 255, 0.92)',
+    fontWeight: '800',
+    zIndex: 7,
   },
 
   // Speech bubble — her reply / live-transcript surface. Lives INSIDE the

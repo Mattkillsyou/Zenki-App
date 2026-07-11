@@ -68,7 +68,7 @@ function dateStringFor(d: Date): string {
 export function BookScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { requestAppointment } = useAppointments();
+  const { requestAppointment, myAppointments } = useAppointments();
   const { recordBooking, recordPrivateSession } = useGamification();
   const { sessionTypes, showPricing } = useSchedulingConfig();
   const [selectedInstructor, setSelectedInstructor] = useState(0);
@@ -87,6 +87,29 @@ export function BookScreen({ navigation }: any) {
   // than the current index (e.g. an admin removed a type).
   const safeType = Math.min(selectedType, sessionTypes.length - 1);
   const currentDuration = parseDurationMinutes(sessionTypes[safeType].duration);
+
+  // Audit 2.0.5 (booking cluster): the busy-interval guard is hard-disabled
+  // (empty calendar URL) and appointments were never consulted — the same
+  // member could double-book the same slot in two taps. Cross-member
+  // conflicts stay admin-side (rules only let a member read their OWN
+  // appointments), but MY pending/confirmed sessions now block the slot.
+  const myBusyAt = useCallback((slotStart: Date, durationMinutes: number): boolean => {
+    const start = slotStart.getTime();
+    const end = start + durationMinutes * 60_000;
+    return myAppointments.some((a) => {
+      if (a.status !== 'pending' && a.status !== 'confirmed') return false;
+      const aStart = new Date(a.startsAt).getTime();
+      if (Number.isNaN(aStart)) return false;
+      const aEnd = aStart + (a.durationMinutes || 60) * 60_000;
+      return start < aEnd && aStart < end;
+    });
+  }, [myAppointments]);
+
+  // Evening dead-end: when every slot is already in the past, say so instead
+  // of a wall of indistinguishable UNAVAILABLE chips.
+  const allSlotsPast = TIME_SLOTS.every(
+    (t) => slotToDate(currentDate, t).getTime() <= currentDate.getTime(),
+  );
 
   // Fetch the owner's busy intervals whenever the date we're booking for changes.
   // Today's the only bookable date right now, but this is structured to expand.
@@ -153,6 +176,11 @@ export function BookScreen({ navigation }: any) {
       Alert.alert('Unavailable', 'That time is already booked. Please choose another slot.');
       return;
     }
+    if (myBusyAt(slotDate, currentDuration)) {
+      Alert.alert('Already booked', 'You already have a session requested or confirmed at that time.');
+      setSelectedTime(null);
+      return;
+    }
 
     if (!requireAuth(user, navigation, 'request a booking')) return;
 
@@ -170,6 +198,9 @@ export function BookScreen({ navigation }: any) {
         durationMinutes: parseDurationMinutes(sessionType.duration),
         price: sessionType.price,
       });
+      // Clear the slot immediately so a second tap can't double-submit while
+      // the confirmation alert is up (the CTA disables with no selection).
+      setSelectedTime(null);
       recordBooking();
       const label = sessionType.label.toLowerCase();
       if (label.includes('private') || label.includes('1:1')) recordPrivateSession();
@@ -313,13 +344,25 @@ export function BookScreen({ navigation }: any) {
           <Text style={[styles.dateLabel, { color: colors.textSecondary }]}>
             {getDisplayDate(currentDate)}
           </Text>
+          {allSlotsPast && (
+            <View style={{ paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginBottom: 10 }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>
+                No more bookable times today
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+                Sessions run through {TIME_SLOTS[TIME_SLOTS.length - 1]}. Check back tomorrow morning to book.
+              </Text>
+            </View>
+          )}
           <View style={styles.timeGrid}>
             {TIME_SLOTS.map((time) => {
               const isSelected = time === selectedTime;
               const slotDate = slotToDate(currentDate, time);
               const conflict = isSlotBusy(slotDate, currentDuration, busyIntervals);
+              const isPast = slotDate.getTime() <= currentDate.getTime();
+              const mine = !isPast && myBusyAt(slotDate, currentDuration);
               // Past slots are disabled exactly like calendar-busy ones.
-              const isBusy = conflict !== null || slotDate.getTime() <= currentDate.getTime();
+              const isBusy = conflict !== null || isPast || mine;
               return (
                 <SoundPressable
                   key={time}
@@ -361,7 +404,7 @@ export function BookScreen({ navigation }: any) {
                   </Text>
                   {isBusy && (
                     <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textMuted, marginTop: 1, letterSpacing: 0.5 }}>
-                      UNAVAILABLE
+                      {isPast ? 'PASSED' : mine ? 'YOUR SESSION' : 'UNAVAILABLE'}
                     </Text>
                   )}
                 </SoundPressable>

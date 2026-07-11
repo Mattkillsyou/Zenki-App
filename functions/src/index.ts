@@ -47,6 +47,11 @@ export { notifyOnReport } from './notifyOnReport';
 // admin can't call Expo directly (browser CORS), so it routes through here.
 export { broadcastPush } from './broadcastPush';
 
+// HTTP (admin-gated): surface /supportMessages to the web admin's Support tab.
+// The collection is client-read:false (contact PII), so the Admin SDK is the
+// only sanctioned read path — fixes the "Contact IT black hole" (audit 2.0.5).
+export { listSupportMessages } from './listSupportMessages';
+
 // Firestore triggers: maintain denormalized follower/following counts on /users
 // from the follower-edge source of truth (abuse-proof; client can't write them).
 export { onFollowerEdgeCreated, onFollowerEdgeDeleted } from './followerCounters';

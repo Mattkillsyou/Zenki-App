@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { View, StyleSheet, Animated, Easing, useWindowDimensions } from 'react-native';
+import Svg, { Circle, Path, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { getSenpaiCornerInfo, effectScaleFor } from './senpaiCornerStore';
 
 export type ImpactType = 'explosion' | 'hearts' | 'flash' | 'spiral';
@@ -8,6 +9,48 @@ interface Props {
   type: ImpactType;
   onComplete?: () => void;
 }
+
+/* ═══ SVG GLOW PARTICLES ═══
+   Same rationale as SenpaiOverlay.tsx: the old Animated.Text glyphs couldn't
+   glow on native (textShadow silently drops), so particles are tiny Svg
+   shapes filled with a RadialGradient (bright core → transparent edge). The
+   Svg mounts once and never re-renders per frame — all motion lives on the
+   wrapping Animated.View (transform/opacity, native driver). Duplicated
+   rather than shared: the two effect layers stay self-contained on purpose. */
+
+type GlowShapeKind = 'star' | 'heart' | 'dot';
+
+// Concave 4-point sparkle star (24×24 box).
+const STAR4_D = 'M12 0C13.2 7.4 16.6 10.8 24 12C16.6 13.2 13.2 16.6 12 24C10.8 16.6 7.4 13.2 0 12C7.4 10.8 10.8 7.4 12 0Z';
+// Filled heart (24×24 box).
+const HEART_D = 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z';
+
+function GlowShape({ kind, size, color, id }: { kind: GlowShapeKind; size: number; color: string; id: string }) {
+  // ids are unique per instance: react-native-svg scopes <Defs> per <Svg> on
+  // native, but unique ids keep us safe on any renderer that hoists defs.
+  const fill = `url(#${id})`;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Defs>
+        <RadialGradient id={id} cx="50%" cy="50%" r="50%">
+          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="1" />
+          <Stop offset="45%" stopColor={color} stopOpacity="0.95" />
+          <Stop offset="100%" stopColor={color} stopOpacity="0" />
+        </RadialGradient>
+      </Defs>
+      {kind === 'dot'
+        ? <Circle cx="12" cy="12" r="12" fill={fill} />
+        : <Path d={kind === 'star' ? STAR4_D : HEART_D} fill={fill} />}
+    </Svg>
+  );
+}
+
+// Pre-sampled sine for the hearts' x-sway — the wave shape lives in the
+// interpolate node while the driving timing stays linear (SenpaiFlipbook.tsx
+// header has the 120Hz note on why stepping/shaping belongs in interpolate).
+const SWAY_STOPS = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1];
+const swayOutput = (amp: number, phase: number) =>
+  SWAY_STOPS.map((t) => Math.sin((t + phase) * Math.PI * 2) * amp);
 
 /**
  * One-shot dramatic overlay for major events.
@@ -51,8 +94,14 @@ function ExplosionEffect({ onComplete }: { onComplete?: () => void }) {
         key: i,
         dx: Math.cos(baseAngle + jitter) * distance,
         dy: Math.sin(baseAngle + jitter) * distance,
-        size: 14 + Math.random() * 8,
+        // ~×1.3 vs the old glyph sizes — the gradient edge is transparent, so
+        // the perceived footprint shrinks; this keeps the old visual weight.
+        size: 18 + Math.random() * 10,
         color: COLORS[i % COLORS.length],
+        // per-star duration/delay scatter — 12 identical 500ms flings read as
+        // one mechanical unit. Stays inside the 700ms onComplete window.
+        dur: 440 + Math.random() * 160,
+        delay: Math.random() * 90,
       };
     }),
   [scale]);
@@ -80,16 +129,15 @@ function ExplosionEffect({ onComplete }: { onComplete?: () => void }) {
       <Animated.View
         style={{
           position: 'absolute',
-          left: center.x - 15,
-          top: center.y - 15,
-          width: 30,
-          height: 30,
-          borderRadius: 15,
-          backgroundColor: '#FFFFFF',
+          left: center.x - 22,
+          top: center.y - 22,
           opacity: flashOpacity,
           transform: [{ scale: flashScale }],
         }}
-      />
+      >
+        {/* radial-gradient bloom — the flat #FFF circle had no falloff */}
+        <GlowShape kind="dot" size={44} color="#FFFFFF" id="expl-flash" />
+      </Animated.View>
       {particles.map((p) => (
         <ExplosionStar key={p.key} config={p} center={center} />
       ))}
@@ -103,27 +151,32 @@ function ExplosionStar({ config, center }: { config: any; center: { x: number; y
   const opacity = useRef(new Animated.Value(0.9)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(translateX, { toValue: config.dx, duration: 500, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: config.dy, duration: 500, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 0, duration: 600, useNativeDriver: true }),
+    Animated.sequence([
+      Animated.delay(config.delay),
+      Animated.parallel([
+        Animated.timing(translateX, { toValue: config.dx, duration: config.dur, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: config.dy, duration: config.dur, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.sequence([
+          // hold bright through the throw, fade on the tail
+          Animated.delay(config.dur * 0.35),
+          Animated.timing(opacity, { toValue: 0, duration: config.dur * 0.65, useNativeDriver: true }),
+        ]),
+      ]),
     ]).start();
   }, []);
 
   return (
-    <Animated.Text
+    <Animated.View
       style={{
         position: 'absolute',
-        left: center.x,
-        top: center.y,
-        fontSize: config.size,
-        color: config.color,
+        left: center.x - config.size / 2,
+        top: center.y - config.size / 2,
         opacity,
         transform: [{ translateX }, { translateY }],
       }}
     >
-      {'\u2605'}
-    </Animated.Text>
+      <GlowShape kind="star" size={config.size} color={config.color} id={`ex-${config.key}`} />
+    </Animated.View>
   );
 }
 
@@ -136,12 +189,14 @@ function HeartsEffect({ onComplete }: { onComplete?: () => void }) {
       key: i,
       sh,
       x: Math.random() * sw,
-      glyph: i % 2 === 0 ? '\u2661' : '\u2665',
       color: COLORS[i % COLORS.length],
-      size: 12 + Math.random() * 8,
+      // ~×1.3 vs the old glyph sizes (transparent gradient edge)
+      size: 16 + Math.random() * 10,
       speed: 1500 + Math.random() * 1000,
       delay: Math.random() * 500,
-      sway: (Math.random() - 0.5) * 40,
+      // sinusoidal x-sway (replaces the old one-way linear drift): amplitude
+      // + phase baked into the interpolate output, no per-frame JS work.
+      swayOut: swayOutput(10 + Math.random() * 12, i / 25),
       spinDir: Math.random() < 0.5 ? 1 : -1,
     })),
   [sw, sh]);
@@ -161,15 +216,18 @@ function HeartsEffect({ onComplete }: { onComplete?: () => void }) {
 }
 
 function HeartFaller({ config }: { config: any }) {
-  const y = useRef(new Animated.Value(-30)).current;
-  const x = useRef(new Animated.Value(config.x)).current;
+  const fall = useRef(new Animated.Value(0)).current;
+  const swayT = useRef(new Animated.Value(0)).current;
   const rot = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(y, { toValue: config.sh + 30, duration: config.speed, delay: config.delay, useNativeDriver: true }),
-      Animated.timing(x, { toValue: config.x + config.sway, duration: config.speed, delay: config.delay, useNativeDriver: true }),
+      // Gentle gravity — sin ease-in accelerates the fall without bombing;
+      // these are hearts fluttering down, not confetti. Sway driver stays
+      // linear: the sine shape lives in the interpolate below (120Hz note).
+      Animated.timing(fall, { toValue: 1, duration: config.speed, delay: config.delay, easing: Easing.in(Easing.sin), useNativeDriver: true }),
+      Animated.timing(swayT, { toValue: 1, duration: config.speed, delay: config.delay, easing: Easing.linear, useNativeDriver: true }),
       Animated.timing(rot, { toValue: config.spinDir, duration: config.speed, delay: config.delay, useNativeDriver: true }),
       Animated.sequence([
         Animated.delay(config.delay),
@@ -180,20 +238,21 @@ function HeartFaller({ config }: { config: any }) {
     ]).start();
   }, []);
 
+  const translateY = fall.interpolate({ inputRange: [0, 1], outputRange: [-30, config.sh + 30] });
+  const translateX = swayT.interpolate({ inputRange: SWAY_STOPS, outputRange: config.swayOut });
   const rotate = rot.interpolate({ inputRange: [-1, 1], outputRange: ['-360deg', '360deg'] });
 
   return (
-    <Animated.Text
+    <Animated.View
       style={{
         position: 'absolute',
-        fontSize: config.size,
-        color: config.color,
+        left: config.x,
         opacity,
-        transform: [{ translateX: x }, { translateY: y }, { rotate }],
+        transform: [{ translateY }, { translateX }, { rotate }],
       }}
     >
-      {config.glyph}
-    </Animated.Text>
+      <GlowShape kind="heart" size={config.size} color={config.color} id={`ih-${config.key}`} />
+    </Animated.View>
   );
 }
 
@@ -237,7 +296,11 @@ function SpiralEffect({ onComplete }: { onComplete?: () => void }) {
         startX: Math.cos(angle) * 200 * scale,
         startY: Math.sin(angle) * 200 * scale,
         color: COLORS[i % COLORS.length],
-        delay: i * 30,
+        // i*30 alone made a perfectly even clock sweep; the deterministic
+        // (i*13)%4 jitter breaks the mechanical cadence. Max delay is 495ms,
+        // so the last sparkle's 1000ms opacity run still beats the 1500ms
+        // onComplete unmount.
+        delay: i * 30 + ((i * 13) % 4) * 15,
       };
     }),
   [scale]);
@@ -265,19 +328,18 @@ function SpiralEffect({ onComplete }: { onComplete?: () => void }) {
       {sparkles.map((s) => (
         <SpiralSparkle key={s.key} config={s} center={center} />
       ))}
-      <Animated.Text
+      <Animated.View
         style={{
           position: 'absolute',
-          left: center.x,
-          top: center.y,
-          fontSize: 28,
-          color: '#FFFFFF',
+          left: center.x - 19,
+          top: center.y - 19,
           opacity: flashOpacity,
-          transform: [{ scale: flashScale }, { translateX: -14 }, { translateY: -14 }],
+          transform: [{ scale: flashScale }],
         }}
       >
-        {'\u2605'}
-      </Animated.Text>
+        {/* the convergence payoff — a white glow star bloom at her corner */}
+        <GlowShape kind="star" size={38} color="#FFFFFF" id="spiral-flash" />
+      </Animated.View>
     </View>
   );
 }
@@ -300,10 +362,12 @@ function SpiralSparkle({ config, center }: { config: any; center: { x: number; y
       Animated.sequence([
         Animated.delay(config.delay),
         Animated.parallel([
-          Animated.timing(translateX, { toValue: 0, duration: 800, useNativeDriver: true }),
-          Animated.timing(translateY, { toValue: 0, duration: 800, useNativeDriver: true }),
+          // accelerating convergence — sparkles get sucked INTO her corner;
+          // the old linear glide had no pull.
+          Animated.timing(translateX, { toValue: 0, duration: 800, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+          Animated.timing(translateY, { toValue: 0, duration: 800, easing: Easing.in(Easing.quad), useNativeDriver: true }),
           Animated.timing(rotation, { toValue: 1, duration: 800, useNativeDriver: true }),
-          Animated.timing(scale, { toValue: 1.3, duration: 800, useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 1.3, duration: 800, easing: Easing.in(Easing.quad), useNativeDriver: true }),
         ]),
       ]),
     ]).start();
@@ -312,19 +376,17 @@ function SpiralSparkle({ config, center }: { config: any; center: { x: number; y
   const rotate = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
 
   return (
-    <Animated.Text
+    <Animated.View
       style={{
         position: 'absolute',
-        left: center.x,
-        top: center.y,
-        fontSize: 18,
-        color: config.color,
+        left: center.x - 12,
+        top: center.y - 12,
         opacity,
         transform: [{ translateX }, { translateY }, { rotate }, { scale }],
       }}
     >
-      {'\u2726'}
-    </Animated.Text>
+      <GlowShape kind="star" size={24} color={config.color} id={`sw-${config.key}`} />
+    </Animated.View>
   );
 }
 

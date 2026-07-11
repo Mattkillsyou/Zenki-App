@@ -168,6 +168,7 @@ function renderTab(tab) {
   if (tab === 'members') return renderMembers();
   if (tab === 'announcements') return renderAnnouncements();
   if (tab === 'broadcast') return renderBroadcast();
+  if (tab === 'support') return renderSupport();
 }
 
 // ── Cloud Function call (Bearer ID token; only ever to FN_BASE) ──────────
@@ -681,4 +682,59 @@ function renderBroadcast() {
     ]),
     el('div', { class: 'section-label', text: 'Push notifications reach only phones that have signed in and granted notification permission (not web or simulators).' }),
   ]));
+}
+
+// ── Support (Contact IT inbox) ───────────────────────────────────────────
+// /supportMessages is client-read:false (contact PII), so this reads through
+// the admin-gated listSupportMessages CF. Fixes the audit 2.0.5 "support
+// black hole": the app promises a 24h response but nothing surfaced messages.
+const SUPPORT_CATEGORY_BADGES = { bug: 'red', urgent: 'red', feature: 'gold', general: 'green' };
+async function renderSupport() {
+  const gen = ++renderGen;
+  content.replaceChildren(spinnerBox());
+  const res = await callFn('listSupportMessages', { action: 'list' });
+  if (gen !== renderGen) return;
+  if (!res.ok) {
+    content.replaceChildren(stateBox("Couldn't load support messages", res.error || 'unknown'));
+    return;
+  }
+  const msgs = (res.data && res.data.messages) || [];
+  const open = msgs.filter((m) => m.status !== 'handled');
+  const handled = msgs.filter((m) => m.status === 'handled');
+  const frame = el('div');
+  frame.appendChild(el('div', { class: 'toolbar' }, [
+    el('div', { class: 'section-label grow', text: `${open.length} OPEN · ${handled.length} handled (newest 100)` }),
+    el('button', { class: 'refresh', text: 'Refresh', onclick: renderSupport }),
+  ]));
+  if (msgs.length === 0) {
+    frame.appendChild(stateBox('No support messages', 'Contact IT submissions from the app appear here.'));
+    content.replaceChildren(frame);
+    return;
+  }
+  for (const m of [...open, ...handled]) {
+    const row = el('div', { class: 'row stack' });
+    const title = el('div', { class: 'name' });
+    title.appendChild(el('span', { class: `badge ${SUPPORT_CATEGORY_BADGES[m.category] || ''}`, text: (m.category || 'general').toUpperCase() }));
+    if (m.status === 'handled') title.appendChild(el('span', { class: 'badge', text: 'handled' }));
+    title.appendChild(document.createTextNode(' ' + (m.subject || '(no subject)')));
+    const body = el('div', { class: 'body' }, [
+      title,
+      el('div', { class: 'report-preview', text: m.message || '' }),
+      el('div', { class: 'meta', text: `${m.memberName || 'Member'}${m.memberEmail ? ' · ' + m.memberEmail : ''} · ${m.platform || ''} ${m.appVersion || ''}` }),
+      el('div', { class: 'date', text: fmtDate(m.createdAt) }),
+    ]);
+    row.appendChild(body);
+    if (m.status !== 'handled') {
+      const btn = el('button', { class: 'iconbtn', text: 'Mark handled' });
+      btn.addEventListener('click', async () => {
+        btn.disabled = true; btn.textContent = 'Saving…';
+        const r = await callFn('listSupportMessages', { action: 'markHandled', id: m.id });
+        if (r.ok) renderSupport();
+        else { btn.disabled = false; btn.textContent = 'Mark handled'; alert('Failed: ' + (r.error || 'unknown')); }
+      });
+      row.appendChild(el('div', { class: 'rowbtns' }, [btn]));
+    }
+    frame.appendChild(row);
+  }
+  content.replaceChildren(frame);
 }
