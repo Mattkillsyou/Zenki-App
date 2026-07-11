@@ -271,7 +271,17 @@ export function DrinkScreen() {
                   return;
                 }
                 await payAllUnpaid(memberName);
-                Alert.alert('Tab paid', `Paid $${amount.toFixed(2)} with Apple Pay. Your drink tab is clear.`);
+                if (pay.receiptSaved === false) {
+                  // Charge captured but the receipt couldn't be persisted —
+                  // be honest instead of claiming a clean success (audit 2.0.5).
+                  Alert.alert(
+                    'Paid — keep this reference',
+                    `Your $${amount.toFixed(2)} Apple Pay charge went through, but we couldn't save the receipt on this device. ` +
+                    `Do not pay again — mention payment ref ${pay.paymentIntentId ?? 'Apple Pay'} at the dojo if there's any question.`,
+                  );
+                } else {
+                  Alert.alert('Tab paid', `Paid $${amount.toFixed(2)} with Apple Pay. Your drink tab is clear.`);
+                }
                 return;
               }
               // Fallback (Stripe not configured / Apple Pay unavailable):

@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isoDateOf } from '../components/WeekCalendar';
 import { safeParseJSON } from '../utils/safeStorage';
 import { TimeClockState, TimeEntry } from '../types/timeclock';
 import type { PeriodTotals } from '../utils/timeclock';
@@ -158,6 +160,13 @@ export function TimeClockProvider({
     }
   }, [state, loaded, uid]);
 
+  // Ref mirror so async flows (flushUnsynced) read the LATEST state without
+  // re-creating their callbacks on every entry change.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  // Late-bound handle so clockIn (defined above flushUnsynced) can trigger it.
+  const flushUnsyncedRef = useRef<null | (() => Promise<void>)>(null);
+
   // Live timer while clocked in
   useEffect(() => {
     if (state.currentEntry) {
@@ -175,8 +184,14 @@ export function TimeClockProvider({
   }, [state.currentEntry?.clockIn]);
 
   const clockIn = useCallback(() => {
+    // Opportunistic retry of any unsynced completed shifts (see flushUnsynced).
+    flushUnsyncedRef.current?.();
     const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
+    // Audit 2.0.5: LOCAL calendar day, not UTC. The UTC key shifted any shift
+    // starting ≥5pm PT onto tomorrow's date — losing holiday 2× pay on the
+    // holiday evening and wrongly granting it the evening before (the UI
+    // banner already used local, so pay math contradicted the banner).
+    const dateStr = isoDateOf(now);
     const hol = getHolidayInfo(dateStr);
     const entry: TimeEntry = {
       id: generateEntryId(),
@@ -239,6 +254,11 @@ export function TimeClockProvider({
 
     // After setState — fire the payroll Sheets sync exactly once, then flip the
     // matching entry to synced:true via a single follow-up setState.
+    // Audit 2.0.5 P1 (payroll data loss): a failed push used to be silent and
+    // permanent — synced:false was never read again and no one was told. Now
+    // the employee is alerted, and unsynced completed shifts are re-pushed by
+    // flushUnsynced() on the next provider mount (app launch) and next
+    // clock-in, so a dead-Wi-Fi clock-out heals instead of vanishing.
     if (completed) {
       const synced: TimeEntry = completed;
       pushTimeEntry(synced, effectiveEmployeeName, effectiveHourlyRate, periodStart, periodEnd).then((ok) => {
@@ -252,10 +272,46 @@ export function TimeClockProvider({
               ),
             },
           }));
+        } else {
+          Alert.alert(
+            'Shift saved locally',
+            "Your clock-out was recorded on this phone but couldn't reach the payroll sheet. It will retry automatically next time you open the app or clock in — if this keeps happening, tell your admin.",
+          );
         }
       });
     }
   }, [effectiveEmployeeName, effectiveHourlyRate]);
+
+  // Re-push completed-but-unsynced shifts (payroll must never silently lose a
+  // clock-out). Runs on mount-after-hydrate and before each new clock-in.
+  const flushingRef = useRef(false);
+  const flushUnsynced = useCallback(async () => {
+    if (flushingRef.current) return;
+    flushingRef.current = true;
+    try {
+      const { entries, startDate, endDate } = stateRef.current.currentPeriod;
+      const pending = entries.filter((e) => !e.synced && e.clockOut);
+      for (const entry of pending) {
+        const ok = await pushTimeEntry(entry, effectiveEmployeeName, effectiveHourlyRate, startDate, endDate);
+        if (!ok) break; // still offline — keep remaining for the next flush
+        setState((s) => ({
+          ...s,
+          currentPeriod: {
+            ...s.currentPeriod,
+            entries: s.currentPeriod.entries.map((e) =>
+              e.id === entry.id ? { ...e, synced: true } : e,
+            ),
+          },
+        }));
+      }
+    } finally {
+      flushingRef.current = false;
+    }
+  }, [effectiveEmployeeName, effectiveHourlyRate]);
+  flushUnsyncedRef.current = flushUnsynced;
+  useEffect(() => {
+    if (loaded) flushUnsynced();
+  }, [loaded, flushUnsynced]);
 
   const markLunchTaken = useCallback(() => {
     setState((prev) => {

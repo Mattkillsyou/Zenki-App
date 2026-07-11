@@ -13,6 +13,11 @@ import { saveDrinkChargeOrder } from './orderSync';
 export interface ApplePayResult {
   ok: boolean;
   paymentIntentId?: string;
+  /** kind:'drinks' only — false when the charge captured but the durable
+   *  receipt could NOT be persisted (audit 2.0.5: money taken, no record).
+   *  The caller must tell the user to keep the payment ref, not claim a
+   *  clean success. Undefined for kind:'order' (call site owns the record). */
+  receiptSaved?: boolean;
   /** True when the user dismissed the sheet (not an error to surface loudly). */
   canceled?: boolean;
   /** Human-facing error message when ok is false and not canceled. */
@@ -115,6 +120,7 @@ export async function payWithApplePay(params: {
     // (the drink tab is otherwise device-local AsyncStorage and the screen
     // discards paymentIntentId). The store path persists its own richer order
     // record at the call site, so it doesn't go through here.
+    let receiptSaved: boolean | undefined;
     if (params.kind === 'drinks' && params.drinks && params.drinks.length > 0) {
       try {
         await saveDrinkChargeOrder({
@@ -124,14 +130,18 @@ export async function payWithApplePay(params: {
           amountUsd: amountCents / 100,
           paymentIntentId,
         });
+        receiptSaved = true;
       } catch (persistErr) {
-        // The money WAS taken — don't fail the result, but make the missing
-        // receipt loud so it can be reconciled (charge is real, record isn't).
+        // The money WAS taken — don't fail the result, but surface the missing
+        // receipt to the CALLER (audit 2.0.5: this used to be a console.warn
+        // and an unqualified ok:true — tab cleared as paid with no record
+        // anywhere). The UI must tell the user to keep the payment ref.
         console.warn('[Payments] drink charge succeeded but receipt persist failed:', persistErr);
+        receiptSaved = false;
       }
     }
 
-    return { ok: true, paymentIntentId };
+    return { ok: true, paymentIntentId, receiptSaved };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? 'Payment failed.' };
   }
