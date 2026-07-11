@@ -18,6 +18,10 @@ import {
 import { FIREBASE_CONFIGURED } from '../config/firebase';
 
 const STORAGE_KEY = '@zenki_attendance';
+// Audit 2.0.5 P2: ids of visits whose Firestore push hasn't been confirmed.
+// Persisted so a push that dies at the dojo door (offline, app killed) is
+// re-pushed on the next launch instead of living only on-device all day.
+const UNSYNCED_KEY = '@zenki_attendance_unsynced';
 
 interface AttendanceContextValue {
   visits: AttendanceVisit[];
@@ -56,6 +60,11 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
   const [locationPermission, setLocationPermission] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const visitsRef = useRef(state.visits);
+  // Cloud-sync retry queue (see UNSYNCED_KEY). Ref-mirrored so the polling
+  // closure can check it every tick without an AsyncStorage read.
+  const unsyncedIdsRef = useRef<string[]>([]);
+  const inFlightPushesRef = useRef<Set<string>>(new Set());
+  const flushingRef = useRef(false);
 
   // Firestore-synced data (admin-only)
   const [firestoreTodayVisitors, setFirestoreTodayVisitors] = useState<AttendanceVisit[]>([]);
@@ -74,13 +83,17 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
     visitsRef.current = state.visits;
   }, [state.visits]);
 
-  // Load visits from AsyncStorage
+  // Load visits (and the unsynced-push queue) from AsyncStorage
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
+    Promise.all([
+      AsyncStorage.getItem(STORAGE_KEY),
+      AsyncStorage.getItem(UNSYNCED_KEY),
+    ]).then(([raw, rawUnsynced]) => {
       const parsed = safeParseJSON<AttendanceState | null>(raw, null, (v) =>
         typeof v === 'object' && v !== null && 'visits' in (v as object),
       );
       if (parsed) setState(parsed);
+      unsyncedIdsRef.current = safeParseJSON<string[]>(rawUnsynced, [], Array.isArray);
       setLoaded(true);
     });
   }, []);
@@ -158,8 +171,80 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
     };
   }, [useFirestore, todayKey]);
 
+  // ─── Cloud-sync retry queue for member check-ins ───
+  // Audit 2.0.5 P2: the check-in push was fire-and-forget, and `alreadyVisited`
+  // (correctly) blocks a same-day re-check-in — so a failed push at the door
+  // left the visit on-device for the rest of the day and the admin's live
+  // roster never showed the member. Unconfirmed pushes now keep their visit id
+  // queued (same idiom as orderSync.flushUnsyncedOrders and
+  // waiverSync.flushPendingSignupWrites) and are re-pushed on the next poll
+  // tick and the next app open. Sheets stays fire-and-forget: it's a
+  // best-effort mirror and a re-POST would duplicate the row.
+  const setUnsyncedIds = useCallback((ids: string[]) => {
+    unsyncedIdsRef.current = ids;
+    AsyncStorage.setItem(UNSYNCED_KEY, JSON.stringify(ids)).catch(() => {});
+  }, []);
+
+  const pushVisitToCloud = useCallback(async (visit: AttendanceVisit): Promise<boolean> => {
+    // Without Firebase nothing can ever flush — keep legacy skip-and-log
+    // behavior rather than growing a queue that has nowhere to drain.
+    if (!FIREBASE_CONFIGURED) return pushAttendanceToFirestore(visit);
+    if (inFlightPushesRef.current.has(visit.id)) return false;
+    inFlightPushesRef.current.add(visit.id);
+    // Queue BEFORE the write (removed on success): an offline Firestore write
+    // never rejects — it hangs until connectivity — so marking only on failure
+    // would still lose the visit if the app is killed while the write pends.
+    if (!unsyncedIdsRef.current.includes(visit.id)) {
+      setUnsyncedIds([...unsyncedIdsRef.current, visit.id]);
+    }
+    try {
+      const ok = await pushAttendanceToFirestore(visit);
+      if (ok) {
+        setUnsyncedIds(unsyncedIdsRef.current.filter((x) => x !== visit.id));
+      } else {
+        console.warn('[Attendance] visit kept locally; cloud sync queued for retry:', visit.id);
+      }
+      return ok;
+    } finally {
+      inFlightPushesRef.current.delete(visit.id);
+    }
+  }, [setUnsyncedIds]);
+
+  // Re-push queued visits. Safe to call repeatedly; no-ops when queue is empty.
+  const flushUnsyncedVisits = useCallback(async () => {
+    if (!FIREBASE_CONFIGURED || flushingRef.current || !user) return;
+    if (unsyncedIdsRef.current.length === 0) return;
+    flushingRef.current = true;
+    try {
+      for (const id of [...unsyncedIdsRef.current]) {
+        if (inFlightPushesRef.current.has(id)) continue;
+        const visit = visitsRef.current.find((v) => v.id === id);
+        if (!visit) {
+          // No local record left to push — drop the stale marker.
+          setUnsyncedIds(unsyncedIdsRef.current.filter((x) => x !== id));
+          continue;
+        }
+        // Only flush the signed-in member's own visits: the Firestore write
+        // stamps the LIVE auth uid, so pushing another member's queued visit
+        // (shared device) would mis-attribute it. Theirs wait for their login.
+        if (visit.memberId !== user.id) continue;
+        const ok = await pushVisitToCloud(visit);
+        if (!ok) break; // still offline/rejected — keep the rest for the next flush
+      }
+    } finally {
+      flushingRef.current = false;
+    }
+  }, [user, pushVisitToCloud, setUnsyncedIds]);
+
+  // Flush on app open (post-hydrate) and whenever the signed-in member changes.
+  useEffect(() => {
+    if (loaded) flushUnsyncedVisits();
+  }, [loaded, flushUnsyncedVisits]);
+
   const checkLocation = useCallback(async () => {
     if (!user || Platform.OS === 'web') return;
+    // Opportunistic retry of any queued check-in pushes (no-op when empty).
+    flushUnsyncedVisits();
     try {
       const loc = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
@@ -182,15 +267,17 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
           };
           // Save locally
           setState((prev) => ({ visits: [...prev.visits, visit] }));
-          // Sync to Sheets + Firestore (fire-and-forget)
+          // Sheets mirror stays fire-and-forget (see queue note above)
           pushAttendanceToSheets(visit);
-          pushAttendanceToFirestore(visit);
+          // Firestore feeds the admin's live roster — queue-tracked so a
+          // failed push at the door retries instead of vanishing for the day
+          pushVisitToCloud(visit);
         }
       }
     } catch {
       // Location unavailable — silently skip
     }
-  }, [user]);
+  }, [user, flushUnsyncedVisits, pushVisitToCloud]);
 
   const startTracking = useCallback(() => {
     if (intervalRef.current || Platform.OS === 'web') return;

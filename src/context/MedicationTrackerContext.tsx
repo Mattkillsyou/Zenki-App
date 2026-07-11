@@ -171,10 +171,16 @@ export function MedicationTrackerProvider({ children }: { children: React.ReactN
         ]);
         setMedications(safeParseJSON<MedicationEntry[]>(medsRaw, [], Array.isArray));
         setLogs(safeParseJSON<MedicationLog[]>(logsRaw, [], Array.isArray));
-      } catch (err) {
-        console.warn('[MedicationTracker] load failed:', err);
-      } finally {
+        // Only arm the persist effects when the hydrate actually SUCCEEDED.
         setLoaded(true);
+      } catch (err) {
+        // Audit 2.0.5 P2 (hydrate-wipe): setting loaded=true here armed the
+        // persist effects with EMPTY state — the next change overwrote the
+        // stored meds/logs, permanently destroying local histories after one
+        // transient storage read failure. Leave persists disabled for this
+        // session instead: new writes won't persist until relaunch (rare,
+        // recoverable) but existing history is never clobbered.
+        console.warn('[MedicationTracker] load failed — persist disabled this session to protect stored data:', err);
       }
     })();
   }, []);

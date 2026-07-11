@@ -83,11 +83,19 @@ interface GpsActivityContextValue {
    *  advances currentPosition by many fixes at once, so a delta-append polyline
    *  would skip every interior point. */
   liveRoute: GpsPoint[];
+  /** Resolves false when tracking could not start (permission denied or the
+   *  GPS watch failed) — callers should alert. A start whose session was
+   *  ended by stopTracking (or superseded by a newer start) while its awaits
+   *  were still resolving aborts, releases anything it acquired, and resolves
+   *  true — the outcome was already handled, so callers must not treat it as
+   *  a failure. */
   startTracking: (type: GpsActivityType, memberId: string) => Promise<boolean>;
   stopTracking: (weightKg?: number) => GpsActivity | null;
   pauseTracking: () => void;
   /** Resolves false when the GPS watch failed to restart (the session stays
-   *  paused so it can't tick while recording nothing) — callers should alert. */
+   *  paused so it can't tick while recording nothing) — callers should alert.
+   *  A resume cancelled by stopTracking mid-await resolves true (the session
+   *  already ended; there is nothing to alert). */
   resumeTracking: () => Promise<boolean>;
   removeActivity: (id: string) => void;
   activities: GpsActivity[];
@@ -153,6 +161,15 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
   const pausedTimeRef = useRef(0);        // accumulated paused time in ms
   const pauseStartRef = useRef(0);        // when current pause started
   const isPausedRef = useRef(false);
+  // Start-generation / cancellation token (APP_AUDIT 2.0.5 P2 — start/End
+  // race). startTracking and resumeTracking capture the value at entry and
+  // re-check it after EVERY await; stopTracking (and each newer start) bumps
+  // it. Without this, ending the session while the first GPS fix or a
+  // permission prompt was still resolving let the in-flight start finish
+  // activation — switching on OS background location + timers for a session
+  // that was already dead (metaRef null, so stopTracking could never re-run)
+  // and recording background GPS indefinitely.
+  const startGenRef = useRef(0);
 
   /** Clear all running timers and watches. */
   const cleanupTimers = useCallback(() => {
@@ -223,7 +240,9 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
   }, []);
 
   // Tear down any active watch/timers if the provider unmounts while tracking.
-  useEffect(() => () => { cleanupTimers(); stopBgUpdates(); }, []);
+  // Bump the generation too so an in-flight start/resume can't re-acquire
+  // GPS after this teardown.
+  useEffect(() => () => { startGenRef.current++; cleanupTimers(); stopBgUpdates(); }, []);
 
   // Catch the live UI up the moment the app returns to foreground (the drain
   // interval is suspended while backgrounded; the bg task keeps buffering).
@@ -237,6 +256,14 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
   }, [drainBgBuffer]);
 
   const startTracking = useCallback(async (type: GpsActivityType, memberId: string): Promise<boolean> => {
+    // Claim a new start generation (this also cancels any older in-flight
+    // start). Every await below re-checks the token: if stopTracking ran — or
+    // a newer start superseded this one — while we were suspended, abort and
+    // release whatever was already acquired instead of finishing activation
+    // for a dead session. Cancelled starts resolve true (not false) so the
+    // caller's "location required" alert can't fire after the user already
+    // ended the session.
+    const gen = ++startGenRef.current;
     // Tracking strategy (APP_AUDIT F17 — resolved):
     //  1. Require When-In-Use permission (the baseline).
     //  2. Try to upgrade to OS-level BACKGROUND updates (startBgUpdates): if the
@@ -247,6 +274,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     //     watchPositionAsync — the UI then shows an honest "keep this screen
     //     open" notice (backgroundTracking=false).
     const { status } = await Location.requestForegroundPermissionsAsync();
+    if (gen !== startGenRef.current) return true; // superseded mid-prompt — nothing acquired yet
     if (status !== 'granted') return false;
 
     routeRef.current = [];
@@ -284,6 +312,9 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     let startLon = -118.2916;
     try {
       const currentLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      // Ended (or superseded) while the first fix resolved — abort before
+      // pushing a stale point into a route that is no longer this session's.
+      if (gen !== startGenRef.current) return true;
       startLat = currentLoc.coords.latitude;
       startLon = currentLoc.coords.longitude;
       // Set initial position immediately so map centers on user
@@ -295,6 +326,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
       routeRef.current.push(initialPoint);
       setCurrentPosition(initialPoint);
     } catch { /* fallback to defaults */ }
+    if (gen !== startGenRef.current) return true; // ended while the first fix was resolving (throw path)
 
     // ── Try TRUE BACKGROUND tracking first ──────────────────────────────
     // Seed the buffer with the initial point so the derived route includes it,
@@ -302,7 +334,16 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     // interval and return — no foreground watch (startLocationUpdatesAsync
     // delivers in foreground too, so a second watch would double-record).
     bgPointBuffer = [...routeRef.current];
-    if (await startBgUpdates()) {
+    const bgStarted = await startBgUpdates();
+    if (gen !== startGenRef.current) {
+      // Session ended while the background permission prompt / OS start was
+      // resolving. Release the updates we just switched on — unless a newer
+      // session now owns background mode (it's a single shared OS task, so
+      // stopping it would kill the live session's recording).
+      if (bgStarted && !bgModeRef.current) stopBgUpdates();
+      return true;
+    }
+    if (bgStarted) {
       bgModeRef.current = true;
       setBackgroundTracking(true);
       drainTimerRef.current = setInterval(drainBgBuffer, 2000);
@@ -312,9 +353,11 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
       return true;
     }
 
-    // GPS watch (foreground-only fallback)
+    // GPS watch (foreground-only fallback). Assign through a local so a start
+    // that went stale mid-await releases its subscription instead of
+    // clobbering watchRef (which may belong to a newer session by now).
     try {
-      watchRef.current = await Location.watchPositionAsync(
+      const sub = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 5, timeInterval: 3000 },
         (loc) => {
           const point: GpsPoint = {
@@ -330,7 +373,10 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
           updateStats();
         },
       );
+      if (gen !== startGenRef.current) { sub.remove(); return true; } // ended mid-await — release the watch
+      watchRef.current = sub;
     } catch {
+      if (gen !== startGenRef.current) return true; // ended mid-await — nothing acquired
       // Web fallback — simulate GPS starting from user's ACTUAL location
       if (Platform.OS === 'web') {
         let simLat = startLat;
@@ -379,10 +425,15 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     }, 1000);
 
     return true;
-  }, [startBgUpdates, drainBgBuffer]);
+  }, [startBgUpdates, drainBgBuffer, stopBgUpdates]);
 
   const stopTracking = useCallback((weightKg: number = 80): GpsActivity | null => {
     if (!metaRef.current) return null;
+
+    // Cancel any in-flight startTracking/resumeTracking: their awaits re-check
+    // this token and release whatever they acquired, instead of re-arming GPS
+    // for the session being torn down here.
+    startGenRef.current++;
 
     // If stopped WHILE paused, fold the in-progress pause into pausedTimeRef so
     // the saved durationSeconds (and the pace/calories derived from it) exclude
@@ -476,6 +527,12 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
 
   const resumeTracking = useCallback(async (): Promise<boolean> => {
     if (!isTracking || !isPausedRef.current) return false;
+    // Snapshot the start generation: if stopTracking runs while one of the
+    // awaits below is in flight, abort and release instead of re-arming GPS
+    // for the ended session (same race as startTracking's guard). Cancelled
+    // resumes resolve true so the caller's "could not resume" alert can't
+    // fire after the user already ended.
+    const gen = startGenRef.current;
     // Accumulate paused time
     pausedTimeRef.current += Date.now() - pauseStartRef.current;
     isPausedRef.current = false;
@@ -487,7 +544,14 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     // notice stops claiming background recording (instead of silently dying).
     if (bgModeRef.current) {
       bgPaused = false;
-      if (await startBgUpdates(false)) {
+      const bgResumed = await startBgUpdates(false);
+      if (gen !== startGenRef.current) {
+        // Ended mid-await — release the OS updates we just re-armed, unless
+        // a newer session now owns background mode (single shared OS task).
+        if (bgResumed && !bgModeRef.current) stopBgUpdates();
+        return true;
+      }
+      if (bgResumed) {
         return true; // drain interval already running handles live UI
       }
       routeRef.current = [...bgPointBuffer];   // fold the bg route captured so far
@@ -509,7 +573,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
     };
 
     try {
-      watchRef.current = await Location.watchPositionAsync(
+      const sub = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 5, timeInterval: 3000 },
         (loc) => {
           if (isPausedRef.current) return;
@@ -526,8 +590,11 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
           updateStats();
         },
       );
+      if (gen !== startGenRef.current) { sub.remove(); return true; } // ended mid-await — release the watch
+      watchRef.current = sub;
       return true;
     } catch {
+      if (gen !== startGenRef.current) return true; // ended mid-await — session already torn down
       if (Platform.OS === 'web') {
         let simLat = lastPoint?.latitude ?? 34.1006;
         let simLon = lastPoint?.longitude ?? -118.2916;
@@ -558,7 +625,7 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
       pauseStartRef.current = Date.now();
       return false;
     }
-  }, [isTracking, startBgUpdates]);
+  }, [isTracking, startBgUpdates, stopBgUpdates]);
 
   const removeActivity = useCallback((id: string) => {
     setActivities((prev) => prev.filter((a) => a.id !== id));

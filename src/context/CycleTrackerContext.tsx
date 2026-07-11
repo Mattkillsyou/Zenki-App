@@ -73,10 +73,16 @@ export function CycleTrackerProvider({ children }: { children: React.ReactNode }
         ]);
         setEntries(safeParseJSON<PeriodEntry[]>(entriesRaw, [], Array.isArray));
         setSettings(safeParseJSON<CycleSettings>(settingsRaw, { showOnDashboard: true }));
-      } catch (err) {
-        console.warn('[Cycle] cold-boot hydrate failed:', err);
-      } finally {
+        // Only arm the persist effects when the hydrate actually SUCCEEDED.
         setLoaded(true);
+      } catch (err) {
+        // Audit 2.0.5 P2 (hydrate-wipe): setting loaded=true here armed the
+        // persist effects with EMPTY state — the next change overwrote the
+        // stored period history, permanently destroying it after one transient
+        // storage read failure. Leave persists disabled for this session
+        // instead: new writes won't persist until relaunch (rare, recoverable)
+        // but existing history is never clobbered.
+        console.warn('[Cycle] cold-boot hydrate failed — persist disabled this session to protect stored data:', err);
       }
     })();
   }, []);

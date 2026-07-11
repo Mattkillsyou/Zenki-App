@@ -73,8 +73,17 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         setLogs(safeParseJSON<WorkoutLog[]>(lRaw, [], Array.isArray));
         setPRs(safeParseJSON<PersonalRecord[]>(pRaw, [], Array.isArray));
-      } catch { /* ignore */ }
-      if (!cancelled) setLoaded(true);
+        // Only arm the persist effects when the hydrate actually SUCCEEDED.
+        setLoaded(true);
+      } catch (e) {
+        // Audit 2.0.5 P2 (hydrate-wipe): flipping loaded=true after a failed
+        // read armed the persist effects with EMPTY state — the next change
+        // wrote [] over the stored logs/PRs, permanently destroying local
+        // histories after one transient storage read failure. Leave persists
+        // disabled for this session instead: new writes won't persist until
+        // relaunch (rare, recoverable) but existing history is never clobbered.
+        console.warn('[Workout] hydrate failed — persist disabled this session to protect stored data:', e);
+      }
     })();
     return () => { cancelled = true; };
   }, [user?.id]);

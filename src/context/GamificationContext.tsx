@@ -208,7 +208,7 @@ function hydrateState(saved: Partial<GamificationState>): GamificationState {
 }
 
 export function GamificationProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<GamificationState>(defaultState);
+  const [state, setStateDirect] = useState<GamificationState>(defaultState);
   const [loaded, setLoaded] = useState(false);
   const { user } = useAuth();
   // The storage key the current `state` was hydrated from. Persist only fires
@@ -223,6 +223,23 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
   // decrement it synchronously, and dispatch a clamped updater.
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
+  // Audit 2.0.5 P2 (pre-hydrate clobber): HomeScreen fires recordAppOpen()
+  // once per mount, and on cold launch the async hydrate resolves AFTER it —
+  // the hydrate's wholesale set then discarded the streak tick, so
+  // loginStreak/quoteReadStreak achievements never advanced for signed-in
+  // users. Until the active user's hydrate lands, every mutation queues here
+  // (in order) and the hydrate replays it on top of the loaded state. All
+  // mutators below go through this queue-aware setState; only the hydrate
+  // itself writes via setStateDirect.
+  const loadedRef = useRef(false);
+  const pendingUpdatesRef = useRef<((prev: GamificationState) => GamificationState)[]>([]);
+  const setState = (updater: (prev: GamificationState) => GamificationState) => {
+    if (loadedRef.current) {
+      setStateDirect(updater);
+    } else {
+      pendingUpdatesRef.current.push(updater);
+    }
+  };
 
   // Re-read (or initialize) per-user gamification whenever the signed-in user
   // changes, so on a shared device member B never sees/overwrites member A's
@@ -232,6 +249,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     let cancelled = false;
     const key = storageKeyFor(user?.id);
     setLoaded(false);
+    loadedRef.current = false;
     (async () => {
       try {
         let raw = await AsyncStorage.getItem(key);
@@ -250,14 +268,29 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
           typeof v === 'object' && v !== null && !Array.isArray(v),
         );
         // Reset to a fresh initial state when a member with no data signs in.
-        setState(saved ? hydrateState(saved) : { ...defaultState, achievements: createInitialAchievements() });
-      } catch {
-        if (!cancelled) setState({ ...defaultState, achievements: createInitialAchievements() });
-      } finally {
-        if (!cancelled) {
-          loadedKeyRef.current = key;
-          setLoaded(true);
-        }
+        const base = saved ? hydrateState(saved) : { ...defaultState, achievements: createInitialAchievements() };
+        // Replay mutations queued while this hydrate was in flight (e.g. the
+        // cold-launch recordAppOpen) on top of the loaded state — the
+        // wholesale set used to silently discard them.
+        const pending = pendingUpdatesRef.current.splice(0);
+        setStateDirect(pending.reduce((acc, fn) => fn(acc), base));
+        loadedKeyRef.current = key;
+        loadedRef.current = true;
+        setLoaded(true);
+      } catch (e) {
+        if (cancelled) return;
+        // Audit 2.0.5 P2 (hydrate-wipe): arming the persist effect after a
+        // failed read used to write this fresh default state over the user's
+        // stored progress. Poison loadedKeyRef so persist stays disabled for
+        // the session (in-memory play still works; nothing saves until
+        // relaunch — rare, recoverable) while the reset below still keeps the
+        // previous member's numbers off this member's screen.
+        loadedKeyRef.current = null;
+        const pending = pendingUpdatesRef.current.splice(0);
+        setStateDirect(pending.reduce((acc, fn) => fn(acc), { ...defaultState, achievements: createInitialAchievements() }));
+        loadedRef.current = true;
+        setLoaded(true);
+        console.warn('[Gamification] hydrate failed — persist disabled this session to protect stored data:', e);
       }
     })();
     return () => {
