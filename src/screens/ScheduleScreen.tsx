@@ -244,6 +244,7 @@ export function ScheduleScreen({ navigation }: any) {
                 type={sessionTypeToClassType(a.sessionType)}
                 booked={true}
                 status={a.status}
+                startsAtIso={a.startsAt}
                 onBook={() => {}}
               />
             ))}
@@ -253,7 +254,7 @@ export function ScheduleScreen({ navigation }: any) {
 
         {filtered.map((cls, i) => (
           <React.Fragment key={`${cls.name}-${cls.time}`}>
-            <ClassCard {...cls} onBook={() => navigation.navigate('Book')} />
+            <ClassCard {...cls} eventDate={selectedDate} onBook={() => navigation.navigate('Book')} />
             {/* Subtle time separator between cards (every 2) */}
             {i < filtered.length - 1 && (i + 1) % 2 === 0 && (
               <View style={styles.dottedDividerRow}>

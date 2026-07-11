@@ -515,28 +515,6 @@ export function SettingsScreen({ navigation }: any) {
         {/* Preferences */}
         {renderSectionHeader('PREFERENCES')}
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
-          {/* Units toggle */}
-          <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-            <View style={styles.settingInfo}>
-              <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Units</Text>
-              <Text style={[styles.settingDesc, { color: colors.textMuted }]}>Distance, weight, elevation display</Text>
-            </View>
-            <View style={[styles.unitToggle, { backgroundColor: colors.backgroundElevated }]}>
-              <TouchableOpacity
-                onPress={() => handleUnitChange('imperial')}
-                style={[styles.unitBtn, unitPref === 'imperial' && { backgroundColor: colors.gold }]}
-              >
-                <Text style={[styles.unitBtnText, { color: unitPref === 'imperial' ? '#000' : colors.textSecondary }]}>mi</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => handleUnitChange('metric')}
-                style={[styles.unitBtn, unitPref === 'metric' && { backgroundColor: colors.gold }]}
-              >
-                <Text style={[styles.unitBtnText, { color: unitPref === 'metric' ? '#000' : colors.textSecondary }]}>km</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
           {/* Sound toggle */}
           {renderToggleRow(
             'Sound Effects',
@@ -651,49 +629,12 @@ export function SettingsScreen({ navigation }: any) {
           </View>
         )}
 
-        {/* Data */}
-        {renderSectionHeader('DATA')}
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
-          {renderNavRow('download-outline', 'Export All Data', () => {
-            Alert.alert('Export Data', 'This will compile all your data into a downloadable JSON file.', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Export', onPress: async () => {
-                try {
-                  const keys = await AsyncStorage.getAllKeys();
-                  const stores = await AsyncStorage.multiGet(keys);
-                  const data: Record<string, any> = {};
-                  for (const [key, val] of stores) {
-                    if (key.startsWith('@zenki_') && val) {
-                      try { data[key] = JSON.parse(val); } catch { data[key] = val; }
-                    }
-                  }
-                  Alert.alert('Data Ready', `Exported ${Object.keys(data).length} data stores. In production, this would download as a JSON file.`);
-                } catch {
-                  Alert.alert('Error', 'Could not export data.');
-                }
-              }},
-            ]);
-          })}
-          {renderNavRow('trash-outline', 'Clear Workout History', () => {
-            Alert.alert('Clear Workouts?', 'This will delete all workout logs. This cannot be undone.', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Clear', style: 'destructive', onPress: () => {
-                AsyncStorage.removeItem('@zenki_workout_logs');
-                Alert.alert('Cleared', 'Workout history has been reset.');
-              }},
-            ]);
-          }, true)}
-          {renderNavRow('trash-outline', 'Clear Nutrition Data', () => {
-            Alert.alert('Clear Nutrition?', 'This will delete all macro entries and weight logs. This cannot be undone.', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Clear', style: 'destructive', onPress: () => {
-                AsyncStorage.removeItem('@zenki_macro_entries');
-                AsyncStorage.removeItem('@zenki_weight_entries');
-                Alert.alert('Cleared', 'Nutrition data has been reset.');
-              }},
-            ]);
-          }, true)}
-        </View>
+        {/* Audit 2.0.5: the DATA section was removed — "Export All Data" was a
+            shipped placeholder ("in production this would download…") and the
+            Clear buttons removed storage keys that the live contexts immediately
+            re-persisted, so nothing actually cleared. Honest data controls
+            (real export / real clear) are tracked for a future pass; account
+            deletion below remains the real data-removal path. */}
 
         {/* Secret Lab / Senpai Headquarters */}
         {renderSectionHeader(senpaiState.enabled ? 'SENPAI HEADQUARTERS \u263D' : 'SECRET LAB \uD83E\uDDEA')}
