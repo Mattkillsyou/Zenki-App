@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { View, StyleSheet, Animated, Text, Easing, useWindowDimensions } from 'react-native';
+import Svg, { Circle, Defs, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 import { useSenpai } from '../context/SenpaiContext';
 import { useMotion } from '../context/MotionContext';
 import { randomDialogue } from '../data/senpaiDialogue';
@@ -219,42 +220,97 @@ function SparklingBluePoints({ progress, dims }: { progress: Animated.Value; dim
   );
 }
 
-/* ─── Phase 2 overlay: kaleidoscopic color marbles (0.15 – 0.45) ─── */
+/* ─── Phase 2 overlay: kaleidoscopic color marbles (0.15 – 0.45) ───
+   Soft radial-gradient orbs on two counter-rotating layers. The gradients
+   are static SVG fills — only the Animated wrappers (opacity/scale/rotate)
+   move, so the whole phase stays on the native driver. */
+
+// Marble offsets are fractions of screen size FROM CENTER (not absolute
+// corners, cf. the D3 note) so the layer rotation swings each orb along a
+// gentle arc instead of leaving it parked on a flat grid.
+const MARBLE_LAYERS = [
+  {
+    key: 'front',
+    // Counter-rotation between the two layers is what sells the depth —
+    // keep the angles small so orbs drift rather than visibly orbit.
+    spin: '16deg',
+    marbles: [
+      { color: '#FF2E51', core: '#FFD1DA', ox: -0.25, oy: -0.20, size: 320, phaseStart: 0.15, peak: 0.25 },
+      { color: '#D260FF', core: '#F3CFFF', ox: 0.00, oy: 0.05, size: 340, phaseStart: 0.20, peak: 0.30 },
+      { color: '#FFB3DF', core: '#FFECF6', ox: 0.20, oy: 0.12, size: 280, phaseStart: 0.24, peak: 0.34 },
+    ],
+  },
+  {
+    key: 'back',
+    spin: '-12deg',
+    marbles: [
+      { color: '#5158FF', core: '#C9CCFF', ox: 0.25, oy: -0.15, size: 380, phaseStart: 0.18, peak: 0.28 },
+      { color: '#FFF666', core: '#FFFDE0', ox: -0.20, oy: 0.15, size: 230, phaseStart: 0.22, peak: 0.32 },
+      { color: '#5EE1FF', core: '#E2FAFF', ox: 0.05, oy: -0.32, size: 170, phaseStart: 0.26, peak: 0.36 },
+    ],
+  },
+];
+
 function ColorMarbles({ progress, dims }: { progress: Animated.Value; dims: Dims }) {
-  const marbles = [
-    { color: '#FF2E51', x: dims.sw * 0.25, y: dims.sh * 0.30, size: 320, phaseStart: 0.15, peak: 0.25 },
-    { color: '#5158FF', x: dims.sw * 0.75, y: dims.sh * 0.35, size: 360, phaseStart: 0.18, peak: 0.28 },
-    { color: '#D260FF', x: dims.sw * 0.50, y: dims.sh * 0.55, size: 340, phaseStart: 0.20, peak: 0.30 },
-    { color: '#FFF666', x: dims.sw * 0.30, y: dims.sh * 0.65, size: 260, phaseStart: 0.22, peak: 0.32 },
-    { color: '#FFB3DF', x: dims.sw * 0.70, y: dims.sh * 0.62, size: 300, phaseStart: 0.24, peak: 0.34 },
-  ];
   return (
     <>
-      {marbles.map((m, i) => {
-        const op = progress.interpolate({
-          inputRange: [0, m.phaseStart, m.peak, 0.48, 1],
-          outputRange: [0, 0, 0.55, 0, 0],
-        });
-        const scale = progress.interpolate({
-          inputRange: [0, m.phaseStart, m.peak, 0.48],
-          outputRange: [0.2, 0.4, 1, 1.4],
-          extrapolate: 'clamp',
+      {MARBLE_LAYERS.map((layer) => {
+        const layerSpin = progress.interpolate({
+          inputRange: [0, 0.15, 0.48, 1],
+          outputRange: ['0deg', '0deg', layer.spin, layer.spin],
         });
         return (
           <Animated.View
-            key={i}
+            key={layer.key}
             style={{
               position: 'absolute',
-              left: m.x - m.size / 2,
-              top: m.y - m.size / 2,
-              width: m.size,
-              height: m.size,
-              borderRadius: m.size / 2,
-              backgroundColor: m.color,
-              opacity: op,
-              transform: [{ scale }],
+              left: dims.cx, top: dims.cy,
+              width: 0, height: 0,
+              transform: [{ rotate: layerSpin }],
             }}
-          />
+          >
+            {layer.marbles.map((m, i) => {
+              // Per-marble stagger preserved from the flat-circle version —
+              // gradient edges are already transparent so peak opacity can sit
+              // higher than the old 0.55 without turning into a paint wall.
+              const op = progress.interpolate({
+                inputRange: [0, m.phaseStart, m.peak, 0.48, 1],
+                outputRange: [0, 0, 0.9, 0, 0],
+              });
+              const scale = progress.interpolate({
+                inputRange: [0, m.phaseStart, m.peak, 0.48],
+                outputRange: [0.2, 0.4, 1, 1.4],
+                extrapolate: 'clamp',
+              });
+              const gradId = `senpaiMarble-${layer.key}-${i}`;
+              return (
+                <Animated.View
+                  key={i}
+                  style={{
+                    position: 'absolute',
+                    left: m.ox * dims.sw - m.size / 2,
+                    top: m.oy * dims.sh - m.size / 2,
+                    width: m.size,
+                    height: m.size,
+                    opacity: op,
+                    transform: [{ scale }],
+                  }}
+                >
+                  <Svg width={m.size} height={m.size}>
+                    <Defs>
+                      {/* Unique id per orb — duplicate gradient ids across Svg roots collide on web */}
+                      <RadialGradient id={gradId} cx="50%" cy="50%" r="50%">
+                        <Stop offset="0" stopColor={m.core} stopOpacity="0.95" />
+                        <Stop offset="0.45" stopColor={m.color} stopOpacity="0.55" />
+                        <Stop offset="1" stopColor={m.color} stopOpacity="0" />
+                      </RadialGradient>
+                    </Defs>
+                    <Circle cx={m.size / 2} cy={m.size / 2} r={m.size / 2} fill={`url(#${gradId})`} />
+                  </Svg>
+                </Animated.View>
+              );
+            })}
+          </Animated.View>
         );
       })}
     </>
@@ -262,19 +318,47 @@ function ColorMarbles({ progress, dims }: { progress: Animated.Value; dims: Dims
 }
 
 /* ─── Phase 3: ribbon swirl (0.40 – 0.68) ─── */
+
+// Ribbon canvas width — wide enough for the bezier S-sway plus the base taper.
+const RIBBON_W = 30;
+
+// Tapered ribbon path: a point at the tip flowing into a swaying bezier body,
+// so it reads as trailing fabric instead of a rotating rectangle. Static per
+// ribbon — all motion happens on the Animated wrapper.
+function ribbonPath(length: number, baseWidth: number): string {
+  const mid = RIBBON_W / 2;
+  const sway = 8; // lateral S-curve offset shared by both edges
+  const half = baseWidth / 2;
+  return [
+    `M ${mid} 0`,
+    `C ${mid - sway} ${length * 0.33} ${mid + sway} ${length * 0.66} ${mid - half} ${length}`,
+    `L ${mid + half} ${length}`,
+    // Return edge follows the same sway offset by a width that tapers to the tip
+    `C ${mid + sway + half * 0.6} ${length * 0.66} ${mid - sway + half * 0.3} ${length * 0.33} ${mid} 0`,
+    'Z',
+  ].join(' ');
+}
+
 function RibbonSwirl({ progress, dims }: { progress: Animated.Value; dims: Dims }) {
   const ribbons = useMemo(() =>
     Array.from({ length: 10 }).map((_, i) => ({
       key: i,
       baseAngle: (i / 10) * 360,
       color: i % 2 === 0 ? '#FF2E51' : '#5EE1FF',
+      // Tip fades toward a pale sister tone so the gradient reads as sheen
+      tip: i % 2 === 0 ? '#FFB3DF' : '#E2FAFF',
       length: 160 + (i % 3) * 40,
-      thickness: 6 + (i % 2) * 4,
+      baseWidth: 10 + (i % 3) * 4,
+      // Alternate curl direction so ribbons splay rather than comb flat
+      curl: `${(i % 2 === 0 ? 1 : -1) * (12 + (i % 3) * 4)}deg`,
     })),
   []);
+  // Master sweep is keyframed ease-in-out (slow start → sweep → settle). The
+  // shaping lives in the interpolate node, not the timing easing, so the
+  // 60Hz-presampled timing curve stays linear (safe at 120Hz).
   const rotate = progress.interpolate({
-    inputRange: [0, 0.40, 0.68, 1],
-    outputRange: ['0deg', '0deg', '270deg', '270deg'],
+    inputRange: [0, 0.40, 0.50, 0.60, 0.68, 1],
+    outputRange: ['0deg', '0deg', '49deg', '245deg', '270deg', '270deg'],
   });
   const scale = progress.interpolate({
     inputRange: [0, 0.40, 0.56, 0.68, 1],
@@ -294,21 +378,45 @@ function RibbonSwirl({ progress, dims }: { progress: Animated.Value; dims: Dims 
         transform: [{ rotate }, { scale }],
       }}
     >
-      {ribbons.map((r) => (
-        <View
-          key={r.key}
-          style={{
-            position: 'absolute',
-            left: -r.thickness / 2,
-            top: -r.length,
-            width: r.thickness,
-            height: r.length,
-            borderRadius: r.thickness / 2,
-            backgroundColor: r.color,
-            transform: [{ rotate: `${r.baseAngle}deg` }, { translateY: r.length / 2 }],
-          }}
-        />
-      ))}
+      {ribbons.map((r) => {
+        // Radial drift (translateY runs along the ribbon's rotated axis) rides
+        // on top of the group sweep, so each ribbon travels an arc — never a
+        // straight line outward. length/2 is the old "anchored at center" pose.
+        const drift = progress.interpolate({
+          inputRange: [0, 0.40, 0.54, 0.68],
+          outputRange: [r.length / 2, r.length / 2, r.length * 0.1, -r.length * 0.15],
+          extrapolate: 'clamp',
+        });
+        const curl = progress.interpolate({
+          inputRange: [0, 0.44, 0.68, 1],
+          outputRange: ['0deg', '0deg', r.curl, r.curl],
+        });
+        const gradId = `senpaiRibbon-${r.key}`;
+        return (
+          <Animated.View
+            key={r.key}
+            style={{
+              position: 'absolute',
+              left: -RIBBON_W / 2,
+              top: -r.length,
+              width: RIBBON_W,
+              height: r.length,
+              transform: [{ rotate: `${r.baseAngle}deg` }, { translateY: drift }, { rotate: curl }],
+            }}
+          >
+            <Svg width={RIBBON_W} height={r.length}>
+              <Defs>
+                <LinearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0" stopColor={r.tip} stopOpacity="0" />
+                  <Stop offset="0.35" stopColor={r.tip} stopOpacity="0.85" />
+                  <Stop offset="1" stopColor={r.color} stopOpacity="0.95" />
+                </LinearGradient>
+              </Defs>
+              <Path d={ribbonPath(r.length, r.baseWidth)} fill={`url(#${gradId})`} />
+            </Svg>
+          </Animated.View>
+        );
+      })}
     </Animated.View>
   );
 }
@@ -328,29 +436,40 @@ function SparkleBurst({ progress, dims }: { progress: Animated.Value; dims: Dims
         glyph: glyphs[i % glyphs.length],
         color: colors[i % colors.length],
         size: 12 + Math.random() * 16,
+        // Launch in five staggered waves so the burst blooms outward
+        // instead of firing as one mechanical wall.
+        start: 0.60 + (i % 5) * 0.016,
       };
     });
   }, []);
   return (
     <>
       {sparkles.map((s) => {
+        // Native interpolation ignores a JS `easing` option, so the
+        // Easing.out(Easing.cubic) curve is baked in as sampled keyframes
+        // (t = .25/.5 of travel → 57.8%/87.5% of distance). The shaping lives
+        // in the interpolate node, keeping the 60Hz-presampled timing curve
+        // linear (safe at 120Hz).
+        const seg = 0.90 - s.start;
+        const travelIn = [0, s.start, s.start + seg * 0.25, s.start + seg * 0.5, 0.90, 1];
         const translateX = progress.interpolate({
-          inputRange: [0, 0.60, 0.90, 1],
-          outputRange: [0, 0, s.dx, s.dx],
+          inputRange: travelIn,
+          outputRange: [0, 0, s.dx * 0.578, s.dx * 0.875, s.dx, s.dx],
           extrapolate: 'clamp',
         });
         const translateY = progress.interpolate({
-          inputRange: [0, 0.60, 0.90, 1],
-          outputRange: [0, 0, s.dy, s.dy],
+          inputRange: travelIn,
+          outputRange: [0, 0, s.dy * 0.578, s.dy * 0.875, s.dy, s.dy],
           extrapolate: 'clamp',
         });
         const opacity = progress.interpolate({
-          inputRange: [0, 0.60, 0.68, 0.88, 1],
-          outputRange: [0, 0, 1, 0, 0],
+          inputRange: [0, s.start, s.start + 0.05, 0.74, 0.88, 1],
+          outputRange: [0, 0, 1, 0.85, 0, 0],
         });
+        // Overshoot then settle — the ease-out(back) pop, keyframed.
         const scale = progress.interpolate({
-          inputRange: [0, 0.60, 0.72, 0.90],
-          outputRange: [0, 0, 1.3, 0.4],
+          inputRange: [0, s.start, s.start + seg * 0.2, s.start + seg * 0.5, 0.90],
+          outputRange: [0, 0, 1.45, 1.0, 0.35],
           extrapolate: 'clamp',
         });
         return (
