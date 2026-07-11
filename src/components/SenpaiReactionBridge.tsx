@@ -5,8 +5,8 @@ import { useSenpai } from '../context/SenpaiContext';
 import { useGamification } from '../context/GamificationContext';
 import { useWorkouts } from '../context/WorkoutContext';
 import { useAuth } from '../context/AuthContext';
-import { randomDialogue } from '../data/senpaiDialogue';
-import { daysSinceMet, deriveBondTier, nextAnniversaryCrossed } from '../services/senpaiBond';
+import { randomDialogue, setDialogueWarmTier, SENPAI_DIALOGUE } from '../data/senpaiDialogue';
+import { BOND_TIERS, daysSinceMet, deriveBondTier, nextAnniversaryCrossed } from '../services/senpaiBond';
 
 // Per-user marker for the last streak-break Senpai already acknowledged,
 // keyed by the break's `lastActiveDate` so each break is comforted exactly
@@ -17,6 +17,38 @@ const STREAK_BREAK_ACK_PREFIX = '@senpai_streak_break_ack_';
 // celebrated (stores the day count, e.g. "30") — each threshold fires once
 // ever, mirroring the streak-break ack pattern above.
 const ANNIVERSARY_ACK_PREFIX = '@senpai_anniversary_ack:';
+
+// Welcome-back nudge: per-user marker storing the last-workout date whose
+// absence-return was already greeted — same "keyed by the absence's identity"
+// shape as the streak-break ack, so one absence fires exactly once no matter
+// how many opens happen before the next workout.
+const WELCOME_BACK_ACK_PREFIX = '@senpai_welcome_back_ack:';
+
+// Streak-at-risk nudge: per-user marker storing the (UTC) calendar day the
+// evening warning already fired — once per day, max.
+const STREAK_RISK_ACK_PREFIX = '@senpai_streak_risk_ack:';
+
+// Local mirror of useSenpaiChat's daysSinceMostRecent (that copy is module-
+// private): whole days between today and the newest WorkoutLog.date
+// (YYYY-MM-DD), or undefined when no workouts exist.
+function daysSinceMostRecentWorkout(latestDate: string | undefined): number | undefined {
+  if (!latestDate) return undefined;
+  const then = new Date(latestDate);
+  if (Number.isNaN(then.getTime())) return undefined;
+  return Math.max(0, Math.floor((Date.now() - then.getTime()) / 86400000));
+}
+
+// Task 5: pick the per-threshold anniversary pool; unauthored thresholds
+// (730, 1095, …) fall back to the generic templated pool.
+function anniversaryPoolFor(threshold: number): keyof typeof SENPAI_DIALOGUE {
+  switch (threshold) {
+    case 7: return 'anniversary7';
+    case 30: return 'anniversary30';
+    case 100: return 'anniversary100';
+    case 365: return 'anniversary365';
+    default: return 'anniversary';
+  }
+}
 
 /**
  * SenpaiReactionBridge — invisible component that watches gamification &
@@ -36,7 +68,7 @@ const ANNIVERSARY_ACK_PREFIX = '@senpai_anniversary_ack:';
 export function SenpaiReactionBridge() {
   const { state: senpaiState, triggerReaction, recordBondEvent } = useSenpai();
   const { state: gamState, loaded: gamLoaded } = useGamification();
-  const { prs } = useWorkouts();
+  const { prs, myLogs } = useWorkouts();
   const { user } = useAuth();
 
   // Refs track previous values so we only fire on transitions, not initial load.
@@ -59,6 +91,11 @@ export function SenpaiReactionBridge() {
   const annivAckRef = useRef<number | null>(null);
   const annivFiredRef = useRef<number | null>(null);
   const tierFiredRef = useRef<number | null>(null);
+  // In-memory mirrors of the welcome-back / streak-at-risk acks (same
+  // double-schedule guard as breakAckFiredRef): last-workout date greeted,
+  // and the UTC day the at-risk warning fired.
+  const welcomeBackFiredRef = useRef<string | null>(null);
+  const streakRiskFiredRef = useRef<string | null>(null);
 
   // When the active account changes, drop all transition baselines so we don't
   // fire a "NEW PR!" / celebration for another user's pre-existing totals.
@@ -74,7 +111,19 @@ export function SenpaiReactionBridge() {
     annivAckRef.current = null;
     annivFiredRef.current = null;
     tierFiredRef.current = null;
+    welcomeBackFiredRef.current = null;
+    streakRiskFiredRef.current = null;
   }, [user?.id]);
+
+  // Task 6: keep the dialogue module's warm-tier flag in sync with the bond.
+  // Top tier only (150+ active days + interaction floor) — the four ambient
+  // greeting pools then trade their feral register for the '_warm' siblings.
+  // Copy selection only: no reaction fires here, so D2 is untouched.
+  useEffect(() => {
+    const bond = senpaiState.bond;
+    const topTier = BOND_TIERS[BOND_TIERS.length - 1].tier;
+    setDialogueWarmTier(senpaiState.enabled && !!bond && deriveBondTier(bond).tier >= topTier);
+  }, [senpaiState.bond, senpaiState.enabled]);
 
   // Workout complete — totalSessions increments
   useEffect(() => {
@@ -185,6 +234,90 @@ export function SenpaiReactionBridge() {
     };
   }, [gamState.lastActiveDate, gamState.streak, senpaiState.enabled, user?.id]);
 
+  // Welcome-back nudge (task 3): the user returns after 7+ days without a
+  // logged workout. Same absence source as useSenpaiChat's
+  // daysSinceLastWorkout (newest myLogs entry). One-shot per absence-return:
+  // persisted ack stores the last-workout date the greeting already covered,
+  // so re-opens during the same absence stay quiet until a new workout starts
+  // a new baseline. Standard 3.5s delay — lands after the 1.5s Home greeting
+  // and takes the bubble for that open, same as the other one-shots. Source
+  // stays the 'ambient' default: a nudge must never detonate milestone
+  // effects (D2).
+  useEffect(() => {
+    if (!senpaiState.enabled) return;
+    const uid = user?.id;
+    if (!uid) return; // workout logs are per-member; guests have none
+    // Max by workout DATE, not [0] — WorkoutContext sorts by createdAt, so a
+    // BACKDATED entry logged after a long absence would sit at [0] and make
+    // the absence look ongoing, firing "welcome back" right after they logged.
+    const latest = myLogs(uid).reduce<string | undefined>(
+      (max, l) => (max === undefined || l.date > max ? l.date : max),
+      undefined,
+    );
+    const away = daysSinceMostRecentWorkout(latest);
+    if (latest === undefined || away === undefined || away < 7) return;
+    if (welcomeBackFiredRef.current === latest) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const ackKey = `${WELCOME_BACK_ACK_PREFIX}${uid}`;
+    AsyncStorage.getItem(ackKey)
+      .then((acked) => {
+        if (cancelled || acked === latest) return;
+        timer = setTimeout(() => {
+          if (welcomeBackFiredRef.current === latest) return;
+          welcomeBackFiredRef.current = latest;
+          safeStorageSet(ackKey, latest, '[SenpaiReactionBridge]');
+          try {
+            triggerReaction('cheering', randomDialogue('welcomeBack'), 6000);
+          } catch { /* fail silent */ }
+        }, 3500);
+      })
+      .catch(() => { /* fail silent — worst case she greets next open */ });
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [myLogs, senpaiState.enabled, user?.id]);
+
+  // Streak-at-risk nudge (task 4): local evening (17:00+), a live streak
+  // worth saving (≥3), and no training today — lastActiveDate uses the same
+  // UTC day-string convention as GamificationContext's streak math, so
+  // "=== yesterday" means exactly "streak alive but not yet extended today"
+  // (today → already trained; older → already broken, streakBroken owns it).
+  // Once per calendar day via persisted ack; 3.5s delay so it never races
+  // the Home greeting inside the 250ms coalesce; 'ambient' source (D2).
+  useEffect(() => {
+    if (!senpaiState.enabled || !gamLoaded) return;
+    if (gamState.streak < 3) return;
+    if (new Date().getHours() < 17) return; // local evening only
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    if (gamState.lastActiveDate !== yesterday) return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (streakRiskFiredRef.current === today) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const ackKey = `${STREAK_RISK_ACK_PREFIX}${user?.id ?? 'guest'}`;
+    AsyncStorage.getItem(ackKey)
+      .then((acked) => {
+        if (cancelled || acked === today) return;
+        timer = setTimeout(() => {
+          if (streakRiskFiredRef.current === today) return;
+          streakRiskFiredRef.current = today;
+          safeStorageSet(ackKey, today, '[SenpaiReactionBridge]');
+          try {
+            triggerReaction('encouraging', randomDialogue('streakAtRisk'), 6000);
+          } catch { /* fail silent */ }
+        }, 3500);
+      })
+      .catch(() => { /* fail silent — worst case she warns tomorrow */ });
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [gamState.streak, gamState.lastActiveDate, gamLoaded, senpaiState.enabled, user?.id]);
+
   // Celebrations — level_up, streak_milestone, achievement
   useEffect(() => {
     if (!senpaiState.enabled) return;
@@ -288,7 +421,10 @@ export function SenpaiReactionBridge() {
           annivAckRef.current = threshold;
           safeStorageSet(ackKey, String(threshold), '[SenpaiReactionBridge]');
           try {
-            triggerReaction('celebrating', randomDialogue('anniversary'), 6000, 'milestone');
+            // Task 5: day-7/30/100/365 each have authored copy; other
+            // thresholds fall back to the generic templated pool. Ack
+            // mechanics above are unchanged.
+            triggerReaction('celebrating', randomDialogue(anniversaryPoolFor(threshold)), 6000, 'milestone');
             recordBondEvent({ type: 'anniversary', days: threshold });
           } catch { /* fail silent */ }
         }, 3500);
