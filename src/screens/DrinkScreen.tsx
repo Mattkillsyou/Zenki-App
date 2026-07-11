@@ -186,7 +186,7 @@ export function DrinkScreen() {
       ) : (
         /* ═════ Monthly view — scrollable history ═════ */
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ width: '100%', maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' }}>
-          <FadeInView delay={60} slideUp={14}>
+          <FadeInView role="header" slideUp={14}>
             <View style={styles.section}>
               <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>MONTHLY CHARGES</Text>
               {getAllMonths().map((m) => (

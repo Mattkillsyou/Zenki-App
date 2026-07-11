@@ -23,7 +23,7 @@ export function AchievementBadge({ achievement, size = 56, onPress }: Achievemen
   const diff = difficultyColor(achievement.difficulty);
 
   return (
-    <SoundPressable activeOpacity={0.7} onPress={onPress} style={{ alignItems: 'center' }}>
+    <SoundPressable onPress={onPress} style={{ alignItems: 'center' }}>
       <View
         style={[
           styles.circle,

@@ -5,6 +5,7 @@ import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
+import { useMotion } from '../context/MotionContext';
 import { borderRadius } from '../theme';
 
 const TUTORIAL_KEY = '@zenki_tutorial_v2_completed';
@@ -28,6 +29,7 @@ const ARROW_SIZE = 14;
 
 export function CoachmarkTutorial({ visible, steps, onDone }: Props) {
   const { colors } = useTheme();
+  const { reduceMotion } = useMotion();
   // Live viewport — must NOT be a module-load Dimensions snapshot, or bubbles
   // mis-position on iPad (and after rotation). The target rects are measured in
   // absolute screen coords by the parent, so these stay in the same space.
@@ -40,9 +42,14 @@ export function CoachmarkTutorial({ visible, steps, onDone }: Props) {
   }, [visible]);
 
   useEffect(() => {
+    // Reduce Motion: show each step's bubble at rest — no fade/slide.
+    if (reduceMotion) {
+      fade.setValue(1);
+      return;
+    }
     fade.setValue(0);
     Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
-  }, [stepIdx, fade]);
+  }, [stepIdx, fade, reduceMotion]);
 
   if (!visible || steps.length === 0) return null;
 
@@ -177,7 +184,7 @@ export function CoachmarkTutorial({ visible, steps, onDone }: Props) {
 
           <View style={styles.navRow}>
             {stepIdx > 0 ? (
-              <SoundPressable onPress={back} style={styles.backBtn} activeOpacity={0.7}>
+              <SoundPressable onPress={back} style={styles.backBtn}>
                 <Ionicons name="chevron-back" size={18} color={colors.textSecondary} />
                 <Text style={[styles.backText, { color: colors.textSecondary }]}>Back</Text>
               </SoundPressable>
@@ -185,7 +192,6 @@ export function CoachmarkTutorial({ visible, steps, onDone }: Props) {
 
             <SoundPressable
               onPress={next}
-              activeOpacity={0.85}
               style={[styles.nextBtn, { backgroundColor: colors.gold || '#D4A017' }]}
             >
               <Text style={styles.nextText}>{isLast ? "Got it" : 'Next'}</Text>

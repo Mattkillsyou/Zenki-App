@@ -145,7 +145,7 @@ export function PRDetailScreen({ navigation, route }: any) {
           </View>
 
           {/* Hero: current best + trend */}
-          <FadeInView delay={0} slideUp={8}>
+          <FadeInView role="header">
             <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.gold }]}>
               <Text style={[styles.heroLabel, { color: colors.gold }]}>CURRENT BEST</Text>
               <Text style={[styles.heroValue, { color: colors.textPrimary }]}>
@@ -166,7 +166,7 @@ export function PRDetailScreen({ navigation, route }: any) {
 
           {/* Chart */}
           {chartData.length > 0 && (
-            <FadeInView delay={80} slideUp={8}>
+            <FadeInView baseDelay={60} index={0} slideUp={8}>
               <View style={[styles.chartCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Text style={[styles.chartHeader, { color: colors.textSecondary }]}>PROGRESSION</Text>
                 <LineChart
@@ -182,14 +182,13 @@ export function PRDetailScreen({ navigation, route }: any) {
           )}
 
           {/* Add PR button */}
-          <FadeInView delay={140} slideUp={8}>
+          <FadeInView baseDelay={60} index={1} slideUp={8}>
             <SoundPressable
               style={[
                 styles.primaryBtn,
                 { backgroundColor: showForm ? colors.surfaceSecondary : colors.red },
               ]}
               onPress={() => setShowForm((s) => !s)}
-              activeOpacity={0.85}
             >
               <Ionicons
                 name={showForm ? 'close' : 'add-circle'}
@@ -208,7 +207,7 @@ export function PRDetailScreen({ navigation, route }: any) {
           </FadeInView>
 
           {showForm && (
-            <FadeInView delay={0} slideUp={8}>
+            <FadeInView slideUp={8}>
               <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Text style={[styles.label, { color: colors.textSecondary }]}>
                   {exercise.unit === 'lbs' ? 'WEIGHT (lb)' : exercise.unit === 'time' ? 'TIME (mm:ss)' : 'REPS'}

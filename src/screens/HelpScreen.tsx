@@ -89,7 +89,7 @@ export function HelpScreen({ navigation }: any) {
         {/* Quick actions */}
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>QUICK ACTIONS</Text>
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <SoundPressable style={styles.row} onPress={handleReplayTutorial} activeOpacity={0.7}>
+          <SoundPressable style={styles.row} onPress={handleReplayTutorial}>
             <View style={[styles.rowIcon, { backgroundColor: colors.goldMuted }]}>
               <Ionicons name="play-circle-outline" size={20} color={colors.gold} />
             </View>
@@ -103,7 +103,6 @@ export function HelpScreen({ navigation }: any) {
           <SoundPressable
             style={styles.row}
             onPress={() => navigation.navigate('ContactSupport')}
-            activeOpacity={0.7}
           >
             <View style={[styles.rowIcon, { backgroundColor: colors.goldMuted }]}>
               <Ionicons name="chatbubbles-outline" size={20} color={colors.gold} />
@@ -118,7 +117,6 @@ export function HelpScreen({ navigation }: any) {
           <SoundPressable
             style={styles.row}
             onPress={() => Linking.openURL(mailto).catch(() => Alert.alert('Error', 'Could not open mail app.'))}
-            activeOpacity={0.7}
           >
             <View style={[styles.rowIcon, { backgroundColor: colors.goldMuted }]}>
               <Ionicons name="mail-outline" size={20} color={colors.gold} />
@@ -141,7 +139,6 @@ export function HelpScreen({ navigation }: any) {
                 <SoundPressable
                   style={styles.faqRow}
                   onPress={() => setExpandedIdx(expanded ? null : i)}
-                  activeOpacity={0.7}
                 >
                   <Text style={[styles.faqQ, { color: colors.textPrimary }]} numberOfLines={expanded ? undefined : 2}>
                     {f.q}
@@ -168,7 +165,6 @@ export function HelpScreen({ navigation }: any) {
           <SoundPressable
             style={styles.row}
             onPress={() => Linking.openURL(PRIVACY_URL).catch(() => Alert.alert('Error', 'Could not open privacy policy.'))}
-            activeOpacity={0.7}
           >
             <View style={[styles.rowIcon, { backgroundColor: colors.goldMuted }]}>
               <Ionicons name="shield-checkmark-outline" size={20} color={colors.gold} />
@@ -180,7 +176,6 @@ export function HelpScreen({ navigation }: any) {
           <SoundPressable
             style={styles.row}
             onPress={() => Linking.openURL(SUPPORT_URL).catch(() => Alert.alert('Error', 'Could not open support page.'))}
-            activeOpacity={0.7}
           >
             <View style={[styles.rowIcon, { backgroundColor: colors.goldMuted }]}>
               <Ionicons name="document-text-outline" size={20} color={colors.gold} />

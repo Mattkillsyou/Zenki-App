@@ -118,7 +118,7 @@ export function AdminScreen({ navigation }: any) {
         </View>
 
         {/* Owner pill — subtle band with accent left bar instead of full red-tinted card */}
-        <FadeInView delay={0} slideUp={8}>
+        <FadeInView role="header">
           <View style={[styles.ownerPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={[styles.ownerAccent, { backgroundColor: colors.red }]} />
             <Ionicons name="shield-checkmark" size={18} color={colors.red} />
@@ -132,7 +132,7 @@ export function AdminScreen({ navigation }: any) {
         </FadeInView>
 
         {/* Who's Here */}
-        <FadeInView delay={50} slideUp={10}>
+        <FadeInView baseDelay={60} index={0} slideUp={10}>
           <View style={[styles.whosHereCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.whosHereHeader}>
               <Ionicons name="location" size={18} color={colors.success} />
@@ -163,7 +163,7 @@ export function AdminScreen({ navigation }: any) {
 
         {/* Admin Cards Grid */}
         <View style={styles.grid}>
-          <FadeInView delay={60} slideUp={12} style={styles.gridItem}>
+          <FadeInView baseDelay={60} index={1} slideUp={12} style={styles.gridItem}>
             <AdminCard
               icon="people-outline"
               title="Members"
@@ -173,7 +173,7 @@ export function AdminScreen({ navigation }: any) {
               onPress={() => navigation.navigate('AdminMembers')}
             />
           </FadeInView>
-          <FadeInView delay={120} slideUp={12} style={styles.gridItem}>
+          <FadeInView baseDelay={60} index={1} slideUp={12} style={styles.gridItem}>
             <AdminCard
               icon="bag-outline"
               title="Store"
@@ -185,7 +185,7 @@ export function AdminScreen({ navigation }: any) {
           </FadeInView>
         </View>
         <View style={styles.grid}>
-          <FadeInView delay={180} slideUp={12} style={styles.gridItem}>
+          <FadeInView baseDelay={60} index={2} slideUp={12} style={styles.gridItem}>
             <AdminCard
               icon="calendar-outline"
               title="Schedule"
@@ -195,7 +195,7 @@ export function AdminScreen({ navigation }: any) {
               onPress={() => navigation.navigate('AdminSchedule')}
             />
           </FadeInView>
-          <FadeInView delay={240} slideUp={12} style={styles.gridItem}>
+          <FadeInView baseDelay={60} index={2} slideUp={12} style={styles.gridItem}>
             <AdminCard
               icon="location-outline"
               title="Attendance"
@@ -207,7 +207,7 @@ export function AdminScreen({ navigation }: any) {
           </FadeInView>
         </View>
         <View style={styles.grid}>
-          <FadeInView delay={280} slideUp={12} style={styles.gridItem}>
+          <FadeInView baseDelay={60} index={3} slideUp={12} style={styles.gridItem}>
             <AdminCard
               icon="megaphone-outline"
               title="Broadcast"
@@ -217,7 +217,7 @@ export function AdminScreen({ navigation }: any) {
               onPress={() => navigation.navigate('AdminBroadcast')}
             />
           </FadeInView>
-          <FadeInView delay={320} slideUp={12} style={styles.gridItem}>
+          <FadeInView baseDelay={60} index={3} slideUp={12} style={styles.gridItem}>
             <AdminCard
               icon="newspaper-outline"
               title="Announcements"
@@ -229,7 +229,7 @@ export function AdminScreen({ navigation }: any) {
           </FadeInView>
         </View>
         <View style={styles.grid}>
-          <FadeInView delay={360} slideUp={12} style={styles.gridItem}>
+          <FadeInView baseDelay={60} index={4} slideUp={12} style={styles.gridItem}>
             <AdminCard
               icon="checkmark-circle-outline"
               title="Appointments"
@@ -239,7 +239,7 @@ export function AdminScreen({ navigation }: any) {
               onPress={() => navigation.navigate('AdminAppointments')}
             />
           </FadeInView>
-          <FadeInView delay={400} slideUp={12} style={styles.gridItem}>
+          <FadeInView baseDelay={60} index={4} slideUp={12} style={styles.gridItem}>
             <AdminCard
               icon="list-outline"
               title="Employee Tasks"
@@ -251,7 +251,7 @@ export function AdminScreen({ navigation }: any) {
           </FadeInView>
         </View>
         <View style={styles.grid}>
-          <FadeInView delay={440} slideUp={12} style={styles.gridItem}>
+          <FadeInView baseDelay={60} index={5} slideUp={12} style={styles.gridItem}>
             <AdminCard
               icon="flag-outline"
               title={openReportsCount && openReportsCount > 0
@@ -263,7 +263,7 @@ export function AdminScreen({ navigation }: any) {
               onPress={() => navigation.navigate('AdminReports')}
             />
           </FadeInView>
-          <FadeInView delay={480} slideUp={12} style={styles.gridItem}>
+          <FadeInView baseDelay={60} index={5} slideUp={12} style={styles.gridItem}>
             <AdminCard
               icon="images-outline"
               title="Community"
@@ -276,7 +276,7 @@ export function AdminScreen({ navigation }: any) {
         </View>
 
         {/* Quick Actions */}
-        <FadeInView delay={300} slideUp={12}>
+        <FadeInView baseDelay={60} index={6} slideUp={12}>
           <View style={styles.section}>
             <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>QUICK ACTIONS</Text>
             {[

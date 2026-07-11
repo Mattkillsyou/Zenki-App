@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Modal, Animated, Pressable } from 'react-native
 import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useMotion } from '../context/MotionContext';
 import { Celebration } from '../types/gamification';
 import { typography, spacing, borderRadius } from '../theme';
 
@@ -13,6 +14,7 @@ interface CelebrationModalProps {
 
 // Simple confetti dots
 function ConfettiDots() {
+  const { reduceMotion } = useMotion();
   const dots = useRef(
     Array.from({ length: 20 }, (_, i) => ({
       id: i,
@@ -24,6 +26,8 @@ function ConfettiDots() {
   ).current;
 
   useEffect(() => {
+    // Reduce Motion: no falling confetti (purely decorative).
+    if (reduceMotion) return;
     // Capture the loop handles so we can stop them on unmount — without
     // cleanup these run forever on the native driver, accumulating across
     // every celebration shown and eventually stalling touch responsiveness
@@ -42,7 +46,9 @@ function ConfettiDots() {
     return () => {
       loops.forEach((l) => l.stop());
     };
-  }, [dots]);
+  }, [dots, reduceMotion]);
+
+  if (reduceMotion) return null;
 
   return (
     <>
@@ -73,11 +79,18 @@ function ConfettiDots() {
 
 export function CelebrationModal({ celebration, onDismiss }: CelebrationModalProps) {
   const { colors } = useTheme();
+  const { reduceMotion } = useMotion();
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (celebration) {
+      // Reduce Motion: show the card at rest immediately — no scale spring.
+      if (reduceMotion) {
+        scaleAnim.setValue(1);
+        opacityAnim.setValue(1);
+        return;
+      }
       // Reset to entry values, then animate. Without resetting, a second
       // celebration after the first dismisses would re-use the final
       // (1.0, 1.0) state and the spring would be a visual no-op.
@@ -100,7 +113,7 @@ export function CelebrationModal({ celebration, onDismiss }: CelebrationModalPro
       scaleAnim.setValue(0.5);
       opacityAnim.setValue(0);
     }
-  }, [celebration, scaleAnim, opacityAnim]);
+  }, [celebration, scaleAnim, opacityAnim, reduceMotion]);
 
   if (!celebration) return null;
 

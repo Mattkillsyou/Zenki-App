@@ -125,7 +125,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <SoundPressable
             style={styles.compactRetryBtn}
             onPress={this.handleRetry}
-            activeOpacity={0.7}
           >
             <Text style={styles.compactRetryText}>RETRY</Text>
           </SoundPressable>
@@ -184,7 +183,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               retryCount >= 3 && styles.retryButtonDisabled,
             ]}
             onPress={this.handleRetry}
-            activeOpacity={0.7}
             disabled={retryCount >= 3}
           >
             <Text style={styles.retryButtonText}>
@@ -203,7 +201,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           <SoundPressable
             style={styles.detailsToggle}
             onPress={this.toggleDetails}
-            activeOpacity={0.7}
           >
             <Text style={styles.detailsToggleText}>
               {showDetails ? 'HIDE DETAILS ▲' : 'SHOW DETAILS ▼'}

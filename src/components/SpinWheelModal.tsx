@@ -20,6 +20,7 @@ import Svg, {
 } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useMotion } from '../context/MotionContext';
 import { useSpinWheel, WHEEL_SLICES, SpinPrize } from '../context/SpinWheelContext';
 import { useSound } from '../context/SoundContext';
 import { Confetti } from './Confetti';
@@ -100,6 +101,7 @@ function getResultIcon(prize: SpinPrize): keyof typeof Ionicons.glyphMap {
 
 export function SpinWheelModal({ visible, onClose }: Props) {
   const { colors } = useTheme();
+  const { reduceMotion } = useMotion();
   const { spin } = useSpinWheel();
   const { play } = useSound();
   const rotation = useRef(new Animated.Value(0)).current;
@@ -119,7 +121,7 @@ export function SpinWheelModal({ visible, onClose }: Props) {
 
   // Idle pulse on the TAP TO SPIN button
   useEffect(() => {
-    if (!visible || spinning || result) {
+    if (!visible || spinning || result || reduceMotion) {
       pulseAnim.setValue(1);
       return;
     }
@@ -141,7 +143,7 @@ export function SpinWheelModal({ visible, onClose }: Props) {
     );
     loop.start();
     return () => loop.stop();
-  }, [visible, spinning, result, pulseAnim]);
+  }, [visible, spinning, result, reduceMotion, pulseAnim]);
 
   const handleSpin = () => {
     if (spinning) return;
@@ -154,6 +156,28 @@ export function SpinWheelModal({ visible, onClose }: Props) {
     const jitter = (Math.random() - 0.5) * (SLICE_ANGLE * 0.3);
     const targetAngle =
       spins * 360 - (sliceIndex * SLICE_ANGLE + SLICE_ANGLE / 2) + jitter;
+
+    const revealResult = () => {
+      setSpinning(false);
+      setResult(prize);
+      // No "success" sound for the deterministic loss outcome — it's
+      // confusing to celebrate the user being told gambling is bad.
+      if (prize.type !== 'gamble_lose') {
+        play('success');
+        if ('confetti' in prize && prize.confetti) {
+          setShowConfetti(false);
+          setTimeout(() => setShowConfetti(true), 30);
+        }
+      }
+    };
+
+    // Reduce Motion: skip the long spin — land the wheel on the result
+    // position immediately and reveal the prize.
+    if (reduceMotion) {
+      rotation.setValue(targetAngle);
+      revealResult();
+      return;
+    }
 
     // Two-phase animation: long deceleration, then a small overshoot bounce
     // so the wheel "settles" into its final position with a subtle wobble.
@@ -170,19 +194,7 @@ export function SpinWheelModal({ visible, onClose }: Props) {
         easing: Easing.inOut(Easing.cubic),
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      setSpinning(false);
-      setResult(prize);
-      // No "success" sound for the deterministic loss outcome — it's
-      // confusing to celebrate the user being told gambling is bad.
-      if (prize.type !== 'gamble_lose') {
-        play('success');
-        if ('confetti' in prize && prize.confetti) {
-          setShowConfetti(false);
-          setTimeout(() => setShowConfetti(true), 30);
-        }
-      }
-    });
+    ]).start(revealResult);
   };
 
   const spinDeg = rotation.interpolate({

@@ -195,14 +195,13 @@ function LogTab({
   return (
     <View>
       {/* Log button */}
-      <FadeInView delay={0} slideUp={8}>
+      <FadeInView role="header">
         <SoundPressable
           style={[
             styles.primaryBtn,
             { backgroundColor: loggedToday ? colors.success : colors.red },
           ]}
           onPress={() => setShowForm((s) => !s)}
-          activeOpacity={0.85}
         >
           <Ionicons
             name={showForm ? 'close' : loggedToday ? 'checkmark-circle' : 'add-circle'}
@@ -216,7 +215,7 @@ function LogTab({
       </FadeInView>
 
       {showForm && (
-        <FadeInView delay={0} slideUp={8}>
+        <FadeInView slideUp={8}>
           <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.label, { color: colors.textSecondary }]}>TITLE</Text>
             <TextInput
@@ -412,7 +411,6 @@ function PRsTab({
                     key={ex.key}
                     style={[styles.prRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
                     onPress={() => navigation.navigate('PRDetail', { exerciseKey: ex.key })}
-                    activeOpacity={0.8}
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.prRowTitle, { color: colors.textPrimary }]}>{ex.name}</Text>

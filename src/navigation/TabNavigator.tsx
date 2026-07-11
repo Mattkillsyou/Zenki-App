@@ -50,6 +50,8 @@ export function TabNavigator() {
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: false,
+        // v7 cross-content shift instead of a hard cut between tabs.
+        animation: 'shift',
         tabBarStyle: {
           backgroundColor: colors.tabBar,
           borderTopColor: 'transparent',
@@ -69,7 +71,7 @@ export function TabNavigator() {
             <View style={{ position: 'relative' }}>
               <AnimatedTabIcon
                 name={iconName}
-                size={focused ? 28 : 24}
+                size={24}
                 color={color}
                 focused={focused}
                 senpaiActive={senpaiState.enabled}

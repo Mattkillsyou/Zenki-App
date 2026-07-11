@@ -7,6 +7,8 @@ import {
   Platform} from 'react-native';
 import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
+import { useMotion } from '../context/MotionContext';
+import { spring } from '../theme';
 
 export interface ReorderableItem {
   id: string;
@@ -22,6 +24,7 @@ interface Props {
 }
 
 export function ReorderableSections({ items, editMode, onReorder, onToggleVisibility }: Props) {
+  const { reduceMotion } = useMotion();
   const heights = useRef<Record<string, number>>({}).current;
   const offsets = useRef<Record<string, Animated.Value>>({}).current;
 
@@ -50,7 +53,8 @@ export function ReorderableSections({ items, editMode, onReorder, onToggleVisibi
 
   const wiggle = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (editMode) {
+    // Reduce Motion: no jiggle — edit mode stays still.
+    if (editMode && !reduceMotion) {
       wiggle.setValue(0);
       const loop = Animated.loop(
         Animated.sequence([
@@ -62,7 +66,7 @@ export function ReorderableSections({ items, editMode, onReorder, onToggleVisibi
       loop.start();
       return () => { loop.stop(); wiggle.setValue(0); };
     }
-  }, [editMode, wiggle]);
+  }, [editMode, reduceMotion, wiggle]);
 
   const handleLayout = (id: string) => (e: LayoutChangeEvent) => {
     heights[id] = e.nativeEvent.layout.height;
@@ -118,23 +122,31 @@ export function ReorderableSections({ items, editMode, onReorder, onToggleVisibi
           offsets[id].setValue(g.dy + offsetAdjust);
         },
         onPanResponderRelease: () => {
-          Animated.spring(offsets[id], {
-            toValue: 0,
-            useNativeDriver: true,
-            friction: 8,
-            tension: 60,
-          }).start();
+          // Reduce Motion: snap into place; otherwise settle on the shared spring.
+          if (reduceMotion) {
+            offsets[id].setValue(0);
+          } else {
+            Animated.spring(offsets[id], {
+              toValue: 0,
+              useNativeDriver: true,
+              ...spring.settle,
+            }).start();
+          }
           setDraggingId(null);
           onReorder(orderRef.current);
         },
         onPanResponderTerminate: () => {
-          Animated.spring(offsets[id], { toValue: 0, useNativeDriver: true }).start();
+          if (reduceMotion) {
+            offsets[id].setValue(0);
+          } else {
+            Animated.spring(offsets[id], { toValue: 0, useNativeDriver: true, ...spring.settle }).start();
+          }
           setDraggingId(null);
         },
       });
     }
     return map;
-  }, [editMode, items.map((i) => i.id).join('|')]);
+  }, [editMode, reduceMotion, items.map((i) => i.id).join('|')]);
 
   const rotate = wiggle.interpolate({
     inputRange: [-1, 1],
@@ -174,7 +186,6 @@ export function ReorderableSections({ items, editMode, onReorder, onToggleVisibi
             {editMode && onToggleVisibility && (
               <SoundPressable
                 onPress={() => onToggleVisibility(id)}
-                activeOpacity={0.7}
                 style={{
                   position: 'absolute',
                   top: 6,

@@ -1,9 +1,10 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { SoundPressable } from './SoundPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useMotion } from '../context/MotionContext';
+import { ambient } from '../theme';
 import { formatCount } from '../utils/formatCount';
 
 interface PointsBadgeProps {
@@ -29,10 +30,13 @@ export function PointsBadge({ points, compact, onPress }: PointsBadgeProps) {
 
   useEffect(() => {
     if (reduceMotion || !hasPoints) return;
+    // Shares the ambient breath period (each direction a half-cycle) and sine
+    // easing so the diamond sparkle pulses in sync with StreakBadge/XP.
+    const halfBreath = ambient.period / 2;
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(sparkleAnim, { toValue: 1, duration: 1400, useNativeDriver: true }),
-        Animated.timing(sparkleAnim, { toValue: 0.7, duration: 1400, useNativeDriver: true }),
+        Animated.timing(sparkleAnim, { toValue: 1, duration: halfBreath, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(sparkleAnim, { toValue: 0.7, duration: halfBreath, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]),
     );
     loop.start();
@@ -72,7 +76,7 @@ export function PointsBadge({ points, compact, onPress }: PointsBadgeProps) {
 
   if (onPress) {
     return (
-      <SoundPressable onPress={onPress} activeOpacity={0.7} style={containerStyle}>
+      <SoundPressable onPress={onPress} style={containerStyle}>
         {content}
       </SoundPressable>
     );

@@ -79,7 +79,6 @@ export function DexaScansScreen({ navigation }: any) {
                 Upload a DEXA report (PDF or photo) and the AI will extract all your metrics automatically.
               </Text>
               <SoundPressable
-                activeOpacity={0.85}
                 onPress={() => navigation.navigate('DexaUpload')}
                 style={[styles.emptyCta, { backgroundColor: colors.gold }]}
               >
@@ -138,7 +137,6 @@ export function DexaScansScreen({ navigation }: any) {
             {scans.map((scan) => (
               <SoundPressable
                 key={scan.id}
-                activeOpacity={0.85}
                 onPress={() => navigation.navigate('DexaScanDetail', { id: scan.id })}
                 style={[styles.scanRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
               >

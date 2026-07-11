@@ -17,6 +17,8 @@ import { useBlocks } from '../context/BlocksContext';
 import { spacing, MAX_CONTENT_WIDTH } from '../theme';
 import { PostCard } from '../components/PostCard';
 import { AnimatedLogo } from '../components/AnimatedLogo';
+import { FadeInView } from '../components/FadeInView';
+import { Skeleton } from '../components/Skeleton';
 import { Post, getFeed, likePost, unlikePost } from '../services/firebasePosts';
 import { getCurrentUid } from '../services/firebaseAuth';
 import { requireAuth } from '../utils/requireAuth';
@@ -186,7 +188,6 @@ export function CommunityScreen({ navigation }: any) {
                 key={s.userId}
                 style={styles.storyItem}
                 onPress={() => handleUserPress(s.userId)}
-                activeOpacity={0.8}
               >
                 <View style={[styles.storyRing, { borderColor: colors.gold }]}>
                   <View style={[styles.storyAvatar, { backgroundColor: colors.goldMuted }]}>
@@ -214,7 +215,10 @@ export function CommunityScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      {/* Two-tier entrance: top bar (chrome) at 0, feed body (content) at ~60ms.
+          The spinner/Skeleton swap inside the body is intentionally untouched. */}
       {/* Top bar — Zenki logo mark, no redundant label */}
+      <FadeInView role="header">
       <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
         <View style={styles.topBarLeft}>
           <AnimatedLogo size={40} />
@@ -245,7 +249,9 @@ export function CommunityScreen({ navigation }: any) {
           </SoundPressable>
         </View>
       </View>
+      </FadeInView>
 
+      <FadeInView baseDelay={60} index={0} style={styles.body}>
       {!user ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="people-outline" size={56} color={colors.textMuted} />
@@ -263,8 +269,12 @@ export function CommunityScreen({ navigation }: any) {
           </SoundPressable>
         </View>
       ) : loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.gold} />
+        // Skeleton feed placeholder — shaped like the PostCards that will
+        // replace it, so the load reads as content arriving rather than a
+        // bare spinner. Skeleton itself gates on Reduce Motion.
+        <View style={styles.skeletonFeed}>
+          <Skeleton.Card bodyLines={2} />
+          <Skeleton.Card bodyLines={2} />
         </View>
       ) : error && visiblePosts.length === 0 ? (
         <ScrollView
@@ -341,6 +351,7 @@ export function CommunityScreen({ navigation }: any) {
           removeClippedSubviews
         />
       )}
+      </FadeInView>
 
       {/* Floating Create Button */}
       <SoundPressable
@@ -355,6 +366,9 @@ export function CommunityScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  // Content-tier entrance wrapper below the top bar — flex:1 so the FlatList /
+  // ScrollView children keep a bounded height and stay scrollable.
+  body: { flex: 1 },
 
   topBar: {
     flexDirection: 'row',
@@ -414,10 +428,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  loadingContainer: {
+  skeletonFeed: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    gap: spacing.md,
+    width: '100%',
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignSelf: 'center',
   },
   footerLoader: {
     paddingVertical: 24,

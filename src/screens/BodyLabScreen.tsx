@@ -192,7 +192,7 @@ export function BodyLabScreen({ navigation }: any) {
             </FadeInView>
 
             {/* Quick stats */}
-            <FadeInView delay={40}>
+            <FadeInView baseDelay={60} index={0}>
               <View style={styles.dashGrid}>
                 <View style={[styles.dashTile, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <Text style={[styles.dashTileValue, { color: colors.gold }]}>
@@ -218,7 +218,7 @@ export function BodyLabScreen({ navigation }: any) {
             </FadeInView>
 
             {/* Medications & Peptides shortcut */}
-            <FadeInView delay={50}>
+            <FadeInView baseDelay={60} index={1}>
               <SoundPressable
                 style={[styles.uploadCard, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 12 }]}
                 onPress={() => navigation.navigate('MedicationTracker')}
@@ -233,7 +233,7 @@ export function BodyLabScreen({ navigation }: any) {
             </FadeInView>
 
             {/* Heart-rate workout history shortcut */}
-            <FadeInView delay={55}>
+            <FadeInView baseDelay={60} index={2}>
               <SoundPressable
                 style={[styles.uploadCard, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 12 }]}
                 onPress={() => navigation.navigate('SessionHistory')}
@@ -253,7 +253,7 @@ export function BodyLabScreen({ navigation }: any) {
               const flagged = latest.biomarkers?.filter((b: any) => b.status === 'out_of_range') || [];
               const optimal = latest.biomarkers?.filter((b: any) => b.status === 'optimal' || b.status === 'sufficient') || [];
               return (
-                <FadeInView delay={60}>
+                <FadeInView baseDelay={60} index={3}>
                   <View style={[styles.bioSummary, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                     <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>LATEST BLOOD PANEL</Text>
                     <View style={styles.bioRow}>
@@ -282,7 +282,7 @@ export function BodyLabScreen({ navigation }: any) {
 
             {/* Insights */}
             {bodyInsights.length > 0 && (
-              <FadeInView delay={80}>
+              <FadeInView baseDelay={60} index={4}>
                 <Text style={[styles.sectionLabel, { color: colors.textMuted, marginTop: 8 }]}>INSIGHTS</Text>
                 {bodyInsights.map((ins, i) => (
                   <View key={i} style={[styles.insightCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>

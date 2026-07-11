@@ -1,7 +1,9 @@
-import React from 'react';
-import { TouchableOpacity, TouchableOpacityProps, GestureResponderEvent } from 'react-native';
+import React, { useRef } from 'react';
+import { Animated, TouchableOpacity, TouchableOpacityProps, GestureResponderEvent } from 'react-native';
 import { useSound } from '../context/SoundContext';
 import { SoundEvent } from '../sounds/synth';
+import { useMotion } from '../context/MotionContext';
+import { duration, easing, scale as scaleTokens, spring } from '../theme';
 
 interface Props extends TouchableOpacityProps {
   /** Which sound event to play on press. Defaults to 'tap'. */
@@ -17,19 +19,94 @@ interface Props extends TouchableOpacityProps {
 // override `hitSlop` (or pass a tighter value to disable).
 const DEFAULT_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
 
+// Wrap TouchableOpacity so its `style` prop accepts an Animated transform
+// (the press-scale) alongside the built-in opacity dim. Both ride the native
+// driver on the same view — no extra layout node, so the ~800 call sites keep
+// their existing flex layout untouched.
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+
 /**
- * Drop-in replacement for TouchableOpacity that plays a themed sound on press.
- * Uses the current screen's sound theme from SoundContext.
+ * The app's single press primitive. Plays a themed sound and gives every
+ * press one consistent physical response: a subtle scale-down + softened
+ * opacity dim on press-in, a spring back on release. This replaces the old
+ * 2012-era `activeOpacity 0.2` lottery — the dim is now a gentle 0.9 and the
+ * scale is what the eye actually reads.
+ *
+ * Reduce Motion → opacity-only (no scale transform, no spring).
  */
-export function SoundPressable({ onPress, soundEvent = 'tap', silent, hitSlop, children, ...rest }: Props) {
+export function SoundPressable({
+  onPress,
+  onPressIn,
+  onPressOut,
+  soundEvent = 'tap',
+  silent,
+  hitSlop,
+  style,
+  children,
+  ...rest
+}: Props) {
   const { play } = useSound();
+  const { reduceMotion } = useMotion();
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
   const handlePress = (e: GestureResponderEvent) => {
     if (!silent) play(soundEvent);
     onPress?.(e);
   };
+
+  const handlePressIn = (e: GestureResponderEvent) => {
+    if (!reduceMotion) {
+      Animated.timing(scaleAnim, {
+        toValue: scaleTokens.pressed,
+        duration: duration.instant,
+        easing: easing.decelerate,
+        useNativeDriver: true,
+      }).start();
+    }
+    onPressIn?.(e);
+  };
+
+  const handlePressOut = (e: GestureResponderEvent) => {
+    if (!reduceMotion) {
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: spring.press.friction,
+        tension: spring.press.tension,
+        useNativeDriver: true,
+      }).start();
+    }
+    onPressOut?.(e);
+  };
+
+  // Reduce Motion: plain TouchableOpacity, opacity-only feedback, no transform.
+  if (reduceMotion) {
+    return (
+      <TouchableOpacity
+        hitSlop={hitSlop ?? DEFAULT_HIT_SLOP}
+        activeOpacity={0.9}
+        {...rest}
+        style={style}
+        onPress={handlePress}
+      >
+        {children}
+      </TouchableOpacity>
+    );
+  }
+
+  // Base transform is applied first so a call-site's own `transform` (rare on a
+  // press target) still wins the flatten and keeps its visual — it only forgoes
+  // the press-scale rather than breaking.
   return (
-    <TouchableOpacity hitSlop={hitSlop ?? DEFAULT_HIT_SLOP} {...rest} onPress={handlePress}>
+    <AnimatedTouchable
+      hitSlop={hitSlop ?? DEFAULT_HIT_SLOP}
+      activeOpacity={0.9}
+      {...rest}
+      style={[{ transform: [{ scale: scaleAnim }] }, style]}
+      onPress={handlePress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+    >
       {children}
-    </TouchableOpacity>
+    </AnimatedTouchable>
   );
 }

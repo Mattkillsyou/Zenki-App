@@ -50,7 +50,6 @@ export function Button({
     <SoundPressable
       onPress={onPress}
       disabled={disabled || loading}
-      activeOpacity={0.7}
       style={[
         styles.base,
         variantStyles[variant],

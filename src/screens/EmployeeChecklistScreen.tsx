@@ -75,7 +75,7 @@ export function EmployeeChecklistScreen({ navigation }: any) {
           </View>
 
           {/* Progress banner */}
-          <FadeInView delay={0} slideUp={8}>
+          <FadeInView role="header">
             <View style={[styles.progressBanner, { backgroundColor: colors.surface, borderColor: colors.gold }]}>
               <View style={[styles.progressRing, { borderColor: colors.gold }]}>
                 <Text style={[styles.progressRingText, { color: colors.gold }]}>
@@ -99,7 +99,7 @@ export function EmployeeChecklistScreen({ navigation }: any) {
 
           {/* Assigned (time-sensitive) */}
           {grouped.assigned.length > 0 && (
-            <FadeInView delay={40} slideUp={8}>
+            <FadeInView baseDelay={60} index={0} slideUp={8}>
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Ionicons name="alarm-outline" size={14} color={colors.error} />
@@ -121,7 +121,7 @@ export function EmployeeChecklistScreen({ navigation }: any) {
 
           {/* Default daily */}
           {grouped.defaults.length > 0 && (
-            <FadeInView delay={80} slideUp={8}>
+            <FadeInView baseDelay={60} index={1} slideUp={8}>
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Ionicons name="repeat-outline" size={14} color={colors.gold} />
@@ -142,7 +142,7 @@ export function EmployeeChecklistScreen({ navigation }: any) {
           )}
 
           {/* Personal */}
-          <FadeInView delay={120} slideUp={8}>
+          <FadeInView baseDelay={60} index={2} slideUp={8}>
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Ionicons name="person-outline" size={14} color={colors.info} />
@@ -244,7 +244,6 @@ function TaskRow({
   return (
     <SoundPressable
       onPress={onToggle}
-      activeOpacity={0.85}
       style={[styles.taskRow, { backgroundColor: colors.surface, borderColor: completed ? accentColor : colors.border }]}
     >
       <View

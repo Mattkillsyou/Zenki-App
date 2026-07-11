@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useMotion } from '../context/MotionContext';
-import { typography, spacing, borderRadius } from '../theme';
+import { typography, spacing, borderRadius, easing } from '../theme';
 
 interface XPProgressBarProps {
   level: number;
@@ -16,31 +16,19 @@ export function XPProgressBar({ level, currentXP, nextLevelXP, progress, totalXP
   const { colors } = useTheme();
   const { reduceMotion } = useMotion();
   const widthAnim = useRef(new Animated.Value(0)).current;
-  const shineAnim = useRef(new Animated.Value(-1)).current;
 
   useEffect(() => {
+    // Eased fill — decelerate curve so the bar settles into the new progress
+    // instead of tracking a flat linear ramp. (The perpetual linear shine loop
+    // that used to live here was never rendered in the JSX; it was dropped so a
+    // native-driver loop no longer runs forever off-screen.)
     Animated.timing(widthAnim, {
       toValue: progress,
       duration: reduceMotion ? 0 : 600,
+      easing: easing.decelerate,
       useNativeDriver: false,
     }).start();
   }, [progress, reduceMotion]);
-
-  useEffect(() => {
-    if (reduceMotion) return;
-    // Capture loop handle so we can stop it on unmount — without cleanup
-    // the native-driver animation runs forever and accumulates across
-    // remounts, which contributed to post-spin home-screen freezes.
-    const loop = Animated.loop(
-      Animated.timing(shineAnim, {
-        toValue: 2,
-        duration: 2000,
-        useNativeDriver: true,
-      }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [reduceMotion, shineAnim]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.surface }]}>

@@ -137,7 +137,7 @@ export function CycleTrackerScreen({ navigation }: any) {
 
             {/* End current period button */}
             {currentPeriod && (
-              <FadeInView delay={40}>
+              <FadeInView baseDelay={60} index={0}>
                 <SoundPressable
                   style={[styles.endPeriodBtn, { backgroundColor: PHASE_COLORS.menstrual + '20', borderColor: PHASE_COLORS.menstrual }]}
                   onPress={handleEndPeriod}
@@ -149,7 +149,7 @@ export function CycleTrackerScreen({ navigation }: any) {
             )}
 
             {/* Log new period */}
-            <FadeInView delay={80}>
+            <FadeInView baseDelay={60} index={1}>
               <View style={[styles.logCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>LOG PERIOD</Text>
 
@@ -228,7 +228,7 @@ export function CycleTrackerScreen({ navigation }: any) {
             </FadeInView>
 
             {/* History */}
-            <FadeInView delay={120}>
+            <FadeInView baseDelay={60} index={2}>
               <Text style={[styles.sectionLabel, { color: colors.textMuted, marginTop: 16 }]}>HISTORY</Text>
               {entries.length === 0 ? (
                 <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -325,7 +325,7 @@ export function CycleTrackerScreen({ navigation }: any) {
             )}
 
             {/* Settings */}
-            <FadeInView delay={60}>
+            <FadeInView baseDelay={60} index={0}>
               <View style={[styles.settingsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>PRIVACY</Text>
                 <View style={styles.settingsRow}>

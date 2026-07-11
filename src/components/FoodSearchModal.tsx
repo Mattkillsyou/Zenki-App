@@ -159,7 +159,6 @@ export function FoodSearchModal({ visible, onClose, onSelect, recentFoods = [], 
             }
             renderItem={({ item }) => (
               <SoundPressable
-                activeOpacity={0.85}
                 onPress={() => handlePick(item)}
                 style={[styles.resultRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
               >

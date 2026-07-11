@@ -325,7 +325,6 @@ export function MacroSetupScreen({ navigation }: any) {
                   return (
                     <SoundPressable
                       key={lvl}
-                      activeOpacity={0.85}
                       onPress={() => setActivity(lvl)}
                       style={[
                         styles.optionRow,
@@ -360,7 +359,6 @@ export function MacroSetupScreen({ navigation }: any) {
                   return (
                     <SoundPressable
                       key={g}
-                      activeOpacity={0.85}
                       onPress={() => setGoal(g)}
                       style={[
                         styles.optionRow,
@@ -427,7 +425,6 @@ export function MacroSetupScreen({ navigation }: any) {
         <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
           {step === 'review' ? (
             <SoundPressable
-              activeOpacity={0.85}
               style={[styles.cta, { backgroundColor: colors.gold }]}
               onPress={finish}
               disabled={!computed}
@@ -437,7 +434,6 @@ export function MacroSetupScreen({ navigation }: any) {
             </SoundPressable>
           ) : (
             <SoundPressable
-              activeOpacity={0.85}
               style={[styles.cta, { backgroundColor: colors.gold }]}
               onPress={next}
             >
@@ -490,7 +486,6 @@ function ChoiceCard({
 }) {
   return (
     <SoundPressable
-      activeOpacity={0.85}
       onPress={onPress}
       style={[
         styles.choiceCard,
@@ -527,7 +522,6 @@ function UnitToggle({
         return (
           <SoundPressable
             key={opt.key}
-            activeOpacity={0.85}
             onPress={() => onChange(opt.key)}
             style={[
               styles.toggleBtn,

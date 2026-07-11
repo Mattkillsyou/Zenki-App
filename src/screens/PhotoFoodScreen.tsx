@@ -187,7 +187,6 @@ export function PhotoFoodScreen({ navigation }: any) {
 
             <View style={{ flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, marginTop: spacing.md }}>
               <SoundPressable
-                activeOpacity={0.85}
                 onPress={takePhoto}
                 style={[styles.bigBtn, { backgroundColor: colors.gold }]}
               >
@@ -195,7 +194,6 @@ export function PhotoFoodScreen({ navigation }: any) {
                 <Text style={styles.bigBtnText}>Take photo</Text>
               </SoundPressable>
               <SoundPressable
-                activeOpacity={0.85}
                 onPress={pickFromLibrary}
                 style={[styles.bigBtn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}
               >
@@ -241,7 +239,6 @@ export function PhotoFoodScreen({ navigation }: any) {
             </View>
 
             <SoundPressable
-              activeOpacity={0.85}
               onPress={analyze}
               style={[styles.cta, { backgroundColor: colors.gold }]}
             >
@@ -283,7 +280,6 @@ export function PhotoFoodScreen({ navigation }: any) {
               return (
                 <SoundPressable
                   key={i}
-                  activeOpacity={0.85}
                   onPress={() => toggleSelection(i)}
                   style={[
                     styles.foodRow,
@@ -315,7 +311,6 @@ export function PhotoFoodScreen({ navigation }: any) {
               );
             })}
             <SoundPressable
-              activeOpacity={0.85}
               onPress={logSelected}
               style={[styles.cta, { backgroundColor: colors.gold }]}
             >
@@ -334,7 +329,6 @@ export function PhotoFoodScreen({ navigation }: any) {
               <Text style={[styles.errorText, { color: colors.textPrimary }]}>{phase.message}</Text>
             </View>
             <SoundPressable
-              activeOpacity={0.85}
               onPress={() => setPhase({ kind: 'idle' })}
               style={[styles.cta, { backgroundColor: colors.gold }]}
             >

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useMemo } from 'react';
 import { View, StyleSheet, Platform, Animated, Dimensions } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { useMotion } from '../context/MotionContext';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
@@ -15,6 +16,7 @@ const { height: SCREEN_H } = Dimensions.get('window');
  */
 export function ThemeOverlay() {
   const { overlay } = useTheme();
+  const { reduceMotion } = useMotion();
 
   // No effects needed
   if (
@@ -27,13 +29,24 @@ export function ThemeOverlay() {
     return null;
   }
 
+  // Reduce Motion: suppress the animated effects (flicker + the moving particle
+  // fields) while keeping the purely-static atmosphere (scanlines, vignette,
+  // texture, and the non-animated static-noise particle).
+  const particlesAnimated =
+    overlay.particles === 'matrix-rain' ||
+    overlay.particles === 'sheikah-runes' ||
+    overlay.particles === 'moon-sparkle';
+  const showFlicker = overlay.flicker && !reduceMotion;
+  const showParticles =
+    overlay.particles !== 'none' && !(reduceMotion && particlesAnimated);
+
   return (
     <View style={styles.container} pointerEvents="none">
       {overlay.scanlines && <Scanlines color={overlay.scanlineColor} opacity={overlay.scanlineOpacity} />}
       {overlay.vignette && <Vignette color={overlay.vignetteColor} />}
-      {overlay.flicker && <Flicker intensity={overlay.flickerIntensity} />}
+      {showFlicker && <Flicker intensity={overlay.flickerIntensity} />}
       {overlay.texture !== 'none' && <Texture type={overlay.texture} opacity={overlay.textureOpacity} />}
-      {overlay.particles !== 'none' && (
+      {showParticles && (
         <Particles type={overlay.particles} color={overlay.particleColor} opacity={overlay.particleOpacity} />
       )}
     </View>

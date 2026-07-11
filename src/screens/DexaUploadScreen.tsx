@@ -303,7 +303,6 @@ export function DexaUploadScreen({ navigation }: any) {
                 <Image source={{ uri: phase.uri }} style={styles.preview} />
               )}
               <SoundPressable
-                activeOpacity={0.85}
                 onPress={analyze}
                 style={[styles.cta, { backgroundColor: colors.gold }]}
               >
@@ -346,7 +345,6 @@ export function DexaUploadScreen({ navigation }: any) {
               </View>
 
               <SoundPressable
-                activeOpacity={0.85}
                 onPress={save}
                 style={[styles.cta, { backgroundColor: colors.gold }]}
               >
@@ -364,7 +362,6 @@ export function DexaUploadScreen({ navigation }: any) {
                 <Text style={[styles.errorText, { color: colors.textPrimary }]}>{phase.message}</Text>
               </View>
               <SoundPressable
-                activeOpacity={0.85}
                 onPress={() => setPhase({ kind: 'idle' })}
                 style={[styles.cta, { backgroundColor: colors.gold }]}
               >

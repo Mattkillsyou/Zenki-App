@@ -344,7 +344,7 @@ export function WeightTrackerScreen({ navigation }: any) {
 
           {/* Week calendar — matches Macro / Medication tracker for visual
               consistency. Gold dot on days with a weigh-in. */}
-          <FadeInView delay={20}>
+          <FadeInView baseDelay={60} index={0}>
             <WeekCalendar
               weekStart={weekStart}
               selectedDate={selectedDate}
@@ -367,7 +367,7 @@ export function WeightTrackerScreen({ navigation }: any) {
           </FadeInView>
 
           {/* Log form — moved below visualization */}
-          <FadeInView delay={40}>
+          <FadeInView baseDelay={60} index={1}>
             <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.gold + '40' }]}>
               <Text style={[styles.formLabel, { color: colors.textMuted }]}>LOG WEIGH-IN</Text>
               <View style={styles.formRow}>
@@ -401,7 +401,6 @@ export function WeightTrackerScreen({ navigation }: any) {
                 </View>
                 <SoundPressable
                   onPress={handleSave}
-                  activeOpacity={0.85}
                   style={[styles.formSaveBtn, { backgroundColor: colors.gold }]}
                 >
                   <Ionicons name="add" size={18} color="#000" />
@@ -412,7 +411,7 @@ export function WeightTrackerScreen({ navigation }: any) {
           </FadeInView>
 
           {/* Hero — trend weight + 4 deltas */}
-          <FadeInView delay={60}>
+          <FadeInView baseDelay={60} index={2}>
             <View style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.heroLabel, { color: colors.textMuted }]}>TREND WEIGHT</Text>
               <View style={styles.heroNumRow}>
@@ -438,7 +437,7 @@ export function WeightTrackerScreen({ navigation }: any) {
 
           {/* Inline stats — 4 chips */}
           {inlineStats && (
-            <FadeInView delay={80}>
+            <FadeInView baseDelay={60} index={3}>
               <View style={styles.statsRow}>
                 <StatChip
                   label="HIGH"
@@ -466,7 +465,7 @@ export function WeightTrackerScreen({ navigation }: any) {
           )}
 
           {/* Action chips */}
-          <FadeInView delay={100}>
+          <FadeInView baseDelay={60} index={4}>
             <View style={styles.actionRow}>
               <ActionChip
                 icon="calendar-outline"
@@ -504,7 +503,7 @@ export function WeightTrackerScreen({ navigation }: any) {
 
           {/* Recent Logs — last 10 entries */}
           {mine.length > 0 && (
-            <FadeInView delay={120}>
+            <FadeInView baseDelay={60} index={4}>
               <View style={[styles.recentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.recentHeader}>
                   <Text style={[styles.formLabel, { color: colors.textMuted, marginBottom: 0 }]}>RECENT LOGS</Text>
@@ -579,7 +578,7 @@ export function WeightTrackerScreen({ navigation }: any) {
               ? etaDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
               : remaining === 0 ? 'Goal hit' : rate === 0 ? 'No trend yet' : 'Off track';
             return (
-              <FadeInView delay={140}>
+              <FadeInView baseDelay={60} index={4}>
                 <View style={[styles.goalProgressCard, { backgroundColor: colors.surface, borderColor: colors.gold + '40' }]}>
                   <View style={styles.goalProgressHead}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useMotion } from '../context/MotionContext';
-import { typography, spacing } from '../theme';
+import { typography, spacing, ambient } from '../theme';
 import { formatCount } from '../utils/formatCount';
 
 interface StreakBadgeProps {
@@ -22,16 +22,20 @@ export function StreakBadge({ streak, compact }: StreakBadgeProps) {
     // Capture loop handles so we can stop them on unmount / dep change.
     // Without cleanup these run forever on the native driver and pile up
     // every time `streak` changes, contributing to home-screen stalls.
+    // Both loops share the one ambient breath period (each direction is a
+    // half-cycle) and sine easing, so streak/points/XP breathe in sync
+    // instead of running as desynced metronomes.
+    const halfBreath = ambient.period / 2;
     const pulse = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.15, duration: 800, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.15, duration: halfBreath, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: halfBreath, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]),
     );
     const glow = Animated.loop(
       Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0.6, duration: 1200, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 1, duration: halfBreath, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0.6, duration: halfBreath, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]),
     );
     pulse.start();

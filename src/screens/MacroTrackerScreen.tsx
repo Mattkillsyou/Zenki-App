@@ -327,7 +327,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
           </View>
 
           {/* ─── Week strip (matches Medication tracker for visual consistency) ─── */}
-          <FadeInView delay={40}>
+          <FadeInView baseDelay={60} index={0}>
             <WeekCalendar
               weekStart={weekStart}
               selectedDate={selectedDate}
@@ -346,7 +346,6 @@ export function MacroTrackerScreen({ navigation, route }: any) {
           {/* Search + Scan + Photo — primary log-entry actions (under the calendar, larger pillboxes) */}
           <View style={styles.actionRow}>
             <SoundPressable
-              activeOpacity={0.85}
               onPress={() => setSearchOpen(true)}
               style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
@@ -354,7 +353,6 @@ export function MacroTrackerScreen({ navigation, route }: any) {
               <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Search</Text>
             </SoundPressable>
             <SoundPressable
-              activeOpacity={0.85}
               onPress={() => navigation.navigate('BarcodeScanner')}
               style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
@@ -362,7 +360,6 @@ export function MacroTrackerScreen({ navigation, route }: any) {
               <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>Scan</Text>
             </SoundPressable>
             <SoundPressable
-              activeOpacity={0.85}
               onPress={() => navigation.navigate('PhotoFood')}
               style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
@@ -375,7 +372,6 @@ export function MacroTrackerScreen({ navigation, route }: any) {
           {!hasSetup && (
             <FadeInView>
               <SoundPressable
-                activeOpacity={0.85}
                 onPress={() => navigation.navigate('MacroSetup')}
                 style={[styles.setupBanner, { backgroundColor: colors.gold }]}
               >
@@ -417,7 +413,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
           </FadeInView>
 
           {/* Macro bars */}
-          <FadeInView delay={60}>
+          <FadeInView baseDelay={60} index={1}>
             <View style={[styles.macrosCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <MacroBar
                 label="Protein"
@@ -454,7 +450,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
 
           {/* Macro Distribution Donut Chart */}
           {totals.calories > 0 && (
-            <FadeInView delay={70}>
+            <FadeInView baseDelay={60} index={2}>
               <View style={[styles.donutCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Text style={[styles.donutTitle, { color: colors.textMuted }]}>MACRO DISTRIBUTION</Text>
                 <View style={styles.donutRow}>
@@ -563,7 +559,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
 
           {/* Quick-add recent foods row */}
           {recentFoods.length > 0 && (
-            <FadeInView delay={75}>
+            <FadeInView baseDelay={60} index={3}>
               <View style={{ marginTop: spacing.sm }}>
                 <Text style={[styles.sectionLabel, { paddingHorizontal: spacing.lg, color: colors.textMuted }]}>QUICK ADD</Text>
                 <ScrollView
@@ -574,7 +570,6 @@ export function MacroTrackerScreen({ navigation, route }: any) {
                   {recentFoods.slice(0, 10).map((food, i) => (
                     <SoundPressable
                       key={`${food.id}-${i}`}
-                      activeOpacity={0.7}
                       onPress={() => {
                         if (!user) return;
                         addMacroEntry({
@@ -615,7 +610,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
             const currentTdee = effectiveTdee(user.id);
             const isAdapted = !!profile?.adaptedTdee;
             return (
-              <FadeInView delay={80}>
+              <FadeInView baseDelay={60} index={4}>
                 <View style={[styles.tdeeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.tdeeLabel, { color: colors.textMuted }]}>EXPENDITURE (TDEE)</Text>
@@ -639,13 +634,13 @@ export function MacroTrackerScreen({ navigation, route }: any) {
             );
           })()}
 
-          <FadeInView delay={90}>
+          <FadeInView baseDelay={60} index={4}>
             <MedicalCitations topic="nutrition" />
           </FadeInView>
 
 
           {/* Add-entry form */}
-          <FadeInView delay={120}>
+          <FadeInView baseDelay={60} index={4}>
             <View style={[styles.form, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>LOG FOOD</Text>
 
@@ -672,7 +667,6 @@ export function MacroTrackerScreen({ navigation, route }: any) {
                         },
                       ]}
                       onPress={() => setMealType(mt)}
-                      activeOpacity={0.7}
                     >
                       <Text style={{ fontSize: 12 }}>{MEAL_TYPE_ICONS[mt]}</Text>
                       <Text style={[styles.mealTypeLabel, { color: active ? '#000' : colors.textSecondary }]}>
@@ -732,7 +726,6 @@ export function MacroTrackerScreen({ navigation, route }: any) {
 
               <SoundPressable
                 onPress={handleAdd}
-                activeOpacity={0.85}
                 style={[styles.saveBtn, { backgroundColor: colors.gold }]}
               >
                 <Ionicons name="add-circle" size={18} color="#000" />
@@ -742,7 +735,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
           </FadeInView>
 
           {/* Today's entries — grouped by meal, draggable order */}
-          <FadeInView delay={180}>
+          <FadeInView baseDelay={60} index={4}>
             <View style={[styles.historyLabel, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
               <Text style={[styles.sectionLabel, { color: colors.textMuted, marginLeft: 0, marginTop: 0 }]}>TODAY · DRAG TO REORDER</Text>
               <SoundPressable onPress={() => setMealEditMode((v) => !v)} hitSlop={10} style={{ paddingHorizontal: spacing.lg }}>

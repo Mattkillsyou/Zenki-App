@@ -491,7 +491,6 @@ export function SignInScreen({ navigation }: any) {
             {/* Social Login */}
             <SoundPressable
               style={[styles.socialBtn, { backgroundColor: '#FAFAFA', borderWidth: 1, borderColor: colors.border }]}
-              activeOpacity={0.8}
               onPress={handleGoogleSignIn}
               disabled={loading || !GOOGLE_CLIENT_ID}
             >

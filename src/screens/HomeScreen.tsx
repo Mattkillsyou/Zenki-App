@@ -111,7 +111,7 @@ function EmployeeChecklistCard({ navigation, memberId }: { navigation: any; memb
   const allDone = total > 0 && done === total;
 
   return (
-    <FadeInView delay={160} slideUp={16}>
+    <FadeInView baseDelay={60} index={2} slideUp={16}>
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Today's Checklist</Text>
@@ -158,7 +158,6 @@ function EmployeeChecklistCard({ navigation, memberId }: { navigation: any; memb
                 key={t.id}
                 onPress={() => toggleComplete(t.id, memberId)}
                 soundEvent="success"
-                activeOpacity={0.85}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -768,7 +767,7 @@ export function HomeScreen({ navigation }: any) {
                   (clock on left of island, signal/battery on right of island).
                   Left cluster: logo + points. Right cluster: flames + bell.
                   The middle gap holds the iOS Dynamic Island / clock / signal icons. */}
-        <FadeInView delay={0} slideUp={0}>
+        <FadeInView role="header" slideUp={0}>
           <View style={styles.header}>
             <View style={styles.headerCluster}>
               <AnimatedLogo size={28} />
@@ -809,7 +808,7 @@ export function HomeScreen({ navigation }: any) {
         </FadeInView>
 
         {/* ─── Welcome row (name + Edit pill) ─── */}
-        <FadeInView delay={40} slideUp={12}>
+        <FadeInView baseDelay={60} index={0} slideUp={12}>
           <View style={[styles.welcomeSection, { paddingBottom: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
             <Text style={[styles.welcomeLine, { flex: 1 }]} numberOfLines={1}>
               <Text style={[styles.welcomeLabel, { color: colors.textTertiary }]}>Welcome back, </Text>
@@ -836,7 +835,7 @@ export function HomeScreen({ navigation }: any) {
 
         {/* ── Cycle Phase Pill (female members only) ── */}
         {showCyclePhase && cycleInfo && (
-          <FadeInView delay={180} slideUp={10}>
+          <FadeInView baseDelay={60} index={3} slideUp={10}>
             <TouchableOpacity
               style={[styles.cyclePill, { backgroundColor: PHASE_COLORS[cycleInfo.currentPhase] + '18', borderColor: PHASE_COLORS[cycleInfo.currentPhase] + '40' }]}
               onPress={() => navigation.navigate('CycleTracker')}
@@ -887,7 +886,7 @@ export function HomeScreen({ navigation }: any) {
         {(() => {
               const sectionsById: Record<string, React.ReactElement | null> = {
                 vouchers: (freeDrinkCredits > 0 || freeShirtCredits > 0) ? (
-                  <FadeInView delay={90} slideUp={14}>
+                  <FadeInView baseDelay={60} index={0} slideUp={14}>
                     <Text style={[styles.sectionTitle, { color: colors.textMuted, paddingHorizontal: spacing.lg, marginTop: spacing.md, marginBottom: spacing.sm }]}>VOUCHERS</Text>
                     <View style={styles.voucherRow}>
                       {freeDrinkCredits > 0 && (
@@ -934,7 +933,7 @@ export function HomeScreen({ navigation }: any) {
                   </FadeInView>
                 ) : null,
                 timeclock: isEmployee ? (
-                  <FadeInView delay={120} slideUp={16}>
+                  <FadeInView baseDelay={60} index={1} slideUp={16}>
                     <View style={styles.section}><TimeClock /></View>
                   </FadeInView>
                 ) : null,
@@ -942,7 +941,7 @@ export function HomeScreen({ navigation }: any) {
                   <EmployeeChecklistCard navigation={navigation} memberId={user?.id ?? ''} />
                 ) : null,
                 announcements: visibleAnnouncements.length > 0 ? (
-                  <FadeInView delay={80} slideUp={12}>
+                  <FadeInView baseDelay={60} index={0} slideUp={12}>
                     <View style={[styles.announcementsWrap, { marginTop: 4 }]}>
                       {visibleAnnouncements.slice(0, 3).map((a) => (
                         <View key={a.id} style={[styles.announcementCard, { backgroundColor: colors.goldMuted }]}>
@@ -969,7 +968,7 @@ export function HomeScreen({ navigation }: any) {
                   </FadeInView>
                 ) : null,
                 xpBar: (
-                  <FadeInView delay={100} slideUp={16}>
+                  <FadeInView baseDelay={60} index={1} slideUp={16}>
                     <View style={{ paddingHorizontal: 24, marginTop: 4 }}>
                       <View style={[styles.compactXpRow, { backgroundColor: colors.surface, marginBottom: 0 }]}>
                         <View style={[styles.compactLevelCircle, { backgroundColor: colors.gold }]}>
@@ -996,7 +995,7 @@ export function HomeScreen({ navigation }: any) {
                   </FadeInView>
                 ),
                 quickFoodActions: (
-                  <FadeInView delay={110} slideUp={16}>
+                  <FadeInView baseDelay={60} index={1} slideUp={16}>
                     <View
                       ref={foodActionsRef}
                       onLayout={measureCoachTarget('foodActions', foodActionsRef)}
@@ -1035,7 +1034,7 @@ export function HomeScreen({ navigation }: any) {
                   </FadeInView>
                 ),
                 achievements: (
-                  <FadeInView delay={120} slideUp={16}>
+                  <FadeInView baseDelay={60} index={1} slideUp={16}>
                     <View style={{ paddingHorizontal: 24, marginTop: 6 }}>
                       {(() => {
                         const unlocked = gamState.achievements.filter((a: any) => a.unlocked);
@@ -1083,7 +1082,7 @@ export function HomeScreen({ navigation }: any) {
                   </FadeInView>
                 ),
                 quote: (
-                  <FadeInView delay={140} slideUp={16}>
+                  <FadeInView baseDelay={60} index={2} slideUp={16}>
                     <View style={{ paddingHorizontal: 24, marginTop: 6 }}>
                       <View style={[styles.quoteCard, { backgroundColor: colors.surface }]}>
                         <Text style={[styles.quoteText, { color: colors.textPrimary }]}>{dailyQuote.text}</Text>
@@ -1093,7 +1092,7 @@ export function HomeScreen({ navigation }: any) {
                   </FadeInView>
                 ),
                 dashboard: (
-                  <FadeInView delay={200} slideUp={16}>
+                  <FadeInView baseDelay={60} index={3} slideUp={16}>
                     <DashboardPager
                       todayStats={todayStats}
                       weekStats={weekStats}
@@ -1104,7 +1103,7 @@ export function HomeScreen({ navigation }: any) {
                   </FadeInView>
                 ),
                 quickStats: quickStats.length > 0 ? (
-                  <FadeInView delay={300} slideUp={16}>
+                  <FadeInView baseDelay={60} index={4} slideUp={16}>
                     <View style={{ marginTop: 10 }}>
                       <ScrollView
                         horizontal
@@ -1132,11 +1131,10 @@ export function HomeScreen({ navigation }: any) {
                   </FadeInView>
                 ) : null,
                 macroBars: (
-                  <FadeInView delay={320} slideUp={16}>
+                  <FadeInView baseDelay={60} index={4} slideUp={16}>
                     <View style={[styles.section, { marginTop: 14 }]}>
                       <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 10 }]}>Today's Macros</Text>
                       <SoundPressable
-                        activeOpacity={0.85}
                         onPress={() => navAccount('MacroTracker')}
                         style={[styles.macroBarCard, { backgroundColor: colors.surface, borderColor: colors.borderSubtle }]}
                       >
@@ -1166,7 +1164,7 @@ export function HomeScreen({ navigation }: any) {
                   </FadeInView>
                 ),
                 training: (
-                  <FadeInView delay={340} slideUp={16}>
+                  <FadeInView baseDelay={60} index={4} slideUp={16}>
                     <View
                       ref={trainingRef}
                       onLayout={measureCoachTarget('training', trainingRef)}
@@ -1219,7 +1217,7 @@ export function HomeScreen({ navigation }: any) {
                   </FadeInView>
                 ),
                 schedule: todaysFullSchedule.length > 0 ? (
-                  <FadeInView delay={400} slideUp={16}>
+                  <FadeInView baseDelay={60} index={4} slideUp={16}>
                     <View style={styles.section}>
                       <View style={styles.sectionHeader}>
                         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Today's Schedule</Text>

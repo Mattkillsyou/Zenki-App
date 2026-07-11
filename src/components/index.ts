@@ -5,6 +5,7 @@ export { SectionHeader } from './SectionHeader';
 export { AnimatedLogo } from './AnimatedLogo';
 export { AnimatedTabIcon } from './AnimatedTabIcon';
 export { FadeInView } from './FadeInView';
+export { Staggered } from './Staggered';
 export { PressableScale } from './PressableScale';
 export { TimeClock } from './TimeClock';
 export { StreakBadge } from './StreakBadge';

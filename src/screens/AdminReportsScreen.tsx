@@ -242,7 +242,7 @@ export function AdminReportsScreen({ navigation }: any) {
             </FadeInView>
           ) : (
             reports.map((r, idx) => (
-              <FadeInView key={r.id} delay={idx * 40}>
+              <FadeInView key={r.id} index={idx}>
                 <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <View style={styles.cardHeader}>
                     <View style={[styles.typeBadge, { backgroundColor: colors.gold + '20' }]}>

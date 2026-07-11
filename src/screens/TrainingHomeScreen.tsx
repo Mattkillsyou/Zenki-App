@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { spacing, borderRadius } from '../theme';
-import { ScreenContainer } from '../components';
+import { ScreenContainer, FadeInView } from '../components';
 import {
   TRAINING_MODULES,
   TrainingAccentToken,
@@ -58,14 +58,17 @@ export function TrainingHomeScreen({ navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text
-          style={[styles.intro, { color: colors.textSecondary }]}
-          maxFontSizeMultiplier={1.3}
-        >
-          Short guides for every module. Tap any card to see what it is and how to use it.
-        </Text>
+        {/* Two-tier entrance: intro (chrome) then the module grid (content). */}
+        <FadeInView role="header">
+          <Text
+            style={[styles.intro, { color: colors.textSecondary }]}
+            maxFontSizeMultiplier={1.3}
+          >
+            Short guides for every module. Tap any card to see what it is and how to use it.
+          </Text>
+        </FadeInView>
 
-        <View style={styles.grid}>
+        <FadeInView baseDelay={60} index={0} style={styles.grid}>
           {TRAINING_MODULES.map((mod) => {
             const accent = resolveAccent(mod.accentToken);
             return (
@@ -79,7 +82,6 @@ export function TrainingHomeScreen({ navigation }: any) {
                     width: `${100 / COLS - 2}%`,
                   },
                 ]}
-                activeOpacity={0.85}
                 onPress={() => navigation.navigate('TrainingModule', { moduleId: mod.id })}
                 accessibilityRole="button"
                 accessibilityLabel={`${mod.title} guide`}
@@ -104,7 +106,7 @@ export function TrainingHomeScreen({ navigation }: any) {
               </SoundPressable>
             );
           })}
-        </View>
+        </FadeInView>
       </ScrollView>
       </ScreenContainer>
     </SafeAreaView>

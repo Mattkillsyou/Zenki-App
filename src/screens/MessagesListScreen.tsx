@@ -58,7 +58,6 @@ export function MessagesListScreen({ navigation }: any) {
             otherUserAvatar: item.otherUserAvatar,
           })
         }
-        activeOpacity={0.8}
       >
         <View style={[styles.avatar, { backgroundColor: colors.goldMuted }]}>
           {item.otherUserAvatar ? (

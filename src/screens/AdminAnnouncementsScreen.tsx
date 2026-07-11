@@ -96,7 +96,6 @@ export function AdminAnnouncementsScreen({ navigation }: any) {
             <SoundPressable
               style={styles.pinRow}
               onPress={() => setDraftPinned(!draftPinned)}
-              activeOpacity={0.7}
             >
               <Ionicons name={draftPinned ? 'pin' : 'pin-outline'} size={18} color={draftPinned ? colors.gold : colors.textMuted} />
               <Text style={[styles.pinLabel, { color: colors.textSecondary }]}>Pin to top</Text>

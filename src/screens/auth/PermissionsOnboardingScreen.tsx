@@ -279,7 +279,6 @@ export function PermissionsOnboardingScreen({ navigation }: any) {
       {/* Buttons */}
       <View style={styles.buttons}>
         <SoundPressable
-          activeOpacity={0.85}
           onPress={handleAllow}
           disabled={busy}
           style={[

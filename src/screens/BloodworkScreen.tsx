@@ -88,7 +88,6 @@ export function BloodworkScreen({ navigation }: any) {
                 Upload a lab report (PDF or photo) and the AI will categorize each biomarker with reference ranges and status.
               </Text>
               <SoundPressable
-                activeOpacity={0.85}
                 onPress={() => navigation.navigate('BloodworkUpload')}
                 style={[styles.emptyCta, { backgroundColor: colors.gold }]}
               >
@@ -128,7 +127,7 @@ export function BloodworkScreen({ navigation }: any) {
 
             {/* Flagged preview */}
             {outOfRange.length > 0 && (
-              <FadeInView delay={80}>
+              <FadeInView baseDelay={60} index={0}>
                 <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>OUT OF RANGE</Text>
                 {outOfRange.map((b, i) => (
                   <View key={i} style={[styles.flagRow, { backgroundColor: colors.surface, borderColor: '#E35B5B33' }]}>
@@ -194,7 +193,6 @@ export function BloodworkScreen({ navigation }: any) {
               return (
                 <SoundPressable
                   key={r.id}
-                  activeOpacity={0.85}
                   onPress={() => navigation.navigate('BloodworkReportDetail', { id: r.id })}
                   style={[styles.historyRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 >

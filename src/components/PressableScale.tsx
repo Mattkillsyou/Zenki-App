@@ -1,61 +1,31 @@
-import React, { useRef, useCallback } from 'react';
-import { Animated, Pressable, ViewStyle } from 'react-native';
-import { duration, easing, scale as scaleTokens } from '../theme';
-import { useMotion } from '../context/MotionContext';
+import React from 'react';
+import { ViewStyle } from 'react-native';
+import { SoundPressable } from './SoundPressable';
 
 interface PressableScaleProps {
   children: React.ReactNode;
   onPress?: () => void;
   style?: ViewStyle;
-  /** Scale factor when pressed. Default: 0.96 */
+  /** @deprecated Scale is now the fixed press primitive (scale.pressed). Accepted for back-compat, ignored. */
   scaleTo?: number;
   disabled?: boolean;
 }
 
 /**
- * A Pressable wrapper that scales down subtly on press.
- * Respects Reduce Motion — skips scale animation if enabled.
+ * Thin alias over SoundPressable — kept so its existing call sites don't break.
+ * The scale-on-press behaviour now lives in SoundPressable (the single press
+ * primitive), so this just forwards through and inherits the shared spring +
+ * Reduce-Motion contract. New code should use SoundPressable directly.
  */
 export function PressableScale({
   children,
   onPress,
   style,
-  scaleTo = scaleTokens.pressed,
   disabled = false,
 }: PressableScaleProps) {
-  const { reduceMotion } = useMotion();
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = useCallback(() => {
-    if (reduceMotion) return;
-    Animated.timing(scaleAnim, {
-      toValue: scaleTo,
-      duration: duration.instant,
-      easing: easing.decelerate,
-      useNativeDriver: true,
-    }).start();
-  }, [scaleTo, reduceMotion]);
-
-  const handlePressOut = useCallback(() => {
-    if (reduceMotion) return;
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      friction: 5,
-      tension: 200,
-      useNativeDriver: true,
-    }).start();
-  }, [reduceMotion]);
-
   return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      disabled={disabled}
-    >
-      <Animated.View style={[{ transform: [{ scale: scaleAnim }] }, style]}>
-        {children}
-      </Animated.View>
-    </Pressable>
+    <SoundPressable onPress={onPress} disabled={disabled} style={style}>
+      {children}
+    </SoundPressable>
   );
 }

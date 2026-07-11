@@ -2,7 +2,7 @@ export { colors, darkColors, lightColors, palette, NO_OVERLAY } from './colors';
 export type { ThemeColors, ThemeOverlayConfig, ThemeDefinition } from './colors';
 export { typography } from './typography';
 export { spacing, borderRadius, shadows } from './spacing';
-export { easing, duration, scale, opacity } from './motion';
+export { easing, duration, scale, opacity, spring, stagger, ambient } from './motion';
 export {
   BREAKPOINTS,
   MAX_CONTENT_WIDTH,

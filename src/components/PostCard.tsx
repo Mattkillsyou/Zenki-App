@@ -165,7 +165,7 @@ export function PostCard({ post, onLike, onUserPress, onCommentPress }: PostCard
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <SoundPressable style={styles.headerLeft} onPress={() => onUserPress(post.userId)} activeOpacity={0.7}>
+        <SoundPressable style={styles.headerLeft} onPress={() => onUserPress(post.userId)}>
           <View style={[styles.avatarRing, { borderColor: colors.gold }]}>
             <View style={[styles.avatar, { backgroundColor: colors.goldMuted }]}>
               {post.avatar && !avatarErrored ? (
@@ -325,7 +325,6 @@ function PostVideoMedia({
         <SoundPressable
           style={styles.videoPlayOverlay}
           onPress={startPlayback}
-          activeOpacity={0.85}
         >
           <View style={styles.videoPlayCircle}>
             <Ionicons name="play" size={32} color="#fff" />

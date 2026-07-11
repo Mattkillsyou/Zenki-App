@@ -207,7 +207,6 @@ export function ProductDetailScreen({ navigation, route }: any) {
                 {gallery.length > 1 && activeImageIdx > 0 && (
                   <SoundPressable
                     style={[styles.arrowBtn, styles.arrowLeft]}
-                    activeOpacity={0.8}
                     onPress={() => {
                       const next = activeImageIdx - 1;
                       setActiveImageIdx(next);
@@ -222,7 +221,6 @@ export function ProductDetailScreen({ navigation, route }: any) {
                 {gallery.length > 1 && activeImageIdx < gallery.length - 1 && (
                   <SoundPressable
                     style={[styles.arrowBtn, styles.arrowRight]}
-                    activeOpacity={0.8}
                     onPress={() => {
                       const next = activeImageIdx + 1;
                       setActiveImageIdx(next);

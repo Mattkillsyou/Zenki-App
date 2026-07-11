@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, View, StyleSheet, ViewStyle, DimensionValue } from 'react-native';
+import { Animated, View, StyleSheet, ViewStyle, DimensionValue, Easing } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
-import { borderRadius as br, spacing } from '../theme';
+import { useMotion } from '../context/MotionContext';
+import { borderRadius as br, spacing, ambient } from '../theme';
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * Skeleton — pulsing placeholder rectangle while async content loads.
@@ -28,7 +29,8 @@ interface SkeletonProps {
   minOpacity?: number;
   /** Maximum opacity in the pulse. Default 0.65 */
   maxOpacity?: number;
-  /** Pulse animation duration (ms). Default 1000 */
+  /** Pulse animation duration (ms) for one direction. Default = half the
+   *  shared ambient breath period, so skeletons pulse on the app's cadence. */
   pulseDuration?: number;
 }
 
@@ -39,29 +41,39 @@ export function Skeleton({
   style,
   minOpacity = 0.25,
   maxOpacity = 0.65,
-  pulseDuration = 1000,
+  pulseDuration = ambient.period / 2,
 }: SkeletonProps) {
   const { colors } = useTheme();
+  const { reduceMotion } = useMotion();
   const opacity = useRef(new Animated.Value(minOpacity)).current;
 
   useEffect(() => {
+    // Reduce Motion: skip the pulse and hold a steady mid-opacity placeholder.
+    if (reduceMotion) {
+      opacity.setValue((minOpacity + maxOpacity) / 2);
+      return;
+    }
+    // Sine-eased pulse on the shared ambient cadence — the same breath rhythm
+    // the streak/points/XP loops use, so loading states feel of a piece.
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, {
           toValue: maxOpacity,
           duration: pulseDuration,
+          easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(opacity, {
           toValue: minOpacity,
           duration: pulseDuration,
+          easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
       ]),
     );
     loop.start();
     return () => loop.stop();
-  }, [minOpacity, maxOpacity, pulseDuration]);
+  }, [minOpacity, maxOpacity, pulseDuration, reduceMotion]);
 
   return (
     <Animated.View

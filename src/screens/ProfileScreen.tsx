@@ -249,7 +249,7 @@ export function ProfileScreen({ navigation }: any) {
             <Text style={[styles.editProfileText, { color: colors.textSecondary }]}>Edit</Text>
           </SoundPressable>
 
-          <SoundPressable onPress={() => setShowPhotoMenu(!showPhotoMenu)} activeOpacity={0.7}>
+          <SoundPressable onPress={() => setShowPhotoMenu(!showPhotoMenu)}>
             <View style={styles.avatarWrapper}>
               <View
                 style={[
@@ -535,7 +535,6 @@ function MenuTile({ icon, label, sub, onPress, accent }: MenuTileProps) {
         },
       ]}
       onPress={onPress}
-      activeOpacity={0.75}
     >
       <View style={[styles.menuTileIcon, { backgroundColor: accent ? colors.gold : colors.gold + '22' }]}>
         <Ionicons name={icon} size={18} color={accent ? '#000' : colors.gold} />

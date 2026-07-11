@@ -623,7 +623,6 @@ export function OnboardingScreen({ navigation, route }: any) {
                     },
                   ]}
                   onPress={() => setData({ ...data, biologicalSex: opt.value })}
-                  activeOpacity={0.7}
                 >
                   <Ionicons
                     name={opt.icon}
@@ -877,7 +876,6 @@ export function OnboardingScreen({ navigation, route }: any) {
           <SoundPressable
             style={styles.emailCopyRow}
             onPress={() => setData({ ...data, emailWaiverCopy: !data.emailWaiverCopy })}
-            activeOpacity={0.7}
           >
             <Ionicons
               name={data.emailWaiverCopy ? 'checkbox' : 'square-outline'}
@@ -893,7 +891,6 @@ export function OnboardingScreen({ navigation, route }: any) {
           <SoundPressable
             style={styles.emailCopyRow}
             onPress={() => setAcceptedGuidelines(!acceptedGuidelines)}
-            activeOpacity={0.7}
           >
             <Ionicons
               name={acceptedGuidelines ? 'checkbox' : 'square-outline'}
@@ -1041,7 +1038,6 @@ export function OnboardingScreen({ navigation, route }: any) {
           <SoundPressable
             style={styles.subtleLoginRow}
             onPress={() => navigation.replace('SignIn')}
-            activeOpacity={0.6}
           >
             <Text style={[styles.subtleLoginText, { color: colors.textMuted }]}>
               Have an account? <Text style={{ color: colors.textSecondary, textDecorationLine: 'underline' }}>Sign in</Text>
@@ -1072,7 +1068,6 @@ function OptionCard({
   return (
     <SoundPressable
       onPress={onPress}
-      activeOpacity={0.7}
       style={[optionCardStyles.card, {
         backgroundColor: active ? colors.goldMuted : colors.surface,
         borderColor: active ? colors.gold : colors.border,

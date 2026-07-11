@@ -127,7 +127,7 @@ export function AdminBroadcastScreen({ navigation }: any) {
           </View>
 
           {/* Compose */}
-          <FadeInView delay={0} slideUp={10}>
+          <FadeInView role="header" slideUp={10}>
             <View style={styles.section}>
               <Text style={[styles.sectionLabel, { color: colors.gold }]}>NEW BROADCAST</Text>
               <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -207,7 +207,7 @@ export function AdminBroadcastScreen({ navigation }: any) {
               to Firestore, so another admin (or a reinstall) won't see it. The
               copy below is deliberately honest about that to avoid implying a
               dojo-wide record. */}
-          <FadeInView delay={60} slideUp={10}>
+          <FadeInView baseDelay={60} index={0} slideUp={10}>
             <View style={styles.section}>
               <Text style={[styles.sectionLabel, { color: colors.gold }]}>SENT FROM THIS DEVICE</Text>
               <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>

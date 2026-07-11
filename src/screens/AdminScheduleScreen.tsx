@@ -212,7 +212,6 @@ export function AdminScheduleScreen({ navigation }: any) {
               key={cls.id}
               style={[styles.classCard, { backgroundColor: colors.surface }]}
               onPress={() => openEditModal(cls)}
-              activeOpacity={0.7}
             >
               <View style={[styles.typeStripe, { backgroundColor: TYPE_COLORS[cls.type] }]} />
               <View style={styles.classInfo}>

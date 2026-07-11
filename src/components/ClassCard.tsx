@@ -109,7 +109,7 @@ export function ClassCard({ name, instructor, time, duration, spotsLeft, type, o
   };
 
   return (
-    <SoundPressable activeOpacity={0.8} onPress={onBook} style={[styles.container, { backgroundColor: colors.surface, marginBottom: 10 }]}>
+    <SoundPressable onPress={onBook} style={[styles.container, { backgroundColor: colors.surface, marginBottom: 10 }]}>
       <View style={[styles.iconWrap, { backgroundColor: accent + '20' }]}>
         <Ionicons name={typeIcons[type] || 'fitness-outline'} size={22} color={accent} />
       </View>
@@ -141,14 +141,13 @@ export function ClassCard({ name, instructor, time, duration, spotsLeft, type, o
       <SoundPressable
         onPress={handleAddToCalendar}
         style={[styles.calBtn, { backgroundColor: colors.backgroundElevated, opacity: addingToCal ? 0.5 : 1 }]}
-        activeOpacity={0.7}
         disabled={addingToCal}
         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
       >
         <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
       </SoundPressable>
 
-      <SoundPressable onPress={onBook} style={[styles.bookBtn, { backgroundColor: booked ? colors.backgroundElevated : colors.red }]} activeOpacity={0.8}>
+      <SoundPressable onPress={onBook} style={[styles.bookBtn, { backgroundColor: booked ? colors.backgroundElevated : colors.red }]}>
         <Ionicons name={booked ? 'checkmark' : 'arrow-forward'} size={16} color={booked ? statusColor : '#FFF'} />
       </SoundPressable>
     </SoundPressable>

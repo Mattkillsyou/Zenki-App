@@ -77,7 +77,6 @@ export function UserSearchScreen({ navigation, route }: any) {
       <SoundPressable
         style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
         onPress={() => handlePress(item)}
-        activeOpacity={0.8}
       >
         <View style={[styles.avatar, { backgroundColor: colors.goldMuted }]}>
           {item.avatar ? (

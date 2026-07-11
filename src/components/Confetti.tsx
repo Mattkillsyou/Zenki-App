@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, Easing, Dimensions } from 'react-native';
+import { useMotion } from '../context/MotionContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -39,6 +40,7 @@ interface Props {
 }
 
 export function Confetti({ active }: Props) {
+  const { reduceMotion } = useMotion();
   // Regenerate pieces each time the burst fires so colors/positions vary
   const piecesRef = useRef<Piece[]>(
     Array.from({ length: PARTICLE_COUNT }, randomPiece),
@@ -48,7 +50,9 @@ export function Confetti({ active }: Props) {
   );
 
   useEffect(() => {
-    if (!active) return;
+    // Reduce Motion: suppress the burst entirely — confetti is purely
+    // decorative, so there's nothing to fall back to.
+    if (!active || reduceMotion) return;
     // Reshuffle pieces on each fire
     piecesRef.current = Array.from({ length: PARTICLE_COUNT }, randomPiece);
     animsRef.current.forEach((a, i) => {
@@ -61,9 +65,9 @@ export function Confetti({ active }: Props) {
         useNativeDriver: true,
       }).start();
     });
-  }, [active]);
+  }, [active, reduceMotion]);
 
-  if (!active) return null;
+  if (!active || reduceMotion) return null;
 
   return (
     <View pointerEvents="none" style={styles.overlay}>

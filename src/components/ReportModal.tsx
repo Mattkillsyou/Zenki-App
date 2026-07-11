@@ -111,7 +111,6 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
                     },
                   ]}
                   onPress={() => setReason(r)}
-                  activeOpacity={0.7}
                 >
                   <Text style={[styles.reasonText, { color: colors.textPrimary }]}>{REPORT_REASON_LABELS[r]}</Text>
                   {selected && <Ionicons name="checkmark-circle" size={18} color={colors.gold || '#D4A017'} />}
@@ -142,7 +141,6 @@ export function ReportModal({ visible, onClose, targetType, targetId, targetUser
             ]}
             onPress={handleSubmit}
             disabled={!reason || submitting}
-            activeOpacity={0.85}
           >
             {submitting
               ? <ActivityIndicator color="#000" />

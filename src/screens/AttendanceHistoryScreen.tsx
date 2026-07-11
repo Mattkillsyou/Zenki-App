@@ -74,7 +74,7 @@ export function AttendanceHistoryScreen({ navigation }: any) {
         </View>
 
         {/* Stats Row */}
-        <FadeInView delay={0} slideUp={10}>
+        <FadeInView role="header" slideUp={10}>
           <View style={styles.statsRow}>
             {[
               { label: 'Today', value: todayVisitors.length, color: colors.success },
@@ -91,7 +91,7 @@ export function AttendanceHistoryScreen({ navigation }: any) {
 
         {/* Member Frequency */}
         {memberCounts.length > 0 && (
-          <FadeInView delay={60} slideUp={10}>
+          <FadeInView baseDelay={60} index={0} slideUp={10}>
             <View style={styles.section}>
               <Text style={[styles.sectionLabel, { color: colors.gold }]}>MOST FREQUENT</Text>
               {memberCounts.slice(0, 5).map((m, i) => (
@@ -108,7 +108,7 @@ export function AttendanceHistoryScreen({ navigation }: any) {
         )}
 
         {/* Visit History */}
-        <FadeInView delay={120} slideUp={10}>
+        <FadeInView baseDelay={60} index={1} slideUp={10}>
           <View style={styles.section}>
             <Text style={[styles.sectionLabel, { color: colors.gold }]}>VISIT LOG</Text>
             {groupedVisits.length === 0 ? (

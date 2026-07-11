@@ -179,7 +179,6 @@ export function MessagesChatScreen({ navigation, route }: any) {
           <SoundPressable
             style={styles.headerUser}
             onPress={() => otherUserId && navigation.navigate('UserProfile', { userId: otherUserId })}
-            activeOpacity={0.7}
           >
             <View style={[styles.headerAvatar, { backgroundColor: colors.goldMuted }]}>
               {otherUserAvatar ? (

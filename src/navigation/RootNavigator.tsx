@@ -7,7 +7,8 @@ import {
 } from '@react-navigation/stack';
 import { TabNavigator } from './TabNavigator';
 import { useAuth } from '../context/AuthContext';
-import { easing, duration, opacity } from '../theme';
+import { useMotion } from '../context/MotionContext';
+import { easing, duration, opacity, spring } from '../theme';
 import { palette } from '../theme/colors';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
@@ -110,11 +111,13 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Used for auth → main and main → auth
 // Clean opacity swap, no directional movement
 // ─────────────────────────────────────────────────
+// Linear-in-opacity [0,1]→[0,1] — no dark hold through the first half (the
+// old [0,.5,1]→[0,.3,1] map read as perceived dead time).
 const crossfadeInterpolator = ({ current }: StackCardInterpolationProps) => ({
   cardStyle: {
     opacity: current.progress.interpolate({
-      inputRange: [0, 0.5, 1],
-      outputRange: [0, 0.3, 1],
+      inputRange: [0, 1],
+      outputRange: [0, 1],
     }),
   },
 });
@@ -124,11 +127,34 @@ const crossfadeTransition = {
   transitionSpec: {
     open: {
       animation: 'timing' as const,
-      config: { duration: duration.slow, easing: easing.emphasized },
+      config: { duration: duration.standard, easing: easing.emphasized },
     },
     close: {
       animation: 'timing' as const,
       config: { duration: duration.standard, easing: easing.accelerate },
+    },
+  },
+};
+
+// ─────────────────────────────────────────────────
+// TRANSITION: Fade fallback (Reduce Motion)
+// A short opacity-only swap used in place of push/modal/crossfade when the
+// user has Reduce Motion enabled — no slide, no scale, no spring.
+// ─────────────────────────────────────────────────
+const fadeInterpolator = ({ current }: StackCardInterpolationProps) => ({
+  cardStyle: { opacity: current.progress },
+});
+
+const fadeTransition = {
+  cardStyleInterpolator: fadeInterpolator,
+  transitionSpec: {
+    open: {
+      animation: 'timing' as const,
+      config: { duration: duration.fast, easing: easing.decelerate },
+    },
+    close: {
+      animation: 'timing' as const,
+      config: { duration: duration.fast, easing: easing.accelerate },
     },
   },
 };
@@ -142,16 +168,19 @@ const crossfadeTransition = {
 // Use React Navigation's built-in iOS horizontal interpolator. It's
 // battle-tested, GPU-accelerated where possible, and handles edge cases
 // like the back-gesture cancel correctly.
+// Open drives into a spring (spring.settle character) so an interactive
+// back-gesture release hands off into the same physics instead of a floaty
+// timing curve. Close stays timing/accelerate — exits read best as fades.
 const pushTransition = {
   cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
   transitionSpec: {
     open: {
-      animation: 'timing' as const,
-      config: { duration: 300, easing: easing.standard },
+      animation: 'spring' as const,
+      config: { ...spring.settle },
     },
     close: {
       animation: 'timing' as const,
-      config: { duration: 300, easing: easing.standard },
+      config: { duration: duration.standard, easing: easing.accelerate },
     },
   },
   gestureDirection: 'horizontal' as const,
@@ -216,6 +245,13 @@ const modalTransition = {
 // ─────────────────────────────────────────────────
 export function RootNavigator() {
   const { user, isGuest, isLoading } = useAuth();
+  const { reduceMotion } = useMotion();
+
+  // Reduce Motion → every transition collapses to a short opacity fade (no
+  // slide, scale, or spring). Otherwise use the designed push/modal/crossfade.
+  const push = reduceMotion ? fadeTransition : pushTransition;
+  const modal = reduceMotion ? fadeTransition : modalTransition;
+  const crossfade = reduceMotion ? fadeTransition : crossfadeTransition;
 
   if (isLoading) {
     return (
@@ -239,78 +275,78 @@ export function RootNavigator() {
       <Stack.Screen
         name="SignIn"
         component={SignInScreen}
-        options={{ ...crossfadeTransition, gestureEnabled: false }}
+        options={{ ...crossfade, gestureEnabled: false }}
       />
-      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={pushTransition} />
-      <Stack.Screen name="Contact" component={ContactScreen} options={pushTransition} />
-      <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ ...crossfadeTransition, gestureEnabled: false }} />
-      <Stack.Screen name="PermissionsOnboarding" component={PermissionsOnboardingScreen} options={{ ...crossfadeTransition, gestureEnabled: false }} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={push} />
+      <Stack.Screen name="Contact" component={ContactScreen} options={push} />
+      <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ ...crossfade, gestureEnabled: false }} />
+      <Stack.Screen name="PermissionsOnboarding" component={PermissionsOnboardingScreen} options={{ ...crossfade, gestureEnabled: false }} />
 
       {/* Main tabs — crossfade from auth */}
       <Stack.Screen
         name="Main"
         component={TabNavigator}
-        options={{ ...crossfadeTransition, gestureEnabled: false }}
+        options={{ ...crossfade, gestureEnabled: false }}
       />
 
       {/* Modals — slide up */}
-      <Stack.Screen name="Settings" component={withErrorBoundary(SettingsScreen, 'Settings')} options={modalTransition} />
-      <Stack.Screen name="BlockedUsers" component={withErrorBoundary(BlockedUsersScreen, 'Blocked Users')} options={pushTransition} />
-      <Stack.Screen name="FollowRequests" component={withErrorBoundary(FollowRequestsScreen, 'Follow Requests')} options={pushTransition} />
-      <Stack.Screen name="BluetoothDevices" component={withErrorBoundary(BluetoothDevicesScreen, 'Bluetooth Devices')} options={pushTransition} />
-      <Stack.Screen name="Help" component={withErrorBoundary(HelpScreen, 'Help')} options={pushTransition} />
-      <Stack.Screen name="TrainingHome" component={withErrorBoundary(TrainingHomeScreen, 'Training')} options={pushTransition} />
-      <Stack.Screen name="TrainingModule" component={withErrorBoundary(TrainingModuleScreen, 'Training Module')} options={pushTransition} />
-      <Stack.Screen name="Admin" component={withErrorBoundary(AdminScreen, 'Admin')} options={modalTransition} />
+      <Stack.Screen name="Settings" component={withErrorBoundary(SettingsScreen, 'Settings')} options={modal} />
+      <Stack.Screen name="BlockedUsers" component={withErrorBoundary(BlockedUsersScreen, 'Blocked Users')} options={push} />
+      <Stack.Screen name="FollowRequests" component={withErrorBoundary(FollowRequestsScreen, 'Follow Requests')} options={push} />
+      <Stack.Screen name="BluetoothDevices" component={withErrorBoundary(BluetoothDevicesScreen, 'Bluetooth Devices')} options={push} />
+      <Stack.Screen name="Help" component={withErrorBoundary(HelpScreen, 'Help')} options={push} />
+      <Stack.Screen name="TrainingHome" component={withErrorBoundary(TrainingHomeScreen, 'Training')} options={push} />
+      <Stack.Screen name="TrainingModule" component={withErrorBoundary(TrainingModuleScreen, 'Training Module')} options={push} />
+      <Stack.Screen name="Admin" component={withErrorBoundary(AdminScreen, 'Admin')} options={modal} />
 
       {/* Admin sub-screens — push */}
-      <Stack.Screen name="AdminMembers" component={withErrorBoundary(AdminMembersScreen, 'Admin Members')} options={pushTransition} />
-      <Stack.Screen name="AdminProducts" component={withErrorBoundary(AdminProductsScreen, 'Admin Products')} options={pushTransition} />
-      <Stack.Screen name="AdminSchedule" component={withErrorBoundary(AdminScheduleScreen, 'Admin Schedule')} options={pushTransition} />
-      <Stack.Screen name="AttendanceHistory" component={withErrorBoundary(AttendanceHistoryScreen, 'Attendance')} options={pushTransition} />
-      <Stack.Screen name="AdminBroadcast" component={withErrorBoundary(AdminBroadcastScreen, 'Broadcast')} options={pushTransition} />
-      <Stack.Screen name="AdminAnnouncements" component={withErrorBoundary(AdminAnnouncementsScreen, 'Announcements')} options={pushTransition} />
-      <Stack.Screen name="AdminAppointments" component={withErrorBoundary(AdminAppointmentsScreen, 'Appointments')} options={pushTransition} />
-      <Stack.Screen name="Workout" component={withErrorBoundary(WorkoutScreen, 'Workout')} options={pushTransition} />
-      <Stack.Screen name="Timer" component={withErrorBoundary(TimerScreen, 'Timer')} options={pushTransition} />
-      <Stack.Screen name="PRDetail" component={withErrorBoundary(PRDetailScreen, 'PR Detail')} options={pushTransition} />
-      <Stack.Screen name="EmployeeChecklist" component={withErrorBoundary(EmployeeChecklistScreen, 'Checklist')} options={pushTransition} />
-      <Stack.Screen name="AdminEmployeeTasks" component={withErrorBoundary(AdminEmployeeTasksScreen, 'Employee Tasks')} options={pushTransition} />
-      <Stack.Screen name="AdminReports" component={withErrorBoundary(AdminReportsScreen, 'Reports')} options={pushTransition} />
-      <Stack.Screen name="AdminPosts" component={withErrorBoundary(AdminPostsScreen, 'Community Posts')} options={pushTransition} />
-      <Stack.Screen name="WeightTracker" component={withErrorBoundary(WeightTrackerScreen, 'Weight Tracker')} options={pushTransition} />
-      <Stack.Screen name="OrderHistory" component={withErrorBoundary(OrderHistoryScreen, 'My Orders')} options={pushTransition} />
-      <Stack.Screen name="MacroTracker" component={withErrorBoundary(MacroTrackerScreen, 'Macro Tracker')} options={pushTransition} />
-      <Stack.Screen name="MacroSetup" component={withErrorBoundary(MacroSetupScreen, 'Macro Setup')} options={modalTransition} />
-      <Stack.Screen name="BarcodeScanner" component={withErrorBoundary(BarcodeScannerScreen, 'Barcode Scanner')} options={modalTransition} />
-      <Stack.Screen name="PhotoFood" component={withErrorBoundary(PhotoFoodScreen, 'Photo Food')} options={modalTransition} />
-      <Stack.Screen name="DexaScans" component={withErrorBoundary(DexaScansScreen, 'DEXA Scans')} options={pushTransition} />
-      <Stack.Screen name="DexaUpload" component={withErrorBoundary(DexaUploadScreen, 'DEXA Upload')} options={modalTransition} />
-      <Stack.Screen name="DexaScanDetail" component={withErrorBoundary(DexaScanDetailScreen, 'DEXA Detail')} options={pushTransition} />
-      <Stack.Screen name="Bloodwork" component={withErrorBoundary(BloodworkScreen, 'Bloodwork')} options={pushTransition} />
-      <Stack.Screen name="BloodworkUpload" component={withErrorBoundary(BloodworkUploadScreen, 'Bloodwork Upload')} options={modalTransition} />
-      <Stack.Screen name="BloodworkReportDetail" component={withErrorBoundary(BloodworkReportDetailScreen, 'Bloodwork Detail')} options={pushTransition} />
-      <Stack.Screen name="WorkoutSession" component={withErrorBoundary(WorkoutSessionScreen, 'Start Workout')} options={modalTransition} />
-      <Stack.Screen name="SessionHistory" component={withErrorBoundary(SessionHistoryScreen, 'Session History')} options={pushTransition} />
-      <Stack.Screen name="ActivityTracker" component={withErrorBoundary(ActivityTrackerScreen, 'GPS Tracker')} options={modalTransition} />
-      <Stack.Screen name="BodyLab" component={withErrorBoundary(BodyLabScreen, 'Body Lab')} options={pushTransition} />
+      <Stack.Screen name="AdminMembers" component={withErrorBoundary(AdminMembersScreen, 'Admin Members')} options={push} />
+      <Stack.Screen name="AdminProducts" component={withErrorBoundary(AdminProductsScreen, 'Admin Products')} options={push} />
+      <Stack.Screen name="AdminSchedule" component={withErrorBoundary(AdminScheduleScreen, 'Admin Schedule')} options={push} />
+      <Stack.Screen name="AttendanceHistory" component={withErrorBoundary(AttendanceHistoryScreen, 'Attendance')} options={push} />
+      <Stack.Screen name="AdminBroadcast" component={withErrorBoundary(AdminBroadcastScreen, 'Broadcast')} options={push} />
+      <Stack.Screen name="AdminAnnouncements" component={withErrorBoundary(AdminAnnouncementsScreen, 'Announcements')} options={push} />
+      <Stack.Screen name="AdminAppointments" component={withErrorBoundary(AdminAppointmentsScreen, 'Appointments')} options={push} />
+      <Stack.Screen name="Workout" component={withErrorBoundary(WorkoutScreen, 'Workout')} options={push} />
+      <Stack.Screen name="Timer" component={withErrorBoundary(TimerScreen, 'Timer')} options={push} />
+      <Stack.Screen name="PRDetail" component={withErrorBoundary(PRDetailScreen, 'PR Detail')} options={push} />
+      <Stack.Screen name="EmployeeChecklist" component={withErrorBoundary(EmployeeChecklistScreen, 'Checklist')} options={push} />
+      <Stack.Screen name="AdminEmployeeTasks" component={withErrorBoundary(AdminEmployeeTasksScreen, 'Employee Tasks')} options={push} />
+      <Stack.Screen name="AdminReports" component={withErrorBoundary(AdminReportsScreen, 'Reports')} options={push} />
+      <Stack.Screen name="AdminPosts" component={withErrorBoundary(AdminPostsScreen, 'Community Posts')} options={push} />
+      <Stack.Screen name="WeightTracker" component={withErrorBoundary(WeightTrackerScreen, 'Weight Tracker')} options={push} />
+      <Stack.Screen name="OrderHistory" component={withErrorBoundary(OrderHistoryScreen, 'My Orders')} options={push} />
+      <Stack.Screen name="MacroTracker" component={withErrorBoundary(MacroTrackerScreen, 'Macro Tracker')} options={push} />
+      <Stack.Screen name="MacroSetup" component={withErrorBoundary(MacroSetupScreen, 'Macro Setup')} options={modal} />
+      <Stack.Screen name="BarcodeScanner" component={withErrorBoundary(BarcodeScannerScreen, 'Barcode Scanner')} options={modal} />
+      <Stack.Screen name="PhotoFood" component={withErrorBoundary(PhotoFoodScreen, 'Photo Food')} options={modal} />
+      <Stack.Screen name="DexaScans" component={withErrorBoundary(DexaScansScreen, 'DEXA Scans')} options={push} />
+      <Stack.Screen name="DexaUpload" component={withErrorBoundary(DexaUploadScreen, 'DEXA Upload')} options={modal} />
+      <Stack.Screen name="DexaScanDetail" component={withErrorBoundary(DexaScanDetailScreen, 'DEXA Detail')} options={push} />
+      <Stack.Screen name="Bloodwork" component={withErrorBoundary(BloodworkScreen, 'Bloodwork')} options={push} />
+      <Stack.Screen name="BloodworkUpload" component={withErrorBoundary(BloodworkUploadScreen, 'Bloodwork Upload')} options={modal} />
+      <Stack.Screen name="BloodworkReportDetail" component={withErrorBoundary(BloodworkReportDetailScreen, 'Bloodwork Detail')} options={push} />
+      <Stack.Screen name="WorkoutSession" component={withErrorBoundary(WorkoutSessionScreen, 'Start Workout')} options={modal} />
+      <Stack.Screen name="SessionHistory" component={withErrorBoundary(SessionHistoryScreen, 'Session History')} options={push} />
+      <Stack.Screen name="ActivityTracker" component={withErrorBoundary(ActivityTrackerScreen, 'GPS Tracker')} options={modal} />
+      <Stack.Screen name="BodyLab" component={withErrorBoundary(BodyLabScreen, 'Body Lab')} options={push} />
 
       {/* Community */}
-      <Stack.Screen name="CreatePost" component={withErrorBoundary(CreatePostScreen, 'Create Post')} options={modalTransition} />
-      <Stack.Screen name="Comments" component={withErrorBoundary(CommentsScreen, 'Comments')} options={pushTransition} />
-      <Stack.Screen name="UserProfile" component={withErrorBoundary(UserProfileScreen, 'User Profile')} options={pushTransition} />
+      <Stack.Screen name="CreatePost" component={withErrorBoundary(CreatePostScreen, 'Create Post')} options={modal} />
+      <Stack.Screen name="Comments" component={withErrorBoundary(CommentsScreen, 'Comments')} options={push} />
+      <Stack.Screen name="UserProfile" component={withErrorBoundary(UserProfileScreen, 'User Profile')} options={push} />
 
       {/* Detail — push */}
-      <Stack.Screen name="ProductDetail" component={withErrorBoundary(ProductDetailScreen, 'Product Detail')} options={pushTransition} />
-      <Stack.Screen name="Achievements" component={withErrorBoundary(AchievementsScreen, 'Achievements')} options={pushTransition} />
-      <Stack.Screen name="AchievementDetail" component={withErrorBoundary(AchievementDetailScreen, 'Achievement Detail')} options={pushTransition} />
-      <Stack.Screen name="ContactSupport" component={withErrorBoundary(ContactSupportScreen, 'Contact Support')} options={pushTransition} />
-      <Stack.Screen name="MessagesList" component={withErrorBoundary(MessagesListScreen, 'Messages')} options={pushTransition} />
-      <Stack.Screen name="MessagesChat" component={withErrorBoundary(MessagesChatScreen, 'Chat')} options={pushTransition} />
-      <Stack.Screen name="UserSearch" component={withErrorBoundary(UserSearchScreen, 'Search')} options={pushTransition} />
-      <Stack.Screen name="CycleTracker" component={withErrorBoundary(CycleTrackerScreen, 'Cycle Tracker')} options={pushTransition} />
-      <Stack.Screen name="MedicationTracker" component={withErrorBoundary(MedicationTrackerScreen, 'Medication Tracker')} options={pushTransition} />
-      <Stack.Screen name="SenpaiMemory" component={withErrorBoundary(SenpaiMemoryScreen, 'Senpai Memory')} options={pushTransition} />
+      <Stack.Screen name="ProductDetail" component={withErrorBoundary(ProductDetailScreen, 'Product Detail')} options={push} />
+      <Stack.Screen name="Achievements" component={withErrorBoundary(AchievementsScreen, 'Achievements')} options={push} />
+      <Stack.Screen name="AchievementDetail" component={withErrorBoundary(AchievementDetailScreen, 'Achievement Detail')} options={push} />
+      <Stack.Screen name="ContactSupport" component={withErrorBoundary(ContactSupportScreen, 'Contact Support')} options={push} />
+      <Stack.Screen name="MessagesList" component={withErrorBoundary(MessagesListScreen, 'Messages')} options={push} />
+      <Stack.Screen name="MessagesChat" component={withErrorBoundary(MessagesChatScreen, 'Chat')} options={push} />
+      <Stack.Screen name="UserSearch" component={withErrorBoundary(UserSearchScreen, 'Search')} options={push} />
+      <Stack.Screen name="CycleTracker" component={withErrorBoundary(CycleTrackerScreen, 'Cycle Tracker')} options={push} />
+      <Stack.Screen name="MedicationTracker" component={withErrorBoundary(MedicationTrackerScreen, 'Medication Tracker')} options={push} />
+      <Stack.Screen name="SenpaiMemory" component={withErrorBoundary(SenpaiMemoryScreen, 'Senpai Memory')} options={push} />
     </Stack.Navigator>
   );
 }

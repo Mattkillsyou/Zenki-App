@@ -11,7 +11,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { KeyboardAwareScrollView, ScreenContainer } from '../components';
+import { KeyboardAwareScrollView, ScreenContainer, FadeInView } from '../components';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -385,7 +385,9 @@ export function SettingsScreen({ navigation }: any) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScreenContainer maxWidth="form">
       <KeyboardAwareScrollView offset={64}>
+        {/* Two-tier entrance: header (chrome) at 0, the settings body (content) at ~60ms. */}
         {/* Header */}
+        <FadeInView role="header">
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backButtonStyled, { backgroundColor: colors.surface, borderColor: colors.border, width: 44, height: 44, borderRadius: 22, borderWidth: 1.5 }]}>
             <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
@@ -393,7 +395,9 @@ export function SettingsScreen({ navigation }: any) {
           <Text style={[styles.title, { color: colors.textPrimary, fontSize: 34, fontWeight: '800' }]}>Settings</Text>
           <View style={styles.backButton} />
         </View>
+        </FadeInView>
 
+        <FadeInView baseDelay={60} index={0}>
         {/* Visual Theme Picker — the theme is a free choice on its own,
             independent of the Senpai companion toggle below: her theme is a
             normal option here, and the mascot works on ANY theme. */}
@@ -840,6 +844,7 @@ export function SettingsScreen({ navigation }: any) {
         </Text>
 
         <View style={{ height: spacing.xxl * 2 }} />
+        </FadeInView>
       </KeyboardAwareScrollView>
       </ScreenContainer>
 

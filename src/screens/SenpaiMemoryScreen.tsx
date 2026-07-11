@@ -381,7 +381,6 @@ export function SenpaiMemoryScreen({ navigation }: any) {
           <SoundPressable
             style={[styles.clearBtn, { backgroundColor: colors.surface, borderColor: colors.error }]}
             onPress={handleClear}
-            activeOpacity={0.7}
           >
             <Ionicons name="trash-outline" size={16} color={colors.error} />
             <Text style={[styles.clearBtnText, { color: colors.error }]}>Clear All Memories</Text>

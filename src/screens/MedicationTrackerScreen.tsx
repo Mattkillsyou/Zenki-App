@@ -268,7 +268,7 @@ export function MedicationTrackerScreen({ navigation }: any) {
             </FadeInView>
 
             {/* Daily schedule */}
-            <FadeInView delay={80}>
+            <FadeInView baseDelay={60} index={0}>
               <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
                 {selectedDateLabel(selectedDate)} · {dayItems.reduce((acc, it) => acc + it.times.length, 0)} doses
               </Text>
@@ -403,7 +403,6 @@ export function MedicationTrackerScreen({ navigation }: any) {
                 return (
                   <SoundPressable
                     key={med.id}
-                    activeOpacity={0.85}
                     onPress={() => handleEditMed(med)}
                     onLongPress={() => handleDeleteMed(med)}
                     style={[styles.medCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
