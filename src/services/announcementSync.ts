@@ -31,9 +31,21 @@ export function subscribeToAnnouncements(cb: (anns: Announcement[]) => void): Un
     return onSnapshot(
       collection(db, 'announcements'),
       (snap) => {
-        const items: Announcement[] = snap.docs.map(
-          (d) => ({ id: d.id, ...(d.data() as Omit<Announcement, 'id'>) }),
-        );
+        const items: Announcement[] = snap.docs.map((d) => {
+          const data = d.data() as any;
+          // Audit 2.0.5 P1 hardening: the web admin briefly wrote createdAt as
+          // a Firestore Timestamp. `.localeCompare` on a Timestamp object
+          // throws INSIDE this snapshot handler — cb(items) never runs and the
+          // announcements pipeline freezes app-wide. Coerce to the ISO-string
+          // contract so one legacy doc can't take down every client.
+          let createdAt = data.createdAt;
+          if (createdAt && typeof createdAt !== 'string' && typeof createdAt.toDate === 'function') {
+            try { createdAt = createdAt.toDate().toISOString(); } catch { createdAt = ''; }
+          } else if (typeof createdAt !== 'string') {
+            createdAt = '';
+          }
+          return { id: d.id, ...(data as Omit<Announcement, 'id'>), createdAt };
+        });
         items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         cb(items);
       },

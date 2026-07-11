@@ -613,9 +613,12 @@ function openAnnEditor(existing) {
     const id = existing ? existing.id : rid('ann');
     const rec = {
       title, description: descI.value.trim(), pinned: pin.checked,
-      // Timestamp (not ISO string): mixing types in one field breaks
-      // Firestore ordering (it sorts by TYPE first). fmtDate handles both.
-      createdAt: existing && existing.createdAt ? existing.createdAt : Timestamp.now(),
+      // ISO STRING, not Firestore Timestamp — the APP is the contract owner
+      // here: announcementSync.ts sorts with createdAt.localeCompare, so a
+      // Timestamp object THREW inside every client's onSnapshot and froze the
+      // announcements pipeline app-wide (audit 2.0.5 P1). The admin's own
+      // list sorts client-side via toMs(), which handles both shapes.
+      createdAt: existing && existing.createdAt ? existing.createdAt : new Date().toISOString(),
     };
     try { await setDoc(doc(db, 'announcements', id), rec, { merge: true }); annDraft = null; renderAnnouncements(); }
     catch (e) { saveBtn.disabled = false; saveBtn.textContent = isNew ? 'Post' : 'Save'; msg.textContent = 'Save failed: ' + ((e && e.message) || 'unknown'); msg.className = 'msg err'; }
