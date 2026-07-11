@@ -38,7 +38,7 @@ Check (read-only, no edits) and report EXACTLY these facts as JSON-ish text:
 3. Whether functions/.env exists and contains SENPAI_TTS_REQUIRE_SIGNATURE.
 4. Whether an Anthropic API key is reachable for the eval harness: check env ANTHROPIC_API_KEY, and if absent try 'firebase functions:secrets:access ANTHROPIC_API_KEY' (report only WHETHER it returned a value — NEVER print the key itself, not even partially).
 5. Current git branch and whether the four Senpai component files + senpaiDialogue/bridge/bond are clean or locally modified.`,
-  { label: 'preflight', phase: 'Preflight', schema: { type: 'object', required: ['report', 'hasImageTooling', 'hasEvalKey'], additionalProperties: false, properties: { report: { type: 'string' }, hasImageTooling: { type: 'boolean' }, hasEvalKey: { type: 'boolean' } } } })
+  { label: 'preflight', phase: 'Preflight', model: 'sonnet', schema: { type: 'object', required: ['report', 'hasImageTooling', 'hasEvalKey'], additionalProperties: false, properties: { report: { type: 'string' }, hasImageTooling: { type: 'boolean' }, hasEvalKey: { type: 'boolean' } } } })
 log(`preflight: imageTooling=${preflight.hasImageTooling} evalKey=${preflight.hasEvalKey}`)
 
 // ─── Mic polish + P2 fixes (exclusive: SenpaiMascot.tsx, useSenpaiChat.ts, SenpaiContext.tsx, SenpaiReactionBridge.tsx, senpaiDialogue.ts) ───
@@ -76,13 +76,13 @@ const [screenSweep, loopHygiene] = await parallel([
 Implement SCREEN_ANIMATION_SPEC.md steps 5-6 (read the spec + the just-updated src/theme/motion.ts for the stagger() helper and tokens). YOUR EXCLUSIVE FILES: src/components/FadeInView.tsx, NEW src/components/Staggered.tsx, and the screen files under src/screens/ that carry hand-typed entrance delay ladders (the spec names HomeScreen, AdminScreen, MacroTracker, WeightTracker, EmployeeChecklist, CycleTracker, AttendanceHistory, BodyLab, WorkoutScreen — grep FadeInView delay= across src/screens to find the real current set) plus adding the two-tier entrance to CommunityScreen, SettingsScreen, TrainingHomeScreen.
 Step 5: FadeInView gains an optional index prop deriving delay from stagger(); subtle variants (header slide 8px vs card 12px); a <Staggered> group component so screens stop hand-typing delays.
 Step 6: replace every hand-typed ladder with stagger()/two-tier entrance (chrome at 0, content group ~60ms; grids stagger BY ROW; total settle <= 250ms after transition). Do NOT touch Senpai components. tsc clean when done.`,
-    { label: 'impl:screen-sweep', phase: 'ScreenSweep', schema: SUMMARY, effort: 'high' }),
+    { label: 'impl:screen-sweep', phase: 'ScreenSweep', model: 'sonnet', schema: SUMMARY, effort: 'high' }),
   () => agent(`${COMMON}
 
 Implement SCREEN_ANIMATION_SPEC.md steps 7-8. YOUR EXCLUSIVE FILES: src/components/StreakBadge.tsx, PointsBadge.tsx, XPProgressBar.tsx, Skeleton.tsx, CelebrationModal.tsx, Confetti.tsx, SpinWheelModal.tsx, CoachmarkTutorial.tsx, ThemeOverlay.tsx, ReorderableSections.tsx, and CommunityScreen.tsx ONLY for wiring Skeleton into its loading state (coordinate: the screen-sweep agent owns CommunityScreen's ENTRANCE; you own only the spinner->Skeleton swap — keep your edit surgical to that block).
 Step 7: sine easing + shared ambient.period for the badge pulses; XPProgressBar eased fill and gate/drop the perpetual linear shine (prefer scaleX over width if the rounded fill still renders correctly, else keep width and just ease it); wire Skeleton into Community's loading state.
 Step 8: Reduce Motion gates (via the MotionContext flag) for CelebrationModal, Confetti, SpinWheelModal, Skeleton, CoachmarkTutorial, ThemeOverlay, ReorderableSections; unify ReorderableSections' two settle springs onto spring.settle; consolidate CelebrationModal's inline confetti onto Confetti.tsx if it is a straightforward lift. tsc clean when done.`,
-    { label: 'impl:loop-hygiene', phase: 'ScreenSweep', schema: SUMMARY, effort: 'high' }),
+    { label: 'impl:loop-hygiene', phase: 'ScreenSweep', model: 'sonnet', schema: SUMMARY, effort: 'high' }),
 ])
 
 // ─── Prompt edits + eval (skips without a key) ───
