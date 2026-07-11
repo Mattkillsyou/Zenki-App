@@ -106,7 +106,15 @@ export function AdminAppointmentsScreen({ navigation }: any) {
                 <SoundPressable style={[styles.btn, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]} onPress={() => handleCancel(a)}>
                   <Text style={[styles.btnText, { color: colors.error }]}>Cancel</Text>
                 </SoundPressable>
-                <SoundPressable style={[styles.btn, { backgroundColor: colors.success }]} onPress={() => completeAppointment(a.id)}>
+                <SoundPressable style={[styles.btn, { backgroundColor: colors.success }]} onPress={() => {
+                  // Audit 2.0.5: Complete now confirms like Cancel does — a
+                  // mis-tap silently removed the session from the member's
+                  // upcoming list and killed their reminder.
+                  Alert.alert('Mark session complete?', `${a.sessionType} with ${a.memberName}. This removes it from their upcoming sessions.`, [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Mark Complete', onPress: () => completeAppointment(a.id) },
+                  ]);
+                }}>
                   <Text style={[styles.btnText, { color: '#FFF' }]}>Mark Complete</Text>
                 </SoundPressable>
               </View>
