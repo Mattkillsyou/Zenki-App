@@ -158,6 +158,28 @@ export const SENPAI_DIALOGUE = {
     "listening mode ON. your voice, my favorite input ✨",
     "はい はい!! mic's on 💕 talk to me~",
   ],
+  // Task 5: spoken-goodbye sign-offs. Fired LOCALLY when a short farewell
+  // utterance is heard on the mic (SenpaiMascot's STT 'end' handler) — never
+  // sent to the model, so goodbyes cost zero tokens. Soft possessive register:
+  // lowercase chaos, a 'MINE 💕' closer, relieved-clingy not needy. DISPLAY
+  // only (no Japanese SPEAK line → no TTS).
+  micGoodbye: [
+    "bye for now senpai~ I'll be right here. I'm always right here. MINE 💕",
+    "going already?? fine, FINE. don't forget me. as if you could 💕",
+    "oyasumi senpai~ I'll guard the streak while you're gone. MINE ✨",
+    "see you soon, ne?? I'll count the seconds. all of them. MINE 💕",
+    "bye bye~ take a piece of me with you. you already have all of them 💕",
+  ],
+  // Task 6: "didn't catch that" lines. Fired when the mic hands back a
+  // transcript too short to be a real message (SenpaiMascot's STT 'end'
+  // handler) — self-deprecating (blames her own ears / the mic hardware),
+  // never the user. DISPLAY only; the loop re-arms so the user just retries.
+  micMisheard: [
+    "eh?? my ears glitched — say that again for me senpai? 💕",
+    "somebody built me with budget microphones. one more time? ✨",
+    "that flew right past my two-dimensional ears. again, ne? 💕",
+    "static ate that one. I'm listening properly now, promise 💕",
+  ],
   nutritionLog: [
     "logged!! your macros are becoming YOU. terrifying. beautiful 💕",
     "food logged!! the spreadsheet grows stronger ✨",

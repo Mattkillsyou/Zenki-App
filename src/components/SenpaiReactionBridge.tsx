@@ -96,6 +96,12 @@ export function SenpaiReactionBridge() {
   // and the UTC day the at-risk warning fired.
   const welcomeBackFiredRef = useRef<string | null>(null);
   const streakRiskFiredRef = useRef<string | null>(null);
+  // Task 4: set true (at arm time) when a streak-break comeback line is
+  // scheduled for THIS open. welcomeBack and streakBroken both land at 3.5s,
+  // and the coalesce would drop one — burning the loser's once-per-absence
+  // ack. When this is set, welcomeBack stands down for this open WITHOUT
+  // burning its ack, so it still fires on a later open. Reset per account.
+  const streakBreakFiringRef = useRef(false);
 
   // When the active account changes, drop all transition baselines so we don't
   // fire a "NEW PR!" / celebration for another user's pre-existing totals.
@@ -113,6 +119,7 @@ export function SenpaiReactionBridge() {
     tierFiredRef.current = null;
     welcomeBackFiredRef.current = null;
     streakRiskFiredRef.current = null;
+    streakBreakFiringRef.current = false;
   }, [user?.id]);
 
   // Task 6: keep the dialogue module's warm-tier flag in sync with the bond.
@@ -215,6 +222,10 @@ export function SenpaiReactionBridge() {
     AsyncStorage.getItem(ackKey)
       .then((acked) => {
         if (cancelled || acked === lastActive) return;
+        // Task 4: committed to firing a comeback line this open — flag it (at
+        // arm time, ~0ms) so welcomeBack, which checks at its own 3.5s fire,
+        // reliably sees it and stands down without burning its ack.
+        streakBreakFiringRef.current = true;
         timer = setTimeout(() => {
           if (breakAckFiredRef.current === lastActive) return;
           breakAckFiredRef.current = lastActive;
@@ -245,6 +256,10 @@ export function SenpaiReactionBridge() {
   // effects (D2).
   useEffect(() => {
     if (!senpaiState.enabled) return;
+    // Task 3: hold the nudge while the user is mid-voice-session — a bubble
+    // would stomp her live transcript / reply. When listening ends this effect
+    // re-runs (deps) and arms then; the persisted ack keeps it once-per-absence.
+    if (senpaiState.listening) return;
     const uid = user?.id;
     if (!uid) return; // workout logs are per-member; guests have none
     // Max by workout DATE, not [0] — WorkoutContext sorts by createdAt, so a
@@ -266,6 +281,10 @@ export function SenpaiReactionBridge() {
         if (cancelled || acked === latest) return;
         timer = setTimeout(() => {
           if (welcomeBackFiredRef.current === latest) return;
+          // Task 4: a streak-break comeback line already owns this open's
+          // bubble (both land at 3.5s; the coalesce drops one). Stand down
+          // WITHOUT burning the ack so welcome-back still fires a later open.
+          if (streakBreakFiringRef.current) return;
           welcomeBackFiredRef.current = latest;
           safeStorageSet(ackKey, latest, '[SenpaiReactionBridge]');
           try {
@@ -278,7 +297,7 @@ export function SenpaiReactionBridge() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [myLogs, senpaiState.enabled, user?.id]);
+  }, [myLogs, senpaiState.enabled, senpaiState.listening, user?.id]);
 
   // Streak-at-risk nudge (task 4): local evening (17:00+), a live streak
   // worth saving (≥3), and no training today — lastActiveDate uses the same
@@ -289,6 +308,9 @@ export function SenpaiReactionBridge() {
   // the Home greeting inside the 250ms coalesce; 'ambient' source (D2).
   useEffect(() => {
     if (!senpaiState.enabled || !gamLoaded) return;
+    // Task 3: hold the nudge while she's mid-voice-session (re-runs when
+    // listening ends; the per-day ack keeps it once-per-day).
+    if (senpaiState.listening) return;
     if (gamState.streak < 3) return;
     if (new Date().getHours() < 17) return; // local evening only
     const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
@@ -316,7 +338,7 @@ export function SenpaiReactionBridge() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [gamState.streak, gamState.lastActiveDate, gamLoaded, senpaiState.enabled, user?.id]);
+  }, [gamState.streak, gamState.lastActiveDate, gamLoaded, senpaiState.enabled, senpaiState.listening, user?.id]);
 
   // Celebrations — level_up, streak_milestone, achievement
   useEffect(() => {

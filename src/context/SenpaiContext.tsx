@@ -86,6 +86,12 @@ interface SenpaiState {
   transformationPlayed: boolean;
   ambientEffects: boolean;
   activeImpact: ImpactType | null;
+  // Mic-open mirror (read-only for consumers). SenpaiMascot is the ONLY
+  // writer — it pushes its local walkie-talkie `listening` state here via
+  // setListening so SenpaiReactionBridge can hold ambient nudges while the
+  // user is mid-voice-session (a bubble nudge would otherwise stomp her live
+  // transcript / reply). Never persisted.
+  listening: boolean;
   // H2: the durable relationship bond file — null until hydrated / initialized
   // (per-account, owned here, mutated only via recordBondEvent & the fact API).
   bond: SenpaiBond | null;
@@ -102,6 +108,9 @@ interface SenpaiContextValue {
   markTransformationPlayed: () => void;
   setAmbientEffects: (on: boolean) => void;
   clearImpact: () => void;
+  // Mascot-internal writer for the mic-open mirror (state.listening). Only
+  // SenpaiMascot should call this; every other consumer reads state.listening.
+  setListening: (on: boolean) => void;
   // H2 bond mutators — all writes funnel through the pure applyBondEvent
   // reducer via functional setState, so concurrent writers can't race.
   recordBondEvent: (e: BondEvent) => void;
@@ -122,6 +131,7 @@ const defaultState: SenpaiState = {
   transformationPlayed: false,
   ambientEffects: true,
   activeImpact: null,
+  listening: false,
   bond: null,
 };
 
@@ -136,6 +146,7 @@ const SenpaiContext = createContext<SenpaiContextValue>({
   markTransformationPlayed: () => {},
   setAmbientEffects: () => {},
   clearImpact: () => {},
+  setListening: () => {},
   recordBondEvent: () => {},
   addBondFact: () => 'duplicate',
   removeBondFact: () => {},
@@ -549,6 +560,12 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
     setState((s) => (s.activeImpact === null ? s : { ...s, activeImpact: null }));
   }, []);
 
+  // Mic-open mirror writer (SenpaiMascot only). Idempotent guard so a no-op
+  // write doesn't churn a render on the whole tree.
+  const setListening = useCallback((on: boolean) => {
+    setState((s) => (s.listening === on ? s : { ...s, listening: on }));
+  }, []);
+
   useEffect(() => {
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, []);
@@ -564,11 +581,12 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
     markTransformationPlayed,
     setAmbientEffects,
     clearImpact,
+    setListening,
     recordBondEvent,
     addBondFact,
     removeBondFact,
     resetBond,
-  }), [state, setEnabled, triggerReaction, setVolume, setSparkleIntensity, clearMemoryLog, shouldReact, markTransformationPlayed, setAmbientEffects, clearImpact, recordBondEvent, addBondFact, removeBondFact, resetBond]);
+  }), [state, setEnabled, triggerReaction, setVolume, setSparkleIntensity, clearMemoryLog, shouldReact, markTransformationPlayed, setAmbientEffects, clearImpact, setListening, recordBondEvent, addBondFact, removeBondFact, resetBond]);
 
   return <SenpaiContext.Provider value={value}>{children}</SenpaiContext.Provider>;
 }
