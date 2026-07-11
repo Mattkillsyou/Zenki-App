@@ -38,3 +38,13 @@ Source: `APP_AUDIT_2.0.5.md` §3/§4. Scope: all client P1s + the data-loss erro
 - Waiver/order/payroll queues: airplane-mode signup → relaunch → confirm flush lands in Firestore/Sheets.
 - Senpai mic: hide-while-armed no longer transcribes; voice fix behaviors unchanged.
 - Web admin: create an announcement after deploying hosting; confirm app clients render it (and legacy Timestamp docs) without freezing.
+
+---
+
+## Residuals pass — branch `fix/audit-2.0.5-residuals` (2026-07-10, after merge + hosting deploy)
+
+**Carried-forward social register:** F1 fixed (requester read in repo rules — rides the pending deploy — + uid-scoped local marker for the live ruleset); F2 fixed (report stays open when the content delete fails; app now matches the web admin); F3+F9 fixed (listComments coerces displayName/createdAt at the source); F4 residual fixed (listOpenReports + listAllPostsForAdmin return null on failure; Reports + AdminPosts screens show real error states — permError branch is live); F7 partially fixed (30s client cooldown on submitReport; server-side limiting deferred); F8 fixed (composer gates on blockedByIds); F11 fixed (Report only offered once the conversation exists). F10 still needs the live backfill check; F12 remains a documented read-cost tradeoff.
+
+**Also fixed:** guest/sign-in dead-listener class (Announcement/Schedule/Product/SchedulingConfig keyed on live uid); Onboarding + Store checkout + Drink Settle double-tap guards (dup accounts / double charges); NutritionContext hydrate-wipe protection (DEXA/bloodwork can't be clobbered by one bad read).
+
+**Still open after this pass:** booking UX cluster (slot conflicts, evening dead-end, calendar quick-add date, device-TZ labels), timers (keep-awake, background time, meditation tone), nutrition sync divergence + migration poisoning, Settings placeholders (Export Data, Clear History, Units), supportMessages black hole, GPS start/End race, gamification pre-hydrate loss, EmployeeTasks assign picker, deleteAccount likes/senpaiUsage gaps + banUser CG index (functions deploys), guest /schedule rule (pending rules deploy), and the P3 tail.
