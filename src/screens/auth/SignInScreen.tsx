@@ -118,14 +118,36 @@ export function SignInScreen({ navigation }: any) {
 
   // When Google returns a token, exchange it with Firebase + sign in locally
   useEffect(() => {
-    if (googleResponse?.type !== 'success') return;
+    if (!googleResponse) return;
+    // Audit 2.0.5 P3: error responses (and success without an id_token) were
+    // silently swallowed here, so the Google button read as "does nothing".
+    // Cancel/dismiss stay silent — the user closed the sheet on purpose.
+    if (googleResponse.type === 'error') {
+      const detail =
+        googleResponse.error?.message ??
+        (googleResponse.params as any)?.error_description ??
+        (googleResponse.params as any)?.error;
+      setErrorMsg(
+        detail
+          ? `Google sign-in didn't go through — ${detail}`
+          : "Google sign-in didn't go through — try again or use email + password.",
+      );
+      return;
+    }
+    if (googleResponse.type !== 'success') return;
     const idToken = (googleResponse.params as any)?.id_token;
-    if (!idToken) return;
+    if (!idToken) {
+      setErrorMsg("Google didn't return a sign-in token — try again, or use email + password.");
+      return;
+    }
     (async () => {
       try {
         setLoading(true);
         const { member, isNewAccount } = await firebaseSignInWithGoogle({ idToken });
-        await auth.signIn(member);
+        // First-timers head into Onboarding next — arm the resume gate so a
+        // force-quit mid-onboarding relaunches back into Onboarding instead
+        // of skipping EULA/waiver (Audit 2.0.5 P2, see AuthContext).
+        await auth.signIn(member, isNewAccount ? { pendingOnboarding: true } : undefined);
         // First-time OAuth users go through onboarding (profile + waiver) the
         // same as email signups; returning users land straight on Main. We
         // pass { oauth: true } so OnboardingScreen skips the email/password
@@ -201,7 +223,10 @@ export function SignInScreen({ navigation }: any) {
         email: appleCred.email,
         nonce: rawNonce,
       });
-      await auth.signIn(member);
+      // First-timers head into Onboarding next — arm the resume gate so a
+      // force-quit mid-onboarding relaunches back into Onboarding instead
+      // of skipping EULA/waiver (Audit 2.0.5 P2, see AuthContext).
+      await auth.signIn(member, isNewAccount ? { pendingOnboarding: true } : undefined);
       // First-time OAuth users go through onboarding (profile + waiver) the
       // same as email signups; returning users land straight on Main. The
       // { oauth: true } param tells OnboardingScreen to skip the

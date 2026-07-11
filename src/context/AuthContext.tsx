@@ -11,7 +11,8 @@ import {
   firebaseSignOut,
   emailForMember,
 } from '../services/firebaseAuth';
-import { FIREBASE_CONFIGURED, auth } from '../config/firebase';
+import { FIREBASE_CONFIGURED, auth, db } from '../config/firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
 import { seedReviewerDataIfNeeded } from '../utils/seedReviewerData';
 import { syncOrAlert } from '../utils/syncOrAlert';
 
@@ -23,11 +24,42 @@ const LAST_USERNAME_KEY = '@zenki_last_username';
 // lets the navigator drop a guest into Main while every account-based action
 // is still gated by requireAuth(user, …). Never fabricate a user for guests.
 const GUEST_KEY = '@zenki_guest_mode';
+// Onboarding-resume gate (Audit 2.0.5 P2 — AuthContext.tsx:214 at audit time).
+// First-time OAuth users are signed in (session persisted) BEFORE Onboarding
+// starts, so a force-quit mid-onboarding used to land them in Main forever
+// with EULA / waiver / permissions bypassed. This flag records "onboarding
+// started but never finished" — set ONLY on a first-time OAuth sign-in
+// (SignInScreen passes { pendingOnboarding: true }), cleared when
+// createAccount completes (onboarding finished) and on every ordinary
+// sign-in / sign-out.
+//
+// Launch decision table (RootNavigator reads `needsOnboarding`):
+//   persisted user | this flag | route
+//   ───────────────┼───────────┼──────────────────────────────────────────
+//   none           | any       | SignIn (or Main when guest)
+//   present        | absent    | Main  ← ALL existing users predate the
+//                  |           |        flag; ambiguity defaults to Main —
+//                  |           |        no network round-trip ever blocks
+//                  |           |        launch, nobody gets re-onboarded
+//   present        | 'true'    | Onboarding (resume, { oauth: true })
+//
+// Deliberately inverted from "gate Main on an onboarding-COMPLETE flag":
+// that shape would re-onboard every existing user who predates the flag.
+// Requiring positive proof of a mid-onboarding state can only ever affect
+// accounts that started (and abandoned) onboarding on this device on this
+// build or later.
+const PENDING_ONBOARDING_KEY = '@zenki_pending_onboarding';
 
 interface AuthContextValue {
   user: Member | null;
   isLoading: boolean;
-  signIn: (member: Member) => Promise<void>;
+  /**
+   * Sign in as an existing member. Pass { pendingOnboarding: true } ONLY for
+   * a first-time OAuth sign-in that is about to enter Onboarding — it arms
+   * the resume gate (see PENDING_ONBOARDING_KEY) so a force-quit before
+   * finishing can't skip EULA/waiver. Any ordinary sign-in clears the gate.
+   */
+  signIn: (member: Member, opts?: { pendingOnboarding?: boolean }) => Promise<void>;
   /**
    * Create a local account. If a password is provided AND Firebase is configured,
    * also provisions a real Firebase Auth user. Otherwise local-only (dev mode).
@@ -40,6 +72,12 @@ interface AuthContextValue {
   continueAsGuest: () => Promise<void>;
   /** Leave guest mode (used on real sign-in / sign-out). */
   exitGuest: () => Promise<void>;
+  /**
+   * True when the signed-in user started onboarding but never finished it
+   * (first-time OAuth force-quit). RootNavigator routes them back into
+   * Onboarding instead of Main. Always false for existing users.
+   */
+  needsOnboarding: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -51,12 +89,14 @@ const AuthContext = createContext<AuthContextValue>({
   isGuest: false,
   continueAsGuest: async () => {},
   exitGuest: async () => {},
+  needsOnboarding: false,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Member | null>(null);
   const [isGuest, setIsGuest] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,6 +157,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // `id` can be null when the Firestore fallback resolved the member.
         const override = await getMemberOverride(base.id);
         const merged: Member = override ? { ...base, ...override } : base;
+
+        // Resume-onboarding marker — see the PENDING_ONBOARDING_KEY decision
+        // table. Read before setUser/isLoading so RootNavigator's one-shot
+        // initialRouteName sees it. Absent (every existing user) → Main.
+        const pendingOnboarding = await AsyncStorage.getItem(PENDING_ONBOARDING_KEY).catch(() => null);
+        if (pendingOnboarding === 'true' && !cancelled) setNeedsOnboarding(true);
 
         if (!cancelled) setUser(merged);
         // Run reviewer-seed on persisted-session startup too, so we cover
@@ -179,7 +225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsub;
   }, [user?.id]);
 
-  const signIn = useCallback(async (member: Member) => {
+  const signIn = useCallback(async (member: Member, opts?: { pendingOnboarding?: boolean }) => {
     // Seed the App Review demo account's sample data BEFORE setUser, so it's on
     // disk before NutritionContext (and others) re-read on the user-id change.
     // Previously this was fire-and-forget AFTER setUser, so the re-read raced
@@ -190,6 +236,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await seedReviewerDataIfNeeded(member).catch((e) =>
       console.warn('[AuthContext] reviewer seed failed (non-fatal)', e),
     );
+
+    // Arm (or clear) the onboarding-resume gate BEFORE the identity keys are
+    // persisted, so a force-quit in the gap can't leave a signed-in session
+    // with no marker (which would re-open the Main bypass). Failure here is
+    // non-fatal — worst case the launch defaults to Main, the pre-fix
+    // behavior. See PENDING_ONBOARDING_KEY decision table.
+    setNeedsOnboarding(!!opts?.pendingOnboarding);
+    try {
+      if (opts?.pendingOnboarding) {
+        await AsyncStorage.setItem(PENDING_ONBOARDING_KEY, 'true');
+      } else {
+        await AsyncStorage.removeItem(PENDING_ONBOARDING_KEY);
+      }
+    } catch (e) {
+      console.warn('[AuthContext] pending-onboarding flag persist failed (non-fatal)', e);
+    }
 
     setUser(member);
     // Signing in supersedes guest mode.
@@ -294,6 +356,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Creating a real account supersedes guest mode.
     setIsGuest(false);
     await AsyncStorage.removeItem(GUEST_KEY);
+    // Onboarding reached its account-provisioning finish line — disarm the
+    // resume gate (see PENDING_ONBOARDING_KEY). Best-effort: a failed remove
+    // just re-shows onboarding once on next launch, never locks anyone out.
+    setNeedsOnboarding(false);
+    await AsyncStorage.removeItem(PENDING_ONBOARDING_KEY).catch(() => {});
 
     // Sheets sync stays fire-and-forget (best-effort).
     pushMemberToSheets(memberWithUid);
@@ -335,6 +402,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     // Sign-out also leaves guest mode, so state never leaks between sessions.
     setIsGuest(false);
+    setNeedsOnboarding(false);
+
+    // Audit 2.0.5 P3: best-effort delete of this account's pushTokens/{uid}
+    // doc so a shared device stops receiving the signed-out account's pushes
+    // (incl. admin report alerts). Must run BEFORE firebaseSignOut — the
+    // owner-write rule needs the live auth token. Raced against a short
+    // timeout so sign-out never hangs offline; failure is swallowed with a
+    // log (the doc is refreshed on that account's next sign-in anyway).
+    if (FIREBASE_CONFIGURED && db && auth?.currentUser?.uid) {
+      const uid = auth.currentUser.uid;
+      await Promise.race([
+        deleteDoc(doc(db, 'pushTokens', uid)).catch((err) =>
+          console.warn('[AuthContext] pushTokens cleanup on sign-out failed:', err),
+        ),
+        new Promise<void>((resolve) => setTimeout(resolve, 2500)),
+      ]);
+    }
 
     // Clear the Firebase Auth session — critical for Apple review
     await firebaseSignOut();
@@ -343,6 +427,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.removeItem(STORAGE_KEY);
     await AsyncStorage.removeItem(CUSTOM_MEMBER_KEY);
     await AsyncStorage.removeItem(GUEST_KEY);
+    await AsyncStorage.removeItem(PENDING_ONBOARDING_KEY).catch(() => {});
   }, [user]);
 
   // ── Guest browsing (App Review 5.1.1(v)) ──
@@ -360,7 +445,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, signIn, createAccount, signOut, isGuest, continueAsGuest, exitGuest }}>
+    <AuthContext.Provider value={{ user, isLoading, signIn, createAccount, signOut, isGuest, continueAsGuest, exitGuest, needsOnboarding }}>
       {children}
     </AuthContext.Provider>
   );

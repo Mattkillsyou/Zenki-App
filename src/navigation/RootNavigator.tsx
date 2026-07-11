@@ -244,8 +244,16 @@ const modalTransition = {
 // NAVIGATOR
 // ─────────────────────────────────────────────────
 export function RootNavigator() {
-  const { user, isGuest, isLoading } = useAuth();
+  const { user, isGuest, isLoading, needsOnboarding } = useAuth();
   const { reduceMotion } = useMotion();
+
+  // Audit 2.0.5 P2: a signed-in user who started onboarding but never
+  // finished it (first-time OAuth force-quit) resumes Onboarding instead of
+  // landing in Main with EULA/waiver/permissions bypassed. needsOnboarding
+  // is only ever true on positive proof recorded at OAuth first sign-in —
+  // every existing user resolves to Main with zero network round-trips (see
+  // the PENDING_ONBOARDING_KEY decision table in AuthContext).
+  const resumeOnboarding = !!user && needsOnboarding;
 
   // Reduce Motion → every transition collapses to a short opacity fade (no
   // slide, scale, or spring). Otherwise use the designed push/modal/crossfade.
@@ -263,7 +271,7 @@ export function RootNavigator() {
 
   return (
     <Stack.Navigator
-      initialRouteName={user || isGuest ? 'Main' : 'SignIn'}
+      initialRouteName={user ? (resumeOnboarding ? 'Onboarding' : 'Main') : isGuest ? 'Main' : 'SignIn'}
       screenOptions={{
         headerShown: false,
         gestureEnabled: true,
@@ -279,7 +287,15 @@ export function RootNavigator() {
       />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={push} />
       <Stack.Screen name="Contact" component={ContactScreen} options={push} />
-      <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ ...crossfade, gestureEnabled: false }} />
+      {/* Resume case only: the abandoned onboarding was OAuth-initiated, so
+          the resumed screen skips the email/password step exactly like the
+          live OAuth entry (SignInScreen passes { oauth: true } explicitly). */}
+      <Stack.Screen
+        name="Onboarding"
+        component={OnboardingScreen}
+        initialParams={resumeOnboarding ? { oauth: true } : undefined}
+        options={{ ...crossfade, gestureEnabled: false }}
+      />
       <Stack.Screen name="PermissionsOnboarding" component={PermissionsOnboardingScreen} options={{ ...crossfade, gestureEnabled: false }} />
 
       {/* Main tabs — crossfade from auth */}

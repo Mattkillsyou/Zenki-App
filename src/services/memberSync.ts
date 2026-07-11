@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db, FIREBASE_CONFIGURED } from '../config/firebase';
 import { Member } from '../data/members';
+import { stripUndefined } from './firestoreUtils';
 
 // ─────────────────────────────────────────────────
 // Google Sheets — Apps Script endpoint
@@ -80,9 +81,13 @@ export async function upsertMemberInFirestore(member: Member): Promise<boolean> 
     // now (the /members doc must not carry credentials/PII beyond what its
     // locked-down read rule intends). A cached local member may still hold one.
     const { pushToken, ...safeMember } = member as Member & { pushToken?: string };
+    // stripUndefined: blank optional signup fields (phone/funFact/profilePhoto)
+    // arrive as explicit-undefined keys, which the SDK rejects client-side —
+    // that made BOTH signup-time /members writes throw for anyone who skipped
+    // them (spurious "Profile sync" alert + missing from the admin list).
     await setDoc(
       ref,
-      { ...safeMember, updatedAt: new Date().toISOString() },
+      stripUndefined({ ...safeMember, updatedAt: new Date().toISOString() }),
       { merge: true },
     );
   } catch (err) {
@@ -155,7 +160,7 @@ export async function backfillMemberIfMissing(member: Member): Promise<boolean> 
     try {
       await setDoc(
         ref,
-        { firebaseUid: member.firebaseUid, updatedAt: new Date().toISOString() },
+        stripUndefined({ firebaseUid: member.firebaseUid, updatedAt: new Date().toISOString() }),
         { merge: true },
       );
       return true;
@@ -187,13 +192,13 @@ export async function setMemberAdminRole(member: Member, makeAdmin: boolean): Pr
   const ref = doc(db, 'admins', member.firebaseUid);
   try {
     if (makeAdmin) {
-      await setDoc(ref, {
+      await setDoc(ref, stripUndefined({
         memberId: member.id,
         email: member.email ?? '',
         firstName: member.firstName ?? '',
         lastName: member.lastName ?? '',
         grantedAt: new Date().toISOString(),
-      }, { merge: true });
+      }), { merge: true });
     } else {
       await deleteDoc(ref);
     }
@@ -344,9 +349,11 @@ export async function backfillMembersToFirestore(members: Member[]): Promise<Bac
       const stamp = new Date().toISOString();
       for (const m of slice) {
         const { pushToken, ...safeM } = m as Member & { pushToken?: string };
+        // stripUndefined: one cached member with a blank optional field would
+        // otherwise throw client-side and poison the whole batch.
         batch.set(
           doc(db, 'members', m.id),
-          { ...safeM, updatedAt: stamp },
+          stripUndefined({ ...safeM, updatedAt: stamp }),
           { merge: true },
         );
       }
@@ -361,7 +368,7 @@ export async function backfillMembersToFirestore(members: Member[]): Promise<Bac
           const { pushToken, ...safeM } = m as Member & { pushToken?: string };
           await setDoc(
             doc(db, 'members', m.id),
-            { ...safeM, updatedAt: new Date().toISOString() },
+            stripUndefined({ ...safeM, updatedAt: new Date().toISOString() }),
             { merge: true },
           );
           ok++;

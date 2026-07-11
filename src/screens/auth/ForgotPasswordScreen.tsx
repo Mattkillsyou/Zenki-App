@@ -43,6 +43,17 @@ export function ForgotPasswordScreen({ navigation }: any) {
       Alert.alert('Error', 'Please enter your email address');
       return;
     }
+    // Audit 2.0.5 P3: a bare username ("mbrown") used to sail through to the
+    // false "Check Your Email" success screen — nothing was ever sent. Minimal
+    // shape check only (no lookup, so zero account-enumeration signal); real
+    // validation stays server-side.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      Alert.alert(
+        'Enter an email address',
+        "That doesn't look like an email address. Enter the email on your account — or if you signed up with a username only, contact the dojo to reset your password.",
+      );
+      return;
+    }
     // Username-only / OAuth-hidden accounts have a synthesized address nobody
     // controls. Sending a reset there silently goes into the void while the UI
     // claims success — leaving the user permanently locked out with no signal.
