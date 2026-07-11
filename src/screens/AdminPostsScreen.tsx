@@ -24,6 +24,10 @@ import { Post, listAllPostsForAdmin, deletePost } from '../services/firebasePost
  * Storage media), the same path the Reports → Remove & Block action uses — but
  * here it works on ANY post, not just a reported one.
  */
+// List is capped at the newest N posts (matching the web admin's page size).
+// The header labels the cap when it's hit so the count never reads as a total.
+const POSTS_CAP = 200;
+
 export function AdminPostsScreen({ navigation }: any) {
   const { colors } = useTheme();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -35,7 +39,7 @@ export function AdminPostsScreen({ navigation }: any) {
   // error state instead of a false "No posts" on the moderation surface.
   const [loadError, setLoadError] = useState(false);
   const load = useCallback(async () => {
-    const list = await listAllPostsForAdmin(200);
+    const list = await listAllPostsForAdmin(POSTS_CAP);
     if (list === null) {
       setLoadError(true);
       return;
@@ -48,7 +52,7 @@ export function AdminPostsScreen({ navigation }: any) {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const list = await listAllPostsForAdmin(200);
+      const list = await listAllPostsForAdmin(POSTS_CAP);
       if (!cancelled) {
         if (list === null) setLoadError(true);
         else { setLoadError(false); setPosts(list); }
@@ -170,7 +174,9 @@ export function AdminPostsScreen({ navigation }: any) {
             }
             ListHeaderComponent={
               <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
-                {posts.length} POST{posts.length === 1 ? '' : 'S'} · newest first
+                {posts.length >= POSTS_CAP
+                  ? `NEWEST ${POSTS_CAP} POSTS · older posts not shown`
+                  : `${posts.length} POST${posts.length === 1 ? '' : 'S'} · newest first`}
               </Text>
             }
             ListEmptyComponent={

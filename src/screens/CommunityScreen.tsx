@@ -43,6 +43,19 @@ export function CommunityScreen({ navigation }: any) {
   // "couldn't load" state with a Retry instead of letting it fall through to the
   // "Be the first to share" empty state — an error must never read as "no posts".
   const [error, setError] = useState(false);
+  // Transient inline notice for load failures that KEEP existing content on
+  // screen (failed pull-to-refresh over a populated feed, failed load-more).
+  // The full-screen error state above only covers an empty feed — without
+  // this, those failures were console-only and the stale list gave zero
+  // feedback (audit 2.0.5 P3).
+  const [loadNotice, setLoadNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showLoadNotice = useCallback((msg: string) => {
+    setLoadNotice(msg);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setLoadNotice(null), 4000);
+  }, []);
+  useEffect(() => () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); }, []);
   // The pagination cursor (last post's createdAt) and an in-flight guard live
   // in refs so the FlatList onEndReached handler always sees the latest values
   // without re-creating the callback (and re-binding the list) on every change.
@@ -67,14 +80,16 @@ export function CommunityScreen({ navigation }: any) {
     } catch (err) {
       console.log('[Community] Feed error:', err);
       // Only flip into the error state when there's nothing already on screen;
-      // a failed pull-to-refresh over an existing feed shouldn't blow it away.
+      // a failed pull-to-refresh over an existing feed shouldn't blow it away —
+      // but it must say SOMETHING, or the stale list reads as a fresh one.
       if (postsRef.current.length === 0) setError(true);
+      else showLoadNotice("Couldn't refresh — showing earlier posts. Check your connection and try again.");
     } finally {
       loadingRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [showLoadNotice]);
 
   // Load the NEXT page (infinite scroll). Keeps paging until it adds at least one
   // VISIBLE (non-hidden, non-duplicate) post or runs out — otherwise a page that
@@ -102,11 +117,14 @@ export function CommunityScreen({ navigation }: any) {
       }
     } catch (error) {
       console.log('[Community] Load-more error:', error);
+      // Console-only left end-of-feed indistinguishable from a failure —
+      // surface it so the user knows to retry rather than assume they're done.
+      showLoadNotice("Couldn't load more posts. Check your connection and try again.");
     } finally {
       loadingRef.current = false;
       setLoadingMore(false);
     }
-  }, [hasMore, blockedIds, mutedIds, blockedByIds]);
+  }, [hasMore, blockedIds, mutedIds, blockedByIds, showLoadNotice]);
 
   // Re-filter whenever the blocked/muted lists change so unblocks/unmutes show
   // instantly. filterHidden hides BOTH blocked and muted authors.
@@ -252,6 +270,14 @@ export function CommunityScreen({ navigation }: any) {
       </FadeInView>
 
       <FadeInView baseDelay={60} index={0} style={styles.body}>
+      {/* Transient load-failure notice — only set when stale content stayed on
+          screen (failed refresh / load-more), so it renders over the list. */}
+      {loadNotice && (
+        <View style={[styles.loadNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Ionicons name="cloud-offline-outline" size={16} color={colors.textMuted} />
+          <Text style={[styles.loadNoticeText, { color: colors.textSecondary }]}>{loadNotice}</Text>
+        </View>
+      )}
       {!user ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="people-outline" size={56} color={colors.textMuted} />
@@ -441,6 +467,20 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     alignItems: 'center',
   },
+  loadNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: spacing.md,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    maxWidth: MAX_CONTENT_WIDTH,
+    alignSelf: 'center',
+  },
+  loadNoticeText: { fontSize: 13, fontWeight: '500', flexShrink: 1 },
   emptyContainer: {
     flex: 1,
     alignItems: 'center',

@@ -175,6 +175,17 @@ export function AdminReportsScreen({ navigation }: any) {
               Alert.alert('Could not ban user', res.error ?? 'Please try again.');
               return;
             }
+            // The CF reports per-step purge failures in `errors` while still
+            // ok:true (the account IS disabled) — don't let a failed content
+            // purge read as fully clean.
+            const purgeErrors = res.errors ? Object.keys(res.errors) : [];
+            if (purgeErrors.length > 0) {
+              Alert.alert(
+                'User banned — content purge incomplete',
+                `Their account is disabled, but these cleanup steps failed: ${purgeErrors.join(', ')}. Their content may still be visible — remove it manually from Community Posts.`,
+              );
+              return;
+            }
             Alert.alert('User banned', 'Their account has been disabled. Resolve the report with Dismiss or Remove & Block.');
           },
         },

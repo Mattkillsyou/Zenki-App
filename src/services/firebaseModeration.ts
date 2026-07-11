@@ -56,7 +56,9 @@ export async function deletePostCascadeViaFunction(postId: string): Promise<{ ok
  * they can no longer sign in or mint tokens, and flags users/{uid}.banned.
  * Required for Apple 1.2 "eject offending users".
  */
-export async function banUserViaFunction(targetUid: string): Promise<{ ok: boolean; error?: string }> {
+export async function banUserViaFunction(
+  targetUid: string,
+): Promise<{ ok: boolean; error?: string; errors?: Record<string, string> }> {
   return callFunction('banUser', { targetUid });
 }
 

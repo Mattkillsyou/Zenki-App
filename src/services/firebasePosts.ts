@@ -1,9 +1,10 @@
-import { db, FIREBASE_CONFIGURED } from '../config/firebase';
+import { db, storage, FIREBASE_CONFIGURED } from '../config/firebase';
 import {
   collection, addDoc, doc, getDoc, getDocFromServer, getDocs, getCountFromServer,
   query, where, orderBy, limit, limitToLast, startAfter, runTransaction, documentId,
 } from 'firebase/firestore';
 import type { QueryDocumentSnapshot } from 'firebase/firestore';
+import { ref as storageRef, deleteObject } from 'firebase/storage';
 import { getCurrentUid, getCurrentIdToken } from './firebaseAuth';
 import { uploadMedia } from './firebaseStorage';
 import { deletePostCascadeViaFunction } from './firebaseModeration';
@@ -20,6 +21,24 @@ export interface Post {
   likes: number;
   liked?: boolean;
   createdAt: string;
+}
+
+/**
+ * Best-effort delete of an already-uploaded post media object by its download
+ * URL (`ref()` accepts https download URLs). Called when the follow-up post
+ * doc write fails — the media is in Storage but no doc references it, and a
+ * retry re-uploads under a fresh `Date.now()` filename (see uploadMedia), so
+ * without this the orphaned objects accumulate forever. Never throws:
+ * cleanup must not mask the original post error.
+ */
+async function cleanupOrphanedMedia(mediaUrl: string): Promise<void> {
+  // Unconfigured builds get the local uri back from uploadMedia — nothing to delete.
+  if (!storage || !/^https?:\/\//.test(mediaUrl)) return;
+  try {
+    await deleteObject(storageRef(storage, mediaUrl));
+  } catch (err: any) {
+    console.warn('[createPost] orphan media cleanup failed (non-fatal):', err?.code || err?.message || 'unknown');
+  }
 }
 
 /** Photo/video post — uploads media then creates doc. */
@@ -55,6 +74,11 @@ export async function createPost(mediaUri: string, mediaType: 'photo' | 'video',
       await getCurrentIdToken(true).catch(() => null);
       return addDoc(collection(db!, 'posts'), postData);
     }
+    throw e;
+  }).catch(async (e: any) => {
+    // addDoc failed for good (including the one retry): delete the uploaded
+    // media so it doesn't sit orphaned in Storage, then rethrow the original.
+    await cleanupOrphanedMedia(mediaUrl);
     throw e;
   });
   // Best-effort server-confirm (non-fatal). experimentalForceLongPolling
@@ -365,7 +389,21 @@ export async function getUserPosts(userId: string, max = 30): Promise<Post[]> {
       limit(max),
     ];
     const snap = await getDocs(query(collection(firestore, 'posts'), ...constraints));
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Post));
+    // Coerce legacy shapes (Timestamp/number createdAt, missing displayName)
+    // the same way getFeed/listAllPostsForAdmin do — a raw spread let a
+    // pre-hardening doc render "Invalid Date" on the profile grid. Drop (and
+    // log) only when createdAt is genuinely uncoercible.
+    return snap.docs
+      .map((d) => {
+        const data = d.data() as any;
+        const createdAt = coerceCreatedAt(data.createdAt);
+        if (createdAt === null) {
+          console.warn(`[getUserPosts] dropping post ${d.id}: uncoercible createdAt`, data?.createdAt);
+          return null;
+        }
+        return { ...data, id: d.id, createdAt, displayName: coerceDisplayName(data.displayName) } as Post;
+      })
+      .filter((p): p is Post => p !== null);
   };
 
   // Owner: the unfiltered single-author query is provable via the rule's
@@ -528,7 +566,7 @@ export interface Comment {
   createdAt: string;
 }
 
-export async function listComments(postId: string, max = 100): Promise<Comment[]> {
+export async function listComments(postId: string, max = 100): Promise<Comment[] | null> {
   if (!FIREBASE_CONFIGURED || !db) return [];
   try {
     // limitToLast (not limit) anchors the window at the NEWEST `max` comments;
@@ -556,8 +594,11 @@ export async function listComments(postId: string, max = 100): Promise<Comment[]
       } as Comment;
     });
   } catch (err) {
+    // Audit 2.0.5 P3: null is the load-failure sentinel (cf.
+    // listAllPostsForAdmin) — swallowing to [] rendered failures as
+    // "Be the first to comment."
     console.warn('[listComments] failed:', err);
-    return [];
+    return null;
   }
 }
 

@@ -396,8 +396,12 @@ function reportRow(r, gen, onResolved) {
     busy(true);
     const res = await callFn('banUser', { targetUid: r.targetUserId });
     if (!res.ok) { busy(false); setMsg('Ban failed: ' + (res.error || 'unknown'), true); return; }
+    // ok:true can still carry per-step purge failures in `errors` (the account
+    // IS disabled) — resolve the report but tell the admin what didn't purge.
+    const purgeFailed = res.errors ? Object.keys(res.errors) : [];
     try { await resolve('actioned'); }
-    catch (e) { busy(false); setMsg('User banned, but the report could not be resolved: ' + ((e && e.message) || 'unknown'), true); }
+    catch (e) { busy(false); setMsg('User banned, but the report could not be resolved: ' + ((e && e.message) || 'unknown'), true); return; }
+    if (purgeFailed.length) setMsg('User banned, but content purge steps failed (' + purgeFailed.join(', ') + ') — their content may still be visible. Remove it from the Community tab.', true);
   });
 
   btns.appendChild(dismissBtn);

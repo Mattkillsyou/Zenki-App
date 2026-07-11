@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useEmployeeTasks } from '../context/EmployeeTaskContext';
-import { MEMBERS } from '../data/members';
+import { MEMBERS, Member } from '../data/members';
+import { subscribeToAllMembers } from '../services/memberSync';
+import { getMergedMembers, readOverrides } from '../services/memberOverrides';
 import { spacing } from '../theme';
 import { KeyboardAwareScrollView, ScreenContainer } from '../components';
 
@@ -37,7 +39,39 @@ export function AdminEmployeeTasksScreen({ navigation }: any) {
   const [dueDate, setDueDate] = useState(todayISO());
   const [assignedTo, setAssignedTo] = useState<string | null>(null);
 
-  const employees = MEMBERS.filter((m) => m.isEmployee);
+  // Live member roster. The static seed MEMBERS never marks anyone
+  // isEmployee, so filtering it (the pre-2.0.5 behavior) rendered only the
+  // "All employees" chip and labeled every legacy assignee "Unknown". Use
+  // the same source Admin → Members uses: local overrides merged on top of
+  // the seed for instant hydration, then live Firestore snapshots (with
+  // local tombstones filtered and overrides re-applied) so employees marked
+  // on any device show up here.
+  const [members, setMembers] = useState<Member[]>(MEMBERS);
+  useEffect(() => {
+    let cancelled = false;
+    getMergedMembers().then((merged) => {
+      if (!cancelled) setMembers(merged);
+    });
+    const unsub = subscribeToAllMembers(async (remote) => {
+      if (cancelled || remote.length === 0) return;
+      const overrides = await readOverrides();
+      if (cancelled) return;
+      const merged = remote
+        .filter((m) => !(overrides[m.id] as Member & { _deleted?: boolean })?._deleted)
+        .map((m) => {
+          const ov = overrides[m.id];
+          if (!ov || (ov as Member & { _deleted?: boolean })._deleted) return m;
+          return { ...m, ...ov };
+        });
+      setMembers(merged);
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, []);
+
+  const employees = members.filter((m) => m.isEmployee);
 
   const resetForm = () => {
     setEditingId(null);
@@ -260,8 +294,12 @@ export function AdminEmployeeTasksScreen({ navigation }: any) {
                 .slice()
                 .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''))
                 .map((t) => {
+                  // Resolve against the full live roster, not just current
+                  // employees — the assignee may have been un-flagged since
+                  // the task was created. "Unknown" only for ids that no
+                  // longer exist anywhere (e.g. deleted members).
                   const assignee = t.assignedToMemberId
-                    ? employees.find((e) => e.id === t.assignedToMemberId)?.firstName ?? 'Unknown'
+                    ? members.find((m) => m.id === t.assignedToMemberId)?.firstName ?? 'Unknown'
                     : 'Everyone';
                   return (
                     <TaskCard

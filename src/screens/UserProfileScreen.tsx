@@ -4,6 +4,8 @@ import { KeyboardAwareScrollView } from '../components';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import { useTheme } from '../context/ThemeContext';
 import { useBlocks } from '../context/BlocksContext';
 import { typography, spacing, borderRadius } from '../theme';
@@ -76,6 +78,17 @@ export function UserProfileScreen({ navigation, route }: any) {
             style: 'destructive',
             onPress: async () => {
               await blockUser(userId);
+              // Revoke THEIR approved-follower edge (/followers/{me}/followers/{them})
+              // too — otherwise a blocked ex-follower keeps rules-level read of my
+              // private posts and still counts as a follower. Rules already let the
+              // followed owner delete this edge (firestore.rules:352); best-effort so
+              // a hiccup here never aborts the block itself.
+              const me = getCurrentUid();
+              if (db && me) {
+                await deleteDoc(doc(db, 'followers', me, 'followers', userId)).catch((e) =>
+                  console.warn('[UserProfile] follower-edge revoke failed:', e),
+                );
+              }
               if (following) {
                 await unfollowUser(userId);
                 setFollowing(false);
@@ -89,10 +102,15 @@ export function UserProfileScreen({ navigation, route }: any) {
   };
 
   useEffect(() => {
-    loadProfile();
+    // Standard cancelled guard — a slow response from a previous userId (params
+    // can change in place when profiles stack) or an unmounted screen must not
+    // land late and clobber the fresher load's state.
+    let cancelled = false;
+    loadProfile(() => cancelled);
+    return () => { cancelled = true; };
   }, [userId]);
 
-  const loadProfile = async () => {
+  const loadProfile = async (isCancelled: () => boolean = () => false) => {
     // Load the profile + relationship first. These reads are always permitted
     // (/users, /following, /followers are signed-in-readable). Posts are loaded
     // SEPARATELY and only when allowed, because a private author's posts are
@@ -104,6 +122,7 @@ export function UserProfileScreen({ navigation, route }: any) {
       getFollowerCount(userId),
       getFollowingCount(userId),
     ]);
+    if (isCancelled()) return;
     setProfile(p);
     setFollowing(isFollow);
     setFollowers(fCount);
@@ -112,11 +131,15 @@ export function UserProfileScreen({ navigation, route }: any) {
     // Only fetch posts when the viewer may see them (own / public author /
     // approved follower). getUserPosts is also try/catch-safe as a backstop.
     const maySeePosts = isOwnProfile || (!!p && !p.isPrivate) || isFollow;
-    setPosts(maySeePosts ? await getUserPosts(userId) : []);
+    const nextPosts = maySeePosts ? await getUserPosts(userId) : [];
+    if (isCancelled()) return;
+    setPosts(nextPosts);
 
     // Pending outbound follow request (private targets you've requested).
     if (!isOwnProfile && !isFollow) {
-      setRequested(await hasRequestedFollow(userId).catch(() => false));
+      const req = await hasRequestedFollow(userId).catch(() => false);
+      if (isCancelled()) return;
+      setRequested(req);
     }
 
     // Own profile only: surface a pending-follow-request count for the inbox
@@ -124,6 +147,7 @@ export function UserProfileScreen({ navigation, route }: any) {
     if (isOwnProfile) {
       try {
         const requests = await listFollowRequests();
+        if (isCancelled()) return;
         // Blocked/blocked-by requesters are hidden in the FollowRequests queue,
         // so keep the badge count consistent with what the screen shows.
         setRequestCount(filterBlocked(requests, 'requesterId').length);
@@ -141,26 +165,34 @@ export function UserProfileScreen({ navigation, route }: any) {
     // instead of silently no-opping (followUser returns '' for a null uid).
     if (!requireAuth(getCurrentUid(), navigation, 'follow members')) return;
 
-    if (following) {
-      await unfollowUser(userId);
-      setFollowing(false);
-      setFollowers((p) => p - 1);
-    } else if (requested) {
-      // Tap "Requested" to withdraw a pending request to a private account.
-      await cancelFollowRequest(userId);
-      setRequested(false);
-    } else {
-      const result = await followUser(userId);
-      if (result === 'requested') {
-        setRequested(true);
-      } else if (result === 'followed') {
-        setFollowing(true);
-        setFollowers((p) => p + 1);
-        // Re-fetch the grid now that the viewer follows the author — the
-        // mount-time fetch may have been empty/partial (private author, or a
-        // privacy flip after mount), and the screen never remounts on Follow.
-        setPosts(await getUserPosts(userId));
+    try {
+      if (following) {
+        await unfollowUser(userId);
+        setFollowing(false);
+        setFollowers((p) => p - 1);
+      } else if (requested) {
+        // Tap "Requested" to withdraw a pending request to a private account.
+        await cancelFollowRequest(userId);
+        setRequested(false);
+      } else {
+        const result = await followUser(userId);
+        if (result === 'requested') {
+          setRequested(true);
+        } else if (result === 'followed') {
+          setFollowing(true);
+          setFollowers((p) => p + 1);
+          // Re-fetch the grid now that the viewer follows the author — the
+          // mount-time fetch may have been empty/partial (private author, or a
+          // privacy flip after mount), and the screen never remounts on Follow.
+          setPosts(await getUserPosts(userId));
+        }
       }
+    } catch (e) {
+      // Guaranteed-hit once the followRequests blockedBetween rule deploys:
+      // re-requesting after a denial/block is rules-rejected (audit P3-a).
+      // Surface it instead of an unhandled rejection with a stale button.
+      console.warn('[UserProfile] follow action failed:', e);
+      Alert.alert("Couldn't update follow", 'Check your connection and try again.');
     }
   };
 

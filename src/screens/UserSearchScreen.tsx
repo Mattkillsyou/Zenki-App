@@ -25,6 +25,9 @@ export function UserSearchScreen({ navigation, route }: any) {
   const action: 'view' | 'message' = route?.params?.action || 'view';
   const [members, setMembers] = useState<MemberProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  // Bumped by the Retry button to re-run the member fetch effect.
+  const [fetchKey, setFetchKey] = useState(0);
   const [queryText, setQueryText] = useState('');
 
   useEffect(() => {
@@ -35,12 +38,23 @@ export function UserSearchScreen({ navigation, route }: any) {
       setLoading(false);
       return;
     }
+    let cancelled = false;
     (async () => {
-      const list = await getAllMembers();
-      setMembers(list);
-      setLoading(false);
+      setLoading(true);
+      setLoadError(false);
+      try {
+        const list = await getAllMembers();
+        if (!cancelled) setMembers(list);
+      } catch {
+        // Offline or rules-denied (cold-start auth race) — show a real error
+        // state with retry instead of a false "No members yet" (audit P3).
+        if (!cancelled) setLoadError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
-  }, [user?.id]);
+    return () => { cancelled = true; };
+  }, [user?.id, fetchKey]);
 
   const filtered = useMemo(() => {
     const q = queryText.trim().toLowerCase();
@@ -153,6 +167,22 @@ export function UserSearchScreen({ navigation, route }: any) {
       ) : loading ? (
         <View style={styles.empty}>
           <ActivityIndicator color={colors.gold} />
+        </View>
+      ) : loadError ? (
+        <View style={styles.empty}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.textMuted} />
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Couldn't load members</Text>
+          <Text style={[styles.emptySub, { color: colors.textMuted }]}>
+            Check your connection and try again.
+          </Text>
+          <SoundPressable
+            style={[styles.signInBtn, { backgroundColor: colors.gold }]}
+            onPress={() => setFetchKey((k) => k + 1)}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading members"
+          >
+            <Text style={styles.signInLabel}>Retry</Text>
+          </SoundPressable>
         </View>
       ) : filtered.length === 0 ? (
         <View style={styles.empty}>

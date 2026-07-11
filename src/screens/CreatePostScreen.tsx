@@ -23,7 +23,10 @@ export function CreatePostScreen({ navigation }: any) {
   const [caption, setCaption] = useState('');
   const [uploading, setUploading] = useState(false);
   const TEXT_MAX = 280;
-  const canPostText = mode === 'text' && caption.trim().length > 0;
+  // Enforce the text cap at submit too — `caption` is shared with photo mode
+  // (maxLength 500), so switching Photo → Text can carry over-cap text past
+  // the input's own maxLength and land a "500/280" post.
+  const canPostText = mode === 'text' && caption.trim().length > 0 && caption.length <= TEXT_MAX;
   const canPostPhoto = mode === 'photo' && !!mediaUri;
   const canPost = canPostText || canPostPhoto;
 
@@ -104,11 +107,27 @@ export function CreatePostScreen({ navigation }: any) {
           body: "Couldn't reach the server to save your post. Check your connection and try again in a moment.",
         };
       }
+      // Upload-layer codes (firebaseStorage.uriToBlob/uploadMedia). These are
+      // per-asset failures — retrying the SAME asset can't succeed, so steer
+      // the user to fix or swap the asset instead of a generic "try again".
+      // (empty-blob message arrives as 'uploadMedia: empty-blob' — match loosely.)
+      if (/empty-blob/.test(code)) {
+        return {
+          title: "Couldn't read that file",
+          body: "That photo or video is empty on this device — it may be an iCloud-optimized original that isn't downloaded. Open it in the Photos app first, or pick a different one.",
+        };
+      }
+      if (/xhr-load-failed/.test(code)) {
+        return {
+          title: "Couldn't read that file",
+          body: "That photo or video couldn't be loaded from your library. Pick it again, or choose a different one.",
+        };
+      }
       return { title: 'Error', body: 'Failed to post. Please try again.' };
     };
 
     if (mode === 'text') {
-      if (!caption.trim()) return;
+      if (!caption.trim() || caption.length > TEXT_MAX) return;
       setUploading(true);
       try {
         const created = await createTextPost(caption);
@@ -134,11 +153,30 @@ export function CreatePostScreen({ navigation }: any) {
     }
   };
 
+  // Close (X) while an upload is in flight: the post promise keeps running
+  // after goBack() and completes invisibly — users assumed the post failed and
+  // reposted duplicates. Warn before leaving; success auto-dismisses via
+  // handlePost's own goBack().
+  const handleClose = () => {
+    if (uploading) {
+      Alert.alert(
+        'Still posting',
+        'Your post is still uploading. If you leave now you won\'t see whether it finished. Leave anyway?',
+        [
+          { text: 'Keep posting', style: 'cancel' },
+          { text: 'Leave', style: 'destructive', onPress: () => navigation.goBack() },
+        ],
+      );
+      return;
+    }
+    navigation.goBack();
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <SoundPressable onPress={() => navigation.goBack()}>
+        <SoundPressable onPress={handleClose}>
           <Ionicons name="close" size={28} color={colors.textPrimary} />
         </SoundPressable>
         <Text style={[styles.title, { color: colors.textPrimary }]}>New Post</Text>

@@ -9,7 +9,10 @@ import {
   Alert,
   ActionSheetIOS,
   Platform,
+  RefreshControl,
+  ScrollView,
 } from 'react-native';
+import { doc, deleteDoc } from 'firebase/firestore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SoundPressable } from '../components/SoundPressable';
@@ -21,6 +24,7 @@ import { spacing, typography, MAX_CONTENT_WIDTH } from '../theme';
 import { Comment, addComment, listComments } from '../services/firebasePosts';
 import { getCurrentUid } from '../services/firebaseAuth';
 import { requireAuth } from '../utils/requireAuth';
+import { db } from '../config/firebase';
 
 export function CommentsScreen({ navigation, route }: any) {
   const { colors } = useTheme();
@@ -30,6 +34,12 @@ export function CommentsScreen({ navigation, route }: any) {
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  // True when a load failed with nothing on screen. Surfaced as a distinct
+  // "couldn't load" state with a Retry instead of falling through to the
+  // "Be the first to comment." empty state — an error must never read as
+  // "no comments" (same standard as CommunityScreen's feed error state).
+  const [error, setError] = useState(false);
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [reportTarget, setReportTarget] = useState<Comment | null>(null);
@@ -42,24 +52,44 @@ export function CommentsScreen({ navigation, route }: any) {
     [comments, filterHidden, blockedIds, mutedIds],
   );
 
+  // Single loader — mount, pull-to-refresh, and the error-state Retry all
+  // funnel through here.
   const reload = useCallback(async () => {
     if (!postId) return;
-    const list = await listComments(postId);
-    setComments(list);
-    setLoading(false);
+    try {
+      // listComments currently swallows failures to `[]`; treat a null return
+      // (the codebase's load-failure sentinel — cf. listAllPostsForAdmin) or
+      // a throw as an error so it never renders as an empty list.
+      const list = (await listComments(postId)) as Comment[] | null;
+      if (list === null) {
+        setError(true);
+      } else {
+        setComments(list);
+        setError(false);
+      }
+    } catch (err) {
+      console.log('[Comments] load error:', err);
+      setError(true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [postId]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const list = await listComments(postId);
-      if (!cancelled) {
-        setComments(list);
-        setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [postId]);
+    reload();
+  }, [reload]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    reload();
+  };
+
+  const handleRetry = () => {
+    setError(false);
+    setLoading(true);
+    reload();
+  };
 
   const handleSubmit = async () => {
     const trimmed = text.trim();
@@ -101,9 +131,52 @@ export function CommentsScreen({ navigation, route }: any) {
     );
   };
 
+  const confirmDeleteComment = (comment: Comment) => {
+    Alert.alert(
+      'Delete this comment?',
+      "This can't be undone.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Owner delete is rules-permitted directly (firestore.rules:
+              // comments delete if resource.data.userId == request.auth.uid) —
+              // same doc path the admin moderation flow removes.
+              if (!db) throw new Error('firebase-not-configured');
+              await deleteDoc(doc(db, 'posts', postId, 'comments', comment.id));
+              setComments((prev) => prev.filter((c) => c.id !== comment.id));
+            } catch (err) {
+              console.warn('[Comments] delete failed:', err);
+              Alert.alert("Couldn't delete comment", 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const openCommentMenu = (comment: Comment) => {
-    // No report/block/mute on your own comment.
-    if (comment.userId === myUid) return;
+    // Your own comment: no report/block/mute on yourself — the menu is just
+    // the owner delete (audit P2: members previously had NO way to remove
+    // their own comment; the rules have always permitted it).
+    if (comment.userId === myUid) {
+      if (Platform.OS === 'ios') {
+        ActionSheetIOS.showActionSheetWithOptions(
+          { options: ['Delete comment', 'Cancel'], cancelButtonIndex: 1, destructiveButtonIndex: 0, title: 'Your comment' },
+          (idx) => { if (idx === 0) confirmDeleteComment(comment); },
+        );
+      } else {
+        // Android / Web fallback — Alert as an action sheet
+        Alert.alert('Your comment', undefined, [
+          { text: 'Delete comment', style: 'destructive', onPress: () => confirmDeleteComment(comment) },
+          { text: 'Cancel', style: 'cancel' },
+        ]);
+      }
+      return;
+    }
 
     const options = ['Report comment', 'Mute user', 'Block user', 'Cancel'];
     const cancelIndex = options.length - 1;
@@ -149,16 +222,14 @@ export function CommentsScreen({ navigation, route }: any) {
             {formatTimestamp(item.createdAt)}
           </Text>
         </View>
-        {!isOwn && (
-          <SoundPressable
-            onPress={() => openCommentMenu(item)}
-            onLongPress={() => openCommentMenu(item)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityLabel={`Comment options from ${item.displayName}`}
-          >
-            <Ionicons name="ellipsis-horizontal" size={18} color={colors.textSecondary} />
-          </SoundPressable>
-        )}
+        <SoundPressable
+          onPress={() => openCommentMenu(item)}
+          onLongPress={() => openCommentMenu(item)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel={isOwn ? 'Options for your comment' : `Comment options from ${item.displayName}`}
+        >
+          <Ionicons name="ellipsis-horizontal" size={18} color={colors.textSecondary} />
+        </SoundPressable>
       </View>
     );
   };
@@ -178,13 +249,38 @@ export function CommentsScreen({ navigation, route }: any) {
           <View style={styles.center}>
             <ActivityIndicator color={colors.gold} />
           </View>
+        ) : error && visibleComments.length === 0 ? (
+          <ScrollView
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.gold} />}
+            contentContainerStyle={{ flex: 1 }}
+          >
+            <View style={styles.center}>
+              <Ionicons name="cloud-offline-outline" size={48} color={colors.textSecondary} />
+              <Text style={[styles.empty, { color: colors.textSecondary }]}>
+                Couldn't load comments. Check your connection and try again.
+              </Text>
+              <SoundPressable
+                style={[styles.retryButton, { backgroundColor: colors.gold }]}
+                onPress={handleRetry}
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading comments"
+              >
+                <Text style={styles.retryLabel}>Retry</Text>
+              </SoundPressable>
+            </View>
+          </ScrollView>
         ) : visibleComments.length === 0 ? (
-          <View style={styles.center}>
-            <Ionicons name="chatbubble-outline" size={48} color={colors.textSecondary} />
-            <Text style={[styles.empty, { color: colors.textSecondary }]}>
-              Be the first to comment.
-            </Text>
-          </View>
+          <ScrollView
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.gold} />}
+            contentContainerStyle={{ flex: 1 }}
+          >
+            <View style={styles.center}>
+              <Ionicons name="chatbubble-outline" size={48} color={colors.textSecondary} />
+              <Text style={[styles.empty, { color: colors.textSecondary }]}>
+                Be the first to comment.
+              </Text>
+            </View>
+          </ScrollView>
         ) : (
           <FlatList
             data={visibleComments}
@@ -194,6 +290,9 @@ export function CommentsScreen({ navigation, route }: any) {
             keyboardShouldPersistTaps="handled"
             automaticallyAdjustKeyboardInsets
             contentInsetAdjustmentBehavior="automatic"
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.gold} />
+            }
           />
         )}
 
@@ -271,8 +370,21 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   line: { fontSize: 14, lineHeight: 19 },
   timestamp: { fontSize: 11, marginTop: 4 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
-  empty: { fontSize: 14 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingHorizontal: spacing.xl },
+  empty: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  retryButton: {
+    marginTop: spacing.sm,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryLabel: {
+    color: '#000',
+    fontSize: 15,
+    fontWeight: '800',
+  },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',

@@ -7,7 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useMotion } from '../context/MotionContext';
 import { useBlocks } from '../context/BlocksContext';
 import { getCurrentUid } from '../services/firebaseAuth';
-import { Post } from '../services/firebasePosts';
+import { Post, deletePost } from '../services/firebasePosts';
 import { ReportModal } from './ReportModal';
 
 interface PostCardProps {
@@ -33,13 +33,33 @@ export function PostCard({ post, onLike, onUserPress, onCommentPress }: PostCard
   const heartAnim = useRef(new Animated.Value(1)).current;
   const dblTapRef = useRef<number>(0);
   const [reportOpen, setReportOpen] = useState(false);
+  // Set once the owner's cascade delete succeeds — the card hides itself
+  // immediately (the post is already gone server-side, so the feed drops it
+  // for good on the next refresh, same as block/mute removals resolve there).
+  const [deleted, setDeleted] = useState(false);
 
   const isOwn = getCurrentUid() === post.userId;
 
   const openMenu = () => {
-    // Skip menu on own posts for now (no edit/delete wired at card level yet).
-    // This also keeps Mute/Block off your own posts.
-    if (isOwn) return;
+    // Own post: no Report/Mute/Block on yourself — the menu is just the
+    // owner delete (audit P2: members previously had NO way to remove their
+    // own post; the backend has always supported it via deletePostCascade).
+    if (isOwn) {
+      const options = ['Delete post', 'Cancel'];
+      if (Platform.OS === 'ios') {
+        ActionSheetIOS.showActionSheetWithOptions(
+          { options, cancelButtonIndex: 1, destructiveButtonIndex: 0, title: 'Your post' },
+          (idx) => { if (idx === 0) confirmDelete(); },
+        );
+      } else {
+        // Android / Web fallback — use Alert as an action sheet
+        Alert.alert('Your post', undefined, [
+          { text: 'Delete post', style: 'destructive', onPress: confirmDelete },
+          { text: 'Cancel', style: 'cancel' },
+        ]);
+      }
+      return;
+    }
 
     const muteLabel = `Mute @${post.displayName}`;
     const options = ['Report post', muteLabel, 'Block user', 'Cancel'];
@@ -70,6 +90,33 @@ export function PostCard({ post, onLike, onUserPress, onCommentPress }: PostCard
         { text: 'Cancel', style: 'cancel' },
       ]);
     }
+  };
+
+  const confirmDelete = () => {
+    Alert.alert(
+      'Delete this post?',
+      "The post and all of its likes and comments will be removed. This can't be undone.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            // deletePost goes through the deletePostCascade Cloud Function
+            // (post doc + likes/comments subcollections + Storage media).
+            const res = await deletePost(post.id);
+            if (res.ok) {
+              setDeleted(true);
+            } else {
+              Alert.alert(
+                "Couldn't delete post",
+                'Please check your connection and try again.',
+              );
+            }
+          },
+        },
+      ],
+    );
   };
 
   const confirmMute = () => {
@@ -161,6 +208,10 @@ export function PostCard({ post, onLike, onUserPress, onCommentPress }: PostCard
   const [avatarErrored, setAvatarErrored] = React.useState(false);
   const [mediaErrored, setMediaErrored] = React.useState(false);
 
+  // Owner deleted this post above — collapse the card in place. (Kept after
+  // every hook so the hook order never changes across renders.)
+  if (deleted) return null;
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -189,7 +240,7 @@ export function PostCard({ post, onLike, onUserPress, onCommentPress }: PostCard
         <SoundPressable
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           onPress={openMenu}
-          accessibilityLabel={`Post options from ${post.displayName}`}
+          accessibilityLabel={isOwn ? 'Options for your post' : `Post options from ${post.displayName}`}
         >
           <Ionicons name="ellipsis-horizontal" size={20} color={colors.textPrimary} />
         </SoundPressable>
