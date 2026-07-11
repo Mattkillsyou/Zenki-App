@@ -16,6 +16,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParseJSON } from '../utils/safeStorage';
 import { useTheme } from '../context/ThemeContext';
 import { useSound } from '../context/SoundContext';
+import { useKeepAwake } from 'expo-keep-awake';
+import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { useSenpai } from '../context/SenpaiContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 import { spacing } from '../theme';
@@ -44,6 +46,10 @@ function formatMMSS(totalSec: number): string {
 }
 
 export function TimerScreen({ navigation, route }: any) {
+  // Audit 2.0.5: timers must survive hands-free use — without keep-awake,
+  // iOS auto-lock backgrounded the screen and every timer silently froze
+  // mid-round. Active only while this screen is mounted.
+  useKeepAwake();
   const { colors } = useTheme();
   const { play } = useSound();
   const { state: senpaiState, triggerReaction: senpaiTrigger, shouldReact: senpaiShouldReact } = useSenpai();
@@ -597,6 +603,11 @@ function StopwatchAndCountdown() {
 
   const [running, setRunning] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Audit 2.0.5: anchor to wall-clock epochs instead of counting interval
+  // ticks — JS timers suspend in the background/locked, so a 2-minute lock
+  // used to simply not count. (The meditation timer below already did this.)
+  const stopwatchStartRef = useRef(0);
+  const countdownEndRef = useRef(0);
 
   useEffect(() => {
     if (mode === 'countdown' && !running) setRemaining(target);
@@ -607,23 +618,27 @@ function StopwatchAndCountdown() {
       if (intervalRef.current) clearInterval(intervalRef.current);
       return;
     }
+    if (mode === 'stopwatch') {
+      stopwatchStartRef.current = Date.now() - elapsed * 1000;
+    } else {
+      countdownEndRef.current = Date.now() + remaining * 1000;
+    }
     intervalRef.current = setInterval(() => {
       if (mode === 'stopwatch') {
-        setElapsed((e) => e + 1);
+        setElapsed(Math.max(0, Math.floor((Date.now() - stopwatchStartRef.current) / 1000)));
       } else {
-        setRemaining((r) => {
-          if (r <= 1) {
-            Vibration.vibrate([0, 200, 100, 200]);
-            setRunning(false);
-            return 0;
-          }
-          return r - 1;
-        });
+        const left = Math.max(0, Math.ceil((countdownEndRef.current - Date.now()) / 1000));
+        setRemaining(left);
+        if (left <= 0) {
+          Vibration.vibrate([0, 200, 100, 200]);
+          setRunning(false);
+        }
       }
-    }, 1000);
+    }, 250);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running, mode]);
 
   const reset = () => {
@@ -766,9 +781,37 @@ function NumberRow({
 // Presets: 21 min, 30 min, 60 min
 // ═════════════════════════════════════════════════════
 
+// Audit 2.0.5: native used to only VIBRATE while the copy promised a bowl
+// tone. Real bundled bowl WAVs now play via expo-audio (same pattern as
+// src/sounds/synth.ts); vibration stays as a haptic accent.
+const BOWL_SOURCES = {
+  start: require('../assets/sounds/bowl.wav'),
+  end: require('../assets/sounds/bowl_end.wav'),
+};
+const bowlCache = new Map<string, ReturnType<typeof createAudioPlayer>>();
+let bowlAudioReady: Promise<void> | null = null;
+function playBowlNative(isEnd: boolean) {
+  if (!bowlAudioReady) {
+    bowlAudioReady = setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'mixWithOthers' }).catch(() => {});
+  }
+  bowlAudioReady.then(() => {
+    try {
+      const key = isEnd ? 'end' : 'start';
+      let player = bowlCache.get(key);
+      if (!player) {
+        player = createAudioPlayer(BOWL_SOURCES[key as 'start' | 'end']);
+        bowlCache.set(key, player);
+      }
+      player.seekTo(0);
+      player.play();
+    } catch { /* sound is non-critical */ }
+  });
+}
+
 /** Play a pleasant singing-bowl tone via Web Audio API. */
 function playSingingBowl(isEnd: boolean = false) {
   if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    playBowlNative(isEnd);
     Vibration.vibrate(isEnd ? [0, 300, 200, 300] : [0, 200]);
     return;
   }
