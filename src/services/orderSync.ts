@@ -27,17 +27,61 @@ export async function appendLocalOrder(order: Order): Promise<void> {
  * Mirrors the appointmentSync pattern (serverConfirmedSetDoc + firebaseUid
  * stamp). Returns false on rule rejection / offline / unconfigured Firebase —
  * the local record still stands, so no order is ever silently lost.
+ *
+ * Audit 2.0.5 P1 (paid-order data loss): a failed cloud sync is no longer
+ * fire-and-forget — the order id is recorded in an unsynced queue and
+ * re-pushed by flushUnsyncedOrders() when a session lands (App.tsx), so a
+ * PAID order that missed Firestore reaches the dojo on the next launch
+ * instead of living only on the buyer's device.
  */
+const UNSYNCED_ORDERS_KEY = '@zenki_orders_unsynced';
+
+async function readUnsyncedIds(): Promise<string[]> {
+  return safeStorageGetJSON<string[]>(UNSYNCED_ORDERS_KEY, [], (v) => Array.isArray(v));
+}
+
+async function setUnsyncedIds(ids: string[]): Promise<void> {
+  await AsyncStorage.setItem(UNSYNCED_ORDERS_KEY, JSON.stringify(ids)).catch(() => {});
+}
+
 export async function saveOrderToFirestore(order: Order): Promise<boolean> {
   const { id, ...rest } = order;
   const firebaseUid = auth?.currentUser?.uid;
   const payload = firebaseUid ? { ...rest, firebaseUid } : rest;
-  return serverConfirmedSetDoc(
+  const ok = await serverConfirmedSetDoc(
     'orders',
     id,
     stripUndefined(payload as Record<string, unknown>),
     '[Orders Firestore]',
   );
+  try {
+    const ids = await readUnsyncedIds();
+    if (ok && ids.includes(id)) {
+      await setUnsyncedIds(ids.filter((x) => x !== id));
+    } else if (!ok && !ids.includes(id)) {
+      await setUnsyncedIds([...ids, id]);
+    }
+  } catch {
+    /* queue bookkeeping is best-effort */
+  }
+  return ok;
+}
+
+/** Re-push local orders whose cloud sync failed. Safe to call repeatedly. */
+export async function flushUnsyncedOrders(): Promise<void> {
+  const ids = await readUnsyncedIds();
+  if (ids.length === 0) return;
+  const local = await getLocalOrders();
+  for (const id of ids) {
+    const order = local.find((o) => o.id === id);
+    if (!order) {
+      // Rotated out of local history — nothing left to push; drop the marker.
+      const now = await readUnsyncedIds();
+      await setUnsyncedIds(now.filter((x) => x !== id));
+      continue;
+    }
+    await saveOrderToFirestore(order); // clears/re-adds its own queue marker
+  }
 }
 
 /**

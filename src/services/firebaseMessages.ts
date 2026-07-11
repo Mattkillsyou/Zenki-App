@@ -62,8 +62,23 @@ export async function getOrCreateConversation(otherUid: string): Promise<string 
   if (!me) return null;
   const id = conversationIdFor(me, otherUid);
   const ref = doc(db, 'conversations', id);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) {
+  // Audit 2.0.5 P1: reading a MISSING conversation doc is permission-DENIED
+  // (the read rule dereferences resource.data.participants, and rules treat
+  // a null resource as deny) — so this getDoc THROWS for every first-ever DM
+  // and the create branch below was unreachable. Because the id is
+  // deterministic from both uids, if the doc existed we'd be a participant
+  // and the read would succeed; permission-denied therefore means "doesn't
+  // exist yet" — swallow it and proceed to create. Other errors still throw.
+  let exists = false;
+  try {
+    const snap = await getDoc(ref);
+    exists = snap.exists();
+  } catch (e: any) {
+    const code = String(e?.code || e?.message || '');
+    if (!/permission[- ]?denied|insufficient permissions/i.test(code)) throw e;
+    exists = false;
+  }
+  if (!exists) {
     // Denormalize both participants' display profiles onto the conversation so
     // the inbox renders without a per-snapshot profile fetch (kills the N+1).
     const [meProfile, otherProfile] = await Promise.all([

@@ -103,10 +103,21 @@ async function scheduleNotification(appointment: Appointment): Promise<string | 
         body: senpaiCopy?.body ?? `Your session with ${appointment.instructor} starts in 1 hour.`,
         sound: 'default',
       },
-      trigger: { seconds: Math.max(1, Math.floor((remindAt - Date.now()) / 1000)) } as any,
+      // Audit 2.0.5 P1: expo-notifications SDK 55 triggers are strictly typed
+      // and REQUIRE a `type` — the legacy bare `{ seconds }` shape threw a
+      // TypeError (swallowed below), so no booking reminder ever fired.
+      // Same migration medicationNotifications.ts got; enum read off the
+      // lazily-required module (web guard above), literal as fallback.
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes?.TIME_INTERVAL ?? 'timeInterval',
+        seconds: Math.max(1, Math.floor((remindAt - Date.now()) / 1000)),
+        repeats: false,
+      } as any,
     });
     return id;
-  } catch {
+  } catch (err) {
+    // Was a bare catch — the exact swallow that hid the dead-trigger P1.
+    console.warn('[Appointments] reminder scheduling failed:', err);
     return undefined;
   }
 }

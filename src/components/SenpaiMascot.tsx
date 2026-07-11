@@ -1680,7 +1680,18 @@ function SenpaiMascotImpl() {
 
         {/* Close button (on long press) */}
         {showClose && (
-          <SoundPressable style={styles.closeBtn} onPress={() => setHidden(true)}>
+          <SoundPressable
+            style={styles.closeBtn}
+            onPress={() => {
+              // Audit 2.0.5 P1 (hot mic): hiding the mascot with the
+              // walkie-talkie armed left an INVISIBLE open microphone
+              // transcribing and auto-sending to the AI, with TTS still
+              // playing. Kill both before hiding.
+              if (listeningRef.current) deactivateListening();
+              stopSenpaiAudio();
+              setHidden(true);
+            }}
+          >
             <Text style={styles.closeBtnText}>x</Text>
           </SoundPressable>
         )}

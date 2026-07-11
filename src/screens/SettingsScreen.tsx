@@ -213,7 +213,7 @@ export function SettingsScreen({ navigation }: any) {
   };
 
   useScreenSoundTheme('settings');
-  const { play } = useSound();
+  const { play, enabled: soundCtxEnabled, setEnabled: setSoundCtxEnabled } = useSound();
   const {
     state: senpaiState,
     setEnabled: setSenpaiEnabled,
@@ -235,12 +235,16 @@ export function SettingsScreen({ navigation }: any) {
 
   // Preferences
   const [unitPref, setUnitPref] = useState<UnitPref>('imperial');
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  // Audit 2.0.5 P1: the Sound Effects toggle used to write its OWN key
+  // (@zenki_sound_enabled) and local state, which nothing in SoundContext
+  // ever read — a complete no-op (sounds kept playing; the switch rendered
+  // stale after restart). Drive the real SoundContext pref instead: it is
+  // the value every play() call checks, and it persists itself.
+  const soundEnabled = soundCtxEnabled;
   const [soundTheme, setSoundTheme] = useState<SoundTheme>('default');
 
   useEffect(() => {
     AsyncStorage.getItem(UNITS_KEY).then((v) => { if (v === 'metric') setUnitPref('metric'); });
-    AsyncStorage.getItem(SOUND_ENABLED_KEY).then((v) => { if (v === 'false') setSoundEnabled(false); });
     AsyncStorage.getItem(SOUND_THEME_KEY).then((v) => { if (v) setSoundTheme(v as SoundTheme); });
   }, []);
 
@@ -249,7 +253,8 @@ export function SettingsScreen({ navigation }: any) {
     AsyncStorage.setItem(UNITS_KEY, u);
   };
   const handleSoundToggle = (val: boolean) => {
-    setSoundEnabled(val);
+    setSoundCtxEnabled(val);
+    // Keep the legacy key in sync for anything that may read it later.
     AsyncStorage.setItem(SOUND_ENABLED_KEY, String(val));
   };
   const handleSoundTheme = (theme: SoundTheme) => {

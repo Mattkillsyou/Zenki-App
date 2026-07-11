@@ -61,6 +61,7 @@ import { requireAuth } from '../utils/requireAuth';
 import { useCycleTracker } from '../context/CycleTrackerContext';
 import { useSenpai } from '../context/SenpaiContext';
 import { randomDialogue } from '../data/senpaiDialogue';
+import { todayIso } from '../components/WeekCalendar';
 import { PHASE_LABELS, PHASE_COLORS, PHASE_ICONS } from '../types/cycle';
 
 function sessionTypeToClassType(s: string): 'jiu-jitsu' | 'muay-thai' | 'pilates' | 'open-mat' {
@@ -502,7 +503,10 @@ export function HomeScreen({ navigation }: any) {
   ].sort((x, y) => x.sortKey - y.sortKey);
 
   // ── Today's Dashboard Metrics ──
-  const todayISO = new Date().toISOString().slice(0, 10);
+  // Audit 2.0.5 P1: meals/weigh-ins are stamped with LOCAL day keys
+  // (todayIso convention, utils/dates.ts) — reading with a UTC key zeroed
+  // "Today's Macros" every evening from 5pm PT (UTC midnight rollover).
+  const todayISO = todayIso();
   const { totalsForDate, latestWeight, myWeights } = useNutrition();
   const { sessions: hrSessions } = useHeartRate();
   const { memberActivities } = useGpsActivity();

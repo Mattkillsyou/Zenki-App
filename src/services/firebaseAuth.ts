@@ -11,7 +11,7 @@ import {
   getAuth,
 } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, initializeFirestore } from 'firebase/firestore';
 import { Member } from '../data/members';
 import { generateId } from '../utils/generateId';
 import { todayDateString } from '../utils/dates';
@@ -232,17 +232,28 @@ export async function adminCreateMemberAccount(
     const siblingAuth = getAuth(siblingApp);
     const cred = await createUserWithEmailAndPassword(siblingAuth, email, password);
     createdUid = cred.user.uid;
-    // Seed the /users/{uid} profile against the shared Firestore — uses the
-    // primary db so the new doc is visible to the rest of the app.
-    await setDoc(doc(db, 'users', cred.user.uid), {
-      displayName: `${member.firstName} ${member.lastName}`.trim(),
-      avatar: null,
-      bio: '',
-      isPrivate: false,
-      memberId: member.id,
-      createdAt: new Date().toISOString(),
-      seededByAdmin: true,
-    });
+    // Audit 2.0.5 P1: seed /users/{uid} through the SIBLING app's Firestore,
+    // not the primary db. The create rule is isOwner(uid)-only, so writing
+    // another user's doc as the ADMIN was always permission-denied — which
+    // threw AFTER Auth creation, so the member doc never got its firebaseUid
+    // stamp and a retry hit email-already-in-use. The sibling session IS the
+    // new user, so the owner-only rule passes. Long-polling forced for the
+    // same RN-transport reason as config/firebase.ts. Best-effort: a failed
+    // seed must not abort the flow (the doc self-heals on first sign-in).
+    try {
+      const siblingDb = initializeFirestore(siblingApp, { experimentalForceLongPolling: true });
+      await setDoc(doc(siblingDb, 'users', cred.user.uid), {
+        displayName: `${member.firstName} ${member.lastName}`.trim(),
+        avatar: null,
+        bio: '',
+        isPrivate: false,
+        memberId: member.id,
+        createdAt: new Date().toISOString(),
+        seededByAdmin: true,
+      });
+    } catch (seedErr) {
+      console.warn('[adminCreateMemberAccount] /users seed failed (non-fatal):', seedErr);
+    }
     // Sign the sibling out so its in-memory session can't be used.
     await fbSignOut(siblingAuth).catch(() => {});
   } finally {

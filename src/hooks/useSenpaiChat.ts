@@ -36,6 +36,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNutrition } from '../context/NutritionContext';
 import { searchFoods } from '../services/foodSearch';
 import { randomDialogue } from '../data/senpaiDialogue';
+import { todayIso } from '../components/WeekCalendar';
 import type { FoodSearchResult } from '../types/food';
 import type { MealType, MacroEntry } from '../types/nutrition';
 
@@ -177,7 +178,10 @@ function defaultMealByTime(): MealType {
   return 'snacks';
 }
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+// Audit 2.0.5 P1: meals are keyed by LOCAL calendar day (todayIso convention,
+// utils/dates.ts) — the old UTC slice landed evening food logs on tomorrow
+// and made remove_food search a day the tracker never wrote.
+const todayISO = () => todayIso();
 
 function useSenpaiChatState() {
   const { state: senpaiState, triggerReaction, recordBondEvent, addBondFact } = useSenpai();

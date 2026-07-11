@@ -13,6 +13,7 @@ import { getCurrentUid } from '../services/firebaseAuth';
 import { useBlocks } from '../context/BlocksContext';
 import { spacing, MAX_CONTENT_WIDTH } from '../theme';
 import { Conversation, subscribeToInbox } from '../services/firebaseMessages';
+import { useFirebaseUid } from '../hooks/useFirebaseUid';
 
 export function MessagesListScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -24,7 +25,13 @@ export function MessagesListScreen({ navigation }: any) {
   const visibleConvs = convs.filter((c) =>
     !c.otherUserId || (!isBlocked(c.otherUserId) && !blockedByIds.has(c.otherUserId)));
 
+  // Audit 2.0.5 F5: key the subscription on the LIVE Firebase uid. Mounting
+  // during the async session restore used to call subscribeToInbox with a
+  // null uid — a no-op unsubscribe that never fired onUpdate — and the []
+  // deps never retried, wedging the screen on "Loading…" for the session.
+  const fbUid = useFirebaseUid();
   useEffect(() => {
+    if (!fbUid) return; // session restoring — effect re-runs when uid lands
     // Conversations arrive already enriched with otherUserName/otherUserAvatar
     // from the doc's denormalized participantProfiles — no per-snapshot fetch.
     const unsub = subscribeToInbox((list) => {
@@ -32,7 +39,7 @@ export function MessagesListScreen({ navigation }: any) {
       setLoading(false);
     });
     return () => unsub();
-  }, []);
+  }, [fbUid]);
 
   const renderItem = ({ item }: { item: Conversation }) => {
     const uid = getCurrentUid();

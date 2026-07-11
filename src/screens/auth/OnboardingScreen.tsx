@@ -19,10 +19,10 @@ import { BELT_ORDER, BELT_DISPLAY_COLORS, BELT_LABELS, BeltLevel, Member } from 
 import { suggestNickname } from '../../utils/nickname';
 import { BeltDisplay } from '../../components/BeltDisplay';
 import { renderWaiverText, WAIVER_VERSION, WaiverSignature } from '../../data/waiver';
-import { pushWaiverToSheets, pushWaiverToFirestore } from '../../services/waiverSync';
+import { pushWaiverToSheets, pushWaiverToFirestore, queuePendingTerms } from '../../services/waiverSync';
 import { db } from '../../config/firebase';
 import { doc, setDoc } from 'firebase/firestore';
-import { getCurrentUid } from '../../services/firebaseAuth';
+import { getCurrentUid, getCurrentIdToken } from '../../services/firebaseAuth';
 import { PRIVACY_URL } from '../../config/api';
 import {
   calculateBMR, calculateTDEE, calculateMacros,
@@ -310,20 +310,32 @@ export function OnboardingScreen({ navigation, route }: any) {
 
     // Record acceptance of the Community Guidelines / objectionable-content
     // policy on the user's profile (Apple 1.2 — durable proof of EULA accept).
-    try {
+    // Audit 2.0.5: this write used to be one-shot + console.warn — in the
+    // fresh-signup token-attach race the proof-of-acceptance never existed at
+    // all. Now: retry with a token re-prime, and on final failure queue it
+    // durably (flushed on the next session via flushPendingSignupWrites).
+    {
       const uid = getCurrentUid();
+      const termsPayload = {
+        acceptedTermsAt: new Date().toISOString(),
+        acceptedTermsVersion: COMMUNITY_GUIDELINES_VERSION,
+      };
       if (uid && db) {
-        await setDoc(
-          doc(db, 'users', uid),
-          {
-            acceptedTermsAt: new Date().toISOString(),
-            acceptedTermsVersion: COMMUNITY_GUIDELINES_VERSION,
-          },
-          { merge: true },
-        );
+        let written = false;
+        for (let attempt = 0; attempt < 3 && !written; attempt++) {
+          try {
+            if (attempt > 0) {
+              await getCurrentIdToken(true).catch(() => null); // re-prime the token
+              await new Promise((r) => setTimeout(r, attempt * 1500));
+            }
+            await setDoc(doc(db, 'users', uid), termsPayload, { merge: true });
+            written = true;
+          } catch (e) {
+            console.warn(`[Onboarding] terms acceptance write failed (attempt ${attempt + 1}):`, e);
+          }
+        }
+        if (!written) await queuePendingTerms(uid, termsPayload);
       }
-    } catch (e) {
-      console.warn('[Onboarding] terms acceptance write failed:', e);
     }
 
     // Record the signed waiver (fire-and-forget)

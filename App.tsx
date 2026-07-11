@@ -28,6 +28,10 @@ LogBox.ignoreLogs([
   // the first rejection surfaces before the guard short-circuits.
   /HK\.initHealthKit is not a function/,
 ]);
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth as firebaseAuth } from './src/config/firebase';
+import { flushPendingSignupWrites } from './src/services/waiverSync';
+import { flushUnsyncedOrders } from './src/services/orderSync';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { MotionProvider } from './src/context/MotionContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -230,6 +234,21 @@ function MaybeStripeProvider({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  // Audit 2.0.5 (legal-record data loss): re-push any queued signed-waiver /
+  // EULA-acceptance writes the moment a Firebase session is available — these
+  // are queued by waiverSync when the original write fails (fresh-signup
+  // token race, offline) and must never be silently lost.
+  React.useEffect(() => {
+    if (!firebaseAuth) return;
+    return onAuthStateChanged(firebaseAuth, (u) => {
+      if (u) {
+        flushPendingSignupWrites().catch((e) => console.warn('[App] signup-writes flush failed:', e));
+        // Paid/reserved orders whose cloud sync failed — same never-silent rule.
+        flushUnsyncedOrders().catch((e) => console.warn('[App] order flush failed:', e));
+      }
+    });
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
     <ErrorBoundary
