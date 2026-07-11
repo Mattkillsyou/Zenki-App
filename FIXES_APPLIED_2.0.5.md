@@ -48,3 +48,17 @@ Source: `APP_AUDIT_2.0.5.md` §3/§4. Scope: all client P1s + the data-loss erro
 **Also fixed:** guest/sign-in dead-listener class (Announcement/Schedule/Product/SchedulingConfig keyed on live uid); Onboarding + Store checkout + Drink Settle double-tap guards (dup accounts / double charges); NutritionContext hydrate-wipe protection (DEXA/bloodwork can't be clobbered by one bad read).
 
 **Still open after this pass:** booking UX cluster (slot conflicts, evening dead-end, calendar quick-add date, device-TZ labels), timers (keep-awake, background time, meditation tone), nutrition sync divergence + migration poisoning, Settings placeholders (Export Data, Clear History, Units), supportMessages black hole, GPS start/End race, gamification pre-hydrate loss, EmployeeTasks assign picker, deleteAccount likes/senpaiUsage gaps + banUser CG index (functions deploys), guest /schedule rule (pending rules deploy), and the P3 tail.
+
+---
+
+## UX pass — branch `fix/2.0.5-ux-pass`, merged to main `4e1fb77` (2026-07-10 evening)
+
+**Quick items:** calendar quick-add now writes the SELECTED day (+ real startsAt for private sessions); Contact IT black hole closed (new admin-gated `listSupportMessages` CF + web-admin Support tab with mark-handled — both DEPLOYED and verified: unauth 401, tab live); Settings honesty (dead Units toggle and placebo DATA section removed).
+
+**Booking cluster:** own pending/confirmed sessions block overlapping slots ("YOUR SESSION"); selection clears on submit (no double-submit); past slots read "PASSED" and an explicit "no more bookable times today" banner replaces the evening wall of UNAVAILABLE; AdminSchedule spots=0 honored; Mark Complete confirms. Cross-member conflicts remain admin-side (rules scope appointments to owners).
+
+**Timers:** `useKeepAwake()` on the Timer screen (auto-lock no longer freezes rounds/meditation); stopwatch + countdown compute from wall-clock anchors (locked time counts); meditation plays real generated singing-bowl WAVs via expo-audio on native (assets bundled; expo-keep-awake pinned as direct dep).
+
+**Nutrition sync:** rule-bound clamps at the write boundary AND the addMacroEntry mutator (local + cloud agree; no more silent divergence); migration de-poisoned (per-doc fallback, skip-and-log); MacroSetup/Onboarding weigh-ins stamp LOCAL day; DEXA review fields keep raw text (decimals typeable).
+
+**Note:** the merge to main also carried the parallel Senpai enhancement work (Phase A animations + dialogue/bond) committed to the same branch; both gates ran clean over the combined tree.
