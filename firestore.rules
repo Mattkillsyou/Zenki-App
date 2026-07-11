@@ -358,7 +358,11 @@ service cloud.firestore {
     // pending queue and deletes on accept/decline. Was MISSING → the private
     // follow flow was silently broken.
     match /followRequests/{targetUid}/requests/{requesterUid} {
-      allow read: if isOwner(targetUid);
+      // The requester may read THEIR OWN outbound request (audit 2.0.5 F1:
+      // target-only read meant "Requested" could never survive a reload —
+      // the requester's own status check was permission-denied). Leaks
+      // nothing: they wrote the doc.
+      allow read: if isOwner(targetUid) || isOwner(requesterUid);
       // A blocked user may not file (or re-file) a follow request against
       // either side of the block — same guard as the DM create rule.
       allow create: if isOwner(requesterUid)

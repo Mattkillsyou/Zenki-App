@@ -31,8 +31,16 @@ export function AdminPostsScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Audit 2.0.5 F4-family: null from the service = load FAILED — show an
+  // error state instead of a false "No posts" on the moderation surface.
+  const [loadError, setLoadError] = useState(false);
   const load = useCallback(async () => {
     const list = await listAllPostsForAdmin(200);
+    if (list === null) {
+      setLoadError(true);
+      return;
+    }
+    setLoadError(false);
     setPosts(list);
   }, []);
 
@@ -42,7 +50,8 @@ export function AdminPostsScreen({ navigation }: any) {
       setLoading(true);
       const list = await listAllPostsForAdmin(200);
       if (!cancelled) {
-        setPosts(list);
+        if (list === null) setLoadError(true);
+        else { setLoadError(false); setPosts(list); }
         setLoading(false);
       }
     })();
@@ -166,10 +175,18 @@ export function AdminPostsScreen({ navigation }: any) {
             }
             ListEmptyComponent={
               <View style={[styles.emptyState, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Ionicons name="images-outline" size={36} color={colors.textMuted} />
-                <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No posts</Text>
+                <Ionicons
+                  name={loadError ? 'alert-circle-outline' : 'images-outline'}
+                  size={36}
+                  color={loadError ? colors.error : colors.textMuted}
+                />
+                <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+                  {loadError ? "Couldn't load posts" : 'No posts'}
+                </Text>
                 <Text style={[styles.emptyDesc, { color: colors.textMuted }]}>
-                  The community feed is empty. Posts members create will appear here for moderation.
+                  {loadError
+                    ? 'The query failed — this is not an empty feed. Check your connection and pull to retry.'
+                    : 'The community feed is empty. Posts members create will appear here for moderation.'}
                 </Text>
               </View>
             }

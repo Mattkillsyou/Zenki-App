@@ -254,7 +254,21 @@ export function OnboardingScreen({ navigation, route }: any) {
     }
   };
 
+  // Audit 2.0.5 P2: re-entrancy guard — double-tapping "Enter the Dojo" ran
+  // two concurrent createAccount calls minting two different member ids
+  // (duplicate /members docs + duplicate waivers).
+  const [finishing, setFinishing] = useState(false);
   const handleFinish = async () => {
+    if (finishing) return;
+    setFinishing(true);
+    try {
+      await doFinish();
+    } finally {
+      setFinishing(false);
+    }
+  };
+
+  const doFinish = async () => {
     // OAuth users already have an identity (id/username/email/firebaseUid)
     // minted during the token exchange — reuse it so we update that member
     // instead of orphaning it behind a freshly-generated id.
@@ -999,10 +1013,13 @@ export function OnboardingScreen({ navigation, route }: any) {
             </SoundPressable>
           ) : (
             <SoundPressable
-              style={[styles.navButtonPrimary, { backgroundColor: colors.gold }]}
+              style={[styles.navButtonPrimary, { backgroundColor: colors.gold, opacity: finishing ? 0.6 : 1 }]}
               onPress={handleFinish}
+              disabled={finishing}
             >
-              <Text style={[styles.navButtonText, { color: '#000' }]}>Enter the Dojo</Text>
+              <Text style={[styles.navButtonText, { color: '#000' }]}>
+                {finishing ? 'Setting up…' : 'Enter the Dojo'}
+              </Text>
               <Ionicons name="arrow-forward" size={20} color="#000" />
             </SoundPressable>
           )}

@@ -26,7 +26,7 @@ import { ReportModal } from '../components/ReportModal';
 
 export function MessagesChatScreen({ navigation, route }: any) {
   const { colors } = useTheme();
-  const { isBlocked, blockUser, unblockUser } = useBlocks();
+  const { isBlocked, blockedByIds, blockUser, unblockUser } = useBlocks();
   const initial = route.params || {};
   const [conversationId, setConversationId] = useState<string | null>(initial.conversationId || null);
   const otherUserId: string | undefined = initial.otherUserId;
@@ -42,6 +42,9 @@ export function MessagesChatScreen({ navigation, route }: any) {
   const [createAttempt, setCreateAttempt] = useState(0);
   const listRef = useRef<FlatList<Message>>(null);
   const blocked = !!otherUserId && isBlocked(otherUserId);
+  // Audit 2.0.5 F8: also gate when THEY blocked ME — the composer used to stay
+  // live and every send failed the blockedBetween rule with a generic error.
+  const blockedByThem = !!otherUserId && blockedByIds.has(otherUserId);
 
   const openChatMenu = () => {
     if (!otherUserId) return;
@@ -74,8 +77,14 @@ export function MessagesChatScreen({ navigation, route }: any) {
           }
         },
       },
-      { text: 'Report conversation', onPress: () => setReportOpen(true) },
-      { text: 'Cancel', style: 'cancel' },
+      // Audit 2.0.5 F11: only offer Report once the conversation EXISTS — a
+      // report filed while creation was pending carried targetId 'unknown',
+      // which the admin redaction path can never act on (reported success,
+      // redacted nothing).
+      ...(conversationId
+        ? [{ text: 'Report conversation', onPress: () => setReportOpen(true) }]
+        : []),
+      { text: 'Cancel', style: 'cancel' as const },
     ]);
   };
 
@@ -235,10 +244,12 @@ export function MessagesChatScreen({ navigation, route }: any) {
               <Text style={styles.retryLabel}>Retry</Text>
             </SoundPressable>
           </View>
-        ) : blocked ? (
+        ) : (blocked || blockedByThem) ? (
           <View style={[styles.inputBar, { backgroundColor: colors.background, borderTopColor: colors.border, justifyContent: 'center' }]}>
             <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: 'center' }}>
-              You've blocked {otherUserName}. Unblock from the ••• menu above to resume messaging.
+              {blocked
+                ? `You've blocked ${otherUserName}. Unblock from the ••• menu above to resume messaging.`
+                : 'You can no longer message this user.'}
             </Text>
           </View>
         ) : (

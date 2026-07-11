@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import {
   doc, setDoc, deleteDoc, getDoc, getDocs, collection, updateDoc,
@@ -79,6 +80,15 @@ export async function updateProfile(updates: Partial<Pick<UserProfile, 'displayN
   }
 }
 
+// Audit 2.0.5 F1: the followRequests read rule only lets the TARGET read the
+// request doc, so the requester's own hasRequestedFollow() check is
+// permission-denied — "Requested" reverted to "Follow" on every reload and
+// the withdraw UI was unreachable. Until the repo rules change (requester
+// read) is deployed, mirror the pending-request state in a local marker so
+// it survives reloads on this device; the server doc stays authoritative
+// whenever it IS readable.
+const followReqKey = (me: string, targetId: string) => `@zenki_follow_req:${me}:${targetId}`;
+
 export async function followUser(targetId: string): Promise<'followed' | 'requested' | ''> {
   if (!db) return '';
   const uid = getCurrentUid();
@@ -88,6 +98,7 @@ export async function followUser(targetId: string): Promise<'followed' | 'reques
   const at = new Date().toISOString();
   if (targetProfile?.isPrivate) {
     await setDoc(doc(db, 'followRequests', targetId, 'requests', uid), { at });
+    AsyncStorage.setItem(followReqKey(uid, targetId), at).catch(() => {});
     return 'requested';
   }
 
@@ -144,8 +155,19 @@ export async function hasRequestedFollow(targetId: string): Promise<boolean> {
   if (!db) return false;
   const uid = getCurrentUid();
   if (!uid) return false;
-  const snap = await getDoc(doc(db, 'followRequests', targetId, 'requests', uid));
-  return snap.exists();
+  try {
+    // Post-rules-deploy the requester may read their own request — server truth.
+    const snap = await getDoc(doc(db, 'followRequests', targetId, 'requests', uid));
+    // Sync the local marker to the server answer while we're here.
+    if (snap.exists()) AsyncStorage.setItem(followReqKey(uid, targetId), 'pending').catch(() => {});
+    else AsyncStorage.removeItem(followReqKey(uid, targetId)).catch(() => {});
+    return snap.exists();
+  } catch {
+    // Live rules deny the requester read (F1) — fall back to the local marker
+    // written when the request was filed, so "Requested" survives reloads.
+    const marker = await AsyncStorage.getItem(followReqKey(uid, targetId)).catch(() => null);
+    return marker != null;
+  }
 }
 
 /** The requester cancels their own pending follow request to `targetId`. */
@@ -154,6 +176,7 @@ export async function cancelFollowRequest(targetId: string): Promise<void> {
   const uid = getCurrentUid();
   if (!uid) return;
   await deleteDoc(doc(db, 'followRequests', targetId, 'requests', uid));
+  AsyncStorage.removeItem(followReqKey(uid, targetId)).catch(() => {});
 }
 
 export async function isFollowing(targetId: string): Promise<boolean> {
@@ -162,6 +185,8 @@ export async function isFollowing(targetId: string): Promise<boolean> {
   if (!uid) return false;
   try {
     const snap = await getDoc(doc(db, 'following', uid, 'follows', targetId));
+    // Following implies any pending-request marker is stale (accept landed).
+    if (snap.exists()) AsyncStorage.removeItem(followReqKey(uid, targetId)).catch(() => {});
     return snap.exists();
   } catch (err) {
     console.warn('[isFollowing] failed:', err);

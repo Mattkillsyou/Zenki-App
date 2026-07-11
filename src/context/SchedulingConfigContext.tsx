@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { safeStorageGetJSON, safeStorageSet } from '../utils/safeStorage';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
+import { useFirebaseUid } from '../hooks/useFirebaseUid';
 
 const STORAGE_KEY = '@zenki_scheduling_config';
 
@@ -87,6 +88,7 @@ export function SchedulingConfigProvider({ children }: { children: React.ReactNo
   }, []);
 
   // ── Firestore realtime subscription — runs only if configured
+  const fbUid = useFirebaseUid();
   useEffect(() => {
     if (!cloudSyncEnabled || !db) return;
     setIsSyncing(true);
@@ -108,7 +110,11 @@ export function SchedulingConfigProvider({ children }: { children: React.ReactNo
       },
     );
     return () => unsub();
-  }, [cloudSyncEnabled]);
+    // Audit 2.0.5: fbUid in deps — under the LIVE rules /config/scheduling
+    // still requires sign-in (the public-read rule is in the pending deploy),
+    // so the guest-boot listener died and never re-attached after sign-in,
+    // pinning Book Private to DEFAULT_CONFIG until restart.
+  }, [cloudSyncEnabled, fbUid]);
 
   const updateConfig = useCallback(async (partial: Partial<SchedulingConfig>): Promise<void> => {
     const merged: SchedulingConfig = sanitizeConfig({ ...config, ...partial });
