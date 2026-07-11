@@ -11,15 +11,35 @@ import { easing, duration, opacity } from '../theme';
 import { palette } from '../theme/colors';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
-/** Wrap a screen component in an ErrorBoundary. */
+/** Wrap a screen component in an ErrorBoundary.
+ *
+ * Audit 2.0.5 P1: MEMOIZED by (component, screenName). This is called inline
+ * in RootNavigator's JSX for ~50 Stack.Screens while RootNavigator subscribes
+ * to useAuth() — without the cache, every auth value change (including every
+ * /members onSnapshot delivery) minted ~50 brand-new component identities,
+ * and React Navigation unmounted/remounted every mounted screen: DM drafts
+ * wiped, lists reset, every listener torn down and resubscribed. The cache
+ * returns the SAME wrapper identity per screen across renders, so screen
+ * components stay referentially stable. WeakMap keyed on the component keeps
+ * hot-reloaded/dead components collectable. */
+const boundaryCache = new WeakMap<React.ComponentType<any>, Map<string, React.ComponentType<any>>>();
 function withErrorBoundary(ScreenComponent: React.ComponentType<any>, screenName: string) {
-  return function WrappedScreen(props: any) {
+  let byName = boundaryCache.get(ScreenComponent);
+  if (!byName) {
+    byName = new Map();
+    boundaryCache.set(ScreenComponent, byName);
+  }
+  const cached = byName.get(screenName);
+  if (cached) return cached;
+  function WrappedScreen(props: any) {
     return (
       <ErrorBoundary screenName={screenName}>
         <ScreenComponent {...props} />
       </ErrorBoundary>
     );
-  };
+  }
+  byName.set(screenName, WrappedScreen);
+  return WrappedScreen;
 }
 
 // Auth screens

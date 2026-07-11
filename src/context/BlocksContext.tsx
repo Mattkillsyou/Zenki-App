@@ -10,8 +10,8 @@ import {
   getMutedUserIds,
   getUsersWhoBlockedMe,
 } from '../services/firebaseModeration';
-import { getCurrentUid } from '../services/firebaseAuth';
 import { useAuth } from './AuthContext';
+import { useFirebaseUid } from '../hooks/useFirebaseUid';
 
 interface BlocksContextValue {
   /** Set of user IDs the current user has blocked. */
@@ -83,6 +83,14 @@ export function BlocksProvider({ children }: { children: React.ReactNode }) {
   // app is open takes effect this session, not after a force-quit. The
   // optimistic set updates in blockUser/muteUser below still apply instantly;
   // the snapshots simply confirm and pick up remote changes.
+  // Audit 2.0.5 P1 (cold-start auth race): the Firebase session restores
+  // ASYNCHRONOUSLY after AuthContext hydrates the local user, so sampling
+  // getCurrentUid() once here left the three listeners unattached (and the
+  // sets permanently empty — every block/mute filter inert) whenever the
+  // effect won the race. Key the effect on the LIVE auth uid instead: it
+  // re-runs the moment the session lands, and re-attaches across account
+  // switches / sign-out.
+  const fbUid = useFirebaseUid();
   useEffect(() => {
     if (!user?.id) {
       setBlockedIds(new Set());
@@ -91,10 +99,10 @@ export function BlocksProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     if (!FIREBASE_CONFIGURED || !db) return;
-    const uid = getCurrentUid();
+    const uid = fbUid;
     if (!uid) {
-      // No Firebase session yet — fall back to the one-shot path (empty sets).
-      refresh().catch((e) => console.warn('[Blocks] refresh failed:', e));
+      // No Firebase session yet — the effect re-runs when fbUid lands, so
+      // this is only the momentary pre-restore window (sets stay empty).
       return;
     }
     const onErr = (label: string) => (e: unknown) =>
@@ -108,7 +116,7 @@ export function BlocksProvider({ children }: { children: React.ReactNode }) {
         (snap) => setBlockedByIds(new Set(snap.docs.map((d) => d.id))), onErr('blockedBy')),
     ];
     return () => unsubs.forEach((u) => u());
-  }, [user?.id, refresh]);
+  }, [user?.id, fbUid, refresh]);
 
   const isBlocked = useCallback((uid: string) => blockedIds.has(uid), [blockedIds]);
   const isMuted = useCallback((uid: string) => mutedIds.has(uid), [mutedIds]);
