@@ -6,6 +6,7 @@ import { syncOrAlert } from '../utils/syncOrAlert';
 import { Product, PRODUCTS as BUILTIN_PRODUCTS, ProductCategory } from '../data/products';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import { generateId } from '../utils/generateId';
+import { useFirebaseUid } from '../hooks/useFirebaseUid';
 
 const STORAGE_KEY = '@zenki_custom_products';
 
@@ -94,6 +95,7 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ── Firestore realtime subscription — runs only if configured
+  const fbUid = useFirebaseUid();
   useEffect(() => {
     if (!cloudSyncEnabled || !db) return;
     setIsSyncing(true);
@@ -114,7 +116,10 @@ export function ProductProvider({ children }: { children: React.ReactNode }) {
       },
     );
     return () => unsub();
-  }, [cloudSyncEnabled]);
+    // Audit 2.0.5: fbUid in deps — a signed-out subscribe permission-denies
+    // and terminates; re-attach when a session lands (custom products were
+    // missing until app restart after a guest boot).
+  }, [cloudSyncEnabled, fbUid]);
 
   // ── Local save whenever customProducts changes. Always mirror to AsyncStorage
   // once loaded (even with cloud sync on) so an optimistic catch-fallback edit

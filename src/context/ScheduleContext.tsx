@@ -4,6 +4,7 @@ import { ClassType, DAYS, SCHEDULES, ScheduleEntry } from '../data/schedule';
 import { generateId } from '../utils/generateId';
 import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 import { syncOrAlert } from '../utils/syncOrAlert';
+import { useFirebaseUid } from '../hooks/useFirebaseUid';
 import {
   subscribeToSchedule,
   upsertScheduleDay,
@@ -82,6 +83,10 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
   // Live Firestore subscription. Replaces local state for any day that has a
   // doc in /schedule; days with no doc fall back to the in-app seed. Cached
   // to AsyncStorage so cold-boot offline still shows last-known state.
+  // Audit 2.0.5: keyed on the live Firebase uid — /schedule requires sign-in,
+  // so a guest-boot listener permission-denies and never re-attaches after
+  // sign-in (frozen at the seed until force-quit).
+  const fbUid = useFirebaseUid();
   useEffect(() => {
     const unsub = subscribeToSchedule((byDay) => {
       setSchedule(() => {

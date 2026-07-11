@@ -7,6 +7,7 @@ import {
   deleteAnnouncementFromFirestore,
 } from '../services/announcementSync';
 import { syncOrAlert } from '../utils/syncOrAlert';
+import { useFirebaseUid } from '../hooks/useFirebaseUid';
 
 const STORAGE_KEY = '@zenki_announcements';
 
@@ -48,13 +49,18 @@ export function AnnouncementProvider({ children }: { children: React.ReactNode }
   // for optimistic updates (Firestore reflects pending writes locally), so
   // a second `useEffect([announcements])` would just write the same value
   // again — pure thrash.
+  // Audit 2.0.5: keyed on the live Firebase uid — /announcements requires
+  // sign-in, so a guest-boot (or sign-out) listener permission-denies and
+  // TERMINATES; with [] deps it never re-attached after sign-in, freezing
+  // announcements at cache/seed until a force-quit.
+  const fbUid = useFirebaseUid();
   useEffect(() => {
     const unsub = subscribeToAnnouncements((items) => {
       setAnnouncements(items);
       safeStorageSet(STORAGE_KEY, items, '[Announcements]');
     });
     return () => { unsub(); };
-  }, []);
+  }, [fbUid]);
 
   const addAnnouncement = useCallback((a: Omit<Announcement, 'id' | 'createdAt'>) => {
     const next: Announcement = {

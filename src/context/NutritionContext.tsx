@@ -228,10 +228,16 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
         setRecentFoodsByMember(safeParseJSON<Record<string, FoodSearchResult[]>>(rRaw, {}, isObject));
         setDexaScans(safeParseJSON<DexaScan[]>(dRaw, [], Array.isArray));
         setBloodwork(safeParseJSON<BloodworkReport[]>(bRaw, [], Array.isArray));
+        // Only arm the persist effects when the hydrate actually SUCCEEDED.
+        setLoaded(true);
       } catch (e) {
-        // non-fatal — start empty
-      } finally {
-        if (!cancelled) setLoaded(true);
+        // Audit 2.0.5 P2 (hydrate-wipe): setting loaded=true here armed the
+        // persist effects with EMPTY state — the next change overwrote the
+        // stored history, permanently destroying local-only DEXA/bloodwork
+        // after one transient storage read failure. Leave persists disabled
+        // for this session instead: new writes won't persist until relaunch
+        // (rare, recoverable) but existing history is never clobbered.
+        console.warn('[Nutrition] hydrate failed — persist disabled this session to protect stored data:', e);
       }
     })();
     return () => {

@@ -257,10 +257,24 @@ export interface ReportInput {
  * File a report. Admins review via /reports (AdminReportsScreen).
  * Reports cannot be read by end users — only written.
  */
+// Audit 2.0.5 F7 (partial, client-side): every report create fans a push to
+// EVERY admin via notifyOnReport, and nothing rate-limited the path — a
+// looped submitReport() could flood the queue and push-bomb all admins. A
+// 30s client cooldown blunts rapid-fire submissions; true server-side
+// limiting (CF-mediated reports) remains a deferred follow-up.
+let lastReportAtMs = 0;
+const REPORT_COOLDOWN_MS = 30_000;
+
 export async function submitReport(input: ReportInput): Promise<boolean> {
   if (!FIREBASE_CONFIGURED || !db) return false;
   const uid = getCurrentUid();
   if (!uid) return false;
+  const now = Date.now();
+  if (now - lastReportAtMs < REPORT_COOLDOWN_MS) {
+    console.warn('[Moderation] submitReport throttled (30s client cooldown)');
+    return false;
+  }
+  lastReportAtMs = now;
   try {
     await addDoc(collection(db, 'reports'), {
       reporterId: uid,
@@ -299,9 +313,14 @@ export interface Report extends ReportInput {
 /**
  * Load all open reports sorted newest first. Requires the caller to pass the
  * Firestore /admins/{uid} rule check (see AdminReportsScreen).
+ *
+ * Audit 2.0.5 F4: returns NULL when the query FAILS (permission-denied,
+ * missing index, offline) — the old catch-to-[] rendered a false "All clear"
+ * on the moderation queue, indistinguishable from genuinely empty. Callers
+ * must treat null as "couldn't load", not "no reports".
  */
-export async function listOpenReports(): Promise<Report[]> {
-  if (!FIREBASE_CONFIGURED || !db) return [];
+export async function listOpenReports(): Promise<Report[] | null> {
+  if (!FIREBASE_CONFIGURED || !db) return null;
   try {
     const q = query(
       collection(db, 'reports'),
@@ -312,7 +331,7 @@ export async function listOpenReports(): Promise<Report[]> {
     return snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as Report[];
   } catch (e) {
     console.warn('[Moderation] listOpenReports failed:', e);
-    return [];
+    return null;
   }
 }
 
@@ -406,14 +425,26 @@ export async function adminActionReport(
       }
     }
 
+    // Audit 2.0.5 F2: if the CONTENT deletion failed, do NOT mark the report
+    // actioned — that dropped it from the open queue forever while the
+    // reported content stayed live (the reporter was told it was handled).
+    // The block above still stands (protects the reporter); the report stays
+    // open so the admin can retry once the failure cause is fixed. The web
+    // admin already behaves this way — this brings the app to parity.
+    if (deleteWarning) {
+      return {
+        ok: false,
+        error: `${deleteWarning} The report stays open so you can retry.${blockWarning ? ` ${blockWarning}` : ''}`,
+      };
+    }
+
     await setDoc(
       reportRef,
       { status: 'actioned', resolvedBy: adminUid, resolvedAt: new Date().toISOString() },
       { merge: true },
     );
 
-    const warning = [deleteWarning, blockWarning].filter(Boolean).join(' ');
-    return warning ? { ok: true, error: warning } : { ok: true };
+    return blockWarning ? { ok: true, error: blockWarning } : { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message || e?.code || 'unknown' };
   }
@@ -425,5 +456,5 @@ export async function adminActionReport(
  */
 export async function countOpenReports(): Promise<number> {
   const list = await listOpenReports();
-  return list.length;
+  return list ? list.length : 0;
 }

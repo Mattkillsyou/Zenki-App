@@ -66,6 +66,8 @@ function AnimatedDrinkButton({ type, label, icon, color, onAdd }: {
 }
 
 export function DrinkScreen() {
+  // Settle-tab re-entrancy guard (audit 2.0.5 P2 — double-charge).
+  const settleBusyRef = useRef(false);
   const { colors } = useTheme();
   const { play } = useSound();
   const { recordDrinkLogged } = useGamification();
@@ -246,6 +248,11 @@ export function DrinkScreen() {
             style={[styles.bottomPayBtn, { backgroundColor: unpaidTotal > 0 ? colors.gold : colors.surfaceSecondary }]}
             disabled={unpaidTotal === 0}
             onPress={async () => {
+              // Audit 2.0.5 P2: re-entrancy guard — double-tapping Settle ran
+              // two full Apple Pay charges for the same tab.
+              if (settleBusyRef.current) return;
+              settleBusyRef.current = true;
+              try {
               // Settling a tab is a real payment / billing write keyed to a
               // member (5.1.1(v)); guests are prompted to sign in.
               if (!requireAuth(user, navigation, 'settle your tab')) return;
@@ -300,6 +307,9 @@ export function DrinkScreen() {
                   },
                 ],
               );
+              } finally {
+                settleBusyRef.current = false;
+              }
             }}
           >
             <Ionicons name="checkmark-circle" size={18} color={unpaidTotal > 0 ? '#000' : colors.textMuted} />

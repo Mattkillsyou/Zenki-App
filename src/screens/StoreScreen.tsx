@@ -55,6 +55,9 @@ export function StoreScreen({ navigation }: any) {
   const [pageIdx, setPageIdx] = useState(0);
   const [pageWidth, setPageWidth] = useState(0);
   const pagerRef = useRef<ScrollView>(null);
+  // Audit 2.0.5 P2: checkout re-entrancy guard — a double-tap ran the whole
+  // flow twice (duplicate orders, points redeemed twice, two PaymentIntents).
+  const checkoutBusyRef = useRef(false);
 
   // Wishlist
   const [wishlist, setWishlist] = useState<string[]>([]);
@@ -371,6 +374,9 @@ export function StoreScreen({ navigation }: any) {
               <TouchableOpacity
                 style={[styles.checkoutButton, { backgroundColor: colors.red }]}
                 onPress={async () => {
+                  if (checkoutBusyRef.current) return;
+                  checkoutBusyRef.current = true;
+                  try {
                   // Account-based action (5.1.1(v)): checkout writes an order
                   // stamped with the member id, so a guest must sign in first.
                   if (!requireAuth(user, navigation, 'check out')) return;
@@ -511,6 +517,9 @@ export function StoreScreen({ navigation }: any) {
                   setShowCart(false);
                   setUsePoints(false);
                   setAppliedPromo(null);
+                  } finally {
+                    checkoutBusyRef.current = false;
+                  }
                 }}
               >
                 <Text style={styles.checkoutText}>

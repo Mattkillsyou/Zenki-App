@@ -479,8 +479,8 @@ export async function deletePost(postId: string): Promise<{ ok: boolean; error?:
  * Legacy shapes are coerced the same way the feed does, so nothing silently
  * disappears from the moderation list.
  */
-export async function listAllPostsForAdmin(max = 200): Promise<Post[]> {
-  if (!FIREBASE_CONFIGURED || !db) return [];
+export async function listAllPostsForAdmin(max = 200): Promise<Post[] | null> {
+  if (!FIREBASE_CONFIGURED || !db) return null;
   try {
     const snap = await getDocs(query(
       collection(db, 'posts'),
@@ -496,8 +496,10 @@ export async function listAllPostsForAdmin(max = 200): Promise<Post[]> {
       })
       .filter((p): p is Post => p !== null);
   } catch (err) {
+    // Audit 2.0.5 F4-family: null = "couldn't load" — the old [] rendered a
+    // false "No posts" empty state on the moderation surface.
     console.warn('[listAllPostsForAdmin] failed:', err);
-    return [];
+    return null;
   }
 }
 
@@ -539,7 +541,20 @@ export async function listComments(postId: string, max = 100): Promise<Comment[]
       limitToLast(max),
     );
     const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Comment, 'id'>) }));
+    // Audit 2.0.5 F3/F9: coerce legacy shapes at the SOURCE — a comment doc
+    // with a missing/non-string displayName threw in CommentsScreen's
+    // renderItem (killing the whole list), and a Firestore-Timestamp
+    // createdAt rendered "Invalid Date". Same hardening getFeed and
+    // listAllPostsForAdmin already have.
+    return snap.docs.map((d) => {
+      const data = d.data() as any;
+      return {
+        ...data,
+        id: d.id,
+        displayName: coerceDisplayName(data.displayName),
+        createdAt: coerceCreatedAt(data.createdAt) ?? '',
+      } as Comment;
+    });
   } catch (err) {
     console.warn('[listComments] failed:', err);
     return [];

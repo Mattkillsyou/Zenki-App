@@ -72,12 +72,16 @@ export function AdminReportsScreen({ navigation }: any) {
   const [permError, setPermError] = useState(false);
 
   const load = useCallback(async (): Promise<Report[]> => {
+    // Audit 2.0.5 F4: listOpenReports now returns null on FAILURE
+    // (permission-denied / missing index / offline) — light up the error
+    // state instead of rendering a false "All clear" over a broken queue.
+    const list = await listOpenReports();
+    if (list === null) {
+      setPermError(true);
+      return [];
+    }
     setPermError(false);
-    // listOpenReports silently returns [] on permission errors — we can't
-    // distinguish "no reports" from "not an admin" from the return value, so
-    // give the "no reports" copy the benefit of the doubt. If rules are denying,
-    // the console.warn inside the service surfaces it.
-    return await listOpenReports();
+    return list;
   }, []);
 
   useEffect(() => {
@@ -212,15 +216,25 @@ export function AdminReportsScreen({ navigation }: any) {
         >
           {reports.length === 0 ? (
             <FadeInView>
+              {/* Audit 2.0.5 F4: a FAILED load must never read as "All clear" —
+                  real reports could be piling up behind a denied/broken query. */}
               <View style={[styles.empty, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Ionicons name="checkmark-done-outline" size={40} color={colors.success} />
-                <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>All clear</Text>
+                <Ionicons
+                  name={permError ? 'alert-circle-outline' : 'checkmark-done-outline'}
+                  size={40}
+                  color={permError ? colors.warning : colors.success}
+                />
+                <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+                  {permError ? "Couldn't load reports" : 'All clear'}
+                </Text>
                 <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
-                  No open reports right now. Pull to refresh.
+                  {permError
+                    ? 'The reports query failed — this is NOT an empty queue. Check your connection and pull to retry.'
+                    : 'No open reports right now. Pull to refresh.'}
                 </Text>
                 {permError && (
                   <Text style={[styles.permWarn, { color: colors.warning }]}>
-                    If you expected reports here, verify /admins/{'{uid}'} is seeded
+                    If this persists, verify /admins/{'{uid}'} is seeded
                     for your account in Firestore. See ADMIN_SETUP.md.
                   </Text>
                 )}
