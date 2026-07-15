@@ -40,6 +40,13 @@ export { banUser } from './banUser';
 // admin's Members tab to clear out test accounts.
 export { adminDeleteUser } from './adminDeleteUser';
 
+// The authority for SPENDABLE currency (Dojo Points 💎 / Flames). Firestore rules
+// pin the balance fields immutable to the client, so this is the only thing that
+// can move them — points redeem for real merchandise, and a member holding their
+// own ID token must not be able to mint product from a browser. Server-owned
+// reward table + per-mutation idempotency (doubles as the audit ledger).
+export { pointsLedger } from './pointsLedger';
+
 // Firestore trigger: push admins on every new report (≤24h review SLA backstop).
 export { notifyOnReport } from './notifyOnReport';
 

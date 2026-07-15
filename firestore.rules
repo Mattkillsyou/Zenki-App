@@ -598,6 +598,56 @@ service cloud.firestore {
       }
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // Gamification — XP, level, streaks, achievements AND the two SPENDABLE
+    // currencies (dojoPoints 💎, flames). Keyed by Firebase Auth uid.
+    //
+    // THE SPLIT THAT MATTERS: progress fields are owner-writable (the app's
+    // gamification engine is client-side and that's fine — worst case is a
+    // vanity/leaderboard lie). The BALANCE fields are not: Dojo Points and
+    // Flames are redeemable for real merchandise at the store, so a member with
+    // their own ID token and a browser could otherwise mint themselves free
+    // product. dojoPoints/pointsLifetime/flames/flamesLifetime are therefore
+    // pinned immutable here; only the pointsLedger Cloud Function (Admin SDK,
+    // which bypasses rules) may move them.
+    //
+    // CREATE deliberately trusts the incoming balance ONCE. Those points were
+    // client-authored anyway — before 2.0.6 the whole state lived only in
+    // AsyncStorage — so trusting the migrated value freezes the existing status
+    // quo rather than opening a new hole, and wiping it instead would take away
+    // balances members genuinely earned. The ceiling below bounds the blast
+    // radius of that one-time trust; DELETE is denied so nobody can drop the doc
+    // and re-create it with a fresh (inflated) opening balance.
+    // ─────────────────────────────────────────────────────────────
+    match /gamification/{uid} {
+      allow read: if isOwner(uid) || isTrainer() || isAdmin();
+
+      allow create: if isOwner(uid)
+                    && request.resource.data.dojoPoints is number
+                    && request.resource.data.dojoPoints >= 0
+                    && request.resource.data.dojoPoints <= 100000
+                    && request.resource.data.flames is number
+                    && request.resource.data.flames >= 0
+                    && request.resource.data.flames <= 100000;
+
+      allow update: if isOwner(uid)
+                    && request.resource.data.dojoPoints == resource.data.dojoPoints
+                    && request.resource.data.pointsLifetime == resource.data.pointsLifetime
+                    && request.resource.data.flames == resource.data.flames
+                    && request.resource.data.flamesLifetime == resource.data.flamesLifetime;
+
+      allow delete: if false;
+
+      // The audit ledger — every grant/spend, written by pointsLedger in the same
+      // transaction as the balance change. Readable by the member (their own
+      // history); never client-writable, or the idempotency keys could be forged
+      // to replay-block a legitimate grant.
+      match /grants/{grantId} {
+        allow read: if isOwner(uid) || isAdmin();
+        allow write: if false;
+      }
+    }
+
     // Trainers collection — the /trainers/{uid} doc opens up isTrainer() for
     // that user (read-only coaching access; see isTrainer() above). Only admins
     // grant/revoke it. isOwner(uid) on read so the web admin can resolve its own

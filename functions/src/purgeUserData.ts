@@ -24,6 +24,7 @@
  *   senpaiUsage where uid == uid                  (per-turn AI usage logs)
  *   nutrition/{uid}                              (recursive: weight/macro/goals/profile)
  *   training/{uid}                               (recursive: logs + personalRecords)
+ *   gamification/{uid}                           (recursive: + grants ledger)
  *   Storage users/{uid}/**  and  postMedia/{uid}/**
  *   Firebase Auth user (admin.auth().deleteUser)
  *
@@ -267,6 +268,10 @@ export async function purgeUserData(uid: string): Promise<PurgeResult> {
   // Owner-only rules make this unreadable AND undeletable once the Auth user is
   // gone, so it MUST be purged here (GDPR Art. 17).
   await step('training', () => deleteDocDeep(db.collection('training').doc(uid)));
+  // Gamification state + its /grants audit ledger. recursiveDelete covers the
+  // subcollection; the doc itself is client-undeletable by rule, so this
+  // Admin-SDK path is the ONLY way it ever goes away (GDPR Art. 17).
+  await step('gamification', () => deleteDocDeep(db.collection('gamification').doc(uid)));
   await step('aiRateLimits', () => deleteDocDeep(db.collection('aiRateLimits').doc(uid)));
   // Senpai usage logs: senpaiChat + senpaiSpeak write uid-keyed per-turn docs
   // (ts, model, mood, characters, …) to the top-level /senpaiUsage collection —
