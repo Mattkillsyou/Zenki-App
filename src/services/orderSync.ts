@@ -8,17 +8,51 @@ import { safeStorageGetJSON } from '../utils/safeStorage';
 import { generateId } from '../utils/generateId';
 
 const ORDERS_KEY = '@zenki_orders';
+/** Newest-first history cap. Synced orders past this are safe to evict — they
+ *  live in Firestore. UNSYNCED ones are not: see trimPreservingUnsynced. */
+const HISTORY_CAP = 100;
 
 /** Newest-first local order history — the receipt source of truth (offline-safe). */
 export async function getLocalOrders(): Promise<Order[]> {
   return safeStorageGetJSON<Order[]>(ORDERS_KEY, [], (v) => Array.isArray(v));
 }
 
+/**
+ * Trim history to HISTORY_CAP while NEVER evicting an order that hasn't reached
+ * Firestore yet.
+ *
+ * The plain `.slice(0, 100)` this replaces silently defeated the retry queue:
+ * flushUnsyncedOrders() looks the order body up in local history by id, so once
+ * an unsynced id rotated past the cap there was nothing left to push and the
+ * flush dropped the marker entirely — a PAID order that never reached the dojo,
+ * i.e. lost revenue, reported as clean. Unsynced orders are therefore kept past
+ * the cap until they land; once synced, a later trim evicts them normally.
+ */
+async function trimPreservingUnsynced(orders: Order[]): Promise<Order[]> {
+  if (orders.length <= HISTORY_CAP) return orders;
+  let unsynced: Set<string>;
+  try {
+    unsynced = new Set(await readUnsyncedIds());
+  } catch {
+    // Can't tell what's unsynced ⇒ don't evict anything this pass. Keeping a few
+    // extra receipts is free; dropping a paid one is not.
+    return orders;
+  }
+  const kept = orders.slice(0, HISTORY_CAP);
+  if (unsynced.size === 0) return kept;
+  const keptIds = new Set(kept.map((o) => o.id));
+  const rescued = orders.slice(HISTORY_CAP).filter((o) => unsynced.has(o.id) && !keptIds.has(o.id));
+  if (rescued.length) {
+    console.warn(`[Orders] keeping ${rescued.length} unsynced order(s) past the ${HISTORY_CAP} cap until they reach Firestore`);
+  }
+  return rescued.length ? [...kept, ...rescued] : kept;
+}
+
 /** Append an order to local history. Throws on failure so the caller can abort
  *  BEFORE deducting points (keeps points and the order record consistent). */
 export async function appendLocalOrder(order: Order): Promise<void> {
   const existing = await getLocalOrders();
-  const next = [order, ...existing].slice(0, 100);
+  const next = await trimPreservingUnsynced([order, ...existing]);
   await AsyncStorage.setItem(ORDERS_KEY, JSON.stringify(next));
 }
 
@@ -75,7 +109,12 @@ export async function flushUnsyncedOrders(): Promise<void> {
   for (const id of ids) {
     const order = local.find((o) => o.id === id);
     if (!order) {
-      // Rotated out of local history — nothing left to push; drop the marker.
+      // No body left to push, so the marker is all we can drop. This should now
+      // be unreachable for cap-evicted orders (trimPreservingUnsynced keeps
+      // unsynced ones past the cap); if it fires, the history was cleared or
+      // corrupted out from under the queue — an order that never reached the
+      // dojo is being abandoned, so say so loudly rather than dropping silently.
+      console.warn(`[Orders] abandoning unsynced order ${id}: no local body found — it never reached Firestore.`);
       const now = await readUnsyncedIds();
       await setUnsyncedIds(now.filter((x) => x !== id));
       continue;

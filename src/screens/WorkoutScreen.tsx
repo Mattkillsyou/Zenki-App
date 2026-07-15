@@ -263,6 +263,10 @@ function LogTab({
               placeholderTextColor={colors.textMuted}
               value={result}
               onChangeText={setResult}
+              // Matches the 60-char clamp in trainingSync.sanitizeLog / the
+              // /training rule. Without it a longer result saved fine locally and
+              // was then silently truncated by the cloud copy on the next hydrate.
+              maxLength={60}
             />
 
             <Text style={[styles.label, { color: colors.textSecondary, marginTop: 12 }]}>SCALING</Text>

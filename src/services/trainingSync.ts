@@ -31,7 +31,7 @@
  * server, and silently never sync.
  */
 
-import { collection, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { collection, onSnapshot, doc, deleteDoc, Unsubscribe } from 'firebase/firestore';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import { noopUnsubscribe } from './firestoreUtils';
 import {
@@ -90,15 +90,26 @@ export function sanitizePR(p: SyncedPersonalRecord): SyncedPersonalRecord {
  * pill: it would be retried on every flush forever and never land. Better to
  * skip it loudly than to retry it silently until the end of time.
  *
- * (These mirror the rules' hard predicates — the clamps above handle the rest.)
+ * These mirror the rules' HARD predicates and nothing more. Do NOT tighten them
+ * past the rules: an earlier version required a strict YYYY-MM-DD date here
+ * while the rule only asks for `date is string` — since the date field is
+ * free-text, any member who typed a non-ISO date had that record judged
+ * unsyncable and silently stranded on-device forever. A record the server would
+ * happily accept must never be withheld by a client-side opinion.
  */
 export function isSyncableLog(l: SyncedWorkoutLog): boolean {
-  return !!l.id && typeof l.memberId === 'string' && isDateString(sanitizeLog(l).date);
+  const s = sanitizeLog(l);
+  return !!l.id && typeof s.memberId === 'string' && typeof s.date === 'string';
 }
 export function isSyncablePR(p: SyncedPersonalRecord): boolean {
-  const v = Number(p.value);
-  return !!p.id && Number.isFinite(v) && v > 0 && !!String(p.exerciseKey ?? '')
-    && isDateString(sanitizePR(p).date);
+  const s = sanitizePR(p);
+  const v = Number(s.value);
+  // value > 0 and the string fields are genuinely enforced by the rule; the date
+  // only has to be A STRING, exactly as the rule says.
+  return !!p.id && Number.isFinite(v) && v > 0
+    && typeof s.exerciseKey === 'string' && s.exerciseKey.length > 0
+    && typeof s.date === 'string'
+    && (s.reps === undefined || (Number.isFinite(Number(s.reps)) && Number(s.reps) > 0));
 }
 
 function reportSkipped<T extends { id: string }>(kind: string, skipped: readonly T[]) {
@@ -123,6 +134,38 @@ export async function pushLog(uid: string, log: SyncedWorkoutLog): Promise<boole
 export async function pushPR(uid: string, pr: SyncedPersonalRecord): Promise<boolean> {
   if (!isSyncablePR(pr)) { reportSkipped('personal records', [pr]); return false; }
   return pushRecord(prsPath(uid), sanitizePR(pr), LOG_TAG);
+}
+
+/**
+ * Delete server-side. MUST be called whenever a record is removed locally: the
+ * live listener re-adds anything still on the server, so a local-only delete
+ * would RESURRECT the record on the next snapshot.
+ *
+ * A failed delete leaves the server copy, which the listener then restores —
+ * visible and self-correcting, rather than silent. Deliberately not queued:
+ * replaying a delete against a record the member later re-created would destroy
+ * the new one.
+ */
+export async function deleteLog(uid: string, id: string): Promise<boolean> {
+  if (!FIREBASE_CONFIGURED || !db || !uid || !id) return false;
+  try {
+    await deleteDoc(doc(db, logsPath(uid), id));
+    return true;
+  } catch (e) {
+    console.warn(`${LOG_TAG} deleteLog failed (server copy remains):`, e);
+    return false;
+  }
+}
+
+export async function deletePR(uid: string, id: string): Promise<boolean> {
+  if (!FIREBASE_CONFIGURED || !db || !uid || !id) return false;
+  try {
+    await deleteDoc(doc(db, prsPath(uid), id));
+    return true;
+  } catch (e) {
+    console.warn(`${LOG_TAG} deletePR failed (server copy remains):`, e);
+    return false;
+  }
 }
 
 /** Push everything still queued. Returns the ids confirmed landed. */
@@ -178,6 +221,17 @@ export interface TrainingDelta {
   logRemovedIds: string[];
   prUpserts: SyncedPersonalRecord[];
   prRemovedIds: string[];
+  /**
+   * The COMPLETE server id set, emitted only on the first snapshot of each
+   * listener. docChanges() can only report a delete it witnessed, so a record
+   * deleted on another device while this one was closed produces no 'removed'
+   * event ever — a fresh listener just never sees the doc. The consumer uses
+   * this to reconcile: a local row marked synced whose id is absent from the
+   * server was deleted elsewhere and must go. (Rows still queued — synced
+   * falsy — are pending uploads and must be kept.)
+   */
+  logAllIds?: string[];
+  prAllIds?: string[];
 }
 
 /**
@@ -192,6 +246,7 @@ export function subscribeTraining(
 ): Unsubscribe {
   if (!FIREBASE_CONFIGURED || !db || !uid) return noopUnsubscribe;
 
+  let logsFirstSnapshot = true;
   const unsubLogs = onSnapshot(
     collection(db, logsPath(uid)),
     (snap) => {
@@ -201,13 +256,17 @@ export function subscribeTraining(
         if (c.type === 'removed') logRemovedIds.push(c.doc.id);
         else logUpserts.push({ ...(c.doc.data() as WorkoutLog), id: c.doc.id, synced: true });
       });
-      if (logUpserts.length || logRemovedIds.length) {
-        onDelta({ logUpserts, logRemovedIds, prUpserts: [], prRemovedIds: [] });
+      const delta: TrainingDelta = { logUpserts, logRemovedIds, prUpserts: [], prRemovedIds: [] };
+      if (logsFirstSnapshot) {
+        logsFirstSnapshot = false;
+        delta.logAllIds = snap.docs.map((d) => d.id);
       }
+      if (logUpserts.length || logRemovedIds.length || delta.logAllIds) onDelta(delta);
     },
     (e) => console.warn(`${LOG_TAG} logs listener error:`, e),
   );
 
+  let prsFirstSnapshot = true;
   const unsubPRs = onSnapshot(
     collection(db, prsPath(uid)),
     (snap) => {
@@ -217,9 +276,12 @@ export function subscribeTraining(
         if (c.type === 'removed') prRemovedIds.push(c.doc.id);
         else prUpserts.push({ ...(c.doc.data() as PersonalRecord), id: c.doc.id, synced: true });
       });
-      if (prUpserts.length || prRemovedIds.length) {
-        onDelta({ logUpserts: [], logRemovedIds: [], prUpserts, prRemovedIds });
+      const delta: TrainingDelta = { logUpserts: [], logRemovedIds: [], prUpserts, prRemovedIds };
+      if (prsFirstSnapshot) {
+        prsFirstSnapshot = false;
+        delta.prAllIds = snap.docs.map((d) => d.id);
       }
+      if (prUpserts.length || prRemovedIds.length || delta.prAllIds) onDelta(delta);
     },
     (e) => console.warn(`${LOG_TAG} prs listener error:`, e),
   );

@@ -542,10 +542,17 @@ service cloud.firestore {
     // and lost on reinstall; moved online so a member's training history
     // survives an app delete or a new phone.
     //
-    // Owner-only, matching the /nutrition stance — a member's training log is
-    // theirs. Trainers/admins do NOT read it here; if that's wanted later it
-    // should be a deliberate, disclosed decision (and the trainer view reads
-    // /attendance, which is a dojo record rather than a personal log).
+    // WRITE is owner-only — a member's training log is authored by them alone.
+    // READ is owner + trainer + admin, a deliberate decision by the owner
+    // (trainers may see member training data). NOTE: nothing reads this
+    // cross-user YET — the web admin's trainer view currently derives its stats
+    // from /attendance. The grant is here so the rule ships with the collection
+    // rather than needing a second rules deploy later; the trainer UI will read
+    // it once the client sync lands in 2.0.6 and members' logs are actually here.
+    // It intentionally DIVERGES from the /nutrition stance ("no cross-user read —
+    // not even admins"), which stays owner-only until a member-facing consent
+    // flow exists, because weight/macros/DEXA/bloodwork are medical-adjacent in a
+    // way a workout log is not.
     //
     // The field bounds below are a MATCHED PAIR with the clamps in
     // src/services/trainingSync.ts (sanitizeLog/sanitizePR). Change one and you
@@ -554,10 +561,12 @@ service cloud.firestore {
     // to end.
     // ─────────────────────────────────────────────────────────────
     match /training/{uid} {
-      allow read, write: if isOwner(uid);
+      allow read: if isOwner(uid) || isTrainer() || isAdmin();
+      allow write: if isOwner(uid);
 
       match /logs/{logId} {
-        allow read, delete: if isOwner(uid);
+        allow read: if isOwner(uid) || isTrainer() || isAdmin();
+        allow delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
                               && request.resource.data.date is string
                               && request.resource.data.title is string
@@ -574,7 +583,8 @@ service cloud.firestore {
       }
 
       match /personalRecords/{prId} {
-        allow read, delete: if isOwner(uid);
+        allow read: if isOwner(uid) || isTrainer() || isAdmin();
+        allow delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
                               && request.resource.data.value is number
                               && request.resource.data.value > 0

@@ -32,6 +32,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth as firebaseAuth } from './src/config/firebase';
 import { flushPendingSignupWrites } from './src/services/waiverSync';
 import { flushUnsyncedOrders } from './src/services/orderSync';
+import { flushPendingNutrition } from './src/services/nutritionSync';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { MotionProvider } from './src/context/MotionContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -245,6 +246,10 @@ export default function App() {
         flushPendingSignupWrites().catch((e) => console.warn('[App] signup-writes flush failed:', e));
         // Paid/reserved orders whose cloud sync failed — same never-silent rule.
         flushUnsyncedOrders().catch((e) => console.warn('[App] order flush failed:', e));
+        // Nutrition writes that never reached the server. NutritionContext calls
+        // its mutators fire-and-forget, so before this a failed weigh-in was
+        // never retried and lived only on the device — forever.
+        flushPendingNutrition().catch((e) => console.warn('[App] nutrition flush failed:', e));
       }
     });
   }, []);
