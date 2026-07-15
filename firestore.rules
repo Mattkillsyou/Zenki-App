@@ -536,6 +536,58 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // Training — workout logs + personal records, keyed by Firebase Auth uid in
+    // the PATH (NOT the app's internal memberId). Previously AsyncStorage-only
+    // and lost on reinstall; moved online so a member's training history
+    // survives an app delete or a new phone.
+    //
+    // Owner-only, matching the /nutrition stance — a member's training log is
+    // theirs. Trainers/admins do NOT read it here; if that's wanted later it
+    // should be a deliberate, disclosed decision (and the trainer view reads
+    // /attendance, which is a dojo record rather than a personal log).
+    //
+    // The field bounds below are a MATCHED PAIR with the clamps in
+    // src/services/trainingSync.ts (sanitizeLog/sanitizePR). Change one and you
+    // MUST change the other, or over-length rows write locally, get rejected
+    // here, and silently never sync — the exact data-loss this migration exists
+    // to end.
+    // ─────────────────────────────────────────────────────────────
+    match /training/{uid} {
+      allow read, write: if isOwner(uid);
+
+      match /logs/{logId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+                              && request.resource.data.date is string
+                              && request.resource.data.title is string
+                              && request.resource.data.title.size() <= 60
+                              && request.resource.data.result is string
+                              && request.resource.data.result.size() <= 60
+                              && request.resource.data.notes is string
+                              && request.resource.data.notes.size() <= 200
+                              && request.resource.data.format in ['AMRAP', 'EMOM', 'FOR_TIME', 'TABATA', 'CHIPPER', 'STRENGTH', 'OTHER']
+                              && request.resource.data.rxOrScaled in ['Rx', 'Scaled']
+                              && request.resource.data.memberId is string
+                              && (!('durationMinutes' in request.resource.data)
+                                  || request.resource.data.durationMinutes is number);
+      }
+
+      match /personalRecords/{prId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+                              && request.resource.data.value is number
+                              && request.resource.data.value > 0
+                              && request.resource.data.exerciseKey is string
+                              && request.resource.data.date is string
+                              && request.resource.data.memberId is string
+                              && (!('reps' in request.resource.data)
+                                  || (request.resource.data.reps is number && request.resource.data.reps > 0))
+                              && (!('notes' in request.resource.data)
+                                  || (request.resource.data.notes is string && request.resource.data.notes.size() <= 200));
+      }
+    }
+
     // Trainers collection — the /trainers/{uid} doc opens up isTrainer() for
     // that user (read-only coaching access; see isTrainer() above). Only admins
     // grant/revoke it. isOwner(uid) on read so the web admin can resolve its own

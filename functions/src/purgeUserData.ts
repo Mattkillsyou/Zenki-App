@@ -23,6 +23,7 @@
  *   attendance / waivers / appointments / taskCompletions / supportMessages / aiRateLimits/{uid}
  *   senpaiUsage where uid == uid                  (per-turn AI usage logs)
  *   nutrition/{uid}                              (recursive: weight/macro/goals/profile)
+ *   training/{uid}                               (recursive: logs + personalRecords)
  *   Storage users/{uid}/**  and  postMedia/{uid}/**
  *   Firebase Auth user (admin.auth().deleteUser)
  *
@@ -261,6 +262,11 @@ export async function purgeUserData(uid: string): Promise<PurgeResult> {
   // macroEntries,macroGoals,nutritionProfile} — uid in the PATH. recursiveDelete
   // covers all four subcollections even though the parent doc is never written.
   await step('nutrition', () => deleteDocDeep(db.collection('nutrition').doc(uid)));
+  // Training tree — /training/{uid}/{logs,personalRecords}. recursiveDelete
+  // covers both subcollections even though the parent doc is never written.
+  // Owner-only rules make this unreadable AND undeletable once the Auth user is
+  // gone, so it MUST be purged here (GDPR Art. 17).
+  await step('training', () => deleteDocDeep(db.collection('training').doc(uid)));
   await step('aiRateLimits', () => deleteDocDeep(db.collection('aiRateLimits').doc(uid)));
   // Senpai usage logs: senpaiChat + senpaiSpeak write uid-keyed per-turn docs
   // (ts, model, mood, characters, …) to the top-level /senpaiUsage collection —
