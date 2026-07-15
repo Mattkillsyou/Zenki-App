@@ -26,6 +26,26 @@ service cloud.firestore {
       );
     }
 
+    // Trainer check — a READ-ONLY coaching role, deliberately weaker than admin.
+    // Mirrors isAdmin()'s shape: a custom claim (token.trainer == true) or a
+    // seeded doc at /trainers/{uid}. A trainer may READ member training data
+    // (members, attendance, appointments, orders) so the web admin's trainer
+    // view can show who is showing up and how often — but grants NO write, and
+    // NOT the admin surface (ban, hard-delete, broadcast, moderation, editing).
+    // `isEmployee` on a member doc is NOT this: it's only a write-elevation
+    // guard and confers zero read power. Being an admin does not imply trainer;
+    // rules that both roles may read say `isAdmin() || isTrainer()`.
+    //
+    // COST NOTE: isTrainer() is always appended LAST in an OR chain so the
+    // common paths (a member reading their own doc) short-circuit before it and
+    // never pay for the extra exists() lookup.
+    function isTrainer() {
+      return isSignedIn() && (
+        request.auth.token.trainer == true ||
+        exists(/databases/$(database)/documents/trainers/$(request.auth.uid))
+      );
+    }
+
     // True if the signed-in user has an approved follower edge to `authorUid`
     // (i.e. /followers/{authorUid}/followers/{me} exists). Used to let approved
     // followers read a private author's posts on that author's profile.
@@ -141,13 +161,17 @@ service cloud.firestore {
       // of their OWN doc → broke profile-photo upload + self-claim. The email
       // match already scopes the fallback to the rightful owner. Do NOT re-add
       // email_verified here unless the app actually sends verification emails.
+      // Trainers read the roster (name/belt/stripes/contact) for the web admin's
+      // trainer view — appended LAST so a member reading their own doc
+      // short-circuits before the extra exists() lookup.
       allow read: if isAdmin()
                   || (isSignedIn()
                       && (
                         resource.data.firebaseUid == request.auth.uid
                         || (!('firebaseUid' in resource.data)
                             && resource.data.email == request.auth.token.email)
-                      ));
+                      ))
+                  || isTrainer();
       allow create: if isAdmin()
                     || (isSignedIn()
                         && request.resource.data.firebaseUid == request.auth.uid
@@ -392,8 +416,11 @@ service cloud.firestore {
     // The doc carries `firebaseUid` (stamped at write) because the app's
     // internal `memberId` is not the auth uid. No updates or deletes (audit).
     match /attendance/{docId} {
+      // Trainers read all check-ins — this is the backbone of the trainer view
+      // (streaks, last-seen, 30-day volume are all derived from these rows).
       allow read: if isAdmin()
-                  || (isSignedIn() && resource.data.firebaseUid == request.auth.uid);
+                  || (isSignedIn() && resource.data.firebaseUid == request.auth.uid)
+                  || isTrainer();
       allow create: if isSignedIn()
                     && request.resource.data.firebaseUid == request.auth.uid
                     && request.resource.data.memberName is string
@@ -509,6 +536,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Trainers collection — the /trainers/{uid} doc opens up isTrainer() for
+    // that user (read-only coaching access; see isTrainer() above). Only admins
+    // grant/revoke it. isOwner(uid) on read so the web admin can resolve its own
+    // role at sign-in; a trainer must NOT be able to enumerate other trainers or
+    // self-grant, hence no isTrainer() branch here and admin-only writes.
+    match /trainers/{uid} {
+      allow read: if isAdmin() || isOwner(uid);
+      allow write: if isAdmin();
+    }
+
     // Class schedule — one doc per day key (`Mon`, `Tue`, …) holding the
     // full classes array. PUBLIC read: guests (App Review 5.1.1(v)) have no
     // Firebase session, so the old signed-in gate left them stuck on the stale
@@ -535,8 +572,10 @@ service cloud.firestore {
       // backfilled for legacy docs (backfillAppointmentOwners) — so this no
       // longer hides a member's own sessions. Clients scope the listener to
       // match (admins stream all; members stream where firebaseUid==uid).
+      // Trainers read (not write) private-session bookings for the trainer view.
       allow read: if isAdmin()
-                  || (isSignedIn() && resource.data.firebaseUid == request.auth.uid);
+                  || (isSignedIn() && resource.data.firebaseUid == request.auth.uid)
+                  || isTrainer();
       allow create: if isAdmin()
                     || (isSignedIn()
                         && request.resource.data.firebaseUid == request.auth.uid);
@@ -598,8 +637,12 @@ service cloud.firestore {
     // firebaseUid); the owner and admins can read it. No client update/delete —
     // fulfillment-status changes are admin-only (audit trail).
     match /orders/{orderId} {
+      // Trainers read (not write) a member's dojo purchases. NOTE: /payments —
+      // the Stripe ledger — stays admin-only; `orders` already shows what was
+      // bought without exposing payment infrastructure.
       allow read: if isAdmin()
-                  || (isSignedIn() && resource.data.firebaseUid == request.auth.uid);
+                  || (isSignedIn() && resource.data.firebaseUid == request.auth.uid)
+                  || isTrainer();
       allow create: if isSignedIn()
                     && request.resource.data.firebaseUid == request.auth.uid;
       allow update, delete: if isAdmin();

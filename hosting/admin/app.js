@@ -135,18 +135,57 @@ $('signOutBtn').addEventListener('click', () => signOut(auth));
 // Complete a redirect-based Google sign-in if one is in flight.
 getRedirectResult(auth).catch((e) => setLoginMsg(authErr(e), true));
 
+// ── Role ──────────────────────────────────────────────────────────────────
+// 'admin' = full surface. 'trainer' = READ-ONLY coaching view (Members only).
+// Like the auth gate itself this is UX only — firestore.rules' isTrainer() and
+// the Cloud Functions' own admin checks are the real enforcement. A trainer who
+// forged this to 'admin' in devtools would still be denied by every rule and CF.
+let role = null;
+const isAdminRole = () => role === 'admin';
+// Tabs a trainer may see. Everything else (post moderation, reports, member
+// editing/deletion, announcements, broadcast) is admin-only by design.
+const TRAINER_TABS = new Set(['members']);
+
+function applyRoleToNav() {
+  const buttons = [...document.querySelectorAll('nav.tabs button')];
+  buttons.forEach((b) => {
+    b.classList.toggle('hidden', !(isAdminRole() || TRAINER_TABS.has(b.dataset.tab)));
+  });
+  // A trainer landing on (or left on) an admin-only tab is moved to Members.
+  if (!isAdminRole() && !TRAINER_TABS.has(currentTab)) {
+    currentTab = 'members';
+    buttons.forEach((x) => x.classList.toggle('active', x.dataset.tab === 'members'));
+  }
+}
+
 onAuthStateChanged(auth, async (user) => {
-  if (!user) { appView.classList.add('hidden'); loginView.classList.remove('hidden'); return; }
-  let adminSnap;
-  try { adminSnap = await getDoc(doc(db, 'admins', user.uid)); }
-  catch (e) {
-    // A transient read/network error must NOT masquerade as "not an admin"
-    // and sign a legitimate admin out — leave the session so a reload retries.
-    setLoginMsg('Could not verify admin access — check your connection and reload.', true);
+  if (!user) { role = null; appView.classList.add('hidden'); loginView.classList.remove('hidden'); return; }
+  // Both docs are readable by their own uid (rules: isAdmin() || isOwner(uid)),
+  // so a non-privileged user gets a clean "doesn't exist" here, not an error.
+  // allSettled, NOT all: with Promise.all the new /trainers probe became a hard
+  // dependency of admin sign-in — one failed read there would lock a verified
+  // admin out of the console entirely.
+  const [a, t] = await Promise.allSettled([
+    getDoc(doc(db, 'admins', user.uid)),
+    getDoc(doc(db, 'trainers', user.uid)),
+  ]);
+  role = (a.status === 'fulfilled' && a.value.exists()) ? 'admin'
+    : (t.status === 'fulfilled' && t.value.exists()) ? 'trainer'
+      : null;
+  if (!role) {
+    // Only sign out on a CONCLUSIVE "not authorized" — i.e. both reads succeeded
+    // and neither granted a role. If either failed we can't distinguish that from
+    // a transient error, so leave the session so a reload retries.
+    if (a.status === 'rejected' || t.status === 'rejected') {
+      setLoginMsg('Could not verify access — check your connection and reload.', true);
+      return;
+    }
+    setLoginMsg('That account is not an admin or trainer.', true);
+    await signOut(auth);
     return;
   }
-  if (!adminSnap.exists()) { setLoginMsg('That account is not an admin.', true); await signOut(auth); return; }
-  $('who').textContent = user.email || user.uid;
+  $('who').textContent = (user.email || user.uid) + (role === 'trainer' ? ' · trainer' : '');
+  applyRoleToNav();
   loginView.classList.add('hidden');
   appView.classList.remove('hidden');
   renderTab(currentTab);
@@ -163,6 +202,9 @@ document.querySelectorAll('nav.tabs button').forEach((b) => {
   });
 });
 function renderTab(tab) {
+  // Defense in depth: never dispatch an admin-only tab for a trainer, even if
+  // the nav were tampered with. (rules + the CFs are the real gate.)
+  if (!isAdminRole() && !TRAINER_TABS.has(tab)) tab = 'members';
   if (tab === 'posts') return renderPosts();
   if (tab === 'reports') return renderReports();
   if (tab === 'members') return renderMembers();
@@ -398,7 +440,10 @@ function reportRow(r, gen, onResolved) {
     if (!res.ok) { busy(false); setMsg('Ban failed: ' + (res.error || 'unknown'), true); return; }
     // ok:true can still carry per-step purge failures in `errors` (the account
     // IS disabled) — resolve the report but tell the admin what didn't purge.
-    const purgeFailed = res.errors ? Object.keys(res.errors) : [];
+    // NB: callFn nests the response body under `data` — reading res.errors here
+    // made this always-empty, so a partly-failed ban silently reported clean.
+    const purgeErrors = (res.data && res.data.errors) || null;
+    const purgeFailed = purgeErrors ? Object.keys(purgeErrors) : [];
     try { await resolve('actioned'); }
     catch (e) { busy(false); setMsg('User banned, but the report could not be resolved: ' + ((e && e.message) || 'unknown'), true); return; }
     if (purgeFailed.length) setMsg('User banned, but content purge steps failed (' + purgeFailed.join(', ') + ') — their content may still be visible. Remove it from the Community tab.', true);
@@ -412,13 +457,22 @@ function reportRow(r, gen, onResolved) {
 }
 
 // ── Members (searchable, editable) ────────────────────────────────────────
+// Auth uids currently holding the trainer role (/trainers doc ids). Populated
+// for admins only — the rule lets an admin list /trainers but a trainer read
+// only their OWN doc, so a trainer must never attempt the collection query.
+let trainerUids = new Set();
+
 async function renderMembers() {
   const gen = ++renderGen;
   content.replaceChildren(spinnerBox());
   let members = [];
   try {
-    const snap = await getDocs(query(collection(db, 'members'), limit(500)));
+    const [snap, tSnap] = await Promise.all([
+      getDocs(query(collection(db, 'members'), limit(500))),
+      isAdminRole() ? getDocs(collection(db, 'trainers')) : Promise.resolve(null),
+    ]);
     members = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (tSnap) trainerUids = new Set(tSnap.docs.map((d) => d.id));
   } catch (e) {
     if (gen !== renderGen) return;
     content.replaceChildren(stateBox('Could not load members', (e && e.message) || String(e)));
@@ -446,9 +500,11 @@ async function renderMembers() {
   ]));
   redraw();
 }
+const isTrainerMember = (m) => !!(m.firebaseUid && trainerUids.has(m.firebaseUid));
 function memberDisplay(m) {
   const name = [m.firstName, m.lastName].filter(Boolean).join(' ') || m.name || m.displayName || '(no name)';
-  const bits = [m.email, m.belt ? `${m.belt}${m.stripes ? ' · ' + m.stripes + ' stripe' + (m.stripes === 1 ? '' : 's') : ''} belt` : null, m.phone, m.isAdmin ? 'admin' : m.isEmployee ? 'staff' : null].filter(Boolean).join(' · ');
+  const roleBit = m.isAdmin ? 'admin' : (isTrainerMember(m) ? 'trainer' : (m.isEmployee ? 'staff' : null));
+  const bits = [m.email, m.belt ? `${m.belt}${m.stripes ? ' · ' + m.stripes + ' stripe' + (m.stripes === 1 ? '' : 's') : ''} belt` : null, m.phone, roleBit].filter(Boolean).join(' · ');
   return { name, bits };
 }
 function memberRow(m, onDeleted) {
@@ -461,6 +517,8 @@ function memberRow(m, onDeleted) {
       el('div', { class: 'name', text: name }),
       el('div', { class: 'meta', text: bits || '—' }),
     ]));
+    // View is the trainer-facing drill-down — available to both roles.
+    const viewBtn = el('button', { class: 'iconbtn', text: 'View', onclick: () => renderMemberDetail(m) });
     const editBtn = el('button', { class: 'iconbtn', text: 'Edit', onclick: edit });
     const delBtn = el('button', { class: 'btn danger', text: 'Delete' });
     if (!m.firebaseUid) {
@@ -489,7 +547,41 @@ function memberRow(m, onDeleted) {
         }
       });
     }
-    row.appendChild(el('div', { class: 'rowbtns' }, [editBtn, delBtn]));
+    // Grant/revoke the read-only trainer role. Admin-only (the /trainers write
+    // rule enforces it server-side); without this the role would be ungrantable
+    // outside the Firebase console.
+    const isT = isTrainerMember(m);
+    const trainerBtn = el('button', { class: 'iconbtn', text: isT ? 'Revoke trainer' : 'Make trainer' });
+    if (!m.firebaseUid) {
+      trainerBtn.disabled = true;
+      trainerBtn.title = 'No linked login — this member can’t sign in, so they can’t be a trainer.';
+    } else {
+      trainerBtn.addEventListener('click', async () => {
+        const nm = safeName(name);
+        const ok = confirm(isT
+          ? `Revoke ${nm}'s trainer access?\n\nThey'll no longer be able to sign in to this admin.`
+          : `Give ${nm} trainer access?\n\nThey'll be able to sign in here and view EVERY member's profile, check-in history, bookings and purchases.\n\nThey CANNOT edit members, delete accounts, ban, moderate posts, or send broadcasts.`);
+        if (!ok) return;
+        trainerBtn.disabled = true; trainerBtn.textContent = 'Saving…';
+        try {
+          if (isT) await deleteDoc(doc(db, 'trainers', m.firebaseUid));
+          else await setDoc(doc(db, 'trainers', m.firebaseUid), {
+            memberId: m.id,
+            email: m.email || null,
+            grantedAt: iso(),
+            grantedBy: auth.currentUser ? auth.currentUser.uid : '',
+          });
+          if (isT) trainerUids.delete(m.firebaseUid); else trainerUids.add(m.firebaseUid);
+          render();
+        } catch (e) {
+          trainerBtn.disabled = false;
+          trainerBtn.textContent = isT ? 'Revoke trainer' : 'Make trainer';
+          alert('Could not update trainer access: ' + ((e && e.message) || 'unknown'));
+        }
+      });
+    }
+    // Trainers are strictly read-only: no editing, no hard delete, no granting.
+    row.appendChild(el('div', { class: 'rowbtns' }, isAdminRole() ? [viewBtn, trainerBtn, editBtn, delBtn] : [viewBtn]));
   };
   const edit = () => {
     row.replaceChildren();
@@ -528,14 +620,275 @@ function memberRow(m, onDeleted) {
     row.appendChild(safeImg(m.profilePhoto || m.avatar));
     row.appendChild(el('div', { class: 'body' }, [
       el('div', { class: 'grid2' }, [first, last]),
-      el('div', { class: 'grid2', style: 'margin-top:8px' }, [belt, stripes]),
-      el('div', { style: 'margin-top:8px' }, [phone]),
+      el('div', { class: 'grid2 mt8' }, [belt, stripes]),
+      el('div', { class: 'mt8' }, [phone]),
       msg,
-      el('div', { class: 'rowbtns', style: 'margin-top:8px' }, [save, cancel]),
+      el('div', { class: 'rowbtns mt8' }, [save, cancel]),
     ]));
   };
   render();
   return row;
+}
+
+// ── Member detail / trainer stats view ────────────────────────────────────
+// The trainer-facing drill-down. Everything here is derived from data that is
+// ACTUALLY in Firestore today: /attendance check-in rows, /appointments, /orders.
+//
+// Deliberately does NOT surface members.totalSessions or members.weekStreak.
+// Those fields exist and are readable, but NO training flow ever increments
+// them (the real counts live in device-local gamification state), so they read
+// 0 for every member — rendering them would quietly lie to a trainer.
+// Workouts, PRs, XP/streaks and health data are device-local and cannot appear
+// here at all until the sync migration lands.
+
+const ATT_PAGE = 730; // ~3.5y at 4 check-ins/wk — bounds reads per member view
+const ORDER_PAGE = 100; // per-member cap for appointments + orders; disclosed when hit
+const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const BELT_COLORS = { none: '#6b7280', white: '#e5e7eb', blue: '#2563eb', purple: '#7c3aed', brown: '#78350f', black: '#111827' };
+const DAY_MS = 86400000;
+const WEEK_MS = 7 * DAY_MS;
+const isDay = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+const dayMs = (s) => new Date(s + 'T00:00:00').getTime();
+const midnightToday = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t.getTime(); };
+// Monday-start week bucket for a local-midnight timestamp.
+const weekStart = (ms) => { const t = new Date(ms); t.setHours(0, 0, 0, 0); t.setDate(t.getDate() - ((t.getDay() + 6) % 7)); return t.getTime(); };
+// The PREVIOUS week's bucket. Steps via weekStart() from 3 days back rather than
+// subtracting a fixed 7*24h: buckets are LOCAL midnights and a DST week is 167h
+// or 169h, so fixed-ms arithmetic lands at 23:00/01:00 of the wrong day — a
+// timestamp that is never in the bucket Set — silently severing every streak at
+// each DST transition (it capped `longest` at the March→November gap).
+// 3 days back from a Monday midnight always lands on the prior Friday whatever
+// the shift, and weekStart() then normalizes it to that week's Monday.
+const prevWeek = (ms) => weekStart(ms - 3 * DAY_MS);
+// Local midnight N days before `ms` — DST-safe, unlike ms - n*DAY_MS.
+const daysBefore = (ms, n) => { const t = new Date(ms); t.setDate(t.getDate() - n); t.setHours(0, 0, 0, 0); return t.getTime(); };
+
+/**
+ * Derive coaching stats from raw check-in rows. Counts DISTINCT DAYS, not docs,
+ * so a double check-in on one day can't inflate a streak or a total.
+ */
+function attendanceStats(rows) {
+  // isDay is shape-only, so a well-formed-but-impossible date ('2025-99-99')
+  // would reach dayMs() as NaN and render 'NaNd ago'. Drop those at the source
+  // so every stat below inherits the guard.
+  const days = [...new Set(rows.map((r) => String(r.date || '')).filter(isDay))]
+    .filter((d) => !isNaN(dayMs(d)))
+    .sort();
+  const today = midnightToday();
+  const dow = [0, 0, 0, 0, 0, 0, 0];
+  days.forEach((d) => { dow[new Date(dayMs(d)).getDay()]++; });
+
+  // Week streak = consecutive Monday-start weeks with >=1 check-in. Counts from
+  // LAST week when nothing is logged this week yet, so a streak isn't reported
+  // broken just because it's only Tuesday.
+  const weeks = new Set(days.map((d) => weekStart(dayMs(d))));
+  const thisWeek = weekStart(today);
+  let current = 0;
+  let cursor = weeks.has(thisWeek) ? thisWeek : prevWeek(thisWeek);
+  while (weeks.has(cursor)) { current++; cursor = prevWeek(cursor); }
+
+  let longest = 0, run = 0, prev = null;
+  for (const w of [...weeks].sort((a, b) => a - b)) {
+    run = (prev !== null && prevWeek(w) === prev) ? run + 1 : 1;
+    prev = w;
+    if (run > longest) longest = run;
+  }
+
+  const last = days.length ? days[days.length - 1] : null;
+  const cut30 = daysBefore(today, 30);
+  return {
+    total: days.length,
+    last,
+    daysSince: last ? Math.max(0, Math.round((today - dayMs(last)) / DAY_MS)) : null,
+    last30: days.filter((d) => dayMs(d) > cut30).length,
+    dow,
+    current,
+    longest,
+    peakDow: dow.some((n) => n > 0) ? dow.indexOf(Math.max(...dow)) : null,
+  };
+}
+
+// What the member actually PAID. `balanceDueUsd` is the balance still OWED at
+// pickup — it is 0 for every Apple Pay order and hard-coded 0 for drink tabs, so
+// summing it reported $0.00 for members who paid in-app. Mirrors the app's own
+// derivation (OrderHistoryScreen: subtotal - pointsValueUsd - promoDiscountUsd).
+const orderCharged = (o) => (Number(o.subtotal) || 0) - (Number(o.pointsValueUsd) || 0) - (Number(o.promoDiscountUsd) || 0);
+const orderDue = (o) => Number(o.balanceDueUsd) || 0;
+
+function statTile(value, label, sub) {
+  return el('div', { class: 'stat' }, [
+    el('div', { class: 'v', text: String(value) }),
+    el('div', { class: 'k', text: label }),
+    sub ? el('div', { class: 'sub', text: sub }) : null,
+  ]);
+}
+
+function dowChart(dow) {
+  const max = Math.max(1, ...dow);
+  return el('div', { class: 'dow' }, dow.map((n, i) => {
+    const bar = el('div', { class: 'bar' });
+    // Set on the node, not via el()'s props — el() blocks a `style` prop
+    // (DANGEROUS_ATTRS). This value is a computed number, never user data.
+    // The % resolves against .track, which owns the column's leftover height.
+    bar.style.height = `${Math.round((n / max) * 100)}%`;
+    return el('div', { class: 'col' }, [
+      el('div', { class: 'n', text: n ? String(n) : '' }),
+      el('div', { class: 'track' }, [bar]),
+      el('div', { class: 'lbl', text: DOW_LABELS[i] }),
+    ]);
+  }));
+}
+
+/** Simple list section from rows; `line` maps a row -> {title, meta, glyph}. */
+function listSection(rows, line, glyph) {
+  const list = el('div');
+  rows.forEach((r) => {
+    const { title, meta } = line(r);
+    list.appendChild(el('div', { class: 'row' }, [
+      el('div', { class: 'thumb', text: glyph }),
+      el('div', { class: 'body' }, [
+        el('div', { class: 'name', text: title }),
+        el('div', { class: 'meta', text: meta }),
+      ]),
+    ]));
+  });
+  return list;
+}
+
+async function renderMemberDetail(m) {
+  const gen = ++renderGen;
+  content.replaceChildren(spinnerBox());
+  const uid = m.firebaseUid || null;
+
+  // Load each panel independently — one failure (e.g. a composite index still
+  // building) must not blank the whole view. Resolves to rows[] or {__error}.
+  const rows = (p) => p.then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() })))
+    .catch((e) => ({ __error: (e && e.message) || String(e) }));
+  // Every query carries an explicit orderBy: without one Firestore pages by
+  // __name__ (document id), so limit() would return an ARBITRARY slice, not the
+  // newest — for orders that hid a heavy drink-tab member's store purchases
+  // entirely, and silently skewed the totals.
+  const [att, appts, orders] = await Promise.all([
+    rows(getDocs(query(collection(db, 'attendance'), where('memberId', '==', m.id), orderBy('date', 'desc'), limit(ATT_PAGE)))),
+    uid ? rows(getDocs(query(collection(db, 'appointments'), where('firebaseUid', '==', uid), orderBy('startsAt', 'desc'), limit(ORDER_PAGE)))) : [],
+    uid ? rows(getDocs(query(collection(db, 'orders'), where('firebaseUid', '==', uid), orderBy('createdAt', 'desc'), limit(ORDER_PAGE)))) : [],
+  ]);
+  if (gen !== renderGen) return;
+
+  const { name } = memberDisplay(m);
+  const frame = el('div');
+  frame.appendChild(el('button', { class: 'backbtn', text: '‹ Back to members', onclick: renderMembers }));
+
+  // ── Header: who + rank ──
+  const dot = el('span', { class: 'belt-dot' });
+  dot.style.background = BELT_COLORS[m.belt] || BELT_COLORS.none; // computed, not user data
+  const rank = el('div', { class: 'who-meta' });
+  rank.appendChild(dot);
+  rank.appendChild(document.createTextNode(
+    (m.belt ? `${m.belt} belt${m.stripes ? ` · ${m.stripes} stripe${m.stripes === 1 ? '' : 's'}` : ''}` : 'no belt recorded')
+    + (m.memberSince ? ` · member since ${m.memberSince}` : ''),
+  ));
+  frame.appendChild(el('div', { class: 'detail-head' }, [
+    safeImg(m.profilePhoto || m.avatar),
+    el('div', {}, [
+      el('div', { class: 'who-name', text: name }),
+      rank,
+      el('div', { class: 'who-meta', text: [m.email, m.phone].filter(Boolean).join(' · ') }),
+    ]),
+  ]));
+
+  // ── Training (from real check-in rows) ──
+  frame.appendChild(el('div', { class: 'section-label', text: 'TRAINING' }));
+  if (!uid) {
+    // No linked login ⇒ no attendance doc CAN exist (the create rule requires
+    // firebaseUid == auth.uid). Rendering "Days trained 0 / never checked in"
+    // here would assert absence rather than report it.
+    frame.appendChild(stateBox('No check-ins recorded', 'This member has never signed in to the app, so the dojo has never recorded a check-in for them. This is not a record of absence.'));
+  } else if (att.__error) {
+    frame.appendChild(stateBox('Could not load attendance', att.__error));
+  } else {
+    const s = attendanceStats(att);
+    frame.appendChild(el('div', { class: 'stats' }, [
+      statTile(s.total, 'Days trained', s.total ? '' : 'never checked in'),
+      statTile(s.daysSince === null ? '—' : (s.daysSince === 0 ? 'Today' : `${s.daysSince}d ago`), 'Last seen', s.last || ''),
+      statTile(s.last30, 'Last 30 days', 'days trained'),
+      statTile(s.current, 'Week streak', s.current ? 'consecutive weeks' : 'no active streak'),
+      statTile(s.longest, 'Longest streak', 'weeks'),
+      statTile(s.peakDow === null ? '—' : DOW_LABELS[s.peakDow], 'Top day', s.peakDow === null ? '' : `${s.dow[s.peakDow]} visits`),
+    ]));
+    if (s.total > 0) {
+      frame.appendChild(el('div', { class: 'card' }, [
+        el('div', { class: 'section-label', text: 'CHECK-INS BY DAY OF WEEK' }),
+        dowChart(s.dow),
+      ]));
+      const recent = att.filter((r) => isDay(String(r.date))).slice(0, 12);
+      frame.appendChild(el('div', { class: 'section-label', text: 'RECENT CHECK-INS' }));
+      frame.appendChild(listSection(recent, (r) => ({
+        title: String(r.date),
+        meta: r.checkInTime ? `checked in ${r.checkInTime}` : '',
+      }), '📍'));
+    } else {
+      frame.appendChild(stateBox('No check-ins yet', 'This member has never checked in at the dojo.'));
+    }
+    if (Array.isArray(att) && att.length >= ATT_PAGE) {
+      frame.appendChild(el('div', { class: 'note', text: `Showing the most recent ${ATT_PAGE} check-ins — older history is not counted in these totals.` }));
+    }
+    // Attendance is local-first with an on-device retry queue (same as orders),
+    // so these numbers can lag. Say so — they're what drives coaching outreach.
+    frame.appendChild(el('div', { class: 'note', text: 'Check-ins sync from the member’s phone, so a very recent visit may not appear yet if they were offline at the door.' }));
+  }
+
+  // ── Private sessions ──
+  frame.appendChild(el('div', { class: 'section-label', text: 'PRIVATE SESSIONS' }));
+  if (!uid) {
+    frame.appendChild(stateBox('No linked login', 'This member has never signed in, so bookings and purchases can’t be linked to them.'));
+  } else if (appts.__error) {
+    frame.appendChild(stateBox('Could not load sessions', appts.__error));
+  } else if (!appts.length) {
+    frame.appendChild(stateBox('No private sessions', 'This member has no bookings.'));
+  } else {
+    // Already newest-first from the server's orderBy — no client re-sort.
+    // Fields per the Appointment interface (AppointmentContext): startsAt (ISO),
+    // sessionType, instructor, durationMinutes — there is no `date`/`time`/`type`.
+    frame.appendChild(listSection(appts.slice(0, 10), (a) => ({
+      title: fmtDate(a.startsAt) || 'Session',
+      meta: [a.sessionType, a.instructor, a.durationMinutes ? `${a.durationMinutes} min` : null, a.status].filter(Boolean).join(' · '),
+    }), '🥋'));
+    if (appts.length >= ORDER_PAGE) {
+      frame.appendChild(el('div', { class: 'note', text: `Showing the most recent ${ORDER_PAGE} bookings.` }));
+    }
+  }
+
+  // ── Purchases ──
+  // NOTE: AsyncStorage is the app's documented receipt-of-record and Firestore
+  // sync is best-effort with a retry queue, so this is near-complete but not an
+  // authoritative ledger — labelled as such rather than implying a full history.
+  if (uid) {
+    frame.appendChild(el('div', { class: 'section-label', text: 'PURCHASES (SYNCED)' }));
+    if (orders.__error) {
+      // Surface the failure — previously this panel vanished entirely on error,
+      // making a failed read indistinguishable from "no purchases".
+      frame.appendChild(stateBox('Could not load purchases', orders.__error));
+    } else if (!orders.length) {
+      frame.appendChild(stateBox('No purchases', 'This member has no synced orders.'));
+    } else {
+      const spend = orders.reduce((n, o) => n + orderCharged(o), 0);
+      const due = orders.reduce((n, o) => n + orderDue(o), 0);
+      frame.appendChild(el('div', { class: 'stats' }, [
+        statTile(orders.length, 'Orders', ''),
+        statTile(`$${spend.toFixed(2)}`, 'Total spent', 'paid'),
+        due > 0 ? statTile(`$${due.toFixed(2)}`, 'Due at dojo', 'unpaid balance') : null,
+      ]));
+      frame.appendChild(listSection(orders.slice(0, 8), (o) => ({
+        title: `${o.kind === 'drinks' ? 'Drink tab' : 'Store order'} · $${orderCharged(o).toFixed(2)}`,
+        meta: [fmtDate(o.createdAt), o.status, Array.isArray(o.items) ? `${o.items.length} item${o.items.length === 1 ? '' : 's'}` : null].filter(Boolean).join(' · '),
+      }), '🧾'));
+      frame.appendChild(el('div', { class: 'note', text: `Synced orders only${orders.length >= ORDER_PAGE ? ` (most recent ${ORDER_PAGE})` : ''} — the app treats on-device history as the receipt of record, so a very recent order may not appear yet.` }));
+    }
+  }
+
+  frame.appendChild(el('div', { class: 'note', text: 'Workouts, personal records, XP and streaks are stored on the member’s phone and aren’t available here yet.' }));
+  content.replaceChildren(frame);
 }
 
 // ── Announcements ─────────────────────────────────────────────────────────

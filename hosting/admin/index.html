@@ -88,6 +88,35 @@
     .checkrow { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
     .checkrow input { width: auto; }
     .report-preview { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font-size: 12px; color: var(--muted); margin-top: 6px; word-break: break-word; }
+
+    /* Utility — el() blocks inline style attributes (DANGEROUS_ATTRS), so
+       spacing must come from a class. */
+    .mt8 { margin-top: 8px; }
+
+    /* Member detail / trainer stats view */
+    .backbtn { background: transparent; border: none; color: var(--muted); font-size: 14px; font-weight: 600; padding: 6px 0; margin-bottom: 4px; }
+    .backbtn:hover { color: var(--text); }
+    .detail-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+    .detail-head .who-name { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; }
+    .detail-head .who-meta { color: var(--muted); font-size: 13px; margin-top: 3px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+    .stat .v { font-size: 24px; font-weight: 800; letter-spacing: -0.6px; line-height: 1.1; }
+    .stat .k { font-size: 10px; font-weight: 700; letter-spacing: 1.1px; color: var(--muted); margin-top: 5px; text-transform: uppercase; }
+    .stat .sub { font-size: 11px; color: var(--tertiary); margin-top: 3px; }
+    .belt-dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 7px; vertical-align: middle; border: 1px solid var(--border); }
+    /* Day-of-week histogram — hand-built (no chart lib is reachable: no bundler, no CDN). */
+    .dow { display: flex; align-items: flex-end; gap: 6px; height: 84px; margin-top: 10px; }
+    .dow .col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 5px; }
+    /* The bar needs its own flexible track: sized directly in the column it was
+       subject to flex-shrink, which flattened every day at >=~55% of the max to
+       an identical height — the chart stopped discriminating exactly where it
+       mattered. The track absorbs the leftover space; the bar never shrinks. */
+    .dow .track { flex: 1; width: 100%; display: flex; align-items: flex-end; }
+    .dow .bar { width: 100%; background: var(--gold); border-radius: 4px 4px 0 0; min-height: 2px; flex: 0 0 auto; }
+    .dow .lbl { font-size: 10px; color: var(--muted); font-weight: 600; }
+    .dow .n { font-size: 10px; color: var(--tertiary); }
+    .note { font-size: 11px; color: var(--tertiary); margin-top: 8px; }
   </style>
 </head>
 <body>
