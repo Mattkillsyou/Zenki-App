@@ -428,6 +428,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.removeItem(CUSTOM_MEMBER_KEY);
     await AsyncStorage.removeItem(GUEST_KEY);
     await AsyncStorage.removeItem(PENDING_ONBOARDING_KEY).catch(() => {});
+    // The drink tab is a device-GLOBAL store (no per-uid key), so leaving it
+    // would show — and, on the next account's first sync, risk re-billing — the
+    // previous member's charges. It's cloud-backed now, so this member's charges
+    // restore from their /drinkTabs/{uid} on next sign-in; clearing here is safe.
+    await AsyncStorage.removeItem('@zenki_drink_tracker').catch(() => {});
+    await AsyncStorage.removeItem('@zenki_drink_deleted_v1').catch(() => {});
   }, [user]);
 
   // ── Guest browsing (App Review 5.1.1(v)) ──

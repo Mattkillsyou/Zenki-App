@@ -28,6 +28,8 @@
  *                                                 gpsActivities, consents)
  *   training/{uid}                               (recursive: logs + personalRecords)
  *   gamification/{uid}                           (recursive: + grants ledger)
+ *   drinkTabs/{uid}                              (recursive: entries — billing)
+ *   users/{uid}/timeEntries/*                    (covered by the users step — payroll)
  *   Storage users/{uid}/**  and  postMedia/{uid}/**
  *   Firebase Auth user (admin.auth().deleteUser)
  *
@@ -275,6 +277,11 @@ export async function purgeUserData(uid: string): Promise<PurgeResult> {
   // subcollection; the doc itself is client-undeletable by rule, so this
   // Admin-SDK path is the ONLY way it ever goes away (GDPR Art. 17).
   await step('gamification', () => deleteDocDeep(db.collection('gamification').doc(uid)));
+  // Drink-tab charges — a NEW top-level collection (billing, not under /users or
+  // /nutrition), so it needs its own step. recursiveDelete covers the entries
+  // subcollection even though the parent doc is never written. (Time-clock
+  // entries live under /users/{uid} and are already covered by the users step.)
+  await step('drinkTabs', () => deleteDocDeep(db.collection('drinkTabs').doc(uid)));
   await step('aiRateLimits', () => deleteDocDeep(db.collection('aiRateLimits').doc(uid)));
   // Senpai usage logs: senpaiChat + senpaiSpeak write uid-keyed per-turn docs
   // (ts, model, mood, characters, …) to the top-level /senpaiUsage collection —

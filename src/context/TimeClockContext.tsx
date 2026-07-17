@@ -18,6 +18,9 @@ import {
 import { getHolidayInfo } from '../data/holidays';
 import { pushTimeEntry } from '../services/googleSheets';
 import { useAuth } from './AuthContext';
+import {
+  pushTimeEntryFs, migrateTimeEntries, subscribeTimeEntries, isSyncableTimeEntry,
+} from '../services/billingSync';
 
 // Legacy single-key store (pre-F03). Kept only so an existing employee's hours
 // on this device migrate into their per-uid store on first load instead of
@@ -32,6 +35,54 @@ const storageKeyForUid = (uid: string | null | undefined): string =>
  *  carries one. NOT a per-employee value — pay math just needs a number rather
  *  than fabricating $0; the real rate should come from the member's hourlyRate. */
 const DOJO_DEFAULT_HOURLY_RATE = 20;
+
+// Per-uid run-once guard for the AsyncStorage -> Firestore time-entry migration.
+const TIME_MIGRATED_KEY_PREFIX = '@zenki_timeclock_migrated_v1:';
+
+/**
+ * Every shift entry the blob holds, deduped by id. The open shift lives in BOTH
+ * currentEntry and currentPeriod.entries (see clockIn), so a Map by id collapses
+ * the duplicate. This flat set is what's mirrored to Firestore — one doc per
+ * shift, rather than the unbounded nested history blob.
+ */
+function flatTimeEntries(s: TimeClockState): TimeEntry[] {
+  const byId = new Map<string, TimeEntry>();
+  if (s.currentEntry) byId.set(s.currentEntry.id, s.currentEntry);
+  for (const e of s.currentPeriod.entries) byId.set(e.id, e);
+  for (const p of s.history) for (const e of p.entries) byId.set(e.id, e);
+  return [...byId.values()];
+}
+
+/**
+ * Reconstruct the blob from a flat entry set (a fresh-install restore). Buckets
+ * every entry into its biweekly period via the canonical getCurrentBiweeklyPeriod,
+ * so the pay math sees exactly the structure clockIn/clockOut maintain: the open
+ * shift (clockOut === null) is currentEntry AND lives in currentPeriod.entries
+ * (getPeriodTotals skips null-clockOut entries, so no double-count).
+ */
+const OPEN_SHIFT_MAX_MS = 18 * 60 * 60 * 1000; // a real shift is never this long
+function rebuildTimeClockState(entries: TimeEntry[]): TimeClockState {
+  const open = entries.find((e) => e.clockOut === null) ?? null;
+  // A cloud-restored open shift whose clock-in is implausibly old (forgot to
+  // clock out, then reinstalled days later) must NOT resurrect as the active
+  // shift — a later clock-out would bill a multi-day duration. Leave it as a
+  // null-clockOut ghost in its period (getPeriodTotals skips those, so no pay)
+  // and start the new device NOT clocked in.
+  const openStale = !!open && (Date.now() - Date.parse(open.clockIn) > OPEN_SHIFT_MAX_MS);
+  const currentEntry = openStale ? null : open;
+  const { startDate: curStart, endDate: curEnd } = getCurrentBiweeklyPeriod();
+  const byPeriod = new Map<string, { startDate: string; endDate: string; entries: TimeEntry[] }>();
+  for (const e of entries) {
+    const { startDate, endDate } = getCurrentBiweeklyPeriod(new Date(e.date + 'T00:00:00'));
+    let p = byPeriod.get(startDate);
+    if (!p) { p = { startDate, endDate, entries: [] }; byPeriod.set(startDate, p); }
+    p.entries.push(e);
+  }
+  const currentPeriod = byPeriod.get(curStart) ?? { startDate: curStart, endDate: curEnd, entries: [] };
+  byPeriod.delete(curStart);
+  const history = [...byPeriod.values()].sort((a, b) => (a.startDate < b.startDate ? 1 : -1));
+  return { currentEntry, currentPeriod, history };
+}
 
 interface TimeClockContextValue {
   state: TimeClockState;
@@ -164,6 +215,78 @@ export function TimeClockProvider({
   // re-creating their callbacks on every entry change.
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  // ── Firestore sync (durability) ──────────────────────────────────────
+  // Staff timesheets were AsyncStorage-only — a lost/wiped phone lost payroll
+  // hours. They now mirror to /users/{uid}/timeEntries (one doc per shift, so the
+  // unbounded biweekly history blob never rides in one doc; purge-free via the
+  // users step). The pay math and the mutations are untouched: a signature-diff
+  // effect pushes whichever entries actually changed, and Firestore-sync state is
+  // tracked HERE (not on TimeEntry.synced, which already means "pushed to the
+  // Google Sheets timesheet").
+  const pushedSigRef = useRef<Map<string, string>>(new Map());
+
+  // Signature EXCLUDES synced — that flag flips when the Google Sheets push
+  // completes, which is not a Firestore-relevant change (synced isn't stored
+  // server-side), so keying on it would cause pointless re-pushes.
+  const entrySig = (e: TimeEntry) => { const { synced: _s, ...rest } = e; return JSON.stringify(rest); };
+
+  // Write-through: push any entry whose content changed since we last pushed it.
+  // Fires only on discrete events (clock in/out, lunch/break) — `state` doesn't
+  // tick with elapsedMinutes, which is separate state.
+  useEffect(() => {
+    if (!loaded || !uid) return;
+    for (const e of flatTimeEntries(stateRef.current)) {
+      const sig = entrySig(e);
+      if (pushedSigRef.current.get(e.id) === sig) continue;
+      pushTimeEntryFs(uid, e).then((ok) => { if (ok) pushedSigRef.current.set(e.id, sig); }).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, loaded, uid]);
+
+  // Migrate existing shifts once, then restore from the cloud on a fresh install.
+  useEffect(() => {
+    if (!loaded || !uid) return;
+    let cancelled = false;
+    let unsub: () => void = () => {};
+
+    (async () => {
+      try {
+        const flagKey = `${TIME_MIGRATED_KEY_PREFIX}${uid}`;
+        const already = await AsyncStorage.getItem(flagKey);
+        if (!already) {
+          const entries = flatTimeEntries(stateRef.current);
+          const ids = await migrateTimeEntries(uid, entries);
+          if (cancelled) return;
+          // Record what we uploaded so the write-through above doesn't re-push it.
+          entries.forEach((e) => { if (ids.has(e.id)) pushedSigRef.current.set(e.id, entrySig(e)); });
+          if (ids.size >= entries.filter(isSyncableTimeEntry).length) await AsyncStorage.setItem(flagKey, '1');
+        }
+      } catch { /* non-fatal — retries next launch */ }
+
+      if (cancelled) return;
+      // Reconcile against the server ONCE, on the first server-confirmed snapshot
+      // (not a one-shot localEmpty check at snapshot time — a clock-in during the
+      // pre-snapshot window would have permanently skipped the restore, and the
+      // employee's current-period pay would silently under-report). ADDITIVE
+      // union: server entries fill in this device's history, but LOCAL wins per
+      // id so an in-progress shift started before the snapshot is never clobbered.
+      let restored = false;
+      unsub = subscribeTimeEntries(uid, (entries, fromServer) => {
+        if (cancelled || !fromServer || restored) return;
+        restored = true;
+        if (entries.length === 0) return;
+        const byId = new Map<string, TimeEntry>();
+        for (const e of entries) byId.set(e.id, e);
+        for (const e of flatTimeEntries(stateRef.current)) byId.set(e.id, e); // local wins
+        entries.forEach((e) => { if (!pushedSigRef.current.has(e.id)) pushedSigRef.current.set(e.id, entrySig(e)); });
+        setState(rebuildTimeClockState([...byId.values()]));
+      });
+    })();
+
+    return () => { cancelled = true; unsub(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, uid]);
   // Late-bound handle so clockIn (defined above flushUnsynced) can trigger it.
   const flushUnsyncedRef = useRef<null | (() => Promise<void>)>(null);
 

@@ -6,6 +6,15 @@ export interface DrinkEntry {
   date: string;      // YYYY-MM-DD
   paid: boolean;     // whether the member has paid for this charge
   paidAt?: string;   // ISO when paid
+  /** LOCAL-only cloud-sync bookkeeping (SyncableRecord); never written to the
+   *  Firestore doc — stripped by forWire(). Absent/false ⇒ still queued. */
+  synced?: boolean;
+  /** Auth uid the charge was rung up under. The local drink store is
+   *  device-global (no per-member key), so WITHOUT this a shared-device account
+   *  switch would upload member A's charges to member B's cloud tab and bill the
+   *  wrong person. The sync layer only ever touches entries whose ownerUid is
+   *  the signed-in uid. Stamped at commit; absent on pre-sync legacy rows. */
+  ownerUid?: string;
 }
 
 export interface PendingDrink {

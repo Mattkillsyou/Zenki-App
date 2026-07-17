@@ -157,6 +157,32 @@ service cloud.firestore {
                         || ('member' in resource.data
                             && request.resource.data.member == resource.data.member));
       allow delete: if isOwner(uid);
+
+      // Staff time-clock entries — one doc per shift. PAYROLL data: owner writes,
+      // owner + admin read (the dojo owner runs payroll). NOT trainer-readable.
+      // Erased with the parent /users/{uid} on account deletion (recursive purge).
+      match /timeEntries/{entryId} {
+        allow read: if isOwner(uid) || isAdmin();
+        allow delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.date is string
+          && request.resource.data.clockIn is string
+          && request.resource.data.synced is bool;
+      }
+    }
+
+    // Drink-tab charges — money OWED to the dojo. Owner writes, owner + admin
+    // read (the owner reconciles who owes what). NOT trainer-readable. A NEW
+    // top-level collection, so it needs its own purgeUserData step.
+    match /drinkTabs/{uid}/entries/{entryId} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.type is string
+        && request.resource.data.price is number
+        && request.resource.data.timestamp is string
+        && request.resource.data.date is string
+        && request.resource.data.paid is bool;
     }
 
     // Members collection — keyed by the app's local member id (not the
