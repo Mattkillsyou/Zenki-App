@@ -23,6 +23,7 @@ import { useHealthKit } from '../context/HealthKitContext';
 import { useHeartRate } from '../context/HeartRateContext';
 import { useScreenSoundTheme, useSound } from '../context/SoundContext';
 import { useSenpai } from '../context/SenpaiContext';
+import { useNutrition } from '../context/NutritionContext';
 import { useSenpaiChat } from '../hooks/useSenpaiChat';
 import { senpaiJingle } from '../sounds/synth';
 import Constants from 'expo-constants';
@@ -74,6 +75,7 @@ function confirmDestructive(
 export function SettingsScreen({ navigation }: any) {
   const { colors, mode, setMode } = useTheme();
   const { user, isGuest, signOut } = useAuth();
+  const { shareHealthWithTrainers, setShareHealthWithTrainers } = useNutrition();
   const isAdmin = user?.isAdmin === true;
 
   // Apple HealthKit — controls a clearly-labeled section so users (and
@@ -622,6 +624,12 @@ export function SettingsScreen({ navigation }: any) {
         {/* Privacy & Safety */}
         {renderSectionHeader('PRIVACY & SAFETY')}
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
+          {renderToggleRow(
+            'Share health data with my trainer',
+            'Off by default. When on, your coaches can see your DEXA scans and bloodwork to help program for you. Your weight and food logs are never shared. You can turn this off anytime.',
+            shareHealthWithTrainers,
+            (val) => { setShareHealthWithTrainers(val); },
+          )}
           {renderNavRow('person-remove-outline', 'Blocked Users', () => navigation.navigate('BlockedUsers'))}
         </View>
 
