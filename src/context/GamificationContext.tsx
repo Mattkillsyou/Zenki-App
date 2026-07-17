@@ -11,6 +11,7 @@ import {
 } from '../types/gamification';
 import { createInitialAchievements } from '../data/achievements';
 import { useAuth } from './AuthContext';
+import { pushGamification, subscribeGamification } from '../services/gamificationSync';
 
 // Legacy single-user global key. Kept for one-time migration into the
 // per-user key so the original member's progress isn't lost.
@@ -306,6 +307,139 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       AsyncStorage.setItem(key, JSON.stringify(state));
     }
   }, [state, loaded, user?.id]);
+
+  // ── Cloud sync (durability) ─────────────────────────────────────────
+  // Mirror the whole blob to /gamification/{uid} so XP/streaks/achievements/
+  // points survive an app delete or a new phone. AsyncStorage above stays the
+  // immediate local cache; the cloud copy is debounced because a single
+  // Firestore doc caps at ~1 write/sec and gamification state changes on every
+  // XP tick. Balance is client-authored for now (see gamificationSync header /
+  // the /gamification rule) — this effect does NOT touch the reward engine.
+  const uid = user?.firebaseUid ?? null;
+  const CLOUD_DEBOUNCE_MS = 4000;
+  const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // updatedAt stamp of the last blob we pushed OR adopted — echo guard: a
+  // snapshot at this stamp is our own write and must not be re-adopted.
+  const lastCloudStampRef = useRef<string | null>(null);
+  // JSON of the last blob we synced (pushed or adopted) so the debounce can skip
+  // a no-op write and never ping-pong an adopted server value back.
+  const lastSyncedJsonRef = useRef<string | null>(null);
+  // False until the FIRST server snapshot for the active uid has been observed.
+  // Until then we must never overwrite the cloud doc from a default local blob —
+  // on a new-device restore the real doc may still be in flight, and clobbering
+  // it with zeros is unrecoverable. These three are per-uid SESSION state and
+  // are reset at the top of the cloud effect, or a shared-device A→B switch
+  // inherits A's echo guard and destroys B's cloud progress.
+  const firstSnapshotSeenRef = useRef(false);
+  const schedulePushRef = useRef<(() => void) | null>(null);
+
+  // pendingCelebration is a transient UI trigger — never send it to the cloud
+  // (or another device would replay the modal) and never restore it on adopt.
+  const cloudCopy = (s: GamificationState): GamificationState => ({ ...s, pendingCelebration: null });
+  // "Is this still the zeroed default?" — must inspect EVERY progress field, not
+  // just a few. A member whose only progress is a belt promotion or a login
+  // streak would otherwise be judged untouched and have that progress discarded
+  // for a stale server doc. Compared field-by-field against a freshly built
+  // default (so new fields are covered automatically) with primitive ===, which
+  // is order-independent — a JSON-string compare could false-NEGATIVE on key
+  // order and, via doPush's guard, reintroduce the zero-blob overwrite. A false
+  // negative here is the dangerous direction, so this is deliberately strict.
+  const looksUntouched = (s: GamificationState): boolean => {
+    if ((s.achievements || []).some((a) => a.unlocked)) return false;
+    const { achievements: _a, pendingCelebration: _c, ...defScalars } = defaultState;
+    const sRec = s as unknown as Record<string, unknown>;
+    const defRec = defScalars as unknown as Record<string, unknown>;
+    return Object.keys(defRec).every((k) => sRec[k] === defRec[k]);
+  };
+
+  useEffect(() => {
+    const key = storageKeyFor(user?.id);
+    // Reset per-uid session state BEFORE the guard/subscribe. Provider is mounted
+    // once for the app's life and account switch is just setUser(), so these refs
+    // survive an A→B switch unless cleared here — leaving them would make B's
+    // reconcile run against A's stamp and clobber B's cloud doc.
+    lastCloudStampRef.current = null;
+    lastSyncedJsonRef.current = null;
+    firstSnapshotSeenRef.current = false;
+
+    // Only sync a hydrate that SUCCEEDED for the active user (loadedKeyRef is
+    // poisoned to null on a failed read) — never push a fresh-default blob over
+    // real cloud progress.
+    if (!loaded || !uid || loadedKeyRef.current !== key) return;
+
+    let cancelled = false;
+
+    const doPush = async () => {
+      if (cancelled) return;
+      // NEVER push a still-default blob. A brand-new user has nothing to persist
+      // until first activity (which makes this false and creates the doc), and
+      // on a new-device restore this prevents a zero blob from merging over the
+      // real server doc while it is still in flight — the unrecoverable loss.
+      // Unconditional (not gated on firstSnapshotSeen) so a doc is never created
+      // with zeros just because an empty first snapshot arrived before this fires.
+      if (looksUntouched(stateRef.current)) return;
+      const snapshot = cloudCopy(stateRef.current);
+      const json = JSON.stringify(snapshot);
+      if (json === lastSyncedJsonRef.current) return; // nothing changed since last sync
+      const stampBefore = lastCloudStampRef.current;
+      const stamp = await pushGamification(uid, snapshot);
+      if (cancelled || !stamp) return; // failed/offline write is retried by the next change
+      // If an adopt landed during the await, our push is stale — don't stomp the
+      // adopted stamp/json (that would trigger a redundant re-push next tick).
+      if (lastCloudStampRef.current !== stampBefore) return;
+      lastCloudStampRef.current = stamp;
+      lastSyncedJsonRef.current = json;
+    };
+
+    const unsub = subscribeGamification(uid, ({ exists, state: remote }) => {
+      if (cancelled) return;
+      const first = !firstSnapshotSeenRef.current;
+      firstSnapshotSeenRef.current = true;
+
+      if (!exists || !remote) {
+        // No cloud doc yet. If local has real progress, create it; else wait.
+        if (!looksUntouched(stateRef.current)) schedulePush();
+        return;
+      }
+      // Echo guard: a snapshot at (or below) our own last stamp is our write.
+      const remoteStamp = remote.updatedAt;
+      if (lastCloudStampRef.current && remoteStamp && remoteStamp <= lastCloudStampRef.current) return;
+      // First reconcile with real server data present: if THIS device has
+      // un-pushed local progress, keep it and push over the server; otherwise
+      // adopt (reinstall / new-device restore / genuine newer cross-device write).
+      if (first && !looksUntouched(stateRef.current)) { schedulePush(); return; }
+
+      const { updatedAt, ...rest } = remote;
+      const adopted = cloudCopy(rest as GamificationState);
+      lastCloudStampRef.current = updatedAt ?? null;
+      lastSyncedJsonRef.current = JSON.stringify(adopted);
+      setStateDirect(adopted);
+    });
+
+    function schedulePush() {
+      if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+      pushTimerRef.current = setTimeout(() => { doPush().catch(() => {}); }, CLOUD_DEBOUNCE_MS);
+    }
+
+    // Poke source for the state-change effect below.
+    schedulePushRef.current = schedulePush;
+    // Kick a reconcile: the listener's first snapshot decides adopt-vs-create;
+    // doPush's untouched guard prevents a premature zero-blob overwrite.
+    schedulePush();
+
+    return () => {
+      cancelled = true;
+      if (pushTimerRef.current) { clearTimeout(pushTimerRef.current); pushTimerRef.current = null; }
+      schedulePushRef.current = null;
+      unsub();
+    };
+  }, [loaded, uid, user?.id]);
+
+  // Debounce a cloud push on every state change (the effect above owns the
+  // actual push + subscription; this just pokes it).
+  useEffect(() => {
+    if (loaded && uid && schedulePushRef.current) schedulePushRef.current();
+  }, [state, loaded, uid]);
 
   const updateStreak = useCallback((prev: GamificationState): GamificationState => {
     const today = todayISO();
