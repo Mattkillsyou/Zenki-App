@@ -26,6 +26,14 @@ import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 // AsyncStorage read has resolved — callers can render loading UI based on it.
 // ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Module-private fallback for safeParseJSON. safeParseJSON returns the SAME
+ * fallback reference on failure, so using `initialValue` made "key absent" and
+ * "key present but corrupt" indistinguishable — and the corrupt case silently
+ * armed persistence with the default. A private sentinel makes failure testable.
+ */
+const SENTINEL: unique symbol = Symbol('useSyncedState.parse-failed');
+
 interface UseSyncedStateOptions<T> {
   /**
    * Optional structural validator on the parsed value. Returning false
@@ -45,9 +53,13 @@ export function useSyncedState<T>(
   storageKey: string,
   initialValue: T,
   options: UseSyncedStateOptions<T> = {},
-): [T, Dispatch<SetStateAction<T>>, boolean] {
+): [T, Dispatch<SetStateAction<T>>, boolean, boolean] {
   const [value, setValue] = useState<T>(initialValue);
   const [hydrated, setHydrated] = useState(false);
+  // Hydrate SUCCEEDED (as opposed to merely completed). See below — this is the
+  // flag that gates persistence, and Firestore-backed callers must gate their
+  // migration on it too.
+  const [hydrateOk, setHydrateOk] = useState(false);
   // Stash the optional functions in refs so updating them doesn't re-fire
   // the hydrate effect. The first-load behavior is the reading at mount.
   const validateRef = useRef(options.validate);
@@ -60,26 +72,47 @@ export function useSyncedState<T>(
     let cancelled = false;
     AsyncStorage.getItem(storageKey).then((raw) => {
       if (cancelled) return;
-      const parsed = safeParseJSON<T>(raw, initialValue, validateRef.current);
-      const next = hydrateRef.current ? hydrateRef.current(parsed) : parsed;
-      // Avoid clobbering when the parse succeeded but yielded the same
-      // initialValue reference (e.g., raw was null) — saves a render.
-      if (next !== initialValue) setValue(next);
+      if (raw != null) {
+        // A SENTINEL (not initialValue) as the fallback so an unreadable blob is
+        // DETECTABLE: safeParseJSON returns the fallback reference on failure,
+        // so passing initialValue made "key absent" and "key corrupt"
+        // indistinguishable — and the corrupt case then armed persistence and
+        // wrote [] over the stored data.
+        const parsed = safeParseJSON<T>(raw, SENTINEL as unknown as T, validateRef.current);
+        if ((parsed as unknown) === SENTINEL) {
+          console.warn(`[useSyncedState] ${storageKey} is present but unreadable — refusing to persist over it this session.`);
+          setHydrated(true);   // let UI proceed…
+          return;              // …but leave hydrateOk false: never overwrite it.
+        }
+        const next = hydrateRef.current ? hydrateRef.current(parsed) : parsed;
+        setValue(next);
+      }
+      setHydrateOk(true);
       setHydrated(true);
     }).catch((err) => {
-      console.warn(`[useSyncedState] hydrate(${storageKey}) failed:`, err);
-      if (!cancelled) setHydrated(true);
+      // A FAILED read must never arm persistence: doing so wrote the empty
+      // default over the user's stored list on the next change — permanent loss
+      // after one transient storage error. The other contexts guard this
+      // explicitly (see WorkoutContext / GamificationContext hydrate-wipe
+      // comments); the hook now does too, for all ~14 of its callers.
+      console.warn(`[useSyncedState] hydrate(${storageKey}) failed — persist disabled this session to protect stored data:`, err);
+      if (!cancelled) setHydrated(true); // UI proceeds; hydrateOk stays false.
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
-  // Persist on change. Skip until hydrated so the first-paint default
-  // doesn't overwrite the saved value.
+  // Persist on change. Gated on hydrateOk (not merely hydrated) so a failed or
+  // unreadable hydrate can never overwrite what's on disk.
   useEffect(() => {
-    if (!hydrated) return;
-    safeStorageSet(storageKey, value, `[useSyncedState ${storageKey}]`);
-  }, [value, hydrated, storageKey]);
+    if (!hydrateOk) return;
+    safeStorageSet(storageKey, value, `[useSyncedState ${storageKey}]`).then((ok) => {
+      // Surface a failing persist rather than swallowing it: under a durability
+      // migration, a silently dead cache hides real data loss (e.g. blowing the
+      // Android AsyncStorage size limit kills every write to the key).
+      if (!ok) console.warn(`[useSyncedState] ${storageKey} PERSIST FAILED — on-device cache is not being written.`);
+    }).catch(() => {});
+  }, [value, hydrateOk, storageKey]);
 
-  return [value, setValue, hydrated];
+  return [value, setValue, hydrated, hydrateOk];
 }

@@ -628,8 +628,8 @@ export function SettingsScreen({ navigation }: any) {
         {renderSectionHeader('PRIVACY & SAFETY')}
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
           {renderToggleRow(
-            'Share body & lab data with my trainer',
-            'Off by default. When on, your coaches can see your DEXA scans and bloodwork to help program for you. Your weight and food logs are never shared. You can turn this off anytime.',
+            'Share training & body data with my trainer',
+            'Off by default. When on, your coaches can see your DEXA scans, bloodwork, heart-rate sessions, and GPS activities — including route maps, which show where you run. Your weight and food logs are never shared. You can turn this off anytime.',
             shareHealthWithTrainers,
             (val) => { setShareHealthWithTrainers(val); },
           )}

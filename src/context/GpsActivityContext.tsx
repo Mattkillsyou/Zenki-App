@@ -1,6 +1,20 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, AppState } from 'react-native';
 import { useSyncedState } from '../hooks/useSyncedState';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParseJSON } from '../utils/safeStorage';
+import { useAuth } from './AuthContext';
+import { getCurrentUid } from '../services/firebaseAuth';
+import { auth } from '../config/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import {
+  mergeById as mergeSyncById, reconcileDeletes, markSyncedUnchanged, snapshotForPush,
+} from '../services/syncCore';
+import {
+  pushGpsActivity, deleteGpsActivity, flushGpsActivities, migrateGpsActivities,
+  subscribeGpsActivities, isSyncableGpsActivity, trimKeepingUnsynced,
+  type SyncedGpsActivity,
+} from '../services/healthSync';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import {
@@ -22,6 +36,11 @@ import {
 } from '../utils/gps';
 
 const STORAGE_KEY = '@zenki_gps_activities';
+// Per-uid run-once guard for the AsyncStorage → Firestore GPS migration.
+const GPS_MIGRATED_KEY_PREFIX = '@zenki_gps_migrated_v1:';
+// Newest-N kept ON DEVICE (~40KB/activity of downsampled route). Firestore holds
+// the full archive; this only bounds the AsyncStorage cache.
+const GPS_LOCAL_CAP = 100;
 
 // ─────────────────────────────────────────────
 // Background location task (APP_AUDIT F17 — true background tracking)
@@ -135,9 +154,86 @@ function randomId(): string {
 }
 
 export function GpsActivityProvider({ children }: { children: React.ReactNode }) {
-  const [activities, setActivities, loaded] = useSyncedState<GpsActivity[]>(STORAGE_KEY, [], {
+  // hydrateOk (NOT `loaded`) — see HeartRateContext: a failed hydrate must not
+  // let the migration mark itself done over an empty list.
+  const [activities, setActivities, loaded, hydrateOk] = useSyncedState<SyncedGpsActivity[]>(STORAGE_KEY, [], {
     validate: Array.isArray,
   });
+  const { user } = useAuth();
+  const [authUid, setAuthUid] = useState<string | null>(getCurrentUid());
+  // Sample the uid live: getCurrentUid() is null on cold start until Firebase
+  // restores the session, which would skip the sync effect for that whole launch.
+  useEffect(() => {
+    if (!auth) return;
+    return onAuthStateChanged(auth, (u) => setAuthUid(u?.uid ?? null));
+  }, []);
+  const activitiesRef = useRef<SyncedGpsActivity[]>([]);
+  activitiesRef.current = activities;
+
+  // ── Firestore sync (durability) ──────────────────────────────────────
+  // GPS activities were AsyncStorage-only and died with the app. Now at
+  // /nutrition/{uid}/gpsActivities (purge-free via the existing step('nutrition')).
+  // Owner-only unless the member turns on the tier-1 sharing switch.
+  useEffect(() => {
+    const memberId = user?.id;
+    const uid = authUid;
+    if (!hydrateOk || !uid || !memberId) return;
+
+    let cancelled = false;
+    let unsub: () => void = () => {};
+    // See HeartRateContext — the migration's synced marks haven't rendered when
+    // the flush reads the ref, so skip what this pass already confirmed.
+    const justMigrated = new Set<string>();
+    const mine = (rows: SyncedGpsActivity[]) => rows.filter((r) => r.memberId === memberId);
+    const newestFirst = (r: SyncedGpsActivity) => Date.parse(r.startedAt) || 0;
+
+    (async () => {
+      try {
+        const flagKey = `${GPS_MIGRATED_KEY_PREFIX}${uid}`;
+        const already = await AsyncStorage.getItem(flagKey);
+        if (!already) {
+          // From disk, not state: independent of hydrate timing; idempotent by id.
+          const raw = await AsyncStorage.getItem(STORAGE_KEY);
+          const rows = mine(safeParseJSON<SyncedGpsActivity[]>(raw, [], Array.isArray));
+          const ids = await migrateGpsActivities(uid, rows);
+          if (cancelled) return;
+          ids.forEach((id) => justMigrated.add(id));
+          setActivities((prev) => markSyncedUnchanged(prev, ids, snapshotForPush(prev)));
+          // Count with the SAME predicate migrate uses, or one unsyncable row
+          // pins the flag off forever and re-migrates the batch every launch.
+          if (ids.size >= rows.filter(isSyncableGpsActivity).length) {
+            await AsyncStorage.setItem(flagKey, '1');
+          }
+        }
+      } catch { /* non-fatal — retries next launch */ }
+
+      if (cancelled) return;
+      try {
+        const toPush = mine(activitiesRef.current).filter((r) => !justMigrated.has(r.id));
+        const snap = snapshotForPush(toPush);
+        const ok = await flushGpsActivities(uid, toPush);
+        if (!cancelled) setActivities((prev) => markSyncedUnchanged(prev, ok, snap));
+      } catch { /* retried next launch */ }
+
+      if (cancelled) return;
+      unsub = subscribeGpsActivities(uid, (d) => {
+        if (cancelled) return;
+        if (d.upserts.length || d.removedIds.length) {
+          // Trim HERE too — see HeartRateContext: an un-capped merge mirrors the
+          // entire server archive into one AsyncStorage key.
+          setActivities((prev) => trimKeepingUnsynced(
+            mergeSyncById(prev, d.upserts.map((r) => ({ ...r, memberId: r.memberId || memberId })), d.removedIds),
+            GPS_LOCAL_CAP, newestFirst,
+          ));
+        }
+        if (d.allIds) setActivities((prev) => reconcileDeletes(prev, d.allIds!, memberId));
+      });
+    })();
+
+    return () => { cancelled = true; unsub(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, user?.id, authUid]);
+
   const [isTracking, setIsTracking] = useState(false);
   const [backgroundTracking, setBackgroundTracking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -500,9 +596,18 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
       calories,
     };
 
-    setActivities((prev) => [activity, ...prev].slice(0, 100));
+    // synced:false BEFORE the write (an offline write hangs). trimKeepingUnsynced,
+    // not slice(): the 100 cap bounds AsyncStorage, and evicting a row that hasn't
+    // reached the server yet would destroy it permanently.
+    const queued: SyncedGpsActivity = { ...activity, synced: false };
+    setActivities((prev) => trimKeepingUnsynced([queued, ...prev], GPS_LOCAL_CAP, (r) => Date.parse(r.startedAt) || 0));
 
-    return activity;
+    const uid = getCurrentUid();
+    if (uid) pushGpsActivity(uid, queued)
+      .then((ok) => { if (ok) setActivities((prev) => prev.map((a) => (a.id === queued.id ? { ...a, synced: true } : a))); })
+      .catch(() => {});
+
+    return queued;
   }, [cleanupTimers, stopBgUpdates]);
 
   const pauseTracking = useCallback(() => {
@@ -629,6 +734,9 @@ export function GpsActivityProvider({ children }: { children: React.ReactNode })
 
   const removeActivity = useCallback((id: string) => {
     setActivities((prev) => prev.filter((a) => a.id !== id));
+    // Server delete too, or the live listener resurrects it on the next snapshot.
+    const delUid = getCurrentUid();
+    if (delUid) deleteGpsActivity(delUid, id).catch(() => {});
   }, []);
 
   const memberActivities = useCallback(

@@ -2,6 +2,18 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { Platform, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSyncedState } from '../hooks/useSyncedState';
+import { safeParseJSON } from '../utils/safeStorage';
+import { useAuth } from './AuthContext';
+import { getCurrentUid } from '../services/firebaseAuth';
+import { auth } from '../config/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import {
+  mergeById as mergeSyncById, reconcileDeletes, markSyncedUnchanged, snapshotForPush,
+} from '../services/syncCore';
+import {
+  pushHrSession, flushHrSessions, migrateHrSessions, subscribeHrSessions,
+  isSyncableHrSession, trimKeepingUnsynced, type SyncedHRSession,
+} from '../services/healthSync';
 import {
   HRSession,
   HRSample,
@@ -22,6 +34,12 @@ import {
 } from '../utils/heartRate';
 
 const STORAGE_KEY = '@zenki_hr_sessions';
+// Per-uid run-once guard for the AsyncStorage → Firestore HR migration.
+const HR_MIGRATED_KEY_PREFIX = '@zenki_hr_migrated_v1:';
+// Newest-N kept ON DEVICE. Firestore holds the full archive; this only bounds
+// the AsyncStorage cache (each session is ~24KB of downsampled samples, and the
+// whole app shares Android's ~6MB AsyncStorage budget).
+const HR_LOCAL_CAP = 200;
 const BLE_DEVICE_KEY = '@zenki_ble_device';
 
 // ── BLE GATT UUIDs (16-bit SIG UUIDs expanded to 128-bit base form)
@@ -157,9 +175,92 @@ function randomId(): string {
 }
 
 export function HeartRateProvider({ children }: { children: React.ReactNode }) {
-  const [sessions, setSessions, loaded] = useSyncedState<HRSession[]>(STORAGE_KEY, [], {
+  // hydrateOk (NOT `loaded`): a failed/unreadable hydrate must not run the
+  // migration — with an empty list it would mark the migration "done" and
+  // permanently strand the very history it exists to rescue.
+  const [sessions, setSessions, loaded, hydrateOk] = useSyncedState<SyncedHRSession[]>(STORAGE_KEY, [], {
     validate: Array.isArray,
   });
+  const { user } = useAuth();
+  const [authUid, setAuthUid] = useState<string | null>(getCurrentUid());
+  // Sample the uid live: getCurrentUid() is null on cold start until Firebase
+  // restores the session, which would skip the sync effect for that whole launch.
+  useEffect(() => {
+    if (!auth) return;
+    return onAuthStateChanged(auth, (u) => setAuthUid(u?.uid ?? null));
+  }, []);
+  const sessionsRef = useRef<SyncedHRSession[]>([]);
+  sessionsRef.current = sessions;
+
+  // ── Firestore sync (durability) ──────────────────────────────────────
+  // Heart-rate sessions were AsyncStorage-only and died with the app. Now at
+  // /nutrition/{uid}/hrSessions (purge-free via the existing step('nutrition')).
+  // Owner-only unless the member turns on the tier-1 sharing switch.
+  useEffect(() => {
+    const memberId = user?.id;
+    const uid = authUid;
+    if (!hydrateOk || !uid || !memberId) return;
+
+    let cancelled = false;
+    let unsub: () => void = () => {};
+    // Ids confirmed by the migration in THIS pass. setState hasn't rendered by
+    // the time the flush below reads the ref, so without this the flush
+    // re-uploads everything the migration just confirmed.
+    const justMigrated = new Set<string>();
+    const mine = (rows: SyncedHRSession[]) => rows.filter((r) => r.memberId === memberId);
+    const newestFirst = (r: SyncedHRSession) => Date.parse(r.startedAt) || 0;
+
+    (async () => {
+      try {
+        const flagKey = `${HR_MIGRATED_KEY_PREFIX}${uid}`;
+        const already = await AsyncStorage.getItem(flagKey);
+        if (!already) {
+          // From disk, not state: independent of hydrate timing; idempotent by id.
+          const raw = await AsyncStorage.getItem(STORAGE_KEY);
+          const rows = mine(safeParseJSON<SyncedHRSession[]>(raw, [], Array.isArray));
+          const ids = await migrateHrSessions(uid, rows);
+          if (cancelled) return;
+          ids.forEach((id) => justMigrated.add(id));
+          setSessions((prev) => markSyncedUnchanged(prev, ids, snapshotForPush(prev)));
+          // Count with the SAME predicate migrate uses, or one unsyncable row
+          // pins the flag off forever and re-migrates the batch every launch.
+          if (ids.size >= rows.filter(isSyncableHrSession).length) {
+            await AsyncStorage.setItem(flagKey, '1');
+          }
+        }
+      } catch { /* non-fatal — retries next launch */ }
+
+      if (cancelled) return;
+      try {
+        const toPush = mine(sessionsRef.current).filter((r) => !justMigrated.has(r.id));
+        const snap = snapshotForPush(toPush);
+        const ok = await flushHrSessions(uid, toPush);
+        if (!cancelled) setSessions((prev) => markSyncedUnchanged(prev, ok, snap));
+      } catch { /* retried next launch */ }
+
+      if (cancelled) return;
+      unsub = subscribeHrSessions(uid, (d) => {
+        if (cancelled) return;
+        if (d.upserts.length || d.removedIds.length) {
+          // Trim HERE, not only on save: the first snapshot reports every server
+          // doc as `added`, so an un-capped merge inflates state to the whole
+          // archive and useSyncedState stringifies all of it into one
+          // AsyncStorage key — unbounded, and on Android that silently kills
+          // every write to the key (taking the offline queue with it). The
+          // server keeps the full history; the device keeps a bounded window.
+          setSessions((prev) => trimKeepingUnsynced(
+            mergeSyncById(prev, d.upserts.map((r) => ({ ...r, memberId: r.memberId || memberId })), d.removedIds),
+            HR_LOCAL_CAP, newestFirst,
+          ));
+        }
+        if (d.allIds) setSessions((prev) => reconcileDeletes(prev, d.allIds!, memberId));
+      });
+    })();
+
+    return () => { cancelled = true; unsub(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, user?.id, authUid]);
+
   const [bleStatus, setBleStatus] = useState<BLEStatus>('unavailable');
   const [connectedDeviceName, setConnectedDeviceName] = useState<string | null>(null);
   const [currentBpm, setCurrentBpm] = useState(0);
@@ -1018,9 +1119,18 @@ export function HeartRateProvider({ children }: { children: React.ReactNode }) {
       deviceName: connectedDeviceName || undefined,
     };
 
-    setSessions((prev) => [session, ...prev].slice(0, 200));
+    // synced:false BEFORE the write — an offline write hangs, so a process death
+    // must leave the session queued for the launch flush. trimKeepingUnsynced,
+    // not slice(): the 200 cap exists to bound AsyncStorage, and evicting a row
+    // that hasn't reached the server yet would destroy it permanently.
+    const queued: SyncedHRSession = { ...session, synced: false };
+    setSessions((prev) => trimKeepingUnsynced([queued, ...prev], HR_LOCAL_CAP, (r) => Date.parse(r.startedAt) || 0));
     setCurrentBpm(0);
-    return session;
+    const uid = getCurrentUid();
+    if (uid) pushHrSession(uid, queued)
+      .then((ok) => { if (ok) setSessions((prev) => prev.map((s) => (s.id === queued.id ? { ...s, synced: true } : s))); })
+      .catch(() => {});
+    return queued;
   }, [connectedDeviceName]);
 
   const memberSessions = useCallback(

@@ -31,12 +31,16 @@ import type { DexaScan } from '../types/dexa';
 import type { BloodworkReport } from '../types/bloodwork';
 import type { MedicationEntry, MedicationLog } from '../types/medication';
 import type { PeriodEntry } from '../types/cycle';
+import type { HRSession } from '../types/heartRate';
+import type { GpsActivity } from '../types/activity';
 
 export type SyncedDexaScan = DexaScan & SyncableRecord;
 export type SyncedBloodworkReport = BloodworkReport & SyncableRecord;
 export type SyncedMedication = MedicationEntry & SyncableRecord;
 export type SyncedMedicationLog = MedicationLog & SyncableRecord;
 export type SyncedPeriodEntry = PeriodEntry & SyncableRecord;
+export type SyncedHRSession = HRSession & SyncableRecord;
+export type SyncedGpsActivity = GpsActivity & SyncableRecord;
 
 const NUTRITION_ROOT = 'nutrition';
 export const dexaPath = (uid: string) => `${NUTRITION_ROOT}/${uid}/dexaScans`;
@@ -44,6 +48,8 @@ export const bloodworkPath = (uid: string) => `${NUTRITION_ROOT}/${uid}/bloodwor
 export const medicationsPath = (uid: string) => `${NUTRITION_ROOT}/${uid}/medications`;
 export const medicationLogsPath = (uid: string) => `${NUTRITION_ROOT}/${uid}/medicationLogs`;
 export const cycleEntriesPath = (uid: string) => `${NUTRITION_ROOT}/${uid}/cycleEntries`;
+export const hrSessionsPath = (uid: string) => `${NUTRITION_ROOT}/${uid}/hrSessions`;
+export const gpsActivitiesPath = (uid: string) => `${NUTRITION_ROOT}/${uid}/gpsActivities`;
 export const consentDocPath = (uid: string) => `${NUTRITION_ROOT}/${uid}/consents`;
 const CONSENT_ID = 'health';
 
@@ -178,17 +184,89 @@ export const migrateCycleEntries = (uid: string, rows: readonly SyncedPeriodEntr
 export const subscribeCycleEntries = (uid: string, onDelta: (d: CollectionDelta<SyncedPeriodEntry>) => void) =>
   subscribeCollection<SyncedPeriodEntry>(cycleEntriesPath(uid), (data, id) => ({ ...(data as unknown as PeriodEntry), id }), onDelta, TAG);
 
+// ── Heart-rate sessions + GPS activities ────────────────────────────────
+// Both carry a large nested array (samples / route), but BOTH are already
+// downsampled before storage — HR to 600 samples (~24KB), GPS to 500 route
+// points (~40KB) — so a doc stays far under Firestore's 1MiB limit and the
+// arrays can ride inside the doc rather than needing chunk subcollections.
+// Tier-1 consent (body/performance) — see the switches below.
+
+export const isSyncableHrSession = (s: SyncedHRSession) =>
+  !!s.id && typeof s.memberId === 'string' && nonEmptyStr(s.startedAt)
+  && Array.isArray(s.samples) && nonEmptyStr(s.activityType);
+export const isSyncableGpsActivity = (a: SyncedGpsActivity) =>
+  !!a.id && typeof a.memberId === 'string' && nonEmptyStr(a.startedAt)
+  && nonEmptyStr(a.type) && Array.isArray(a.route) && Array.isArray(a.splits);
+
+const sanitizeHrSession = (s: SyncedHRSession): SyncedHRSession => ({ ...s, memberId: String(s.memberId ?? '') });
+const sanitizeGpsActivity = (a: SyncedGpsActivity): SyncedGpsActivity => ({ ...a, memberId: String(a.memberId ?? '') });
+
+export const pushHrSession = (uid: string, s: SyncedHRSession) =>
+  isSyncableHrSession(s) ? pushRecord(hrSessionsPath(uid), sanitizeHrSession(s), TAG) : Promise.resolve(false);
+export const deleteHrSession = (uid: string, id: string) => deleteRecord(hrSessionsPath(uid), id, TAG);
+export const flushHrSessions = (uid: string, rows: readonly SyncedHRSession[]) =>
+  flushQueue(hrSessionsPath(uid), rows.filter(isSyncableHrSession).map(sanitizeHrSession), TAG);
+export const migrateHrSessions = (uid: string, rows: readonly SyncedHRSession[]) =>
+  migrateRecords(hrSessionsPath(uid), rows.filter(isSyncableHrSession).map(sanitizeHrSession), TAG);
+export const subscribeHrSessions = (uid: string, onDelta: (d: CollectionDelta<SyncedHRSession>) => void) =>
+  subscribeCollection<SyncedHRSession>(hrSessionsPath(uid), (data, id) => ({ ...(data as unknown as HRSession), id }), onDelta, TAG);
+
+export const pushGpsActivity = (uid: string, a: SyncedGpsActivity) =>
+  isSyncableGpsActivity(a) ? pushRecord(gpsActivitiesPath(uid), sanitizeGpsActivity(a), TAG) : Promise.resolve(false);
+export const deleteGpsActivity = (uid: string, id: string) => deleteRecord(gpsActivitiesPath(uid), id, TAG);
+export const flushGpsActivities = (uid: string, rows: readonly SyncedGpsActivity[]) =>
+  flushQueue(gpsActivitiesPath(uid), rows.filter(isSyncableGpsActivity).map(sanitizeGpsActivity), TAG);
+export const migrateGpsActivities = (uid: string, rows: readonly SyncedGpsActivity[]) =>
+  migrateRecords(gpsActivitiesPath(uid), rows.filter(isSyncableGpsActivity).map(sanitizeGpsActivity), TAG);
+export const subscribeGpsActivities = (uid: string, onDelta: (d: CollectionDelta<SyncedGpsActivity>) => void) =>
+  subscribeCollection<SyncedGpsActivity>(gpsActivitiesPath(uid), (data, id) => ({ ...(data as unknown as GpsActivity), id }), onDelta, TAG);
+
+/**
+ * Trim a capped local list WITHOUT evicting anything that hasn't reached the
+ * server yet. The plain `.slice(0, cap)` these lists used exists only to bound
+ * AsyncStorage — but now that Firestore is the source of truth, dropping an
+ * UNSYNCED row past the cap destroys it permanently (the same cap-evicts-
+ * unsynced bug already fixed in orderSync). Synced rows are safe to evict: they
+ * live on the server and the listener restores them.
+ */
+export function trimKeepingUnsynced<T extends SyncableRecord>(
+  rows: readonly T[],
+  cap: number,
+  /**
+   * Sort key (higher = newer). REQUIRED whenever the array may have come from a
+   * server merge: mergeById returns Map-insertion order (effectively random
+   * uuid order), so a bare slice(0, cap) would keep an ARBITRARY subset and
+   * evict recent sessions while keeping ancient ones. Callers pass e.g.
+   * (r) => Date.parse(r.startedAt).
+   */
+  newest?: (r: T) => number,
+): T[] {
+  const ordered = newest
+    ? [...rows].sort((a, b) => (newest(b) || 0) - (newest(a) || 0))
+    : (rows as T[]);
+  if (ordered.length <= cap) return ordered;
+  const kept = ordered.slice(0, cap);
+  const keptIds = new Set(kept.map((r) => r.id));
+  const rescued = ordered.slice(cap).filter((r) => !r.synced && !keptIds.has(r.id));
+  if (rescued.length) {
+    console.warn(`${TAG} keeping ${rescued.length} unsynced record(s) past the ${cap} cap until they reach the server`);
+  }
+  return rescued.length ? [...kept, ...rescued] : kept;
+}
+
 // ── Consent (the member's trainer-sharing switches) ───────────────────────
 //
 // TWO independent flags, deliberately NOT one:
-//   shareWithTrainers          → DEXA + bloodwork (body composition / labs)
+//   shareWithTrainers          → DEXA, bloodwork, HR sessions, GPS activities
+//                                (GPS routes reveal WHERE the member runs, so
+//                                 the Settings copy names them explicitly)
 //   shareSensitiveWithTrainers → medications + cycle
 // Bundling them would force a member who wants coaching on their body-comp scan
 // to also expose menstrual and medication data. Both default OFF (an absent doc
 // reads false), and either can be revoked independently at any time.
 
 export interface HealthConsent {
-  share: boolean;           // DEXA + bloodwork
+  share: boolean;           // DEXA, bloodwork, HR sessions, GPS activities
   shareSensitive: boolean;  // medications + cycle
 }
 
@@ -271,7 +349,7 @@ async function writeConsent(uid: string, patch: Record<string, unknown>): Promis
   return ok;
 }
 
-/** DEXA + bloodwork visibility for trainers/admins. */
+/** Tier 1 — DEXA, bloodwork, HR sessions + GPS activities (incl. route maps). */
 export const setHealthSharing = (uid: string, share: boolean) =>
   writeConsent(uid, { shareWithTrainers: !!share });
 

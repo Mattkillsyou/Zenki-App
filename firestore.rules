@@ -899,6 +899,32 @@ service cloud.firestore {
           && (!('memberId' in request.resource.data) || request.resource.data.memberId is string);
       }
 
+      // Heart-rate sessions — samples[] is pre-downsampled to 600 points on the
+      // client (~24KB), so it rides inside the doc, far under the 1MiB limit.
+      match /hrSessions/{sessionId} {
+        allow read: if isOwner(uid) || ((isTrainer() || isAdmin()) && sharesHealth(uid));
+        allow delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.startedAt is string
+          && request.resource.data.activityType is string
+          && request.resource.data.samples is list
+          && (!('memberId' in request.resource.data) || request.resource.data.memberId is string);
+      }
+
+      // GPS activities — route[] is pre-downsampled to 500 points (~40KB).
+      // NOTE: a route reveals WHERE the member runs (i.e. near home), which is
+      // why the tier-1 toggle copy names GPS routes explicitly.
+      match /gpsActivities/{activityId} {
+        allow read: if isOwner(uid) || ((isTrainer() || isAdmin()) && sharesHealth(uid));
+        allow delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.startedAt is string
+          && request.resource.data.type is string
+          && request.resource.data.route is list
+          && request.resource.data.splits is list
+          && (!('memberId' in request.resource.data) || request.resource.data.memberId is string);
+      }
+
       // ── The SENSITIVE tier — medications + cycle. Gated on the SEPARATE
       // sharesSensitiveHealth switch, not sharesHealth. Owner-only write.
 

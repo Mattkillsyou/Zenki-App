@@ -24,7 +24,8 @@
  *   senpaiUsage where uid == uid                  (per-turn AI usage logs)
  *   nutrition/{uid}                              (recursive: weight/macro/goals/profile,
  *                                                 dexaScans, bloodworkReports, medications,
- *                                                 medicationLogs, cycleEntries, consents)
+ *                                                 medicationLogs, cycleEntries, hrSessions,
+ *                                                 gpsActivities, consents)
  *   training/{uid}                               (recursive: logs + personalRecords)
  *   gamification/{uid}                           (recursive: + grants ledger)
  *   Storage users/{uid}/**  and  postMedia/{uid}/**
