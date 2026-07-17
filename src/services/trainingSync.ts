@@ -31,11 +31,11 @@
  * server, and silently never sync.
  */
 
-import { collection, onSnapshot, doc, deleteDoc, Unsubscribe } from 'firebase/firestore';
+import { doc, deleteDoc, Unsubscribe } from 'firebase/firestore';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
 import { noopUnsubscribe } from './firestoreUtils';
 import {
-  pushRecord, flushQueue, migrateRecords, type SyncableRecord,
+  pushRecord, flushQueue, migrateRecords, subscribeCollection, type SyncableRecord,
 } from './syncCore';
 import type { WorkoutLog, PersonalRecord, WorkoutFormat, WodResult } from '../types/workout';
 
@@ -246,44 +246,20 @@ export function subscribeTraining(
 ): Unsubscribe {
   if (!FIREBASE_CONFIGURED || !db || !uid) return noopUnsubscribe;
 
-  let logsFirstSnapshot = true;
-  const unsubLogs = onSnapshot(
-    collection(db, logsPath(uid)),
-    (snap) => {
-      const logUpserts: SyncedWorkoutLog[] = [];
-      const logRemovedIds: string[] = [];
-      snap.docChanges().forEach((c) => {
-        if (c.type === 'removed') logRemovedIds.push(c.doc.id);
-        else logUpserts.push({ ...(c.doc.data() as WorkoutLog), id: c.doc.id, synced: true });
-      });
-      const delta: TrainingDelta = { logUpserts, logRemovedIds, prUpserts: [], prRemovedIds: [] };
-      if (logsFirstSnapshot) {
-        logsFirstSnapshot = false;
-        delta.logAllIds = snap.docs.map((d) => d.id);
-      }
-      if (logUpserts.length || logRemovedIds.length || delta.logAllIds) onDelta(delta);
-    },
-    (e) => console.warn(`${LOG_TAG} logs listener error:`, e),
+  // Delegates to syncCore.subscribeCollection so the server-confirmed allIds gate
+  // (an offline cache snapshot must NOT drive a delete-reconcile) lives in one
+  // place rather than being re-implemented — and correctly — per dataset.
+  const unsubLogs = subscribeCollection<SyncedWorkoutLog>(
+    logsPath(uid),
+    (data, id) => ({ ...(data as unknown as WorkoutLog), id }),
+    (d) => onDelta({ logUpserts: d.upserts, logRemovedIds: d.removedIds, logAllIds: d.allIds, prUpserts: [], prRemovedIds: [] }),
+    LOG_TAG,
   );
-
-  let prsFirstSnapshot = true;
-  const unsubPRs = onSnapshot(
-    collection(db, prsPath(uid)),
-    (snap) => {
-      const prUpserts: SyncedPersonalRecord[] = [];
-      const prRemovedIds: string[] = [];
-      snap.docChanges().forEach((c) => {
-        if (c.type === 'removed') prRemovedIds.push(c.doc.id);
-        else prUpserts.push({ ...(c.doc.data() as PersonalRecord), id: c.doc.id, synced: true });
-      });
-      const delta: TrainingDelta = { logUpserts: [], logRemovedIds: [], prUpserts, prRemovedIds };
-      if (prsFirstSnapshot) {
-        prsFirstSnapshot = false;
-        delta.prAllIds = snap.docs.map((d) => d.id);
-      }
-      if (prUpserts.length || prRemovedIds.length || delta.prAllIds) onDelta(delta);
-    },
-    (e) => console.warn(`${LOG_TAG} prs listener error:`, e),
+  const unsubPRs = subscribeCollection<SyncedPersonalRecord>(
+    prsPath(uid),
+    (data, id) => ({ ...(data as unknown as PersonalRecord), id }),
+    (d) => onDelta({ logUpserts: [], logRemovedIds: [], prUpserts: d.upserts, prRemovedIds: d.removedIds, prAllIds: d.allIds }),
+    LOG_TAG,
   );
 
   return () => { unsubLogs(); unsubPRs(); };

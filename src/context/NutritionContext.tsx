@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParseJSON, safeStorageSet } from '../utils/safeStorage';
 import {
@@ -22,6 +22,13 @@ import { generateId } from '../utils/generateId';
 import { DexaScan } from '../types/dexa';
 import { BloodworkReport } from '../types/bloodwork';
 import { useAuth } from './AuthContext';
+import { mergeById as mergeSyncById, reconcileDeletes } from '../services/syncCore';
+import {
+  pushDexa, deleteDexa, flushDexa, migrateDexa, subscribeDexa, isSyncableDexa,
+  pushBloodwork, deleteBloodwork, flushBloodwork, migrateBloodwork, subscribeBloodwork, isSyncableBloodwork,
+  setHealthSharing, subscribeHealthSharing,
+  type SyncedDexaScan, type SyncedBloodworkReport,
+} from '../services/healthSync';
 import { useGamification } from './GamificationContext';
 import { getCurrentUid } from '../services/firebaseAuth';
 import { auth } from '../config/firebase';
@@ -48,6 +55,9 @@ const DEXA_KEY = '@zenki_dexa_scans';
 const BLOODWORK_KEY = '@zenki_bloodwork_reports';
 // Per-uid run-once guard for the AsyncStorage → Firestore nutrition migration.
 const MIGRATED_KEY_PREFIX = '@zenki_nutrition_migrated_v1:';
+// Separate flag from the weight/macro migration above: existing users already
+// have that flag set, so reusing it would skip the health upload forever.
+const HEALTH_MIGRATED_KEY_PREFIX = '@zenki_health_migrated_v1:';
 
 const RECENT_FOODS_LIMIT = 20;
 
@@ -109,6 +119,10 @@ interface NutritionContextValue {
   myBloodworkReports: (memberId: string) => BloodworkReport[];
   addBloodworkReport: (report: Omit<BloodworkReport, 'id' | 'addedAt'>) => BloodworkReport;
   removeBloodworkReport: (id: string) => void;
+
+  // Consent switch — let this member's trainer/admin see their health data.
+  shareHealthWithTrainers: boolean;
+  setShareHealthWithTrainers: (share: boolean) => Promise<boolean>;
   getBloodworkReport: (id: string) => BloodworkReport | null;
   /** Time series for one biomarker across all reports, oldest → newest. */
   biomarkerSeries: (memberId: string, biomarkerName: string) => { date: string; value: number }[];
@@ -152,6 +166,8 @@ const NutritionContext = createContext<NutritionContextValue>({
   myBloodworkReports: () => [],
   addBloodworkReport: () => ({} as BloodworkReport),
   removeBloodworkReport: () => {},
+  shareHealthWithTrainers: false,
+  setShareHealthWithTrainers: async () => false,
   getBloodworkReport: () => null,
   biomarkerSeries: () => [],
 });
@@ -185,8 +201,17 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   const [goalsByMember, setGoalsByMember] = useState<Record<string, MacroGoals>>({});
   const [profilesByMember, setProfilesByMember] = useState<Record<string, NutritionProfile>>({});
   const [recentFoodsByMember, setRecentFoodsByMember] = useState<Record<string, FoodSearchResult[]>>({});
-  const [dexaScans, setDexaScans] = useState<DexaScan[]>([]);
-  const [bloodwork, setBloodwork] = useState<BloodworkReport[]>([]);
+  const [dexaScans, setDexaScans] = useState<SyncedDexaScan[]>([]);
+  const [bloodwork, setBloodwork] = useState<SyncedBloodworkReport[]>([]);
+  // Current arrays for the health sync effect to read (migration + flush)
+  // without re-subscribing on every add.
+  const dexaRef = useRef<SyncedDexaScan[]>([]);
+  const bloodworkRef = useRef<SyncedBloodworkReport[]>([]);
+  dexaRef.current = dexaScans;
+  bloodworkRef.current = bloodwork;
+  // The member's "let my trainer see my health data" switch. Owner-controlled,
+  // OFF by default; trainer/admin health reads are gated on it server-side.
+  const [shareHealthWithTrainers, setShareHealthState] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const { user } = useAuth();
   const { recordMealLogged, recordWeightLogged, recordDexaScan, recordBloodwork } = useGamification();
@@ -351,6 +376,101 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, authUid]);
+
+  // ── Firestore sync (DEXA + bloodwork) ──
+  // Health data moved online for durability (was AsyncStorage-only, lost on
+  // reinstall). Owner-only by default; a member opts into trainer visibility via
+  // the consent switch (see healthSync + the /nutrition health rules). Same
+  // migrate → flush → live-subscribe shape as the weight/macro path above, but
+  // gated by its OWN migration flag (existing users already tripped the nutrition
+  // one, which would skip this forever).
+  useEffect(() => {
+    const memberId = user?.id;
+    const uid = authUid;
+    if (!uid || !memberId) return;
+
+    let cancelled = false;
+    let unsubD: () => void = () => {};
+    let unsubB: () => void = () => {};
+    let unsubC: () => void = () => {};
+    const mine = <T extends { memberId: string }>(rows: T[]) => rows.filter((r) => r.memberId === memberId);
+    const markSynced = <T extends { id: string; synced?: boolean }>(ids: Set<string>) =>
+      (rows: T[]) => (ids.size ? rows.map((r) => (ids.has(r.id) ? { ...r, synced: true } : r)) : rows);
+
+    (async () => {
+      // One-time upload of this device's existing scans/reports. Read from
+      // AsyncStorage (not state) so it doesn't matter whether hydrate has landed;
+      // idempotent by existing id, so re-running per device can't duplicate.
+      try {
+        const flagKey = `${HEALTH_MIGRATED_KEY_PREFIX}${uid}`;
+        const already = await AsyncStorage.getItem(flagKey);
+        if (!already) {
+          const [dRaw, bRaw] = await Promise.all([
+            AsyncStorage.getItem(DEXA_KEY),
+            AsyncStorage.getItem(BLOODWORK_KEY),
+          ]);
+          const myDexa = mine(safeParseJSON<SyncedDexaScan[]>(dRaw, [], Array.isArray));
+          const myBw = mine(safeParseJSON<SyncedBloodworkReport[]>(bRaw, [], Array.isArray));
+          const [dIds, bIds] = await Promise.all([migrateDexa(uid, myDexa), migrateBloodwork(uid, myBw)]);
+          if (cancelled) return;
+          setDexaScans(markSynced(dIds));
+          setBloodwork(markSynced(bIds));
+          // Mark done only if every SYNCABLE row landed — count with the SAME
+          // predicate migrate uses, or a row that migrate drops (unsyncable)
+          // makes the threshold unreachable forever and re-migrates every launch.
+          const wantD = myDexa.filter(isSyncableDexa).length;
+          const wantB = myBw.filter(isSyncableBloodwork).length;
+          if (dIds.size >= wantD && bIds.size >= wantB) await AsyncStorage.setItem(flagKey, '1');
+        }
+      } catch {
+        // non-fatal — subscription still works, migration retries next launch
+      }
+
+      if (cancelled) return;
+
+      // Flush anything still queued (failed write-throughs / partial migration).
+      try {
+        const [okD, okB] = await Promise.all([
+          flushDexa(uid, mine(dexaRef.current)),
+          flushBloodwork(uid, mine(bloodworkRef.current)),
+        ]);
+        if (cancelled) return;
+        setDexaScans(markSynced(okD));
+        setBloodwork(markSynced(okB));
+      } catch { /* retried next launch */ }
+
+      if (cancelled) return;
+      unsubD = subscribeDexa(uid, (d) => {
+        if (cancelled) return;
+        if (d.upserts.length || d.removedIds.length) {
+          setDexaScans((prev) => mergeSyncById(prev, d.upserts, d.removedIds).map((s) => ({ ...s, memberId: s.memberId || memberId })));
+        }
+        if (d.allIds) setDexaScans((prev) => reconcileDeletes(prev, d.allIds!, memberId));
+      });
+      unsubB = subscribeBloodwork(uid, (d) => {
+        if (cancelled) return;
+        if (d.upserts.length || d.removedIds.length) {
+          setBloodwork((prev) => mergeSyncById(prev, d.upserts, d.removedIds).map((r) => ({ ...r, memberId: r.memberId || memberId })));
+        }
+        if (d.allIds) setBloodwork((prev) => reconcileDeletes(prev, d.allIds!, memberId));
+      });
+      unsubC = subscribeHealthSharing(uid, (share) => { if (!cancelled) setShareHealthState(share); });
+    })();
+
+    return () => { cancelled = true; unsubD(); unsubB(); unsubC(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, authUid]);
+
+  // Flip the consent switch. Optimistic (the subscription confirms), returns the
+  // server-confirmed result so a settings toggle can surface a failure.
+  const setShareHealthWithTrainers = useCallback(async (share: boolean): Promise<boolean> => {
+    setShareHealthState(share); // optimistic; subscribeHealthSharing reconciles
+    const uid = getCurrentUid();
+    if (!uid) return false;
+    const ok = await setHealthSharing(uid, share);
+    if (!ok) setShareHealthState((prev) => prev); // leave optimistic value; flush retries not needed for a toggle
+    return ok;
+  }, []);
 
   // ── Weight ──
   const myWeights = useCallback(
@@ -729,13 +849,21 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
 
   const addDexaScan = useCallback(
     (scan: Omit<DexaScan, 'id' | 'addedAt'>): DexaScan => {
-      const full: DexaScan = {
+      // synced:false is the queue marker, set BEFORE the write (an offline write
+      // hangs, so a process death must leave the record queued). The launch
+      // flush re-pushes anything still unsynced.
+      const full: SyncedDexaScan = {
         ...scan,
         id: genId('dexa'),
         addedAt: new Date().toISOString(),
+        synced: false,
       };
       setDexaScans((prev) => [...prev, full]);
       recordDexaScan();
+      const uid = getCurrentUid();
+      if (uid) pushDexa(uid, full)
+        .then((ok) => { if (ok) setDexaScans((prev) => prev.map((s) => (s.id === full.id ? { ...s, synced: true } : s))); })
+        .catch(() => {});
       return full;
     },
     [recordDexaScan],
@@ -743,13 +871,25 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
 
   const updateDexaScan = useCallback(
     (id: string, patch: Partial<Omit<DexaScan, 'id' | 'memberId'>>) => {
-      setDexaScans((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+      let updated: SyncedDexaScan | null = null;
+      setDexaScans((prev) => prev.map((s) => {
+        if (s.id !== id) return s;
+        updated = { ...s, ...patch, synced: false };
+        return updated;
+      }));
+      const uid = getCurrentUid();
+      if (uid && updated) pushDexa(uid, updated)
+        .then((ok) => { if (ok) setDexaScans((prev) => prev.map((s) => (s.id === id ? { ...s, synced: true } : s))); })
+        .catch(() => {});
     },
     [],
   );
 
   const removeDexaScan = useCallback((id: string) => {
     setDexaScans((prev) => prev.filter((s) => s.id !== id));
+    // Server delete too, or the live listener resurrects it on the next snapshot.
+    const uid = getCurrentUid();
+    if (uid) deleteDexa(uid, id).catch(() => {});
   }, []);
 
   const getDexaScan = useCallback(
@@ -768,13 +908,18 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
 
   const addBloodworkReport = useCallback(
     (report: Omit<BloodworkReport, 'id' | 'addedAt'>): BloodworkReport => {
-      const full: BloodworkReport = {
+      const full: SyncedBloodworkReport = {
         ...report,
         id: genId('bw'),
         addedAt: new Date().toISOString(),
+        synced: false,
       };
       setBloodwork((prev) => [...prev, full]);
       recordBloodwork();
+      const uid = getCurrentUid();
+      if (uid) pushBloodwork(uid, full)
+        .then((ok) => { if (ok) setBloodwork((prev) => prev.map((r) => (r.id === full.id ? { ...r, synced: true } : r))); })
+        .catch(() => {});
       return full;
     },
     [recordBloodwork],
@@ -782,6 +927,8 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
 
   const removeBloodworkReport = useCallback((id: string) => {
     setBloodwork((prev) => prev.filter((r) => r.id !== id));
+    const uid = getCurrentUid();
+    if (uid) deleteBloodwork(uid, id).catch(() => {});
   }, []);
 
   const getBloodworkReport = useCallback(
@@ -842,6 +989,8 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       removeBloodworkReport,
       getBloodworkReport,
       biomarkerSeries,
+      shareHealthWithTrainers,
+      setShareHealthWithTrainers,
     }),
     [
       weights,
@@ -880,6 +1029,8 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       removeBloodworkReport,
       getBloodworkReport,
       biomarkerSeries,
+      shareHealthWithTrainers,
+      setShareHealthWithTrainers,
     ],
   );
 

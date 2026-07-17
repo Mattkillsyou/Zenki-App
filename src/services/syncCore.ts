@@ -40,9 +40,9 @@
  * nutritionSync. Fine for single-owner data; there is no vector clock.
  */
 
-import { writeBatch, doc } from 'firebase/firestore';
+import { writeBatch, doc, deleteDoc, collection, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { db, FIREBASE_CONFIGURED } from '../config/firebase';
-import { serverConfirmedSetDoc, stripUndefined } from './firestoreUtils';
+import { serverConfirmedSetDoc, stripUndefined, noopUnsubscribe } from './firestoreUtils';
 
 /** Any record durable-syncable by this module. `id` must be stable + pre-existing. */
 export interface SyncableRecord {
@@ -176,6 +176,94 @@ export async function migrateRecords<T extends SyncableRecord>(
     }
   }
   return written;
+}
+
+/**
+ * Delete one record server-side. MUST accompany any local removal of a synced
+ * record: a live listener re-adds anything still on the server, so a local-only
+ * delete RESURRECTS the record on the next snapshot. A failed delete leaves the
+ * server copy (self-correcting via the listener) rather than losing data.
+ * Deliberately NOT queued — replaying a delete against a record the member later
+ * re-created would destroy the new one.
+ */
+export async function deleteRecord(path: string, id: string, logTag: string): Promise<boolean> {
+  if (!FIREBASE_CONFIGURED || !db || !id) return false;
+  try {
+    await deleteDoc(doc(db, path, id));
+    return true;
+  } catch (e) {
+    console.warn(`${logTag} delete failed (server copy remains):`, e);
+    return false;
+  }
+}
+
+/** Incremental snapshot delta for one collection. */
+export interface CollectionDelta<T> {
+  upserts: T[];
+  removedIds: string[];
+  /**
+   * The COMPLETE server id set — emitted ONLY on the first snapshot. docChanges()
+   * can't report a delete that happened while this device wasn't listening, so a
+   * fresh listener needs the full set once to reconcile cross-device deletes.
+   */
+  allIds?: string[];
+}
+
+/**
+ * Live-subscribe to a collection, emitting incremental deltas (docChanges) — never
+ * whole-collection replacements, so an empty/partial snapshot can't wipe local
+ * rows. Rows are tagged synced:true (they came from the server). `hydrate` maps a
+ * raw doc payload + id into the record type.
+ */
+export function subscribeCollection<T extends SyncableRecord>(
+  path: string,
+  hydrate: (data: Record<string, unknown>, id: string) => T,
+  onDelta: (d: CollectionDelta<T>) => void,
+  logTag: string,
+): Unsubscribe {
+  if (!FIREBASE_CONFIGURED || !db) return noopUnsubscribe;
+  // allIds (the full server id set, used to reconcile cross-device deletes) may
+  // ONLY be taken from a SERVER-confirmed snapshot. The offline memory cache
+  // raises an empty fromCache=true snapshot first; taking allIds from it would
+  // drive reconcileDeletes to wipe every synced row from state AND blank the
+  // on-disk cache on a routine offline launch. includeMetadataChanges ensures we
+  // still receive the fromCache=false snapshot even when no doc changed, so the
+  // reconcile happens as soon as the server actually answers.
+  let serverSnapshotSeen = false;
+  return onSnapshot(
+    collection(db, path),
+    { includeMetadataChanges: true },
+    (snap) => {
+      const upserts: T[] = [];
+      const removedIds: string[] = [];
+      snap.docChanges().forEach((c) => {
+        if (c.type === 'removed') removedIds.push(c.doc.id);
+        else upserts.push({ ...hydrate(c.doc.data() as Record<string, unknown>, c.doc.id), synced: true });
+      });
+      const delta: CollectionDelta<T> = { upserts, removedIds };
+      if (!serverSnapshotSeen && !snap.metadata.fromCache) {
+        serverSnapshotSeen = true;
+        delta.allIds = snap.docs.map((d) => d.id);
+      }
+      if (upserts.length || removedIds.length || delta.allIds) onDelta(delta);
+    },
+    (e) => console.warn(`${logTag} listener error:`, e),
+  );
+}
+
+/**
+ * Reconcile a local list against the COMPLETE server id set (from a first
+ * snapshot's allIds): drop any row that is this member's, already synced, and
+ * absent from the server — it was deleted on another device. Un-synced rows
+ * (pending uploads) and other members' rows are kept.
+ */
+export function reconcileDeletes<T extends SyncableRecord & { memberId?: string }>(
+  local: readonly T[],
+  serverIds: readonly string[],
+  memberId: string,
+): T[] {
+  const server = new Set(serverIds);
+  return local.filter((r) => r.memberId !== memberId || !r.synced || server.has(r.id));
 }
 
 /**

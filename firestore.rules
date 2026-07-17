@@ -46,6 +46,19 @@ service cloud.firestore {
       );
     }
 
+    // Health data (DEXA/bloodwork/etc under /nutrition/{uid}) is OWNER-ONLY by
+    // default; a member OPTS IN to trainer/admin visibility with a per-member
+    // switch. True iff that member set shareWithTrainers on their consent doc.
+    // MUST exists()-guard the get(): get() on a MISSING doc returns null and
+    // null.data throws, which denies via evaluation error rather than a clean
+    // false — most members never toggle this, so the missing-doc case is the
+    // COMMON path and must resolve to a clean false, not an error.
+    function sharesHealth(uid) {
+      return exists(/databases/$(database)/documents/nutrition/$(uid)/consents/health)
+        && get(/databases/$(database)/documents/nutrition/$(uid)/consents/health)
+               .data.get('shareWithTrainers', false) == true;
+    }
+
     // True if the signed-in user has an approved follower edge to `authorUid`
     // (i.e. /followers/{authorUid}/followers/{me} exists). Used to let approved
     // followers read a private author's posts on that author's profile.
@@ -774,12 +787,14 @@ service cloud.firestore {
     // paths using the uid from the verified ID token, so client and
     // server share one source of truth. See NUTRITION_FIRESTORE_SCHEMA.md.
     //
-    // Health data is private: owner-only READ and WRITE. No cross-user
-    // read — not even admins (medical-adjacent PII; moderation never
-    // needs it). `memberId` inside the docs is denormalized only: the
-    // client re-stamps it on read, so it is OPTIONAL here (a future
-    // server tool knows only the uid) and is intentionally NOT the
-    // security boundary.
+    // Health data is private by default: weightEntries/macroEntries/
+    // macroGoals/nutritionProfile are owner-only READ+WRITE, no cross-user
+    // read — not even admins (medical-adjacent PII). The EXCEPTION is
+    // dexaScans/bloodworkReports: owner-only WRITE, but READABLE by a
+    // trainer/admin ONLY when the member has opted in via the consent
+    // switch (sharesHealth) — see those match blocks below. `memberId`
+    // inside the docs is denormalized only: the client re-stamps it on
+    // read, so it is OPTIONAL here and is NOT the security boundary.
     // ─────────────────────────────────────────────────────────────
     match /nutrition/{uid} {
       allow read, write: if isOwner(uid);
@@ -835,6 +850,43 @@ service cloud.firestore {
           && request.resource.data.heightCm is number
           && request.resource.data.activity in ['sedentary', 'light', 'moderate', 'active', 'very_active']
           && request.resource.data.goal in ['cut', 'maintain', 'bulk'];
+      }
+
+      // ── Health data — OWNER-ONLY by default, trainer/admin read ONLY when the
+      // member has opted in (sharesHealth). WRITE is always owner-only. Formerly
+      // AsyncStorage-only and lost on reinstall. isTrainer/isAdmin are appended
+      // LAST so a member reading their own scan never pays for the consent get().
+
+      // The consent switch itself. Owner writes it; trainer/admin may READ it so
+      // the web UI can reflect whether a member has shared (the sharesHealth
+      // get() above is a privileged rule read and doesn't need this).
+      match /consents/{consentId} {
+        allow read: if isOwner(uid) || isTrainer() || isAdmin();
+        allow write: if isOwner(uid)
+          && (!('shareWithTrainers' in request.resource.data)
+              || request.resource.data.shareWithTrainers is bool);
+      }
+
+      // DEXA body-composition scans — one doc per scan.
+      match /dexaScans/{scanId} {
+        allow read: if isOwner(uid) || ((isTrainer() || isAdmin()) && sharesHealth(uid));
+        allow delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.scanDate is string
+          && request.resource.data.source in ['ai', 'manual']
+          && (!('memberId' in request.resource.data) || request.resource.data.memberId is string);
+      }
+
+      // Bloodwork / biomarker panels — one doc per report; biomarkers stay a
+      // nested array (bounded, always read whole).
+      match /bloodworkReports/{reportId} {
+        allow read: if isOwner(uid) || ((isTrainer() || isAdmin()) && sharesHealth(uid));
+        allow delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.testDate is string
+          && request.resource.data.source in ['ai', 'manual']
+          && request.resource.data.biomarkers is list
+          && (!('memberId' in request.resource.data) || request.resource.data.memberId is string);
       }
     }
 
