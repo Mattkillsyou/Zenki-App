@@ -62,11 +62,20 @@ export async function serverConfirmedSetDoc<T extends object>(
   docId: string,
   data: T,
   logTag: string,
+  /**
+   * merge:true (the default, and what every pre-existing caller relies on) only
+   * writes the fields present in `data`. Pass merge:false when `data` is the
+   * COMPLETE document: with merge:true a field the user CLEARED is simply absent
+   * from the payload (stripUndefined removes it), so the server keeps its old
+   * value and the live listener echoes the stale value back — the user's delete
+   * silently un-does itself. Full-record writers must use merge:false.
+   */
+  opts?: { merge?: boolean },
 ): Promise<boolean> {
   if (!FIREBASE_CONFIGURED || !db) return false;
   const ref = doc(db, collectionName, docId);
   try {
-    await setDoc(ref, data as Record<string, unknown>, { merge: true });
+    await setDoc(ref, data as Record<string, unknown>, { merge: opts?.merge !== false });
   } catch (err) {
     console.warn(`${logTag} write failed:`, err);
     return false;

@@ -7,7 +7,7 @@ import { EXERCISES_BY_KEY } from '../data/exercises';
 import { generateId } from '../utils/generateId';
 import { useGamification } from './GamificationContext';
 import { useAuth } from './AuthContext';
-import { mergeById } from '../services/syncCore';
+import { mergeById, markSyncedUnchanged, snapshotForPush } from '../services/syncCore';
 import {
   pushLog, pushPR, flushLogs, flushPRs, subscribeTraining,
   migrateTrainingToFirestore, deleteLog, deletePR,
@@ -186,13 +186,19 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       // 2. Flush anything still queued (failed write-throughs, prior partials).
       if (cancelled) return;
       try {
+        // By-reference snapshot — a log/PR edited during the flush must stay
+        // queued rather than be marked synced and dropped from the queue.
+        const logsToPush = mine(logsRef.current);
+        const prsToPush = mine(prsRef.current);
+        const logsSnap = snapshotForPush(logsToPush);
+        const prsSnap = snapshotForPush(prsToPush);
         const [okLogs, okPRs] = await Promise.all([
-          flushLogs(uid, mine(logsRef.current)),
-          flushPRs(uid, mine(prsRef.current)),
+          flushLogs(uid, logsToPush),
+          flushPRs(uid, prsToPush),
         ]);
         if (cancelled) return;
-        setLogs(markSynced(okLogs));
-        setPRs(markSynced(okPRs));
+        setLogs((prev) => markSyncedUnchanged(prev, okLogs, logsSnap));
+        setPRs((prev) => markSyncedUnchanged(prev, okPRs, prsSnap));
       } catch (e) {
         console.warn('[Workout] training flush failed:', e);
       }

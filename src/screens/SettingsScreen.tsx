@@ -75,7 +75,10 @@ function confirmDestructive(
 export function SettingsScreen({ navigation }: any) {
   const { colors, mode, setMode } = useTheme();
   const { user, isGuest, signOut } = useAuth();
-  const { shareHealthWithTrainers, setShareHealthWithTrainers } = useNutrition();
+  const {
+    shareHealthWithTrainers, setShareHealthWithTrainers,
+    shareSensitiveWithTrainers, setShareSensitiveWithTrainers,
+  } = useNutrition();
   const isAdmin = user?.isAdmin === true;
 
   // Apple HealthKit — controls a clearly-labeled section so users (and
@@ -625,10 +628,16 @@ export function SettingsScreen({ navigation }: any) {
         {renderSectionHeader('PRIVACY & SAFETY')}
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderRadius: 20, padding: 0 }]}>
           {renderToggleRow(
-            'Share health data with my trainer',
+            'Share body & lab data with my trainer',
             'Off by default. When on, your coaches can see your DEXA scans and bloodwork to help program for you. Your weight and food logs are never shared. You can turn this off anytime.',
             shareHealthWithTrainers,
             (val) => { setShareHealthWithTrainers(val); },
+          )}
+          {renderToggleRow(
+            'Share medication & cycle data with my trainer',
+            'Off by default, and separate from the switch above — turning that one on does NOT share this. When on, your coaches can see your medication list, dose history, and cycle tracking. You can turn this off anytime.',
+            shareSensitiveWithTrainers,
+            (val) => { setShareSensitiveWithTrainers(val); },
           )}
           {renderNavRow('person-remove-outline', 'Blocked Users', () => navigation.navigate('BlockedUsers'))}
         </View>

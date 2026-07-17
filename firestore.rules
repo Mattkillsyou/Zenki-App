@@ -59,6 +59,16 @@ service cloud.firestore {
                .data.get('shareWithTrainers', false) == true;
     }
 
+    // The SECOND, independent switch — medications + cycle. Deliberately NOT the
+    // same flag as sharesHealth: bundling would force a member who wants coaching
+    // on a body-comp scan to also expose menstrual/medication data. Same
+    // exists()-guard reasoning as above.
+    function sharesSensitiveHealth(uid) {
+      return exists(/databases/$(database)/documents/nutrition/$(uid)/consents/health)
+        && get(/databases/$(database)/documents/nutrition/$(uid)/consents/health)
+               .data.get('shareSensitiveWithTrainers', false) == true;
+    }
+
     // True if the signed-in user has an approved follower edge to `authorUid`
     // (i.e. /followers/{authorUid}/followers/{me} exists). Used to let approved
     // followers read a private author's posts on that author's profile.
@@ -886,6 +896,48 @@ service cloud.firestore {
           && request.resource.data.testDate is string
           && request.resource.data.source in ['ai', 'manual']
           && request.resource.data.biomarkers is list
+          && (!('memberId' in request.resource.data) || request.resource.data.memberId is string);
+      }
+
+      // ── The SENSITIVE tier — medications + cycle. Gated on the SEPARATE
+      // sharesSensitiveHealth switch, not sharesHealth. Owner-only write.
+
+      // Medication / peptide regimen.
+      match /medications/{medId} {
+        allow read: if isOwner(uid) || ((isTrainer() || isAdmin()) && sharesSensitiveHealth(uid));
+        allow delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.name is string
+          && request.resource.data.category is string
+          && request.resource.data.route is string
+          && request.resource.data.frequency is string
+          && request.resource.data.startDate is string
+          && request.resource.data.timesOfDay is list
+          && request.resource.data.notificationsEnabled is bool
+          && (!('memberId' in request.resource.data) || request.resource.data.memberId is string);
+      }
+
+      // Dose adherence log — the highest-volume health collection (uncapped).
+      match /medicationLogs/{logId} {
+        allow read: if isOwner(uid) || ((isTrainer() || isAdmin()) && sharesSensitiveHealth(uid));
+        allow delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.medicationId is string
+          && request.resource.data.takenAt is string
+          && request.resource.data.skipped is bool
+          && (!('memberId' in request.resource.data) || request.resource.data.memberId is string);
+      }
+
+      // Menstrual cycle entries. (CycleSettings.showOnDashboard is a UI
+      // preference and stays device-local — nothing to store here.)
+      match /cycleEntries/{entryId} {
+        allow read: if isOwner(uid) || ((isTrainer() || isAdmin()) && sharesSensitiveHealth(uid));
+        allow delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && request.resource.data.startDate is string
+          && request.resource.data.flowIntensity is string
+          && request.resource.data.symptoms is list
+          && request.resource.data.createdAt is string
           && (!('memberId' in request.resource.data) || request.resource.data.memberId is string);
       }
     }

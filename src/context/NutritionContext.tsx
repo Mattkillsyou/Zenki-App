@@ -22,11 +22,12 @@ import { generateId } from '../utils/generateId';
 import { DexaScan } from '../types/dexa';
 import { BloodworkReport } from '../types/bloodwork';
 import { useAuth } from './AuthContext';
-import { mergeById as mergeSyncById, reconcileDeletes } from '../services/syncCore';
+import { mergeById as mergeSyncById, reconcileDeletes, markSyncedUnchanged, snapshotForPush } from '../services/syncCore';
 import {
   pushDexa, deleteDexa, flushDexa, migrateDexa, subscribeDexa, isSyncableDexa,
   pushBloodwork, deleteBloodwork, flushBloodwork, migrateBloodwork, subscribeBloodwork, isSyncableBloodwork,
-  setHealthSharing, subscribeHealthSharing,
+  setHealthSharing, setSensitiveSharing, subscribeHealthConsent,
+  flushPendingConsent, pendingConsentFor,
   type SyncedDexaScan, type SyncedBloodworkReport,
 } from '../services/healthSync';
 import { useGamification } from './GamificationContext';
@@ -120,9 +121,12 @@ interface NutritionContextValue {
   addBloodworkReport: (report: Omit<BloodworkReport, 'id' | 'addedAt'>) => BloodworkReport;
   removeBloodworkReport: (id: string) => void;
 
-  // Consent switch — let this member's trainer/admin see their health data.
+  // Consent switches — let this member's trainer/admin see their health data.
+  // Two independent tiers: body-comp/labs vs the more sensitive meds/cycle.
   shareHealthWithTrainers: boolean;
   setShareHealthWithTrainers: (share: boolean) => Promise<boolean>;
+  shareSensitiveWithTrainers: boolean;
+  setShareSensitiveWithTrainers: (share: boolean) => Promise<boolean>;
   getBloodworkReport: (id: string) => BloodworkReport | null;
   /** Time series for one biomarker across all reports, oldest → newest. */
   biomarkerSeries: (memberId: string, biomarkerName: string) => { date: string; value: number }[];
@@ -168,6 +172,8 @@ const NutritionContext = createContext<NutritionContextValue>({
   removeBloodworkReport: () => {},
   shareHealthWithTrainers: false,
   setShareHealthWithTrainers: async () => false,
+  shareSensitiveWithTrainers: false,
+  setShareSensitiveWithTrainers: async () => false,
   getBloodworkReport: () => null,
   biomarkerSeries: () => [],
 });
@@ -209,9 +215,11 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   const bloodworkRef = useRef<SyncedBloodworkReport[]>([]);
   dexaRef.current = dexaScans;
   bloodworkRef.current = bloodwork;
-  // The member's "let my trainer see my health data" switch. Owner-controlled,
-  // OFF by default; trainer/admin health reads are gated on it server-side.
+  // The member's trainer-sharing switches. Owner-controlled, both OFF by
+  // default; trainer/admin health reads are gated on them server-side. Two
+  // independent flags so body-comp sharing never drags medication/cycle with it.
   const [shareHealthWithTrainers, setShareHealthState] = useState(false);
+  const [shareSensitiveWithTrainers, setShareSensitiveState] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const { user } = useAuth();
   const { recordMealLogged, recordWeightLogged, recordDexaScan, recordBloodwork } = useGamification();
@@ -430,13 +438,19 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
 
       // Flush anything still queued (failed write-throughs / partial migration).
       try {
+        // By-reference snapshot — see markSyncedUnchanged: a scan/report edited
+        // during the flush must stay queued, not be silently marked synced.
+        const dToPush = mine(dexaRef.current);
+        const bToPush = mine(bloodworkRef.current);
+        const dSnap = snapshotForPush(dToPush);
+        const bSnap = snapshotForPush(bToPush);
         const [okD, okB] = await Promise.all([
-          flushDexa(uid, mine(dexaRef.current)),
-          flushBloodwork(uid, mine(bloodworkRef.current)),
+          flushDexa(uid, dToPush),
+          flushBloodwork(uid, bToPush),
         ]);
         if (cancelled) return;
-        setDexaScans(markSynced(okD));
-        setBloodwork(markSynced(okB));
+        setDexaScans((prev) => markSyncedUnchanged(prev, okD, dSnap));
+        setBloodwork((prev) => markSyncedUnchanged(prev, okB, bSnap));
       } catch { /* retried next launch */ }
 
       if (cancelled) return;
@@ -454,7 +468,25 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
         }
         if (d.allIds) setBloodwork((prev) => reconcileDeletes(prev, d.allIds!, memberId));
       });
-      unsubC = subscribeHealthSharing(uid, (share) => { if (!cancelled) setShareHealthState(share); });
+      // Replay a consent change that never reached the server BEFORE trusting
+      // the server value below — otherwise the subscription would surface the
+      // stale server flag and the member's revoke would appear to flip back on.
+      try { await flushPendingConsent(uid); } catch { /* retried next launch */ }
+      if (cancelled) return;
+      const pending = await pendingConsentFor(uid).catch(() => null);
+      if (cancelled) return;
+
+      unsubC = subscribeHealthConsent(uid, (c) => {
+        if (cancelled) return;
+        // A still-pending intent is what the member ASKED for and what will land,
+        // so it wins over the server's current (stale) value in the UI.
+        setShareHealthState(
+          pending && 'shareWithTrainers' in pending ? pending.shareWithTrainers === true : c.share,
+        );
+        setShareSensitiveState(
+          pending && 'shareSensitiveWithTrainers' in pending ? pending.shareSensitiveWithTrainers === true : c.shareSensitive,
+        );
+      });
     })();
 
     return () => { cancelled = true; unsubD(); unsubB(); unsubC(); };
@@ -463,13 +495,23 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
 
   // Flip the consent switch. Optimistic (the subscription confirms), returns the
   // server-confirmed result so a settings toggle can surface a failure.
+  // Both setters are optimistic and do NOT revert on a failed/hung write: the
+  // intent is queued durably before the write (healthSync.writeConsent) and
+  // replayed on the next launch, so the switch showing the member's choice is
+  // truthful — it WILL land. Reverting would be the lie. Only a missing uid
+  // (no account to store consent against) is a real failure.
   const setShareHealthWithTrainers = useCallback(async (share: boolean): Promise<boolean> => {
-    setShareHealthState(share); // optimistic; subscribeHealthSharing reconciles
     const uid = getCurrentUid();
     if (!uid) return false;
-    const ok = await setHealthSharing(uid, share);
-    if (!ok) setShareHealthState((prev) => prev); // leave optimistic value; flush retries not needed for a toggle
-    return ok;
+    setShareHealthState(share);
+    return setHealthSharing(uid, share);
+  }, []);
+
+  const setShareSensitiveWithTrainers = useCallback(async (share: boolean): Promise<boolean> => {
+    const uid = getCurrentUid();
+    if (!uid) return false;
+    setShareSensitiveState(share);
+    return setSensitiveSharing(uid, share);
   }, []);
 
   // ── Weight ──
@@ -991,6 +1033,8 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       biomarkerSeries,
       shareHealthWithTrainers,
       setShareHealthWithTrainers,
+      shareSensitiveWithTrainers,
+      setShareSensitiveWithTrainers,
     }),
     [
       weights,
@@ -1031,6 +1075,8 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
       biomarkerSeries,
       shareHealthWithTrainers,
       setShareHealthWithTrainers,
+      shareSensitiveWithTrainers,
+      setShareSensitiveWithTrainers,
     ],
   );
 

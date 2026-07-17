@@ -82,7 +82,12 @@ export async function pushRecord<T extends SyncableRecord>(
     console.warn(`${logTag} refusing to push a record with no stable id`);
     return false;
   }
-  return serverConfirmedSetDoc(path, record.id, forWire(record), logTag);
+  // merge:false — every caller here writes the COMPLETE record, so merge buys
+  // nothing and actively breaks deletes: a field the user cleared is absent from
+  // the payload (stripUndefined drops undefined), so under merge:true the server
+  // keeps its old value and the live listener echoes the stale value straight
+  // back into local state. The clear silently un-does itself.
+  return serverConfirmedSetDoc(path, record.id, forWire(record), logTag, { merge: false });
 }
 
 /**
@@ -159,7 +164,8 @@ export async function migrateRecords<T extends SyncableRecord>(
     const chunk = records.slice(i, i + BATCH_CHUNK);
     try {
       const batch = writeBatch(db);
-      for (const r of chunk) batch.set(doc(db, path, r.id), forWire(r), { merge: true });
+      // merge:false for the same reason as pushRecord — these are complete records.
+      for (const r of chunk) batch.set(doc(db, path, r.id), forWire(r), { merge: false });
       // commit() resolves only on backend ack (it hangs while offline rather
       // than resolving optimistically), so reaching here means the chunk landed.
       await batch.commit();
@@ -249,6 +255,38 @@ export function subscribeCollection<T extends SyncableRecord>(
     },
     (e) => console.warn(`${logTag} listener error:`, e),
   );
+}
+
+/**
+ * Mark rows synced after a flush/migrate — but ONLY rows the user hasn't edited
+ * since the upload started.
+ *
+ * Stamping purely by id is wrong: if the member edits a record while its upload
+ * is in flight, the edit sets synced:false, then a blanket mark flips it back to
+ * true and the edit is dropped from the retry queue — never uploaded, and lost
+ * on reinstall. `pushed` maps id → the exact snapshot that was sent; a row whose
+ * current content no longer matches is left queued for the next flush.
+ */
+export function markSyncedUnchanged<T extends SyncableRecord>(
+  rows: readonly T[],
+  confirmedIds: Set<string>,
+  pushed: Map<string, T>,
+): T[] {
+  if (confirmedIds.size === 0) return rows as T[];
+  return rows.map((r) => {
+    if (!confirmedIds.has(r.id)) return r;
+    // Reference identity is the test: state updates are immutable, so an edited
+    // row is a NEW object and won't match what we uploaded. (Comparing content
+    // wouldn't work — the flush sanitizes records before sending, so the wire
+    // form never equals the in-state row.)
+    if (pushed.get(r.id) !== r) return r; // edited mid-flight — leave it queued
+    return { ...r, synced: true };
+  });
+}
+
+/** Snapshot the rows about to be uploaded, by reference, for markSyncedUnchanged. */
+export function snapshotForPush<T extends SyncableRecord>(rows: readonly T[]): Map<string, T> {
+  return new Map(rows.map((r) => [r.id, r]));
 }
 
 /**
