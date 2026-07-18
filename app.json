@@ -89,7 +89,7 @@
       "supportsTablet": true,
       "requireFullScreen": true,
       "bundleIdentifier": "com.zenkidojo.app",
-      "buildNumber": "52",
+      "buildNumber": "53",
       "config": {
         "usesNonExemptEncryption": false
       },
