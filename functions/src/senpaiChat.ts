@@ -1077,11 +1077,19 @@ export const senpaiChat = onRequest(
         response = await client.messages.create({
           model: MODEL,
           max_tokens: MAX_OUTPUT_TOKENS,
+          // Sonnet 4.6 defaults to effort 'high' — deep deliberation for a
+          // 1-3 sentence chibi reply. 'low' generates terser and faster and
+          // reaches for get_user_stats far less often (each tool call is a
+          // whole extra inference round trip, ~2s). Thinking is off by
+          // omission on 4.6, but state it explicitly so a future model swap
+          // can't silently turn it on (Sonnet 5 / Opus 5 default it ON).
+          thinking: { type: 'disabled' },
+          output_config: { effort: 'low' },
           // SDK 0.30.0 doesn't type cache_control on TextBlockParam, nor
           // does it type tools on this overload — both are accepted by
           // the API. Same `as any` pattern as elsewhere in the codebase.
-          // Cache the personality+tool prefix (~1700 tokens, identical
-          // every turn) — drops cached-turn input cost ~90% on Sonnet 4.6.
+          // Cache the personality+tool prefix (~10.7k tokens incl. tool JSON,
+          // identical every turn) — drops cached-turn input cost ~90%.
           // H2: the bond block is a SECOND system block AFTER the cached
           // persona block — per-user, deliberately UNCACHED (~150–250
           // input tokens/turn ≈ noise). Do NOT put cache_control on it and
@@ -1090,7 +1098,13 @@ export const senpaiChat = onRequest(
             {
               type: 'text',
               text: SYSTEM_PROMPT,
-              cache_control: { type: 'ephemeral' },
+              // 1h TTL, not the 5-minute default. With ~12 members the gap
+              // between turns is usually >5min, so the default cache expired
+              // before it was ever read and every turn re-prefilled ~10.7k
+              // tokens at full price. A 1h write costs 2x vs 1.25x but reads
+              // at 0.1x — break-even is 3 requests, and a single chat session
+              // clears that easily. Faster AND cheaper at this volume.
+              cache_control: { type: 'ephemeral', ttl: '1h' },
             },
             ...(bondBlock ? [{ type: 'text', text: bondBlock }] : []),
           ] as any,

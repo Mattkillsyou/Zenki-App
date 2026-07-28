@@ -16,8 +16,9 @@ import { useAuth } from '../context/AuthContext';
 import { useMotion } from '../context/MotionContext';
 import { randomDialogue } from '../data/senpaiDialogue';
 import { useSenpaiChat } from '../hooks/useSenpaiChat';
-import { stopSenpaiAudio } from '../services/senpaiAudio';
+import { stopSenpaiAudio, prewarmAudioSession } from '../services/senpaiAudio';
 import { smallTick } from '../services/senpaiHaptics';
+import { AI_FUNCTION_BASE_URL } from '../config/api';
 import { ANIM_ASSETS, FLIPBOOK_ASSETS } from './senpaiMoodAssets';
 import { SenpaiFlipbook } from './SenpaiFlipbook';
 import { publishSenpaiCorner } from './senpaiCornerStore';
@@ -106,6 +107,26 @@ const isLikelyGarbage = (t: string): boolean =>
 // for someone who was never signed in. One honest line, shared by the dock's
 // guest panel, the mic gate, and the no_auth error copy in the bubble.
 const GUEST_SIGNIN_LINE = 'gotta sign in first senpai — then I can actually talk to you 💕';
+
+// Boot the senpaiSpeak container while the user is still holding the mic.
+// senpaiChat and senpaiSpeak are separate Cloud Run services with separate
+// instance pools, and neither declares minInstances — so with a small member
+// base the first turn of a session pays BOTH cold starts, SERIALLY (speak
+// isn't contacted until the whole chat reply has returned). The client knows
+// a senpaiSpeak call is 3-8s away the instant the button goes down, so an
+// OPTIONS request here boots the container inside the time the user is
+// talking. OPTIONS short-circuits at the top of the handler (204, pre-auth),
+// so it costs no quota, no Firestore write, and no ElevenLabs characters —
+// it only pays a cold start we would otherwise eat on the critical path.
+let lastSpeakPrewarmAt = 0;
+const prewarmSpeakFunction = () => {
+  const now = Date.now();
+  if (now - lastSpeakPrewarmAt < 60_000) return; // instances stay warm ~15min
+  lastSpeakPrewarmAt = now;
+  fetch(`${AI_FUNCTION_BASE_URL}/senpaiSpeak`, { method: 'OPTIONS' }).catch(() => {
+    /* best effort — a failed prewarm just means we pay the cold start later */
+  });
+};
 
 /* ─── Animation asset maps ───────────────────────────────────────────────── */
 // ANIM_ASSETS (mood→static PNG) and FLIPBOOK_ASSETS (mood→sprite strip) live
@@ -1233,6 +1254,9 @@ function SenpaiMascotImpl() {
     }
     if (chatLoading) return;               // thinking — button is disabled anyway
     if (listeningRef.current) return;      // double press-in guard
+    // Boot the TTS container now, while the user talks — it's the last hop
+    // of the turn and otherwise cold-starts on the critical path.
+    prewarmSpeakFunction();
     if (holdReleasedRef.current) {
       // The PREVIOUS release is still finalizing ('end' hasn't landed).
       // Flush it right now so it can't be orphaned by this press resetting

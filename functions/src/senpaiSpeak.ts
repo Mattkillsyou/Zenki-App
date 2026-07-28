@@ -280,19 +280,29 @@ export const senpaiSpeak = onRequest(
       logger.error('[senpaiSpeak] SENPAI_TTS_SIGNING_SECRET unavailable — signature check skipped');
     }
 
-    // 3. Rate limit (per-uid, before the shared budget so one user's spam
-    // burns their own allowance first).
-    const limit = await enforceRateLimit(uid, 'senpaiSpeak');
+    // 3. Per-uid rate limit AND the global daily character budget, run
+    // CONCURRENTLY. They read disjoint documents (aiRateLimits/{uid}/... vs
+    // senpaiTtsBudget/{day}) and neither feeds the other, but running them in
+    // sequence put ~120-400ms of blocking Firestore latency directly between
+    // "reply text is on screen" and "audio starts". The old ordering comment
+    // ("per-uid first so one user's spam burns their own allowance") was
+    // cosmetic accounting, not a correctness invariant: the budget is already
+    // reserve-first by design (a failed synthesis still counts its
+    // characters), so reserving for a request the limiter then rejects is the
+    // same conservative-over-racy trade this module already documents.
+    const [limit, budgetResult] = await Promise.all([
+      enforceRateLimit(uid, 'senpaiSpeak'),
+      reserveTtsBudget(text.length),
+    ]);
     if (!limit.ok) {
       res.status(429).json({ error: limit.reason });
       return;
     }
 
-    // 3b. Global daily character budget (audit E3). Reserve BEFORE the
+    // 3b. Global daily character budget (audit E3). Reserved BEFORE the
     // ElevenLabs call; fail-closed past the budget, fail-open on infra
     // errors (inside reserveTtsBudget). 429 maps to the client's
     // 'rate_limit' handling, same as the per-uid limiter above.
-    const budgetResult = await reserveTtsBudget(text.length);
     if (!budgetResult.ok) {
       logger.warn('[senpaiSpeak] global daily budget exhausted', { uid, chars: text.length });
       res.status(429).json({ error: budgetResult.reason });
@@ -304,7 +314,12 @@ export const senpaiSpeak = onRequest(
     let audioBuffer: Buffer;
     try {
       const elResp = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
+        // mp3_22050_32, not mp3_44100_128: a ~6s voice line drops from
+        // ~80-110KB to ~20-28KB of MP3 (and ~4x less base64 to transfer,
+        // JSON-parse, and write to disk on the phone). Through a phone
+        // speaker the difference is inaudible; on LTE it saves ~100ms, more
+        // on a weak connection.
+        `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_22050_32`,
         {
           method: 'POST',
           headers: {

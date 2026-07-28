@@ -26,7 +26,7 @@ import {
   type SenpaiUserContext,
 } from '../services/senpaiChat';
 import { fetchSenpaiAudio } from '../services/senpaiSpeak';
-import { playSenpaiAudio, stopSenpaiAudio } from '../services/senpaiAudio';
+import { playSenpaiAudio, stopSenpaiAudio, prewarmAudioSession } from '../services/senpaiAudio';
 import { getCurrentIdToken } from '../services/firebaseAuth';
 import { useSenpai, type MascotMood } from '../context/SenpaiContext';
 import { buildBondSummary, FACT_CAP, FACT_MAX_LEN, bondHasFact } from '../services/senpaiBond';
@@ -609,6 +609,10 @@ function useSenpaiChatState() {
         if (voiceEnabled && ttsFailureCountRef.current < TTS_FAIL_AUTODISABLE) {
           setTtsPlaying(true);
           const ttsGen = ++ttsGenRef.current;
+          // Flip the iOS audio session out of STT's PlayAndRecord NOW, so the
+          // ~30-150ms category/route transition overlaps the TTS fetch instead
+          // of sitting in front of playback.
+          prewarmAudioSession();
           (async () => {
             const onTtsFail = (label: string, detail: unknown) => {
               // eslint-disable-next-line no-console
@@ -675,7 +679,14 @@ function useSenpaiChatState() {
               // present) still verifies. If enforcement is ever turned on, the
               // now-session-only auto-disable above keeps a rejection from
               // muting her permanently.
-              const ttsToken = await getCurrentIdToken();
+              // Reuse the token minted for the chat call moments ago instead
+              // of re-entering getCurrentIdToken. The cached path is ~0ms, but
+              // if the token has drifted into firebase/auth's 5-minute
+              // proactive-refresh window this re-entry does a real network
+              // round trip (~200-600ms) at the exact moment the user is
+              // waiting on audio. A token valid a second ago has >=5 minutes
+              // left — well inside senpaiSpeak's 10-minute signature window.
+              const ttsToken = token;
               const ttsResult = await fetchSenpaiAudio(
                 speakText,
                 undefined,

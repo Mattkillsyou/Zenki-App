@@ -51,6 +51,22 @@ async function ensureAudioMode(): Promise<void> {
 }
 
 /**
+ * Flip the iOS audio session back to Playback EARLY, rather than at playback
+ * time. STT leaves the session in PlayAndRecord, so ensureAudioMode is a real
+ * category + route transition (~30-150ms), and playSenpaiAudio awaits it as
+ * the very first thing it does — squarely on the critical path between "reply
+ * arrived" and "audio starts". The mic is already closed by then (finishHold
+ * stopped the recognizer a whole chat round trip earlier), so nothing races:
+ * call this when the TTS fetch STARTS and the transition overlaps the ~1s
+ * network wait instead of adding to it. playSenpaiAudio still calls
+ * ensureAudioMode for correctness — the second call is a cheap no-op once the
+ * session is already in Playback.
+ */
+export function prewarmAudioSession(): void {
+  ensureAudioMode().catch(() => { /* best effort */ });
+}
+
+/**
  * Stop whatever Senpai clip is currently playing, if any. No-op otherwise.
  * Safe to call from cleanup / modal-close hooks.
  */
@@ -166,12 +182,12 @@ export async function playSenpaiAudio(
   // missing clear here was leaving phantom intervals running against
   // released players, which corrupted the next play attempt.
   let cleaned = false;
-  let statusPoll: ReturnType<typeof setInterval> | null = null;
+  let statusPoll: ReturnType<typeof setTimeout> | null = null;
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
     if (statusPoll) {
-      clearInterval(statusPoll);
+      clearTimeout(statusPoll);
       statusPoll = null;
     }
     try {
@@ -211,12 +227,20 @@ export async function playSenpaiAudio(
   // engine reports a positive duration (file loaded), (2) clean up
   // when playback naturally finishes.
   let started = false;
-  // 250ms, not 100ms: `currentStatus` is a SYNCHRONOUS JSI read against a
-  // live AVPlayer on the JS thread — polling it 10×/sec during exactly the
-  // window where a volume press / route change transitions the audio session
-  // maximizes the odds of blocking on a session lock. 4×/sec is plenty for
-  // "did the file load / did it finish".
-  statusPoll = setInterval(() => {
+  // RAMPED poll, not a fixed interval. Two conflicting needs:
+  //   - Before play(): a small local MP3 loads in ~20-60ms, and every ms
+  //     past that is dead air the user hears as lag. A flat 250ms interval
+  //     doesn't even take its FIRST sample until t+250ms.
+  //   - During playback: `currentStatus` is a SYNCHRONOUS JSI read against a
+  //     live AVPlayer on the JS thread. Hammering it 10x/sec while a volume
+  //     press or route change transitions the audio session is what risked
+  //     blocking on a session lock (the freeze this file's 250ms was for).
+  // So: poll fast (40ms) until the clip is loaded and playing, then back off
+  // to 250ms for the rest of playback. The freeze guard is preserved exactly
+  // where it matters, and the dead air before audio is gone.
+  const FAST_MS = 40;
+  const SLOW_MS = 250;
+  const tick = () => {
     if (cleaned) return;
     const status: any = (player as any).currentStatus ?? {};
     const ready = status?.isLoaded === true || (typeof status?.duration === 'number' && status.duration > 0);
@@ -232,8 +256,11 @@ export async function playSenpaiAudio(
     }
     if (status?.didJustFinish || (status?.duration > 0 && status?.currentTime >= status?.duration && started)) {
       cleanup();
+      return;
     }
-  }, 250);
+    statusPoll = setTimeout(tick, started ? SLOW_MS : FAST_MS);
+  };
+  statusPoll = setTimeout(tick, FAST_MS);
   // Fallback if `currentStatus` never reports ready (rare but seen).
   setTimeout(() => {
     if (!started && !cleaned) {
