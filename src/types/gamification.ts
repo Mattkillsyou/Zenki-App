@@ -109,12 +109,15 @@ export function xpForLevel(level: number): number {
 }
 
 export function getLevelFromXP(totalXP: number): { level: number; currentXP: number; nextLevelXP: number; progress: number } {
-  let level = 1;
-  let remaining = totalXP;
-  while (remaining >= xpForLevel(level)) {
-    remaining -= xpForLevel(level);
-    level++;
-  }
+  // Closed form — the old subtract-in-a-while-loop version was unbounded:
+  // a corrupt xp (huge float from a bad Firestore doc / AsyncStorage blob)
+  // span it for seconds-to-forever ON EVERY provider render, freezing the
+  // whole JS thread. Clamp first, then solve level*(level-1)/2*100 <= xp.
+  const xp = Number.isFinite(totalXP) && totalXP > 0 ? Math.min(totalXP, 1e12) : 0;
+  // Total XP consumed by levels 1..(n-1) is 100 * n(n-1)/2; invert it.
+  const level = Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * (xp / 100))) / 2));
+  const consumed = 100 * ((level * (level - 1)) / 2);
+  const remaining = xp - consumed;
   const nextLevelXP = xpForLevel(level);
   return {
     level,

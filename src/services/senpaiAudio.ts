@@ -211,6 +211,11 @@ export async function playSenpaiAudio(
   // engine reports a positive duration (file loaded), (2) clean up
   // when playback naturally finishes.
   let started = false;
+  // 250ms, not 100ms: `currentStatus` is a SYNCHRONOUS JSI read against a
+  // live AVPlayer on the JS thread — polling it 10×/sec during exactly the
+  // window where a volume press / route change transitions the audio session
+  // maximizes the odds of blocking on a session lock. 4×/sec is plenty for
+  // "did the file load / did it finish".
   statusPoll = setInterval(() => {
     if (cleaned) return;
     const status: any = (player as any).currentStatus ?? {};
@@ -228,7 +233,7 @@ export async function playSenpaiAudio(
     if (status?.didJustFinish || (status?.duration > 0 && status?.currentTime >= status?.duration && started)) {
       cleanup();
     }
-  }, 100);
+  }, 250);
   // Fallback if `currentStatus` never reports ready (rare but seen).
   setTimeout(() => {
     if (!started && !cleaned) {

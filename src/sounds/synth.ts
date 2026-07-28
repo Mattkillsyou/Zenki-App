@@ -123,7 +123,14 @@ function getNativeSound(event: SoundEvent): AudioPlayer | null {
   const cached = nativeSoundCache.get(event);
   if (cached) return cached;
   try {
-    const player = createAudioPlayer(NATIVE_SOURCES[event]);
+    // keepAudioSessionActive: without it every tap sound activates the iOS
+    // audio session synchronously ON THE JS THREAD (expo-audio play() →
+    // AVAudioSession.setActive(true)) and schedules a main-thread deactivate
+    // ~100ms after the clip ends — constant three-way session churn against
+    // TTS playback and the speech recognizer, which can wedge mediaserverd
+    // and hard-freeze the app (the volume-press freeze). Activate once,
+    // stay active.
+    const player = createAudioPlayer(NATIVE_SOURCES[event], { keepAudioSessionActive: true });
     nativeSoundCache.set(event, player);
     return player;
   } catch {
@@ -155,9 +162,15 @@ async function playNative(theme: SoundTheme, event: SoundEvent): Promise<void> {
   if (!sound) return;
   try {
     sound.setPlaybackRate(themeRate(theme));
-    await sound.seekTo(0);
+    // Fire-and-forget seek — awaiting it serialized a native round-trip into
+    // every single tap, and a wedged seek promise would strand the play().
+    sound.seekTo(0).catch(() => { /* ignore */ });
     sound.play();
-  } catch { /* ignore */ }
+  } catch {
+    // A player that throws is wedged for good — drop it so the next tap
+    // builds a fresh one instead of re-poking a dead native object.
+    nativeSoundCache.delete(event);
+  }
 }
 
 /**

@@ -192,6 +192,22 @@ function previousWeekISO(fromISOWeek: string): string {
   return isoWeek(weekStart);
 }
 
+/** Clamp every numeric scalar to a finite, sane value. Corrupt numbers from a
+ *  bad AsyncStorage blob or the client-writable /gamification Firestore doc
+ *  (huge floats, strings, NaN) used to reach getLevelFromXP and render math
+ *  raw — a huge xp pinned the JS thread in its level loop (hard app freeze),
+ *  and a string xp string-concatenates on every award until it gets there.
+ *  Keyed off defaultState so new numeric fields are covered automatically. */
+function sanitizeNumericScalars(state: GamificationState): GamificationState {
+  const out: any = { ...state };
+  for (const key of Object.keys(defaultState) as (keyof GamificationState)[]) {
+    if (typeof defaultState[key] !== 'number') continue;
+    const n = Number(out[key]);
+    out[key] = Number.isFinite(n) ? Math.max(0, Math.min(n, 1e12)) : (defaultState[key] as number);
+  }
+  return out as GamificationState;
+}
+
 /** Hydrate a saved (possibly partial) blob into a full GamificationState,
  *  reconciling persisted achievement unlock flags against the current catalog. */
 function hydrateState(saved: Partial<GamificationState>): GamificationState {
@@ -205,7 +221,7 @@ function hydrateState(saved: Partial<GamificationState>): GamificationState {
       unlockedAt: existing.unlockedAt,
     };
   });
-  return { ...defaultState, ...saved, achievements: merged };
+  return sanitizeNumericScalars({ ...defaultState, ...saved, achievements: merged });
 }
 
 export function GamificationProvider({ children }: { children: React.ReactNode }) {
@@ -410,7 +426,9 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       if (first && !looksUntouched(stateRef.current)) { schedulePush(); return; }
 
       const { updatedAt, ...rest } = remote;
-      const adopted = cloudCopy(rest as GamificationState);
+      // Sanitize BEFORE adopting: the /gamification doc is client-writable,
+      // so a corrupt numeric field would otherwise land straight in state.
+      const adopted = cloudCopy(sanitizeNumericScalars(rest as GamificationState));
       lastCloudStampRef.current = updatedAt ?? null;
       lastSyncedJsonRef.current = JSON.stringify(adopted);
       setStateDirect(adopted);

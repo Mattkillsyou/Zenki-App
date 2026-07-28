@@ -655,13 +655,23 @@ export function NutritionProvider({ children }: { children: React.ReactNode }) {
   );
 
   // ── Goals ──
+  // Default-goals cache: goalsFor used to mint a FRESH object (with a fresh
+  // Date) on every call for members with no saved goals, so every consumer
+  // memo keyed on `goals` recomputed every render — 14 full passes over the
+  // macros array per render on the tracker screen. One stable object per
+  // member instead.
+  const defaultGoalsCacheRef = useRef<Map<string, MacroGoals>>(new Map());
   const goalsFor = useCallback(
-    (memberId: string): MacroGoals =>
-      goalsByMember[memberId] ?? {
-        memberId,
-        ...DEFAULT_MACRO_GOALS,
-        updatedAt: new Date().toISOString(),
-      },
+    (memberId: string): MacroGoals => {
+      const saved = goalsByMember[memberId];
+      if (saved) return saved;
+      let def = defaultGoalsCacheRef.current.get(memberId);
+      if (!def) {
+        def = { memberId, ...DEFAULT_MACRO_GOALS, updatedAt: new Date().toISOString() };
+        defaultGoalsCacheRef.current.set(memberId, def);
+      }
+      return def;
+    },
     [goalsByMember],
   );
 
