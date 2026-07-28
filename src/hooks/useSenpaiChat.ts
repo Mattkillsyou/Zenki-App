@@ -294,6 +294,19 @@ function useSenpaiChatState() {
     };
   }, [historyKey, uid, authLoading]);
 
+  // Monotonic TTS generation. stopTts() bumps it; a TTS fetch that started
+  // under an older generation discards its result instead of playing. This is
+  // the only way to "stop" a reply whose audio hasn't arrived yet — the
+  // ElevenLabs fetch takes seconds and stopSenpaiAudio() can only stop a clip
+  // that already started (a PTT barge-in during the fetch window would
+  // otherwise get the full reply played over the open mic).
+  const ttsGenRef = useRef(0);
+  const stopTts = useCallback(() => {
+    ttsGenRef.current += 1;
+    stopSenpaiAudio();
+    setTtsPlaying(false);
+  }, []);
+
   const setVoiceEnabled = useCallback((on: boolean) => {
     setVoiceEnabledState(on);
     safeStorageSet(VOICE_KEY, String(on), '[useSenpaiChat]');
@@ -304,13 +317,15 @@ function useSenpaiChatState() {
       // toggle + force-on, not just Settings' resetTtsFailures().
       ttsFailureCountRef.current = 0;
     } else {
-      // Killed mid-clip — stop whatever's playing right now
+      // Killed mid-clip OR mid-fetch — bump the generation so a TTS fetch
+      // still in flight discards its result, stop whatever's playing now.
+      ttsGenRef.current += 1;
       stopSenpaiAudio();
       // E1 defense-in-depth: a cancel that lands during playSenpaiAudio's
       // setup awaits can resolve without ever firing onEnded — and this
       // else-branch also gates off the TTS block that would otherwise reset
-      // the flag. Clear it here so the walkie-talkie mic re-arm
-      // (SenpaiMascot reads ttsPlaying) can never stay wedged.
+      // the flag. Clear it here so the PTT UI (SenpaiMascot reads
+      // ttsPlaying) can never stay wedged.
       setTtsPlaying(false);
     }
   }, []);
@@ -593,6 +608,7 @@ function useSenpaiChatState() {
         // fired between auto-disable's setState and the next render).
         if (voiceEnabled && ttsFailureCountRef.current < TTS_FAIL_AUTODISABLE) {
           setTtsPlaying(true);
+          const ttsGen = ++ttsGenRef.current;
           (async () => {
             const onTtsFail = (label: string, detail: unknown) => {
               // eslint-disable-next-line no-console
@@ -668,6 +684,12 @@ function useSenpaiChatState() {
               );
               if (ttsResult.ok) {
                 ttsFailureCountRef.current = 0;
+                // A stopTts() (barge-in / mute) landed while we were fetching —
+                // this reply's audio is stale; never start it.
+                if (ttsGenRef.current !== ttsGen) {
+                  setTtsPlaying(false);
+                  return;
+                }
                 await playSenpaiAudio(ttsResult.data.audioBase64, () => {
                   setTtsPlaying(false);
                 });
@@ -837,6 +859,7 @@ function useSenpaiChatState() {
     voiceEnabled,
     setVoiceEnabled,
     ttsPlaying,
+    stopTts,
     send,
     clear,
     clearError,

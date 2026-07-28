@@ -212,6 +212,20 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(SPARKLE_KEY),
           AsyncStorage.getItem(AMBIENT_KEY),
         ]);
+        // Key-collision rescue: SenpaiMascot's Type/Talk switch used to
+        // persist 'type'/'talk' to THIS key, silently disabling Senpai on the
+        // next launch. A mode value here proves Senpai was enabled (the
+        // switch only exists while she's on) — treat it as enabled, move the
+        // mode to its new key, and hand this key back to the enabled flag.
+        // This must live HERE (unconditional) — the mascot never mounts while
+        // enabled hydrates false, so a mascot-side migration can't run for
+        // exactly the users it exists to rescue.
+        let enabled = enabledRaw === 'true';
+        if (enabledRaw === 'type' || enabledRaw === 'talk') {
+          enabled = true;
+          AsyncStorage.setItem('@zenki_senpai_chat_mode', enabledRaw);
+          AsyncStorage.setItem(STORAGE_KEY, 'true');
+        }
         const volume: SenpaiVolume =
           volumeRaw === 'low' || volumeRaw === 'med' || volumeRaw === 'high' ? volumeRaw : 'high';
         const sparkleIntensity: SparkleIntensity =
@@ -220,7 +234,7 @@ export function SenpaiProvider({ children }: { children: React.ReactNode }) {
         volumeRef.current = volume;
         setState((s) => ({
           ...s,
-          enabled: enabledRaw === 'true',
+          enabled,
           volume,
           sparkleIntensity,
           ambientEffects,

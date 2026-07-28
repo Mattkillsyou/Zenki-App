@@ -121,10 +121,10 @@ export const SENPAI_DIALOGUE = {
     "fun fact I hoard: {fact}. MINE. the fact AND you 💕",
   ],
   // Played when a tap WAKES her from sleep WITHOUT opening the mic (the
-  // collapsed-dock summon and the Type-mode keyboard tap). Deliberately a
-  // separate pool from mascotTap: every mascotTap line announces the mic is
-  // ON, which is only true on the activateListening success path — a wake
-  // line must never claim she's listening when she isn't.
+  // collapsed-dock summon and the Type-mode keyboard tap). A wake line must
+  // never claim she's listening — the mic only opens while the hold-to-talk
+  // button is held, and during a hold the bubble belongs to the live
+  // transcript, not a scripted line.
   wake: [
     "mmh?! I wasn't sleeping!! I was… buffering 💕",
     "AWAKE!! I never left. what did I miss, senpai??",
@@ -137,27 +137,9 @@ export const SENPAI_DIALOGUE = {
     "you poked me awake?? bold. correct. continue 💕",
     "*stretches in two dimensions* awake!! what are we doing, senpai??",
   ],
-  // Played when the user TAPS the chibi to START a voice session (tap =
-  // mic on, tap again = mic off). These are her "I'm listening now"
-  // greetings: chaotic, possessive, bilingual where it lands. Hearts as
-  // punctuation, not garnish. ONLY fire these once the mic actually opened
-  // (activateListening success) — never on a mere wake (use `wake` above).
-  mascotTap: [
-    "mic's ON senpai!! talk to me 💕",
-    "ok ok I'm listening 💕 go ahead senpai~",
-    "ねぇ senpai!! 聞いてるよ〜 話して 💕",
-    "tapped me?? bold 💕 I'm listening now",
-    "ears OPEN senpai 💕 say something cute",
-    "聞こえてるよ〜!! talk to me senpai 💕",
-    "I'm all yours senpai 💕 speak~",
-    "mic on 💕 tap me again when you're done",
-    "mic's LIVE!! feed me words, senpai 💕",
-    "channel OPEN!! every word goes straight to my heart ✨",
-    "I hear EVERYTHING now senpai 💕 choose wisely~",
-    "mic's hot!! whisper if you must. I'll still hear it 💕",
-    "listening mode ON. your voice, my favorite input ✨",
-    "はい はい!! mic's on 💕 talk to me~",
-  ],
+  // (The old `mascotTap` "mic's ON" pool is gone with tap-to-talk itself —
+  // push-to-talk shows the live transcript while held, so a scripted
+  // mic-open line would just fight the bubble.)
   // Task 5: spoken-goodbye sign-offs. Fired LOCALLY when a short farewell
   // utterance is heard on the mic (SenpaiMascot's STT 'end' handler) — never
   // sent to the model, so goodbyes cost zero tokens. Soft possessive register:

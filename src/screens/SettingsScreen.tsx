@@ -494,16 +494,18 @@ export function SettingsScreen({ navigation }: any) {
             />
           </View>
 
-          {/* Senpai voice (TTS) — only meaningful when Senpai Mode is on.
-              Persisted to AsyncStorage. Auto-disables after consecutive
-              TTS failures (e.g. ElevenLabs free-tier blocked) so the user
-              can flip it back on here once their account is healthy. */}
+          {/* Senpai voice MODE — only meaningful when Senpai Mode is on.
+              Gates the whole voice layer: the hold-to-talk mic AND spoken
+              replies (the mascot dock has the same 🔊 toggle). Persisted to
+              AsyncStorage. Auto-disables after consecutive TTS failures
+              (e.g. ElevenLabs free-tier blocked) so the user can flip it
+              back on here once their account is healthy. */}
           {senpaiState.enabled && (
             <View style={styles.settingRow}>
               <View style={styles.settingInfo}>
-                <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Senpai Voice</Text>
+                <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Senpai Voice Mode</Text>
                 <Text style={[styles.settingDesc, { color: colors.textMuted }]}>
-                  Hear her replies out loud (ElevenLabs TTS)
+                  Hold-to-talk mic + spoken replies. Off = typing only.
                 </Text>
               </View>
               <Switch

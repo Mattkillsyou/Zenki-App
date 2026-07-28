@@ -39,7 +39,12 @@ const clampPos = (x: number, y: number) => ({
 // In-place chat surface. She is draggable and snaps to the nearest of the 4
 // screen corners; the chat "dock" (reply bubble + Type/Talk switch + text box)
 // opens INWARD from whichever corner she's in, so it never runs off-screen.
-const MODE_KEY = '@zenki_senpai_mode';
+// MODE_KEY used to be '@zenki_senpai_mode' — the SAME key SenpaiContext uses
+// for its enabled flag ('true'/'false'), so flipping Type⟷Talk overwrote the
+// enabled flag with 'type'/'talk' and silently disabled Senpai on the next
+// launch. The restore effect below migrates a stranded value back.
+const MODE_KEY = '@zenki_senpai_chat_mode';
+const LEGACY_MODE_KEY = '@zenki_senpai_mode';
 // One-time AI safety disclaimer gate (carried over from the deleted full-screen
 // chat). PER-ACCOUNT: the real key is `${DISCLAIMER_KEY_BASE}:${accountId}`
 // (guest bucket for guests) so a second member on the same device gets their
@@ -175,35 +180,55 @@ function SenpaiMascotImpl() {
   // the input isn't hidden behind the keyboard at a bottom corner.
   const [kbHeight, setKbHeight] = useState(0);
 
-  // Inline walkie-talkie chat state. TAP senpai once to start listening,
-  // tap again to stop — a friendlier replacement for the old press-and-hold
-  // (2s on / 3s off). The speech bubble above her doubles as the chat
-  // surface (live transcript while you speak → her reply text once the model
-  // returns), and TTS plays the audio of her response over the speaker.
+  // Inline push-to-talk chat state. HOLD the dock's mic button while
+  // speaking, RELEASE to send — like a walkie-talkie / Siri. The speech
+  // bubble above her doubles as the chat surface (live transcript while you
+  // speak → her reply text once the model returns), and TTS plays the audio
+  // of her response over the speaker. voiceEnabled is the voice-mode master
+  // switch: off = no TTS and no Talk mode at all.
   const {
     messages,
     loading: chatLoading,
     error: chatError,
     ttsPlaying,
     lastArrivedId,
+    voiceEnabled,
+    setVoiceEnabled,
+    stopTts,
     send: sendChat,
     clear: clearChat,
     clearError: clearChatError,
   } = useSenpaiChat();
-  // `listening` = user's intent: "the mic should be on." Once on, it
-  // stays on through silence, through senpai's replies, and through
-  // re-arming, until the user taps her again to turn it off. We track
+  // `listening` = the finger is down on the PTT button and the recognizer is
+  // open. It never persists through thinking or replies anymore. We track
   // listeningRef in parallel so STT event callbacks (which capture state
   // by closure) read a fresh value rather than the stale render-time one.
   const [listening, setListening] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
   const transcriptRef = useRef('');
   const listeningRef = useRef(false);
-  // Task 6: true only for the FIRST 'end' after a deliberate tap-to-talk
-  // (startListening). Distinguishes "user opened the mic and we caught
-  // nothing" (worth a scripted "didn't catch that") from the walkie-talkie's
-  // silent auto-re-arm cycles (which must never nag). Consumed on each 'end'.
-  const freshMicSessionRef = useRef(false);
+  // PTT bookkeeping:
+  //   holdActiveRef — finger is down (set in beginHold, cleared on release/
+  //     cancel); guards the async engine-start against a release that lands
+  //     before the recognizer actually opened.
+  //   holdReleasedRef — the release wants the captured transcript SENT; the
+  //     'end' handler / watchdog consume it exactly once (finalizeAndSend).
+  //   finalizeTimerRef — iOS can delay 'end' while finalizing; this watchdog
+  //     sends from transcriptRef directly if 'end' hasn't fired in time.
+  //   holdStartedAtRef — distinguishes a too-short tap from a real hold.
+  //   pressCommitTimerRef — slide-off-to-cancel disambiguation (onPressOut
+  //     fires for both; onPress only when released inside the button).
+  const holdActiveRef = useRef(false);
+  const holdReleasedRef = useRef(false);
+  const finalizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdStartedAtRef = useRef(0);
+  const pressCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Count of our own ExpoSpeechRecognitionModule.stop() calls whose 'end'
+  // hasn't arrived yet. iOS can lag 'end' behind stop() by up to ~1s; if the
+  // user starts a NEW hold in that window, the late 'end' must be attributed
+  // to the stopped session — not misread as a self-end of the live one
+  // (which would flip its refs and strand an invisible open mic).
+  const pendingStopsRef = useRef(0);
   // Task 3: mirror the mic-open state into SenpaiContext so the reaction
   // bridge can hold ambient nudges (welcomeBack / streakAtRisk) while a voice
   // session is live. The cleanup resets it on unmount (senpai disabled) so a
@@ -235,10 +260,6 @@ function SenpaiMascotImpl() {
     triggerReaction('encouraging', GUEST_SIGNIN_LINE, 3000);
     showBubbleOverride(GUEST_SIGNIN_LINE, 3000);
   };
-  // The most recent assistant reply id we've already scheduled a
-  // re-arm-after for — prevents firing the timer twice on the same turn.
-  const lastReplyIdRef = useRef<string | null>(null);
-
   // (Removed: force-on voice useEffect. It fought the auto-disable in
   // useSenpaiChat — every time TTS failures flipped voiceEnabled to
   // false, this effect would immediately set it back to true, causing
@@ -257,116 +278,105 @@ function SenpaiMascotImpl() {
     setLiveTranscript(t);
   });
 
-  // Re-open the mic after a short settle delay — but only if the user still
-  // wants it on and no reply is mid-flight. Shared by the STT 'end' handler's
-  // empty-silence and "didn't catch that" (task 6) paths so both re-arm
-  // identically. (The 'error' handler keeps its own inline re-arm — its
-  // longer delay + silent catch are intentional there.)
-  const rearmListening = (delayMs: number) => {
-    setTimeout(() => {
-      if (!listeningRef.current || chatLoading) return;
-      try {
-        ExpoSpeechRecognitionModule.start({
-          lang: 'en-US',
-          // Single-shot — iOS auto-stops on silence and fires 'end', which is
-          // what triggers sendChat. Continuous mode wedges the mic open and
-          // 'end' never fires until stop().
-          interimResults: true,
-          continuous: false,
-          requiresOnDeviceRecognition: false,
-        });
-      } catch (e) {
-        console.warn('[SenpaiMascot] STT re-arm failed:', e);
+  // PTT finalize — the single funnel for "the user released and wants this
+  // sent". Reached from the STT 'end' handler (normal path) or the release
+  // watchdog (iOS occasionally delays 'end' while finalizing). Idempotent:
+  // holdReleasedRef is consumed on first entry, so end + watchdog can both
+  // fire and only one send happens. A cancel never sets holdReleasedRef, so
+  // this is a no-op for abandoned holds.
+  const finalizeAndSend = (raw: string) => {
+    if (!holdReleasedRef.current) return;
+    holdReleasedRef.current = false;
+    if (finalizeTimerRef.current) {
+      clearTimeout(finalizeTimerRef.current);
+      finalizeTimerRef.current = null;
+    }
+    transcriptRef.current = '';
+    setLiveTranscript('');
+    const t = raw.trim();
+    const heldMs = Date.now() - holdStartedAtRef.current;
+    if (!t) {
+      // Nothing captured. A too-short press gets the how-to hint (also
+      // absorbs the first-ever press that only opened the permission
+      // dialog); a real hold that caught nothing gets the honest miss.
+      if (heldMs < 700) {
+        showBubbleOverride('hold the mic while you talk to me senpai 💕', 2500);
+      } else {
+        const line = randomDialogue('micMisheard');
+        triggerReaction('encouraging', line, 2500);
+        showBubbleOverride(line, 2500);
       }
-    }, delayMs);
+      return;
+    }
+    // Task 5: a short farewell ("bye senpai", "oyasumi") signs off LOCALLY —
+    // never sent to the model (zero tokens). The mic is already closed
+    // (release did that); play a canon goodbye and collapse the dock.
+    if (isGoodbyeIntent(t)) {
+      const line = randomDialogue('micGoodbye');
+      triggerReaction('cheering', line, 2500);
+      showBubbleOverride(line, 2500);
+      setDockOpen(false);
+      return;
+    }
+    // Task 6: an ultra-short transcript (stray syllable / noise) isn't a
+    // real message — admit the miss instead of burning a round-trip.
+    if (isLikelyGarbage(t)) {
+      const line = randomDialogue('micMisheard');
+      triggerReaction('encouraging', line, 2500);
+      showBubbleOverride(line, 2500);
+      return;
+    }
+    setReplyDismissed(false);
+    sendChat(t);
   };
 
   useSpeechRecognitionEvent('end', () => {
-    const finalTranscript = transcriptRef.current.trim();
+    if (pendingStopsRef.current > 0) {
+      // This 'end' answers one of OUR stop() calls — consume it so a late
+      // arrival can never be misattributed to a newer live session.
+      pendingStopsRef.current--;
+      finalizeAndSend(transcriptRef.current);
+    } else if (listeningRef.current) {
+      // The engine ended on its own mid-hold (session cap / audio-route
+      // change) — treat it as a release so the captured speech still sends
+      // instead of silently vanishing while the finger is still down.
+      listeningRef.current = false;
+      setListening(false);
+      holdReleasedRef.current = true;
+      holdActiveRef.current = false;
+      finalizeAndSend(transcriptRef.current);
+    }
+    // Unconditionally drop whatever remains: stop() delivers a final
+    // 'result' AFTER a cancel already cleared state, and liveTranscript
+    // outranks nearly everything in the bubble — an abandoned transcript
+    // would wedge the speech bubble indefinitely. (The send paths consumed
+    // the transcript inside finalizeAndSend before this line.)
     transcriptRef.current = '';
     setLiveTranscript('');
-    // Consume the fresh-session flag: any 'end' concludes the user-initiated
-    // open (the walkie-talkie's later auto-re-arms are not "fresh").
-    const wasFreshSession = freshMicSessionRef.current;
-    freshMicSessionRef.current = false;
-
-    console.warn(
-      '[SenpaiMascot] STT end fired. transcript:',
-      JSON.stringify(finalTranscript),
-      'listening:', listeningRef.current,
-      'chatLoading:', chatLoading,
-    );
-
-    // Auto-send the captured speech as soon as STT detects end-of-turn.
-    // Two guards beyond the obvious (transcript exists, chat not in flight):
-    //   - listeningRef.current: stopListening() flips this BEFORE calling
-    //     stop(), so a late 'result' arriving between can't trigger a
-    //     send the user already abandoned.
-    //   (tap-to-stop flips listeningRef.current=false before calling stop(),
-    //   so the listeningRef guard already covers a message the user is
-    //   abandoning — no separate "mid-hold" flag is needed anymore.)
-    if (
-      finalTranscript &&
-      !chatLoading &&
-      listeningRef.current
-    ) {
-      // Task 5: a short farewell ("bye senpai", "oyasumi") signs off LOCALLY —
-      // never sent to the model (zero tokens). Stop the mic, play a canon
-      // goodbye, and collapse the dock so she actually goes quiet.
-      if (isGoodbyeIntent(finalTranscript)) {
-        const line = randomDialogue('micGoodbye');
-        stopListening();
-        triggerReaction('cheering', line, 2500);
-        showBubbleOverride(line, 2500);
-        setDockOpen(false);
-        return;
-      }
-      // Task 6: an ultra-short transcript (stray syllable / noise) isn't a
-      // real message — admit the miss (scripted, self-deprecating) and re-arm
-      // so the user just retries, instead of burning a round-trip on garbage.
-      if (isLikelyGarbage(finalTranscript)) {
-        const line = randomDialogue('micMisheard');
-        triggerReaction('encouraging', line, 2500);
-        showBubbleOverride(line, 2500);
-        rearmListening(250);
-        return;
-      }
-      sendChat(finalTranscript);
-      return;
-    }
-
-    // No speech captured (silence timeout with nothing said). If user
-    // still wants the mic on, re-arm after a short delay so the native
-    // engine has a tick to settle.
-    if (listeningRef.current && !chatLoading) {
-      // Task 6: only nag on a FRESH tap-to-talk that caught nothing — the
-      // honest analog of the old press-and-hold "heard nothing" case. Auto
-      // re-arm cycles stay silent so the idle walkie-talkie loop never spams.
-      if (wasFreshSession) {
-        const line = randomDialogue('micMisheard');
-        triggerReaction('encouraging', line, 2500);
-        showBubbleOverride(line, 2500);
-      }
-      rearmListening(250);
-    }
   });
 
   useSpeechRecognitionEvent('error', (event) => {
-    transcriptRef.current = '';
-    setLiveTranscript('');
-    // Three error tiers:
-    //  1. Benign (aborted/no-speech): silence-timeout style, let 'end'
-    //     re-arm if user still wants the mic on.
+    // Two error tiers now that push-to-talk owns the session lifecycle:
+    //  1. Benign (aborted/no-speech): 'aborted' is a normal stop(); a
+    //     'no-speech' on release still gets its 'end', where the empty
+    //     transcript produces the honest miss line. Nothing to do here.
     //  2. Unrecoverable (audio-capture/service-not-allowed/language*):
-    //     mic is unavailable — flip listening off, surface an alert.
-    //     Continuing to retry every 400ms here floods the console and
-    //     burns battery without ever recovering. Most common cause on
-    //     iOS Simulator: "Audio Input" not enabled in the simulator's
-    //     I/O menu (no host mic forwarding).
-    //  3. Transient: log + re-arm with a short delay.
+    //     mic is unavailable — tear the hold down, surface an alert.
+    //  Anything else: tear the hold down quietly (a scripted miss) —
+    //  there is no re-arm loop anymore; the user just holds again.
     if (event?.error === 'aborted' || event?.error === 'no-speech') {
       return;
     }
+    transcriptRef.current = '';
+    setLiveTranscript('');
+    holdActiveRef.current = false;
+    holdReleasedRef.current = false;
+    if (finalizeTimerRef.current) {
+      clearTimeout(finalizeTimerRef.current);
+      finalizeTimerRef.current = null;
+    }
+    listeningRef.current = false;
+    setListening(false);
     const code = event?.error;
     const unrecoverable =
       code === 'audio-capture' ||
@@ -376,9 +386,7 @@ function SenpaiMascotImpl() {
       code === 'bad-grammar';
     if (unrecoverable) {
       console.warn('[SenpaiMascot] STT unrecoverable:', code, event?.message);
-      listeningRef.current = false;
-      setListening(false);
-      try { ExpoSpeechRecognitionModule.stop(); } catch { /* ignore */ }
+      try { ExpoSpeechRecognitionModule.stop(); pendingStopsRef.current++; } catch { /* ignore */ }
       Alert.alert(
         'Mic unavailable',
         code === 'audio-capture'
@@ -388,33 +396,24 @@ function SenpaiMascotImpl() {
       return;
     }
     console.warn('[SenpaiMascot] STT error:', code, event?.message);
-    if (listeningRef.current && !chatLoading) {
-      setTimeout(() => {
-        if (!listeningRef.current || chatLoading) return;
-        try {
-          ExpoSpeechRecognitionModule.start({
-            lang: 'en-US',
-            interimResults: true,
-            continuous: false,
-            requiresOnDeviceRecognition: false,
-          });
-        } catch {
-          /* engine perma-dead; visual stays on, user can tap to stop */
-        }
-      }, 400);
-    }
+    const line = randomDialogue('micMisheard');
+    triggerReaction('encouraging', line, 2500);
+    showBubbleOverride(line, 2500);
   });
 
-  // Stop listening + audio when the mascot itself unmounts (senpai disabled).
+  // Stop listening + audio + PTT timers when the mascot itself unmounts
+  // (senpai disabled).
   useEffect(() => {
     return () => {
       try { ExpoSpeechRecognitionModule.stop(); } catch { /* ignore */ }
       stopSenpaiAudio();
+      if (finalizeTimerRef.current) clearTimeout(finalizeTimerRef.current);
+      if (pressCommitTimerRef.current) clearTimeout(pressCommitTimerRef.current);
     };
   }, []);
 
   // Returns true once the mic is actually open, false on permission denial /
-  // error. The caller (activateListening) uses this so the "mic's ON" flourish
+  // error. The caller (beginHold) uses this so the "mic's ON" flourish
   // only plays after the mic really started — not right before a denial alert.
   const startListening = async (): Promise<boolean> => {
     try {
@@ -430,43 +429,63 @@ function SenpaiMascotImpl() {
       setLiveTranscript('');
       setListening(true);
       listeningRef.current = true;
-      freshMicSessionRef.current = true; // task 6: this open was user-initiated
       ExpoSpeechRecognitionModule.start({
         lang: 'en-US',
         interimResults: true,
-        // Single-shot. iOS auto-stops on silence and fires 'end' →
-        // sendChat. The 'end' handler re-arms while listeningRef is
-        // still true, so the conversation flows like a walkie-talkie
-        // without ever wedging the mic open. Continuous mode never
-        // fires 'end' until stop(), so replies never landed.
-        continuous: false,
+        // Continuous: push-to-talk owns the session — the engine must NOT
+        // self-stop on a mid-hold thinking pause. 'end' fires when the
+        // release calls stop(), which is exactly the send moment. (The old
+        // single-shot + silence-detection was the tap-toggle design.)
+        continuous: true,
         requiresOnDeviceRecognition: false,
       });
       return true;
     } catch (e: any) {
       setListening(false);
+      listeningRef.current = false;
       Alert.alert('Mic trouble', e?.message ?? 'Could not start listening.');
       return false;
     }
   };
 
   const stopListening = () => {
-    // User-initiated stop. Order matters:
-    //   1. listeningRef false FIRST — so any late STT 'result' event that
-    //      fires between here and the 'end' callback won't trigger a
-    //      send (the 'end' handler now guards on listeningRef).
+    // ABANDON path (cancel / mode switch / hide). Order matters:
+    //   1. listeningRef + hold flags false FIRST — so the trailing 'end'
+    //      event finds holdReleasedRef false and sends nothing.
     //   2. Drop the pending transcript so we don't accidentally send
     //      half-formed speech.
     //   3. stop() the engine — this fires 'end' but we've already armed
     //      the guards above.
-    //   4. Cut TTS audio. If the user tapped to stop while senpai was
-    //      mid-reply, they want her to shut up too — not keep talking.
+    //   4. Cut TTS audio. Cancelling means "shut up too" — not keep talking.
+    holdActiveRef.current = false;
+    holdReleasedRef.current = false;
+    if (finalizeTimerRef.current) {
+      clearTimeout(finalizeTimerRef.current);
+      finalizeTimerRef.current = null;
+    }
     listeningRef.current = false;
     setListening(false);
     transcriptRef.current = '';
     setLiveTranscript('');
-    try { ExpoSpeechRecognitionModule.stop(); } catch { /* ignore */ }
-    stopSenpaiAudio();
+    try { ExpoSpeechRecognitionModule.stop(); pendingStopsRef.current++; } catch { /* ignore */ }
+    stopTts(); // also discards a reply still mid-fetch, not just live audio
+  };
+
+  // RELEASE-SEND path — the finger lifted inside the button: close the mic
+  // and send whatever was captured. iOS may keep finalizing for a beat after
+  // stop(), so the actual send happens in 'end' (or the watchdog below if
+  // 'end' stalls) via finalizeAndSend — never here directly.
+  const finishHold = () => {
+    holdActiveRef.current = false;
+    if (!listeningRef.current) return;
+    holdReleasedRef.current = true;
+    listeningRef.current = false;
+    setListening(false);
+    try { ExpoSpeechRecognitionModule.stop(); pendingStopsRef.current++; } catch { /* ignore */ }
+    if (finalizeTimerRef.current) clearTimeout(finalizeTimerRef.current);
+    finalizeTimerRef.current = setTimeout(() => {
+      finalizeAndSend(transcriptRef.current);
+    }, 1200);
   };
 
   // Most recent settled assistant message — drives the bubble text after
@@ -488,51 +507,20 @@ function SenpaiMascotImpl() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastAssistantMsg?.id]);
 
-  useEffect(() => {
-    if (!listening) return;
-    if (!lastAssistantMsg) return;
-    if (lastReplyIdRef.current === lastAssistantMsg.id) return;
-    // Wait for TTS playback to actually finish — otherwise STT picks up
-    // senpai's own voice through the speaker and transcribes garbage. The
-    // old fixed 4500ms guess was reliably too short for bilingual replies
-    // (Japanese + English easily runs 6–8s). ttsPlaying flips false in
-    // the audio cleanup callback, so this effect re-runs and re-arms.
-    if (ttsPlaying) return;
-    lastReplyIdRef.current = lastAssistantMsg.id;
-    // Small additional delay so the audio output buffer fully drains and
-    // the speech engine sees clear silence before we open the mic again.
-    const t = setTimeout(() => {
-      if (!listeningRef.current || chatLoading) return;
-      transcriptRef.current = '';
-      setLiveTranscript('');
-      try {
-        ExpoSpeechRecognitionModule.start({
-          lang: 'en-US',
-          interimResults: true,
-          continuous: false,
-          requiresOnDeviceRecognition: false,
-        });
-      } catch {
-        listeningRef.current = false;
-        setListening(false);
-      }
-    }, 350);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastAssistantMsg?.id, listening, ttsPlaying]);
+  // (The hands-free after-reply re-arm loop is gone — push-to-talk only
+  // listens while the finger is down, so there is nothing to re-arm and the
+  // mic can never transcribe her own TTS.)
 
-  // P2: a failed send never produces a settled reply, so the after-reply
-  // re-arm effect above never fires — the mic-open visual (listening + glow)
-  // would stay lit with NO live recognizer (the 'end' handler took the
-  // sendChat branch and returned without re-arming). When a chat error
-  // surfaces while the walkie-talkie is armed, cleanly close the mic (ref +
-  // visual + engine) so the error bubble shows and the user re-taps to retry.
+  // Safety net: if a chat error lands while the mic is somehow still open
+  // (release raced the error), close it so the error bubble shows cleanly.
   // Guarded on listeningRef so a typed-mode send failure never touches the mic.
   useEffect(() => {
     if (chatError && listeningRef.current) {
       listeningRef.current = false;
       setListening(false);
-      try { ExpoSpeechRecognitionModule.stop(); } catch { /* ignore */ }
+      holdActiveRef.current = false;
+      holdReleasedRef.current = false;
+      try { ExpoSpeechRecognitionModule.stop(); pendingStopsRef.current++; } catch { /* ignore */ }
     }
   }, [chatError]);
 
@@ -611,10 +599,38 @@ function SenpaiMascotImpl() {
 
   // Restore the last-used chat mode (type vs talk).
   useEffect(() => {
-    AsyncStorage.getItem(MODE_KEY).then((m) => {
-      if (m === 'type' || m === 'talk') setModeState(m);
-    });
+    (async () => {
+      const m = await AsyncStorage.getItem(MODE_KEY);
+      if (m === 'type' || m === 'talk') { setModeState(m); return; }
+      // One-time migration off the collided key: if the legacy key holds a
+      // mode value, it was ours — adopt it, move it to the new key, and hand
+      // the legacy key back to SenpaiContext's enabled flag as 'true' (the
+      // mascot was necessarily enabled to have written a mode there).
+      const legacy = await AsyncStorage.getItem(LEGACY_MODE_KEY);
+      if (legacy === 'type' || legacy === 'talk') {
+        setModeState(legacy);
+        AsyncStorage.setItem(MODE_KEY, legacy);
+        AsyncStorage.setItem(LEGACY_MODE_KEY, 'true');
+      }
+    })();
   }, []);
+
+  // Voice mode off ⇒ Talk mode ceases to exist — snap back to Type. Uses
+  // setModeState directly (not setMode) so the toggle doesn't yank keyboard
+  // focus; still persisted so the choice sticks. MUST tear down an active
+  // hold first: voiceEnabled can flip false from OUTSIDE the dock toggle
+  // (Settings switch, TTS strike-2 auto-disable) while the finger is on the
+  // PTT button — unmounting the button then orphans an open mic whose
+  // eventual self-end would auto-send ambient room audio (the audit-2.0.5
+  // P1 hot-mic class).
+  useEffect(() => {
+    if (!voiceEnabled && mode === 'talk') {
+      if (listeningRef.current) cancelHold(true);
+      setModeState('type');
+      AsyncStorage.setItem(MODE_KEY, 'type');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceEnabled, mode]);
 
   // Restore the one-time AI disclaimer acceptance — PER ACCOUNT. Re-runs on
   // account switch (disclaimerKey embeds user.id) so a second member on the
@@ -1069,7 +1085,7 @@ function SenpaiMascotImpl() {
     setModeState(m);
     AsyncStorage.setItem(MODE_KEY, m);
     if (m === 'type') {
-      if (listeningRef.current) deactivateListening();
+      if (listeningRef.current) cancelHold(true);
       setTimeout(() => inputRef.current?.focus(), 120);
     } else {
       inputRef.current?.blur();
@@ -1119,8 +1135,8 @@ function SenpaiMascotImpl() {
       smallTick(); // dock summon — subtle ack (self-gated in the util)
       if (state.mascotMood === 'sleeping') {
         // Wake-up arc (H5): stretch/wave beat, then the 'wake' greeting —
-        // this tap only summons the dock; mascotTap lines claim the mic is
-        // ON, which is only true via activateListening.
+        // this tap only summons the dock; the mic opens only while the
+        // hold-to-talk button is held (beginHold).
         playWakeArc();
       }
       setDockOpen(true);
@@ -1141,15 +1157,17 @@ function SenpaiMascotImpl() {
       inputRef.current?.focus();
       return;
     }
-    // Listening → tap turns the mic OFF. Allowed even while a reply is in
-    // flight so the user can always bail without waiting on the 35s timeout.
-    if (listening) {
-      deactivateListening();
+    // Talk mode: the chibi is no longer a mic toggle — push-to-talk lives on
+    // the dock's hold-to-talk button. A tap while she's speaking cuts her
+    // off; while the finger is on the PTT button a stray chibi tap is a no-op.
+    if (listening) return;
+    if (ttsPlaying) {
+      stopTts(); // covers the fetch window too, not just live playback
+      showBubbleOverride("okay okay, I'll stop 💕", 1500);
       return;
     }
-    // Not listening but a reply is still in flight — opening the mic before
-    // her answer lands is confusing. Acknowledge the tap so the user knows
-    // it registered; the AbortController in sendSenpaiChat clears chatLoading
+    // A reply is still in flight — acknowledge the tap so the user knows it
+    // registered; the AbortController in sendSenpaiChat clears chatLoading
     // within 35s if the network hangs, and the reply still fills the bubble.
     if (chatLoading) {
       const msg = 'thinking... be patient senpai 💕';
@@ -1157,8 +1175,8 @@ function SenpaiMascotImpl() {
       showBubbleOverride(msg, 1500);
       return;
     }
-    // Idle → tap turns the mic ON.
-    activateListening();
+    if (state.mascotMood === 'sleeping') playWakeArc();
+    setReplyDismissed(true);
   };
 
   const fireExplosion = () => {
@@ -1202,81 +1220,85 @@ function SenpaiMascotImpl() {
     ).start(() => shutdownSparkleAnims.forEach((a) => a.setValue(0)));
   };
 
-  // P2 self-transcription guard: set when a tap tries to open the mic while
-  // her own TTS reply is still playing. We defer instead of opening (the
-  // recognizer would hear her voice through the speaker); the effect below
-  // opens the mic the instant playback ends — mirroring the post-reply re-arm
-  // effect, which likewise waits on ttsPlaying.
-  const pendingMicOpenRef = useRef(false);
-
-  // Tap-to-start: open the mic, then (only on success) flash the boot ring +
-  // explosion + "mic's ON" line. Deferring the flourish until startListening
-  // resolves true means a permission denial doesn't flash "mic's ON" and then
-  // immediately alert "mic access needed".
-  const activateListening = () => {
-    // P2 (guest dead-end): no Firebase user → the walkie-talkie would only
-    // ever transcribe speech into 401s. Never open the mic for a guest —
-    // say the honest thing instead. Also covers the deferred open below.
+  // PRESS-IN — open the mic while the finger is down. Push-to-talk means
+  // pressing while she's mid-reply is a barge-in: cut her TTS and listen.
+  // The flourish (charge ring + explosion) only plays after the mic really
+  // started — not right before a permission-denial alert.
+  const beginHold = () => {
+    // P2 (guest dead-end): no Firebase user → the mic would only ever
+    // transcribe speech into 401s. Never open it for a guest.
     if (!user) {
       showGuestSignInGate();
       return;
     }
-    // Clear any prior chat error so activating also escapes a stale error
-    // bubble (the other escape is the 8s auto-dismiss inside useSenpaiChat).
-    clearChatError();
-    // Defensive: handleTap already guards chatLoading before calling us.
-    if (chatLoading) return;
-    // P2: never open the mic while she's still speaking — STT would transcribe
-    // her own TTS through the speaker. Remember the intent and let the
-    // ttsPlaying effect below open the mic once she finishes.
-    if (ttsPlaying) {
-      pendingMicOpenRef.current = true;
-      const msg = 'let me finish talking first senpai 💕';
-      triggerReaction('cheering', msg, 1500);
-      showBubbleOverride(msg, 1500);
+    if (chatLoading) return;               // thinking — button is disabled anyway
+    if (listeningRef.current) return;      // double press-in guard
+    if (holdReleasedRef.current) {
+      // The PREVIOUS release is still finalizing ('end' hasn't landed).
+      // Flush it right now so it can't be orphaned by this press resetting
+      // the hold flags, and let this press bounce off the thinking state —
+      // finalizeAndSend clears the watchdog and fires the send immediately.
+      finalizeAndSend(transcriptRef.current);
       return;
     }
-    startListening()
-      .then((started) => {
-        if (!started) return;
-        smallTick(); // mic really opened — tactile ack
-        if (!reduceMotionRef.current) {
-          // Boot flourish is decoration — skipped under Reduce Motion (D5).
-          chargeAnim.setValue(1);
-          Animated.timing(chargeAnim, { toValue: 0, duration: 350, useNativeDriver: true }).start();
-          fireExplosion();
-        }
-        triggerReaction('cheering', randomDialogue('mascotTap'), 2500);
-      })
-      .catch((err) => {
-        console.warn('[SenpaiMascot] startListening threw:', err);
-      });
+    bumpInteraction();
+    // Clear any prior chat error so a new hold also escapes a stale error
+    // bubble (the other escape is the 8s auto-dismiss inside useSenpaiChat).
+    clearChatError();
+    holdActiveRef.current = true;
+    holdReleasedRef.current = false;
+    holdStartedAtRef.current = Date.now();
+    const bargedIn = ttsPlaying;
+    // stopTts (not stopSenpaiAudio): ttsPlaying flips true BEFORE the TTS
+    // fetch, so "playing" may really be "fetching" — only the generation
+    // bump inside stopTts stops a reply whose audio hasn't arrived yet.
+    if (bargedIn) stopTts();
+    const doStart = () => {
+      if (!holdActiveRef.current) return;  // released before the engine opened
+      startListening()
+        .then((started) => {
+          if (!started) {
+            holdActiveRef.current = false;
+            return;
+          }
+          if (!holdActiveRef.current) {
+            // Finger already lifted while the engine was starting (a quick
+            // tap, or the first-ever press that only raised the permission
+            // dialog). Close the mic and teach the gesture.
+            listeningRef.current = false;
+            setListening(false);
+            try { ExpoSpeechRecognitionModule.stop(); pendingStopsRef.current++; } catch { /* ignore */ }
+            showBubbleOverride('hold the mic while you talk to me senpai 💕', 2200);
+            return;
+          }
+          smallTick(); // mic really opened — tactile ack
+          if (!reduceMotionRef.current) {
+            // Boot flourish is decoration — skipped under Reduce Motion (D5).
+            chargeAnim.setValue(1);
+            Animated.timing(chargeAnim, { toValue: 0, duration: 350, useNativeDriver: true }).start();
+            fireExplosion();
+          }
+        })
+        .catch((err) => {
+          holdActiveRef.current = false;
+          console.warn('[SenpaiMascot] startListening threw:', err);
+        });
+    };
+    // After a barge-in the iOS audio session needs a beat to leave Playback
+    // before STT can claim PlayAndRecord (see ensureAudioMode in senpaiAudio).
+    if (bargedIn) setTimeout(doStart, 150);
+    else doStart();
   };
 
-  // P2: the deferred-open half of the ttsPlaying guard. When a tap arrived
-  // mid-reply we recorded the intent; open the mic the moment her TTS finishes
-  // (ttsPlaying → false). Distinct from the after-reply re-arm effect, which
-  // only continues an already-listening session — this starts a fresh one the
-  // user asked for while she was still talking.
-  useEffect(() => {
-    if (ttsPlaying || !pendingMicOpenRef.current) return;
-    pendingMicOpenRef.current = false;
-    // Claim the just-finished reply for the after-reply re-arm effect: when
-    // activateListening flips `listening` true, that effect re-runs and would
-    // ALSO fire a start for this same reply id — a double-start whose
-    // error-catch could tear the fresh session down. Marking it handled makes
-    // that effect no-op, so only this path opens the mic.
-    if (lastAssistantMsg) lastReplyIdRef.current = lastAssistantMsg.id;
-    activateListening();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ttsPlaying]);
-
-  // Tap-to-stop: flash the discharge ring, fire the shutdown burst, close the mic.
-  const deactivateListening = () => {
-    smallTick(); // mic closing — tactile ack (mirrors activate)
+  // CANCEL — the finger slid off the button (or a mode switch / hide closed
+  // the mic mid-hold). Discharge flourish, drop the transcript, send nothing.
+  const cancelHold = (silent = false) => {
+    const wasListening = listeningRef.current;
+    stopListening();
+    if (!wasListening) return;
+    smallTick(); // mic closing — tactile ack (mirrors the open tick)
     if (!reduceMotionRef.current) {
-      // Snap discharge ring to full then fade — visual symmetry with activate.
-      // Shutdown flourish is decoration — skipped under Reduce Motion (D5).
+      // Snap discharge ring to full then fade — visual symmetry with the open.
       dischargeAnim.setValue(1);
       Animated.timing(dischargeAnim, {
         toValue: 0,
@@ -1285,11 +1307,8 @@ function SenpaiMascotImpl() {
       }).start();
       fireShutdown();
     }
-    // Same as activate: clear any stuck error so the off tap also doubles
-    // as an "escape from this error" path.
     clearChatError();
-    triggerReaction('sleeping', 'mic off, going dark 💕', 2000);
-    stopListening();
+    if (!silent) showBubbleOverride('cancelled — say it again whenever 💕', 2000);
   };
 
   // Pulsing glow whenever the mic is open. Loops until listening flips off.
@@ -1341,7 +1360,7 @@ function SenpaiMascotImpl() {
   // dismisses a held typed reply, so the bubble doesn't outlive the dock.
   useEffect(() => {
     if (!dockOpen) return;
-    if (listening || chatLoading || kbHeight > 0 || draft.trim().length > 0) return;
+    if (listening || chatLoading || ttsPlaying || kbHeight > 0 || draft.trim().length > 0) return;
     const armCollapse = (waitMs: number) => {
       dockCollapseTimerRef.current = setTimeout(() => {
         const sinceTouch = Date.now() - lastInteractionAtRef.current;
@@ -1358,7 +1377,7 @@ function SenpaiMascotImpl() {
       if (dockCollapseTimerRef.current) clearTimeout(dockCollapseTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dockOpen, mode, listening, chatLoading, kbHeight, draft, lastAssistantMsg?.id, disclaimerOK]);
+  }, [dockOpen, mode, listening, chatLoading, ttsPlaying, kbHeight, draft, lastAssistantMsg?.id, disclaimerOK]);
 
   if (hidden) return null;
 
@@ -1432,10 +1451,8 @@ function SenpaiMascotImpl() {
       ? state.lastReaction
       : mode === 'type' && !replyDismissed && lastAssistantMsg && lastAssistantMsg.id === lastArrivedId
       ? lastAssistantMsg.content
-      : listening && lastAssistantMsg?.content
-      ? lastAssistantMsg.content
       : listening
-      ? 'speak to me senpai 💕'
+      ? 'listening… release to send 💕'
       : state.lastReaction;
   })();
 
@@ -1904,7 +1921,7 @@ function SenpaiMascotImpl() {
                   </View>
                 ) : (
                   <>
-                    {/* Type ⟷ Talk switch + clear */}
+                    {/* Type ⟷ Talk switch + voice on/off + clear */}
                     <View style={styles.switchRow}>
                       <View style={styles.segWrap}>
                         <Pressable
@@ -1916,16 +1933,35 @@ function SenpaiMascotImpl() {
                         >
                           <Text style={[styles.segText, mode === 'type' && styles.segTextActive]}>⌨ Type</Text>
                         </Pressable>
-                        <Pressable
-                          onPress={() => setMode('talk')}
-                          hitSlop={4}
-                          accessibilityRole="button"
-                          accessibilityLabel="Talk to Senpai"
-                          style={[styles.segBtn, mode === 'talk' && styles.segBtnActive]}
-                        >
-                          <Text style={[styles.segText, mode === 'talk' && styles.segTextActive]}>🎤 Talk</Text>
-                        </Pressable>
+                        {voiceEnabled && (
+                          <Pressable
+                            onPress={() => setMode('talk')}
+                            hitSlop={4}
+                            accessibilityRole="button"
+                            accessibilityLabel="Talk to Senpai"
+                            style={[styles.segBtn, mode === 'talk' && styles.segBtnActive]}
+                          >
+                            <Text style={[styles.segText, mode === 'talk' && styles.segTextActive]}>🎤 Talk</Text>
+                          </Pressable>
+                        )}
                       </View>
+                      {/* Voice mode on/off — her ears AND her voice. Off hides
+                          Talk mode entirely and mutes TTS (same persisted flag
+                          as the Settings "Senpai Voice" switch). */}
+                      <Pressable
+                        onPress={() => {
+                          bumpInteraction();
+                          if (listeningRef.current) cancelHold(true);
+                          setVoiceEnabled(!voiceEnabled);
+                        }}
+                        hitSlop={6}
+                        accessibilityRole="switch"
+                        accessibilityState={{ checked: voiceEnabled }}
+                        accessibilityLabel="Senpai voice mode"
+                        style={styles.clearBtn}
+                      >
+                        <Text style={styles.clearBtnText}>{voiceEnabled ? '🔊' : '🔇'}</Text>
+                      </Pressable>
                       <Pressable
                         onPress={confirmClear}
                         hitSlop={6}
@@ -1962,15 +1998,58 @@ function SenpaiMascotImpl() {
                         </Pressable>
                       </View>
                     ) : (
+                      /* Push-to-talk, Siri-style: press-in opens the mic,
+                         release-inside sends, slide-off cancels. RN fires
+                         pressIn → pressOut → press(only if released inside),
+                         so a short timer after pressOut with no press means
+                         the finger slid off the button. */
                       <Pressable
-                        onPress={handleTap}
+                        onPressIn={() => {
+                          // Finger jitter across the button edge re-fires
+                          // pressIn while the slide-off cancel timer is armed
+                          // — clear it or the hold dies 80ms later with the
+                          // finger still down.
+                          if (pressCommitTimerRef.current) {
+                            clearTimeout(pressCommitTimerRef.current);
+                            pressCommitTimerRef.current = null;
+                          }
+                          bumpInteraction();
+                          beginHold();
+                        }}
+                        onPress={() => {
+                          if (pressCommitTimerRef.current) {
+                            clearTimeout(pressCommitTimerRef.current);
+                            pressCommitTimerRef.current = null;
+                          }
+                          finishHold();
+                        }}
+                        onPressOut={() => {
+                          if (pressCommitTimerRef.current) clearTimeout(pressCommitTimerRef.current);
+                          pressCommitTimerRef.current = setTimeout(() => {
+                            pressCommitTimerRef.current = null;
+                            cancelHold();
+                          }, 80);
+                        }}
+                        disabled={chatLoading}
+                        delayLongPress={100000}
                         hitSlop={6}
                         accessibilityRole="button"
-                        accessibilityLabel={listening ? 'Stop talking to Senpai' : 'Talk to Senpai'}
-                        style={[styles.micBtn, listening && styles.micBtnActive]}
+                        accessibilityLabel="Hold to talk to Senpai"
+                        accessibilityHint="Press and hold, speak, then release to send"
+                        style={[
+                          styles.micBtn,
+                          listening && styles.micBtnHeld,
+                          chatLoading && { opacity: 0.5 },
+                        ]}
                       >
                         <Text style={styles.micBtnText}>
-                          {listening ? '● listening — tap to stop' : '🎤 tap to talk'}
+                          {listening
+                            ? '● release to send · slide off to cancel'
+                            : chatLoading
+                            ? '… thinking'
+                            : ttsPlaying
+                            ? '▶ hold to interrupt'
+                            : '🎤 hold to talk'}
                         </Text>
                       </Pressable>
                     )}
@@ -1987,11 +2066,11 @@ function SenpaiMascotImpl() {
           <SoundPressable
             style={styles.closeBtn}
             onPress={() => {
-              // Audit 2.0.5 P1 (hot mic): hiding the mascot with the
-              // walkie-talkie armed left an INVISIBLE open microphone
-              // transcribing and auto-sending to the AI, with TTS still
-              // playing. Kill both before hiding.
-              if (listeningRef.current) deactivateListening();
+              // Audit 2.0.5 P1 (hot mic): hiding the mascot with the mic
+              // open left an INVISIBLE open microphone transcribing and
+              // auto-sending to the AI, with TTS still playing. Kill both
+              // before hiding.
+              if (listeningRef.current) cancelHold(true);
               stopSenpaiAudio();
               setHidden(true);
             }}
@@ -2417,12 +2496,16 @@ const styles = StyleSheet.create({
   sendBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
   micBtn: {
     alignSelf: 'stretch',
-    paddingVertical: 9,
+    // Taller than the old tap button — a hold target needs more meat.
+    paddingVertical: 14,
     borderRadius: 10,
     backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
   },
-  micBtnActive: { backgroundColor: 'rgba(220,38,38,0.92)' },
+  micBtnHeld: {
+    backgroundColor: 'rgba(220,38,38,0.92)',
+    transform: [{ scale: 1.02 }],
+  },
   micBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800', letterSpacing: 0.2 },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   clearBtn: {
