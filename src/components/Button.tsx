@@ -33,7 +33,12 @@ export function Button({
   const { colors } = useTheme();
 
   const variantStyles: Record<string, ViewStyle> = {
-    primary: { backgroundColor: colors.red, ...shadows.md },
+    // Disabled primary renders as a quiet surface card instead of the loud
+    // red slab at 0.35 opacity ("Select a Time" on Book, out-of-stock CTAs).
+    // Keyed off `disabled` only — a loading primary stays red with a spinner.
+    primary: disabled
+      ? { backgroundColor: colors.surfaceSecondary, borderWidth: 1.5, borderColor: colors.border }
+      : { backgroundColor: colors.red, ...shadows.md },
     secondary: { backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border },
     outline: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: colors.border },
     ghost: { backgroundColor: 'transparent' },
@@ -44,6 +49,8 @@ export function Button({
       ? colors.textPrimary
       : variant === 'secondary'
       ? colors.textPrimary
+      : disabled
+      ? colors.textMuted
       : '#FFFFFF';
 
   return (
@@ -55,7 +62,7 @@ export function Button({
         variantStyles[variant],
         styles[size],
         fullWidth && styles.fullWidth,
-        disabled && styles.disabled,
+        disabled && variant !== 'primary' && styles.disabled,
         style,
       ]}
     >

@@ -276,11 +276,11 @@ export function AdminScheduleScreen({ navigation }: any) {
           ))}
 
           <Button
-            title={savingPricing ? 'Saving…' : 'Save Pricing'}
+            title="Save Pricing"
             onPress={handleSavePricing}
             fullWidth
             size="lg"
-            disabled={savingPricing}
+            loading={savingPricing}
             style={{ marginTop: spacing.md }}
           />
         </View>

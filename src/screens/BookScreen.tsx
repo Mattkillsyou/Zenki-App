@@ -7,6 +7,7 @@ import {
   Alert,
   ActivityIndicator} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { SoundPressable } from '../components/SoundPressable';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
@@ -22,7 +23,8 @@ import { useSchedulingConfig, priceLabelFor } from '../context/SchedulingConfigC
 
 // Generate the booking date for display
 const getDisplayDate = (now: Date) => {
-  const options: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
+  // Today-only booking — the year (and long-form names) are noise here.
+  const options: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'short', day: 'numeric' };
   return now.toLocaleDateString('en-US', options);
 };
 
@@ -234,7 +236,7 @@ export function BookScreen({ navigation }: any) {
             to this device's own calendar (see offerAddToCalendar). */}
         <View style={styles.header}>
           <View>
-            <Text style={[styles.title, { color: colors.textPrimary, fontSize: 24 }]}>Book Private</Text>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>Book Private</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               By appointment only
             </Text>
@@ -258,11 +260,11 @@ export function BookScreen({ navigation }: any) {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    borderRadius: 14,
+                    borderRadius: 999,
                     paddingLeft: 6,
-                    paddingRight: 12,
+                    paddingRight: 14,
                     paddingVertical: 6,
-                    borderWidth: 1.5,
+                    borderWidth: 1,
                     backgroundColor: isSelected ? colors.goldMuted : colors.surface,
                     borderColor: isSelected ? colors.gold : colors.border,
                     gap: 8,
@@ -270,14 +272,14 @@ export function BookScreen({ navigation }: any) {
                   }}
                   onPress={() => setSelectedInstructor(index)}
                 >
-                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: isSelected ? colors.gold : colors.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={[styles.avatarText, { color: isSelected ? colors.textInverse : colors.textMuted, fontSize: 12 }]}>
+                  <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: isSelected ? colors.gold : colors.surfaceSecondary, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={[styles.avatarText, { color: isSelected ? colors.textInverse : colors.textMuted, fontSize: 11 }]}>
                       {inst.avatar}
                     </Text>
                   </View>
                   <View>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{inst.name}</Text>
-                    <Text style={{ fontSize: 10, color: colors.textSecondary }}>{inst.specialty}</Text>
+                    <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 1 }}>{inst.specialty}</Text>
                   </View>
                 </SoundPressable>
               );
@@ -297,9 +299,13 @@ export function BookScreen({ navigation }: any) {
                   style={[
                     {
                       flex: 1,
-                      borderRadius: 20,
-                      padding: 16,
+                      borderRadius: 16,
+                      paddingVertical: 14,
+                      paddingHorizontal: 10,
                       alignItems: 'center',
+                      justifyContent: 'center',
+                      // Equal card heights even when one label wraps to two lines.
+                      minHeight: showPricing ? 108 : 88,
                       borderWidth: 1.5,
                       backgroundColor: isSelected ? colors.gold : colors.surface,
                       borderColor: isSelected ? colors.gold : colors.border,
@@ -307,10 +313,13 @@ export function BookScreen({ navigation }: any) {
                   ]}
                   onPress={() => setSelectedType(index)}
                 >
-                  <Text style={[
-                    styles.typeLabel,
-                    { color: isSelected ? colors.textInverse : colors.textPrimary },
-                  ]}>
+                  <Text
+                    numberOfLines={2}
+                    style={[
+                      styles.typeLabel,
+                      { color: isSelected ? colors.textInverse : colors.textPrimary },
+                    ]}
+                  >
                     {type.label}
                   </Text>
                   <Text style={[styles.typeDuration, { color: isSelected ? colors.textInverse : colors.textMuted }]}>
@@ -341,97 +350,105 @@ export function BookScreen({ navigation }: any) {
               </View>
             )}
           </View>
-          <Text style={[styles.dateLabel, { color: colors.textSecondary }]}>
-            {getDisplayDate(currentDate)}
-          </Text>
-          {allSlotsPast && (
-            <View style={{ paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginBottom: 10 }}>
-              <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textPrimary }}>
-                No more bookable times today
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
-                Sessions run through {TIME_SLOTS[TIME_SLOTS.length - 1]}. Check back tomorrow morning to book.
-              </Text>
+          <View style={styles.dateRow}>
+            <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
+            <Text style={[styles.dateLabel, { color: colors.textSecondary }]}>
+              {getDisplayDate(currentDate)}
+            </Text>
+          </View>
+          {allSlotsPast ? (
+            // Every slot is in the past — the info card says it all, so the
+            // grid of struck-out chips stays hidden (it was pure noise).
+            <View style={[styles.doneForDayCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.doneForDayIcon, { backgroundColor: colors.goldMuted }]}>
+                <Ionicons name="moon-outline" size={18} color={colors.gold} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>
+                  No more bookable times today
+                </Text>
+                <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2, lineHeight: 16 }}>
+                  Sessions run through {TIME_SLOTS[TIME_SLOTS.length - 1]}. Check back tomorrow morning to book.
+                </Text>
+              </View>
             </View>
-          )}
+          ) : (
           <View style={styles.timeGrid}>
-            {TIME_SLOTS.map((time) => {
+            {/* Past slots don't render at all — a row of struck-out "PASSED"
+                chips was the biggest source of clutter on this screen. */}
+            {TIME_SLOTS.filter((t) => slotToDate(currentDate, t).getTime() > currentDate.getTime()).map((time) => {
               const isSelected = time === selectedTime;
               const slotDate = slotToDate(currentDate, time);
               const conflict = isSlotBusy(slotDate, currentDuration, busyIntervals);
-              const isPast = slotDate.getTime() <= currentDate.getTime();
-              const mine = !isPast && myBusyAt(slotDate, currentDuration);
-              // Past slots are disabled exactly like calendar-busy ones.
-              const isBusy = conflict !== null || isPast || mine;
+              const mine = myBusyAt(slotDate, currentDuration);
+              const isBusy = conflict !== null || mine;
               return (
                 <SoundPressable
                   key={time}
                   disabled={isBusy}
                   style={[
+                    styles.timeChip,
                     {
-                      height: 52,
-                      borderRadius: 14,
-                      width: '23%',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderWidth: 1.5,
                       backgroundColor: isBusy
-                        ? colors.surfaceSecondary
+                        ? 'transparent'
                         : isSelected
                         ? colors.gold
                         : colors.surface,
                       borderColor: isBusy
-                        ? colors.border
+                        ? colors.borderSubtle
                         : isSelected
                         ? colors.gold
                         : colors.border,
-                      opacity: isBusy ? 0.5 : 1,
+                      opacity: isBusy ? 0.45 : 1,
                     },
                   ]}
                   onPress={() => setSelectedTime(time)}
                 >
                   <Text style={{
-                    fontSize: 15,
-                    fontWeight: '600',
+                    fontSize: 14,
+                    fontWeight: isSelected ? '700' : '600',
                     color: isBusy
                       ? colors.textMuted
                       : isSelected
                       ? colors.textInverse
                       : colors.textSecondary,
-                    textDecorationLine: isBusy ? 'line-through' : 'none',
                   }}>
                     {time}
                   </Text>
                   {isBusy && (
-                    <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textMuted, marginTop: 1, letterSpacing: 0.5 }}>
-                      {isPast ? 'PASSED' : mine ? 'YOUR SESSION' : 'UNAVAILABLE'}
+                    <Text style={{ fontSize: 8, fontWeight: '700', color: colors.textMuted, marginTop: 1, letterSpacing: 0.6 }}>
+                      {mine ? 'YOUR SESSION' : 'UNAVAILABLE'}
                     </Text>
                   )}
                 </SoundPressable>
               );
             })}
           </View>
+          )}
         </View>
 
         {/* Summary + Book — compact single row, always at bottom */}
         <View style={[styles.section, { paddingBottom: 12 }]}>
           {selectedTime && (
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}>
-              <Text style={{ fontSize: 12, color: colors.textMuted }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textSecondary, flex: 1, marginRight: 8 }} numberOfLines={1}>
                 {sessionTypes[safeType].label} · {INSTRUCTORS[selectedInstructor].name} · {selectedTime}
               </Text>
               {showPricing && (
-                <Text style={{ fontSize: 16, fontWeight: '900', color: colors.gold }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.gold }}>
                   {priceLabelFor(sessionTypes[safeType])}
                 </Text>
               )}
             </View>
           )}
+          {/* No selection yet → Button's disabled-primary state renders as a
+              quiet surface card, not a loud dark-red slab. */}
           <Button
-            title={selectedTime ? (showPricing ? `Request Booking · ${priceLabelFor(sessionTypes[safeType])}` : 'Request Booking') : 'Select a Time'}
+            title={selectedTime ? (showPricing ? `Request Booking · ${priceLabelFor(sessionTypes[safeType])}` : 'Request Booking') : allSlotsPast ? 'Booking Closed for Today' : 'Select a Time'}
             onPress={handleBooking}
             fullWidth
             size="lg"
+            loading={submitting}
             disabled={!selectedTime}
           />
         </View>
@@ -450,10 +467,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingHorizontal: spacing.lg,
     paddingTop: 0,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
   },
   title: {
-    fontSize: 34,
+    fontSize: 24,
     fontWeight: '800',
     letterSpacing: -0.5,
   },
@@ -474,13 +491,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
-  instructorInfo: {
-    flex: 1,
-  },
-  instructorSpecialty: {
-    ...typography.bodySmall,
-    marginTop: 2,
-  },
   typeGrid: {
     flexDirection: 'row',
     gap: 12,
@@ -492,36 +502,57 @@ const styles = StyleSheet.create({
   },
   typeDuration: {
     ...typography.bodySmall,
-    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
   },
   typePrice: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.md,
   },
   dateLabel: {
-    ...typography.body,
-    marginBottom: spacing.md,
+    fontSize: 13,
+    fontWeight: '600',
   },
   timeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  timeChip: {
+    height: 48,
+    borderRadius: 12,
+    // 4 columns: flexBasis under 25% so the gaps fit on every supported
+    // width, flexGrow so each row fills edge-to-edge (no ragged 3+1 wrap).
+    flexBasis: '22%',
+    flexGrow: 1,
+    maxWidth: '31%',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    justifyContent: 'center',
+    borderWidth: 1.5,
   },
-  summaryLabel: {
-    ...typography.bodySmall,
+  doneForDayCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 10,
   },
-  summaryValue: {
-    ...typography.body,
-    fontWeight: '600',
-  },
-  summaryDivider: {
-    height: 1,
+  doneForDayIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

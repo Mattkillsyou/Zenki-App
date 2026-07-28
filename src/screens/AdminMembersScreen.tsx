@@ -612,11 +612,11 @@ export function AdminMembersScreen({ navigation }: any) {
             )}
 
             <Button
-              title={saving ? 'Saving…' : editingMember ? 'Save Changes' : 'Add Member'}
+              title={editingMember ? 'Save Changes' : 'Add Member'}
               onPress={handleSave}
               fullWidth
               size="lg"
-              disabled={saving}
+              loading={saving}
               style={{ marginTop: spacing.lg }}
             />
             <View style={{ height: spacing.xxl * 2 }} />
