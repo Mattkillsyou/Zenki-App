@@ -99,6 +99,9 @@ export function MacroTrackerScreen({ navigation, route }: any) {
   const DEFAULT_MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snacks'];
   const [mealOrder, setMealOrder] = useState<MealType[]>(DEFAULT_MEAL_ORDER);
   const [mealEditMode, setMealEditMode] = useState(false);
+  // True while a meal section is being dragged — scroll must be locked or the
+  // ScrollView's native pan swallows the drag (see ReorderableSections).
+  const [mealDragActive, setMealDragActive] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -308,7 +311,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScreenContainer>
-      <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+      <KeyboardAwareScrollView contentContainerStyle={{ paddingBottom: 120 }} scrollEnabled={!mealDragActive}>
           {/* Header */}
           <View style={styles.header}>
             <SoundPressable
@@ -737,8 +740,8 @@ export function MacroTrackerScreen({ navigation, route }: any) {
           {/* Today's entries — grouped by meal, draggable order */}
           <FadeInView baseDelay={60} index={4}>
             <View style={[styles.historyLabel, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
-              <Text style={[styles.sectionLabel, { color: colors.textMuted, marginLeft: 0, marginTop: 0 }]}>TODAY · DRAG TO REORDER</Text>
-              <SoundPressable onPress={() => setMealEditMode((v) => !v)} hitSlop={10} style={{ paddingHorizontal: spacing.lg }}>
+              <Text style={[styles.sectionLabel, { color: colors.textMuted, marginLeft: 0, marginTop: 0 }]}>TODAY · HOLD ≡ TO REORDER</Text>
+              <SoundPressable onPress={() => { setMealEditMode((v) => !v); setMealDragActive(false); }} hitSlop={10} style={{ paddingHorizontal: spacing.lg }}>
                 <Text style={{ color: mealEditMode ? colors.gold : colors.textMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>
                   {mealEditMode ? 'DONE' : 'EDIT'}
                 </Text>
@@ -761,7 +764,9 @@ export function MacroTrackerScreen({ navigation, route }: any) {
                   hidden: false,
                   node: (
                     <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      {/* In edit mode the ≡ grip floats at the top-left — indent the
+                          header row so the meal label stays readable under it. */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, marginLeft: mealEditMode ? 40 : 0 }}>
                         <Text style={{ fontSize: 13, fontWeight: '800', letterSpacing: 1, color: colors.textPrimary }}>
                           {MEAL_TYPE_ICONS[meal]} {MEAL_TYPE_LABELS[meal].toUpperCase()}
                         </Text>
@@ -797,6 +802,7 @@ export function MacroTrackerScreen({ navigation, route }: any) {
                   items={items}
                   editMode={mealEditMode}
                   onReorder={handleMealReorder}
+                  onDragActiveChange={setMealDragActive}
                 />
               );
             })() : null}

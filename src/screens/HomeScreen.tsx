@@ -681,6 +681,9 @@ export function HomeScreen({ navigation }: any) {
   const [moduleOrder, setModuleOrder] = useState<string[]>(DEFAULT_MODULE_ORDER);
   const [moduleVisibility, setModuleVisibility] = useState<Record<string, boolean>>({});
   const [editMode, setEditMode] = useState(false);
+  // True while a module is being dragged — the ScrollView must not scroll
+  // during a drag or the native pan swallows the gesture (see ReorderableSections).
+  const [reorderDragActive, setReorderDragActive] = useState(false);
   const orderStorageKey = user?.id ? `@zenki_home_order_${user.id}` : null;
   const visibilityStorageKey = user?.id ? `@zenki_home_visibility_${user.id}` : null;
 
@@ -706,6 +709,8 @@ export function HomeScreen({ navigation }: any) {
       LayoutAnimation.configureNext(editModeLayoutAnim);
     }
     setEditMode(next);
+    // Safety: never leave scroll locked if edit mode closes mid-drag.
+    if (!next) setReorderDragActive(false);
     Animated.parallel([
       Animated.timing(editBarOpacity, {
         toValue: next ? 1 : 0,
@@ -766,6 +771,7 @@ export function HomeScreen({ navigation }: any) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         contentInsetAdjustmentBehavior="never"
+        scrollEnabled={!reorderDragActive}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />
         }
@@ -878,7 +884,7 @@ export function HomeScreen({ navigation }: any) {
           >
             <Ionicons name="move-outline" size={16} color={colors.gold} />
             <Text style={[styles.editHint, { color: colors.textSecondary }]}>
-              Drag to rearrange · tap − to hide
+              Hold ≡ to drag · tap − to hide
             </Text>
             <TouchableOpacity
               style={[styles.doneBtn, { backgroundColor: colors.gold }]}
@@ -1301,6 +1307,7 @@ export function HomeScreen({ navigation }: any) {
                   editMode={editMode}
                   onReorder={handleReorder}
                   onToggleVisibility={toggleVisibility}
+                  onDragActiveChange={setReorderDragActive}
                 />
               );
             })()}
